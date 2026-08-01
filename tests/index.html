@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>TangoQuest self-tests</title>
+<style>
+body{font-family:Consolas,monospace; background:#12141f; color:#e9ecf8; padding:16px; font-size:13px}
+.ok{color:#4ade80} .ng{color:#f87171} h1{font-size:16px}
+#sum{font-weight:bold; font-size:15px; margin:10px 0}
+iframe{width:1px; height:1px; opacity:0}
+</style>
+</head>
+<body>
+<h1>TangoQuest self-tests</h1>
+<div id="sum">running...</div>
+<div id="list"></div>
+<iframe id="app" src="../index.html"></iframe>
+<script>
+"use strict";
+/* 本番URLで誤って開いてlocalStorageを壊さないためのガード */
+if(location.hostname!=="localhost" && location.hostname!=="127.0.0.1"){
+  document.body.innerHTML="<p>localhost専用</p>";
+  throw new Error("guard");
+}
+const results=[];
+function t(name, fn){
+  try{ fn(); results.push([name, true, ""]); }
+  catch(e){ results.push([name, false, String(e.message||e)]); }
+}
+function eq(a,b,msg){ if(a!==b) throw new Error((msg||"")+" expected="+b+" got="+a); }
+function ok(v,msg){ if(!v) throw new Error(msg||"falsy"); }
+
+localStorage.removeItem("tangoquest_v1"); // 毎回まっさらな状態で起動させる
+
+const frame=document.getElementById("app");
+frame.onload=()=>setTimeout(run, 300);
+
+function run(){
+  const W=frame.contentWindow;
+  try{
+
+  /* ---- データ ---- */
+  t("WORDSが800語以上", ()=>ok(W.WORDS.length>=800, "len="+W.WORDS.length));
+  t("全単語にpos(v/n/adj/adv)がある", ()=>{
+    const okPos=new Set(["v","n","adj","adv"]);
+    W.WORDS.forEach(w=>ok(okPos.has(w.pos), w.en));
+  });
+
+  /* ---- カード生成 ---- */
+  t("カード生成は決定的", ()=>{
+    const a=W.cardOf("abate|3|2"), b=W.cardOf("abate|3|2");
+    eq(JSON.stringify(a), JSON.stringify(b));
+  });
+  t("品詞→役割のマッピング", ()=>{
+    const find=p=>W.WORDS.find(w=>w.pos===p);
+    ok(W.genCard(find("n"),1,0).stats, "noun stats");
+    ok(W.genCard(find("adj"),1,0).buffStat, "adj buff");
+    ok(W.genCard(find("adv"),1,0).fieldType, "adv field");
+    ok(W.genCard(find("v"),1,0).mult>0, "verb mult");
+  });
+  t("レア度・Lvで性能が伸びる", ()=>{
+    const w=W.WORDS.find(x=>W.genCard(x,1,0).slot==="weapon");
+    ok(W.genCard(w,5,0).stats.atk > W.genCard(w,1,0).stats.atk, "rar");
+    ok(W.genCard(w,1,3).stats.atk > W.genCard(w,1,0).stats.atk, "lv");
+  });
+  t("ドロップレア度: 新規=★1〜2 / 連続ミス10=★5", ()=>{
+    for(let i=0;i<50;i++){
+      const r=W.dropRarity(null); ok(r>=1&&r<=2, "new r="+r);
+      const r2=W.dropRarity([0,0,0,10,0,10,0]); eq(r2,5,"ws10");
+    }
+  });
+
+  /* ---- 在庫・合成 ---- */
+  t("入手→合成でLvが上がり在庫が減る", ()=>{
+    const G=W.G;
+    const en=W.WORDS[0].en;
+    W.addCard(en,1); W.addCard(en,1);
+    const k=en+"|1|0";
+    eq(G.inv[k],2,"before");
+    const nk=W.mergeOne(k);
+    eq(nk, en+"|1|1");
+    ok(!G.inv[k], "old key removed");
+    eq(G.inv[nk],1,"new key");
+  });
+  t("装備中カードの在庫が尽きたら合成後カードへ引き継ぐ", ()=>{
+    const G=W.G;
+    const w=W.WORDS.find(x=>W.genCard(x,1,0).slot==="weapon");
+    const k=w.en+"|1|0";
+    W.addCard(w.en,1); W.addCard(w.en,1);
+    G.party.equip.weapon=k;
+    const nk=W.mergeOne(k);
+    eq(G.party.equip.weapon, nk);
+  });
+  t("一括合成: 4枚→+2が1枚", ()=>{
+    const G=W.G;
+    const w=W.WORDS[10];
+    for(let i=0;i<4;i++) W.addCard(w.en,2);
+    W.autoMergeAll();
+    eq(G.inv[w.en+"|2|2"],1,"lv2");
+    ok(!G.inv[w.en+"|2|0"] && !G.inv[w.en+"|2|1"], "consumed");
+  });
+
+  /* ---- 戦闘 ---- */
+  t("強者は勝ち弱者は負ける(戦闘は必ず終わる)", ()=>{
+    const strong={name:"S",hp:1000,atk:500,def:100,spd:20,skills:[]};
+    const weak={name:"W",hp:100,atk:5,def:0,spd:5};
+    ok(W.simBattle(strong, Object.assign({},weak)).win, "strong wins");
+    ok(!W.simBattle(Object.assign({},weak,{name:"W2"}), Object.assign({},strong)).win, "weak loses");
+  });
+  t("敵はtier/floorで強くなる", ()=>{
+    const e1=W.enemyFor(1,1,5,false,["a"],"b");
+    const e2=W.enemyFor(2,1,5,false,["a"],"b");
+    const e3=W.enemyFor(1,4,5,false,["a"],"b");
+    ok(e2.hp>e1.hp, "tier"); ok(e3.hp>e1.hp, "floor");
+  });
+  t("編成でステータスが上がる", ()=>{
+    const G=W.G;
+    G.party.equip={weapon:null,armor:null,acc:null,buff1:null,buff2:null,field:null,skill1:null,skill2:null,skill3:null};
+    const p0=W.playerStats();
+    const w=W.WORDS.find(x=>W.genCard(x,1,0).slot==="weapon");
+    W.addCard(w.en,3);
+    G.party.equip.weapon=w.en+"|3|0";
+    const p1=W.playerStats();
+    ok(p1.atk>p0.atk, "weapon atk");
+    ok(p1.power>p0.power, "power");
+  });
+
+  /* ---- 任務・計上 ---- */
+  t("track()がデイリー/ウィークリー/累計を計上する", ()=>{
+    const G=W.G;
+    const before=G.counters.cor;
+    const d0=W.dailyRec().c;
+    W.track("cor");
+    eq(G.counters.cor, before+1);
+    eq(W.dailyRec().c, d0+1);
+  });
+  t("正解10問でデイリー任務が受取可能になる", ()=>{
+    const d=W.dailyRec();
+    d.c=10; d.cl={};
+    ok(W.hasClaimable(), "claimable");
+  });
+
+  /* ---- 同期マージ ---- */
+  t("mergeDataは進捗を失わない", ()=>{
+    const a={words:{x:[1,0,5,2,0,0,0]}, days:{}, inv:{"abate|1|0":1}, chars:{}, dungeons:{},
+             gold:100, tickets:0, counters:{cor:5}, inf:{best:3}, ach:{}, updatedAt:1};
+    const b={words:{x:[0,0,9,3,0,0,0]}, days:{}, inv:{"abate|1|0":4}, chars:{c05:{dup:2}}, dungeons:{},
+             gold:50, tickets:7, counters:{cor:9}, inf:{best:8}, ach:{acor:1}, updatedAt:2};
+    const m=W.mergeData(a,b);
+    eq(m.words.x[2], 9, "words: 解答回数が多い方");
+    eq(m.inv["abate|1|0"], 4, "inv max");
+    eq(m.gold, 100, "gold max"); eq(m.tickets, 7, "tickets max");
+    eq(m.counters.cor, 9); eq(m.inf.best, 8); eq(m.ach.acor, 1);
+    ok(m.chars.c05, "chars union");
+  });
+
+  /* ---- 起動状態 ---- */
+  t("起動時に問題が出題されている", ()=>{
+    ok(W.document.getElementById("promptWord").textContent.length>0);
+  });
+  t("初期キャラを所持している", ()=>ok(W.G.chars.c01));
+
+  }catch(e){
+    results.push(["(test harness)", false, String(e.message||e)]);
+  }
+  report();
+}
+
+function report(){
+  const list=document.getElementById("list");
+  let pass=0;
+  results.forEach(([n,okv,msg])=>{
+    const d=document.createElement("div");
+    d.className=okv?"ok":"ng";
+    d.textContent=(okv?"PASS ":"FAIL ")+n+(msg?" — "+msg:"");
+    list.appendChild(d);
+    if(okv) pass++;
+  });
+  const all=pass===results.length;
+  document.getElementById("sum").textContent=(all?"ALL PASS":"FAIL")+" ("+pass+"/"+results.length+")";
+  document.title=all?"ALL PASS":"FAIL";
+  fetch("/__RESULT__/"+(all?"PASS":"FAIL")+"/"+pass+"-"+results.length).catch(()=>{});
+  localStorage.removeItem("tangoquest_v1"); // 後片付け
+}
+</script>
+</body>
+</html>

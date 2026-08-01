@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#12141f">
+<meta name="description" content="英単語を解いてカードを集め、ダンジョンを攻略するローグライク単語学習RPG。">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="css/style.css">
+<title>タンゴクエスト</title>
+</head>
+<body>
+
+<header>
+  <div class="title">⚔ タンゴクエスト</div>
+  <div class="res"><span class="ic">🪙</span><span id="resGold">0</span></div>
+  <div class="res"><span class="ic">🎫</span><span id="resTicket">0</span></div>
+  <button id="gearBtn">⚙</button>
+</header>
+
+<!-- ============ 学習(クイズ) ============ -->
+<main id="quizView">
+  <div id="infPill"><span>🌀 無限回廊</span><b id="infPillTxt"></b></div>
+  <div id="promptCard">
+    <span id="qBadge">新規</span>
+    <span id="qCount"></span>
+    <div id="promptWord"></div>
+    <div id="promptHint"></div>
+    <div id="qStats"></div>
+  </div>
+  <div class="choices" id="choices"></div>
+  <div id="resultBar">
+    <div id="resultInfo">
+      <div id="resultHead"></div>
+      <div id="resultCard"></div>
+    </div>
+    <button id="nextBtn">次へ ▶</button>
+  </div>
+</main>
+
+<!-- ============ カード ============ -->
+<main id="cardsView" class="hidden">
+  <div class="row">
+    <div class="grow small" id="cardSummary"></div>
+    <button class="btn" id="autoMergeBtn">⚒ 一括合成</button>
+  </div>
+  <div class="seg" id="cardFilter">
+    <button data-f="all" class="active">すべて</button>
+    <button data-f="n">装備</button>
+    <button data-f="adj">強化</button>
+    <button data-f="adv">場</button>
+    <button data-f="v">技</button>
+  </div>
+  <div id="cardGrid"></div>
+</main>
+
+<!-- ============ 冒険 ============ -->
+<main id="advView" class="hidden">
+  <h2>パーティ</h2>
+  <div class="panel partycard">
+    <div class="charface" id="pcFace">🗡️</div>
+    <div class="grow">
+      <div style="font-weight:800; font-size:13px" id="pcName"></div>
+      <div class="small" id="pcPower"></div>
+    </div>
+    <button class="btn primary" id="equipBtn">編成</button>
+  </div>
+  <h2>ダンジョン</h2>
+  <div id="dungeonList"></div>
+  <h2>無限回廊(放置探索)</h2>
+  <div class="panel" id="infPanel"></div>
+</main>
+
+<!-- ============ ガチャ ============ -->
+<main id="gachaView" class="hidden">
+  <div class="gbanner">
+    <div class="gt">🔮 冒険者召喚</div>
+    <div class="gs">SSR 3% ／ SR 10% ／ R 32% ／ N 55%<br>同じ冒険者は「突破」となり能力+6%(最大10回)</div>
+    <div class="row" style="justify-content:center; gap:8px; margin-top:12px">
+      <button class="btn gold" id="pull1">1回 🎫1</button>
+      <button class="btn gold" id="pull10">10回 🎫10</button>
+    </div>
+    <div class="row" style="justify-content:center; gap:8px; margin-top:8px">
+      <button class="btn" id="pullG1">1回 🪙1000</button>
+      <button class="btn" id="pullG10">10回 🪙10000</button>
+    </div>
+  </div>
+  <h2>なかま</h2>
+  <div id="charGrid"></div>
+</main>
+
+<!-- ============ 任務 ============ -->
+<main id="missionView" class="hidden">
+  <div class="seg" id="missionSeg">
+    <button data-m="daily" class="active">デイリー</button>
+    <button data-m="weekly">ウィークリー</button>
+    <button data-m="ach">実績</button>
+  </div>
+  <div class="panel" id="missionList"></div>
+</main>
+
+<nav>
+  <button id="navQuiz" class="active"><span class="nic">📖</span>学習</button>
+  <button id="navCards"><span class="nic">🃏</span>カード</button>
+  <button id="navAdv"><span class="nic">⚔️</span>冒険</button>
+  <button id="navGacha"><span class="nic">🔮</span>ガチャ</button>
+  <button id="navMission"><span class="nic badge">📜<span class="dot hidden" id="missionDot"></span></span>任務</button>
+</nav>
+
+<div id="overlay"><div id="modal"></div></div>
+<div id="toast"></div>
+
+<script src="js/words.js"></script>
+<script src="js/util.js"></script>
+<script src="js/state.js"></script>
+<script src="js/cards.js"></script>
+<script src="js/chars.js"></script>
+<script src="js/battle.js"></script>
+<script src="js/quiz.js"></script>
+<script src="js/dungeon.js"></script>
+<script src="js/missions.js"></script>
+<script src="js/sync.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
