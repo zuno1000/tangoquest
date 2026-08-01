@@ -25,6 +25,7 @@ $("navGacha").onclick=()=>switchTab("gacha");
 
 /* ---- ホーム画面(各機能へのハブ) ---- */
 const NEWS=[
+  {d:"2026-08-02", t:"✨ v2.1.0 UI刷新! パック開封演出・カードのホロ光沢を追加"},
   {d:"2026-08-02", t:"🎉 v2.0.0 「LEXICA」に改名! ホーム画面・人型編成・新ダンジョン6種を追加"},
   {d:"2026-08-02", t:"☄️ 期間限定ガチャ「星降る夜の召喚」開催中(8/31まで)"},
 ];
@@ -49,7 +50,7 @@ function renderHome(){
         '<div class="mbar" style="margin-top:3px"><i style="width:'+pct+'%"></i></div>'+
       '</div></div>'+
     // 学習CTA
-    '<button id="homeStudy" class="studycta">📖 学習をはじめる'+
+    '<button id="homeStudy" class="studycta shine">📖 学習をはじめる'+
       '<span class="ctasub">今日 '+d.a+'問(正解'+d.c+')</span></button>'+
     // ショートカット
     '<div class="tilegrid">'+

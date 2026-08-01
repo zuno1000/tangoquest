@@ -101,19 +101,60 @@ function doPull(n, useGold, banner){
     track("pull");
   }
   saveG(); refreshHeader(); renderChars();
-  if(results.some(r=>r.c.rar===4)) vibe([40,60,100]); // SSR演出
-  openModal(
-    '<h3>召喚結果</h3>'+
-    '<div class="gresult">'+results.map((r,i)=>
-      '<div class="gres bd'+(r.c.rar===4?5:r.c.rar)+'" style="animation-delay:'+(i*90)+'ms">'+
-        (r.c.limited?'<div class="ltdmini">限定</div>':"")+
-        '<div style="font-size:32px">'+r.c.face+'</div>'+
-        '<div class="'+CHAR_RAR_CLASS[r.c.rar-1]+'" style="font-weight:800; font-size:12px">'+CHAR_RAR[r.c.rar-1]+'</div>'+
-        '<div style="font-size:11px; font-weight:700; margin-top:2px; line-height:1.2">'+esc(r.c.name)+'</div>'+
-        '<div class="small" style="font-size:10px; margin-top:2px">'+(r.isNew?"NEW!":"突破 +6%")+'</div>'+
-      '</div>').join("")+
+  openPackCeremony(results, banner);
+}
+
+/* ---- パック開封セレモニー(ポケポケ参考: スライドで切って開ける) ---- */
+function gresHTML(r, i){
+  return '<div class="gres bd'+(r.c.rar===4?5:r.c.rar)+(r.c.rar===4?' shine':'')+'" style="animation-delay:'+(i*90)+'ms">'+
+    (r.c.limited?'<div class="ltdmini">限定</div>':"")+
+    '<div style="font-size:32px">'+r.c.face+'</div>'+
+    '<div class="'+CHAR_RAR_CLASS[r.c.rar-1]+'" style="font-weight:800; font-size:12px">'+CHAR_RAR[r.c.rar-1]+'</div>'+
+    '<div style="font-size:11px; font-weight:700; margin-top:2px; line-height:1.2">'+esc(r.c.name)+'</div>'+
+    '<div class="small" style="font-size:10px; margin-top:2px">'+(r.isNew?"NEW!":"突破 +6%")+'</div>'+
+  '</div>';
+}
+function openPackCeremony(results, banner){
+  openModal('<h3>'+(banner? banner.name : "🔮 冒険者召喚")+'</h3>'+
+    '<div id="packStage">'+
+      '<div id="pack" class="shine'+(banner?" ltdpack":"")+'">'+
+        '<div class="packTear"></div>'+
+        '<div class="packLogo">⚔ LEXICA</div>'+
+        '<div class="packIc">'+(banner?"☄️":"🔮")+'</div>'+
+        '<div class="packHint">スライドして開封!</div>'+
+        '<div class="packCap"></div>'+
+      '</div>'+
+      '<div id="packResults" class="gresult hidden"></div>'+
     '</div>'+
-    '<div class="row" style="justify-content:center"><button class="btn primary" style="flex:1" data-close>OK</button></div>');
+    '<div class="row" id="packCtrl" style="margin-top:6px">'+
+      '<button class="btn" style="flex:1" id="packSkipBtn">スキップ ▶▶</button></div>');
+  let flash=document.getElementById("packFlash");
+  if(!flash){ flash=document.createElement("div"); flash.id="packFlash"; document.body.appendChild(flash); }
+
+  const hasSSR=results.some(r=>r.c.rar===4);
+  let opened=false;
+  const reveal=()=>{
+    if(opened) return; opened=true;
+    const pack=$("pack"); if(!pack) return;
+    pack.classList.add("open");
+    if(hasSSR){ flash.classList.remove("go"); void flash.offsetWidth; flash.classList.add("go"); vibe([40,60,100]); }
+    else vibe(30);
+    setTimeout(()=>{
+      if(!$("packResults")) return;
+      pack.classList.add("hidden");
+      const box=$("packResults");
+      box.classList.remove("hidden");
+      box.innerHTML=results.map(gresHTML).join("");
+      $("packCtrl").innerHTML='<button class="btn primary" style="flex:1" data-close>OK</button>';
+      $("packCtrl").querySelector("[data-close]").onclick=closeModal;
+    }, 430);
+  };
+  const pack=$("pack");
+  let sx=null;
+  pack.onpointerdown=e=>{ sx=e.clientX; try{ pack.setPointerCapture(e.pointerId); }catch(err){} };
+  pack.onpointermove=e=>{ if(sx!=null && Math.abs(e.clientX-sx)>70){ sx=null; reveal(); } };
+  pack.onpointerup=e=>{ if(sx!=null && Math.abs(e.clientX-sx)<12) reveal(); sx=null; };
+  $("packSkipBtn").onclick=reveal;
 }
 
 /* ---- なかま一覧 ---- */

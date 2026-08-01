@@ -177,7 +177,7 @@ function renderCards(){
   const frag=document.createDocumentFragment();
   items.forEach(c=>{
     const d=document.createElement("div");
-    d.className="ccard bd"+c.rar+(eq.has(c.key)?" equipped":"");
+    d.className="ccard bd"+c.rar+" el"+c.elem+(c.rar>=4?" shine":"")+(eq.has(c.key)?" equipped":"");
     d.innerHTML=
       (c.lv>0? '<span class="clv">+'+c.lv+'</span>':"")+
       '<span class="ccnt">×'+G.inv[c.key]+'</span>'+
@@ -193,16 +193,15 @@ function renderCards(){
 }
 
 function cardDetailHTML(c){
-  return '<div style="text-align:center; padding:6px 0">'+
-    '<div style="font-size:34px">'+c.icon+'</div>'+
-    '<div style="font-size:20px; font-weight:800; margin-top:4px">'+esc(c.en)+
+  return '<div class="bigcard bd'+c.rar+' el'+c.elem+(c.rar>=4?' shine':'')+'">'+
+    '<div class="bcic">'+c.icon+'</div>'+
+    '<div class="bcen">'+esc(c.en)+
       '<span style="font-size:13px; color:var(--accent)">'+lvLabel(c)+'</span></div>'+
-    '<div class="small" style="margin-top:2px">'+esc(c.ja)+'</div>'+
-    '<div class="rc'+c.rar+'" style="font-weight:800; margin-top:4px">'+RAR_STARS[c.rar-1]+'</div>'+
-    '<div style="margin-top:6px"><span class="pos'+c.pos+'" style="font-size:12px; font-weight:700">'+
-      POS_LABEL[c.pos]+' ・ '+c.typeName+'</span>'+
-      ' <span class="small">'+c.elemIcon+' '+ELEM_NAME[c.elem]+'属性</span></div>'+
-    '<div style="margin-top:10px; font-size:14px; font-weight:800">'+effectText(c)+'</div>'+
+    '<div class="bcja">'+esc(c.ja)+'</div>'+
+    '<div class="bcstars rc'+c.rar+'">'+RAR_STARS[c.rar-1]+'</div>'+
+    '<div class="bctype"><span class="pos'+c.pos+'">'+POS_LABEL[c.pos]+' ・ '+c.typeName+'</span>'+
+      ' <span class="small">'+c.elemIcon+' '+ELEM_NAME[c.elem]+'</span></div>'+
+    '<div class="bceffect">'+effectText(c)+'</div>'+
   '</div>';
 }
 
