@@ -53,7 +53,8 @@ function enemyFor(tier, floor, floors, boss, names, bossName){
   return e;
 }
 
-/* オート戦闘シミュレーション。P/E は {hp,atk,def,spd,...}。P.skills使用。 */
+/* オート戦闘シミュレーション。P/E は {hp,atk,def,spd,...}。P.skills使用。
+   log 要素は演出用の構造化データも持つ: {t, s, side, dmg, sk, php, ehp} */
 function simBattle(P, E){
   let php=P.hp, ehp=E.hp;
   const log=[];
@@ -65,13 +66,16 @@ function simBattle(P, E){
     }
     const v=Math.round((0.9+Math.random()*0.2)*Math.max(1, P.atk*mult - E.def*0.55));
     ehp-=v;
-    log.push(sk? {t:"sk", s:"『"+sk.name+"』発動! "+fmt(v)+"ダメージ"}
-               : {t:"pl", s:P.name+"の攻撃 "+fmt(v)+"ダメージ"});
+    log.push(sk? {t:"sk", side:"p", dmg:v, sk:sk.name, php:Math.max(0,php), ehp:Math.max(0,ehp),
+                  s:"『"+sk.name+"』発動! "+fmt(v)+"ダメージ"}
+               : {t:"pl", side:"p", dmg:v, php:Math.max(0,php), ehp:Math.max(0,ehp),
+                  s:P.name+"の攻撃 "+fmt(v)+"ダメージ"});
   };
   const eAtk=()=>{
     const v=Math.round((0.9+Math.random()*0.2)*Math.max(1, E.atk - P.def*0.55));
     php-=v;
-    log.push({t:"en", s:E.name+"の攻撃 "+fmt(v)+"ダメージ"});
+    log.push({t:"en", side:"e", dmg:v, php:Math.max(0,php), ehp:Math.max(0,ehp),
+              s:E.name+"の攻撃 "+fmt(v)+"ダメージ"});
   };
   const pFirst=P.spd>=E.spd;
   for(let t=0; t<200 && php>0 && ehp>0; t++){

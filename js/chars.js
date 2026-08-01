@@ -67,17 +67,18 @@ function doPull(n, useGold){
     track("pull");
   }
   saveG(); refreshHeader(); renderChars();
+  if(results.some(r=>r.c.rar===4)) vibe([40,60,100]); // SSR演出
   openModal(
     '<h3>召喚結果</h3>'+
-    '<div class="gresult">'+results.map(r=>
-      '<div class="gres bd'+(r.c.rar===4?5:r.c.rar)+'">'+
-        '<div style="font-size:26px">'+r.c.face+'</div>'+
-        '<div class="'+CHAR_RAR_CLASS[r.c.rar-1]+'" style="font-weight:800; font-size:11px">'+CHAR_RAR[r.c.rar-1]+'</div>'+
-        '<div style="font-size:9px; font-weight:700; margin-top:2px; line-height:1.2">'+esc(r.c.name)+'</div>'+
-        '<div class="small" style="font-size:8px; margin-top:2px">'+(r.isNew?"NEW!":"突破 +6%")+'</div>'+
+    '<div class="gresult">'+results.map((r,i)=>
+      '<div class="gres bd'+(r.c.rar===4?5:r.c.rar)+'" style="animation-delay:'+(i*90)+'ms">'+
+        '<div style="font-size:32px">'+r.c.face+'</div>'+
+        '<div class="'+CHAR_RAR_CLASS[r.c.rar-1]+'" style="font-weight:800; font-size:12px">'+CHAR_RAR[r.c.rar-1]+'</div>'+
+        '<div style="font-size:11px; font-weight:700; margin-top:2px; line-height:1.2">'+esc(r.c.name)+'</div>'+
+        '<div class="small" style="font-size:10px; margin-top:2px">'+(r.isNew?"NEW!":"突破 +6%")+'</div>'+
       '</div>').join("")+
     '</div>'+
-    '<div class="row" style="justify-content:center"><button class="btn primary" data-close>OK</button></div>');
+    '<div class="row" style="justify-content:center"><button class="btn primary" style="flex:1" data-close>OK</button></div>');
 }
 
 /* ---- なかま一覧 ---- */
@@ -88,18 +89,32 @@ function renderChars(){
   owned.sort((a,b)=>b.rar-a.rar);
   owned.forEach(c=>{
     const st=charStats(c.id), dup=G.chars[c.id].dup||0;
+    const base=Math.round(st.hp/6 + st.atk*4 + st.def*3 + st.spd*5); // 素の戦闘力
     const d=document.createElement("div");
     d.className="charcard bd"+(c.rar===4?5:c.rar);
     d.innerHTML=
-      '<div style="font-size:26px">'+c.face+'</div>'+
-      '<div class="'+CHAR_RAR_CLASS[c.rar-1]+'" style="font-weight:800; font-size:10px">'+CHAR_RAR[c.rar-1]+(dup?" +"+dup:"")+'</div>'+
-      '<div style="font-size:10px; font-weight:700; margin-top:2px; line-height:1.2">'+esc(c.name)+'</div>'+
-      '<div class="small" style="font-size:9px; margin-top:4px">HP'+st.hp+' 攻'+st.atk+'<br>防'+st.def+' 速'+st.spd+'</div>'+
-      (G.party.char===c.id? '<div style="font-size:9px; color:var(--accent); font-weight:800; margin-top:3px">出撃中</div>':"");
+      '<div style="font-size:32px">'+c.face+'</div>'+
+      '<div class="'+CHAR_RAR_CLASS[c.rar-1]+'" style="font-weight:800; font-size:11px">'+CHAR_RAR[c.rar-1]+(dup?" +"+dup:"")+'</div>'+
+      '<div style="font-size:12px; font-weight:700; margin-top:3px; line-height:1.2">'+esc(c.name)+'</div>'+
+      '<div class="small" style="margin-top:4px">力 '+fmt(base)+'</div>'+
+      (G.party.char===c.id? '<div style="font-size:11px; color:var(--accent); font-weight:800; margin-top:3px">出撃中</div>':"");
     d.onclick=()=>{ G.party.char=c.id; saveG(); renderChars(); toast(c.name+" を出撃メンバーにした"); };
     grid.appendChild(d);
   });
 }
+
+/* ---- 提供割合モーダル ---- */
+$("rateInfo").onclick=()=>{
+  openModal('<h3>提供割合</h3>'+
+    '<table class="stt">'+
+    '<tr><td class="rc5">SSR</td><td>3%</td></tr>'+
+    '<tr><td class="rc3">SR</td><td>10%</td></tr>'+
+    '<tr><td class="rc2">R</td><td>32%</td></tr>'+
+    '<tr><td class="rc1">N</td><td>55%</td></tr>'+
+    '</table>'+
+    '<div class="small" style="margin-top:12px; line-height:1.7">同じ冒険者を引くと「突破」となり、能力が +6% ずつ強化される(最大10回)。</div>'+
+    '<div class="row" style="margin-top:12px"><button class="btn primary" style="flex:1" data-close>OK</button></div>');
+};
 
 $("pull1").onclick=()=>doPull(1,false);
 $("pull10").onclick=()=>doPull(10,false);

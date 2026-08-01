@@ -3,17 +3,17 @@
 
 const DUNGEONS=[
   {id:"d1", tier:1, floors:5,  icon:"🌾", name:"はじまりの草原",
-   names:["スライム","野ウサギ","いたずら妖精"], boss:"巨大スライム"},
+   names:["スライム","野ウサギ","いたずら妖精"], eicons:["👾","🐇","🧚"], boss:"巨大スライム", bossIcon:"👾"},
   {id:"d2", tier:2, floors:7,  icon:"🕳️", name:"苔むす洞窟",
-   names:["洞窟コウモリ","ゴブリン","岩ガニ"], boss:"ゴブリンキング"},
+   names:["洞窟コウモリ","ゴブリン","岩ガニ"], eicons:["🦇","👺","🦀"], boss:"ゴブリンキング", bossIcon:"👹"},
   {id:"d3", tier:3, floors:8,  icon:"🌲", name:"忘却の森",
-   names:["森オオカミ","歩く木トレント","毒キノコ"], boss:"森の主アルラウネ"},
+   names:["森オオカミ","歩く木トレント","毒キノコ"], eicons:["🐺","🌳","🍄"], boss:"森の主アルラウネ", bossIcon:"🌺"},
   {id:"d4", tier:4, floors:10, icon:"🏜️", name:"砂塵の遺跡",
-   names:["砂サソリ","ミイラ兵","ガーゴイル"], boss:"遺跡の守護者アヌビス"},
+   names:["砂サソリ","ミイラ兵","ガーゴイル"], eicons:["🦂","🧟","🗿"], boss:"遺跡の守護者アヌビス", bossIcon:"⚱️"},
   {id:"d5", tier:5, floors:10, icon:"🌋", name:"竜の火山",
-   names:["火トカゲ","溶岩ゴーレム","ヘルハウンド"], boss:"火竜イフリート"},
+   names:["火トカゲ","溶岩ゴーレム","ヘルハウンド"], eicons:["🦎","🪨","🔥"], boss:"火竜イフリート", bossIcon:"🐉"},
   {id:"d6", tier:6, floors:12, icon:"🗼", name:"星降る魔塔",
-   names:["魔導兵","死霊術師","ガーゴイル卿"], boss:"大魔王リヴェリオン"},
+   names:["魔導兵","死霊術師","ガーゴイル卿"], eicons:["🧙","💀","🗿"], boss:"大魔王リヴェリオン", bossIcon:"👿"},
 ];
 
 function dgRec(id){ if(!G.dungeons[id]) G.dungeons[id]={clears:0, lastClearDay:null}; return G.dungeons[id]; }
@@ -46,32 +46,24 @@ function renderAdv(){
   renderInfPanel();
 }
 
-/* ---- ダンジョン攻略(即時シミュレーション → ログ演出) ---- */
-let logTimer=null;
-
+/* ---- ダンジョン攻略(即時シミュレーション → ビジュアルバトル演出) ---- */
 function startRun(d){
   const P=playerStats();
   track("run");
-  const lines=[]; // {t,s}
-  let cleared=0, gold=0;
-  let hp=P.hp;
+  const floors=[]; // {f, boss, E, icon, hpStart, hpAfter, win, events}
+  let cleared=0, gold=0, hp=P.hp;
   for(let f=1; f<=d.floors; f++){
     const boss=f===d.floors;
     const E=enemyFor(d.tier, f, d.floors, boss, d.names, d.boss);
-    lines.push({t:"fl", s:"─── "+f+"F "+(boss?"👹 ":"")+E.name+" が現れた ───"});
-    const cur=Object.assign({}, P, {hp});
-    const r=simBattle(cur, E);
-    // 長い戦闘ログは前後だけ見せる
-    const bl=r.log.length>12? r.log.slice(0,6).concat([{t:"pl",s:"…激しい攻防が続く…"}], r.log.slice(-4)) : r.log;
-    lines.push(...bl);
-    if(!r.win){
-      lines.push({t:"lose", s:"力尽きた… "+f+"Fで敗退"});
-      break;
-    }
+    const r=simBattle(Object.assign({}, P, {hp}), E);
+    const fl={f, boss, E, icon:boss? d.bossIcon : d.eicons[(f-1)%d.eicons.length],
+              hpStart:hp, win:r.win, events:r.log};
+    if(!r.win){ floors.push(fl); break; }
     cleared=f;
     gold+=Math.round(8*d.tier*d.tier*(1+(P.goldBonus||0)/100));
     hp=Math.min(P.hp, Math.round(r.php + P.hp*0.25)); // 各階クリア後 25%回復
-    lines.push({t:"win", s:E.name+"を倒した! (残りHP "+fmt(hp)+")"});
+    fl.hpAfter=hp;
+    floors.push(fl);
   }
   const full=cleared===d.floors;
   // 報酬確定
@@ -84,35 +76,201 @@ function startRun(d){
     else if(Math.random()<0.25) tickets+=1;
     rec.clears++; rec.lastClearDay=todayKey();
     track("clear");
-    lines.push({t:"win", s:"🏆 "+d.name+" 完全攻略!"});
   }
   G.gold+=gold; G.tickets+=tickets;
-  lines.push({t:full?"win":"lose", s:"報酬: 🪙"+fmt(gold)+(tickets? " ／ 🎫"+tickets:"")});
-  saveG(); refreshHeader();
+  saveG(); refreshHeader(); renderAdv();
+  playRun(d, P, floors, {full, cleared, gold, tickets});
+}
 
-  // 演出
-  openModal('<h3>'+d.icon+' '+d.name+'</h3>'+
-    '<div id="battleLog"></div>'+
-    '<div class="row" style="justify-content:center; margin-top:10px">'+
-    '<button class="btn" id="skipLog">スキップ ▶▶</button>'+
-    '<button class="btn primary hidden" id="logDone">閉じる</button></div>');
-  const box=$("battleLog");
-  let i=0;
-  const put=l=>{
-    const e=document.createElement("div");
-    e.className=l.t; e.textContent=l.s;
-    box.appendChild(e); box.scrollTop=box.scrollHeight;
+/* ---- 演出プレイヤー ---- */
+function vibe(pat){
+  if(localStorage.getItem("tq_vibe")==="off") return;
+  if(navigator.vibrate) try{ navigator.vibrate(pat); }catch(e){}
+}
+
+function playRun(d, P, floors, R){
+  let speed=+(localStorage.getItem("tq_bspeed")||1);
+  if(![1,2,3].includes(speed)) speed=1;
+  openModal('<h3>'+d.icon+' '+esc(d.name)+'</h3>'+
+    '<div id="bScene">'+
+      '<div id="bFloorTxt"></div>'+
+      '<div id="bArena">'+
+        '<div class="bUnit" id="bP">'+
+          '<div class="bFace" id="bPFace">'+P.face+'</div>'+
+          '<div class="bUName">'+esc(P.name)+'</div>'+
+          '<div class="bHp"><i id="bPHp"></i></div><div class="bHpN" id="bPHpN"></div></div>'+
+        '<div class="bUnit" id="bE">'+
+          '<div class="bFace" id="bEFace"></div>'+
+          '<div class="bUName" id="bEName"></div>'+
+          '<div class="bHp"><i id="bEHp"></i></div><div class="bHpN" id="bEHpN"></div></div>'+
+      '</div>'+
+      '<div id="bAct"></div>'+
+    '</div>'+
+    '<div class="row" id="bCtrl" style="margin-top:10px">'+
+      '<button class="btn" id="bSpeedBtn">⏩ ×'+speed+'</button>'+
+      '<div class="grow"></div>'+
+      '<button class="btn" id="bSkipBtn">結果へ ▶▶</button>'+
+    '</div>');
+
+  // ステップ列を組み立てる(長い攻防は前後だけ再生)
+  const steps=[];
+  floors.forEach(fl=>{
+    steps.push({k:"floor", fl, ms:750});
+    let ev=fl.events;
+    if(ev.length>12){
+      const head=ev.slice(0,7), tail=ev.slice(-4), mid=ev[ev.length-5];
+      steps.push(...head.map(e=>({k:"atk", e, ms:e.sk?600:320})));
+      steps.push({k:"ff", e:mid, ms:800});
+      steps.push(...tail.map(e=>({k:"atk", e, ms:e.sk?600:320})));
+    }else{
+      steps.push(...ev.map(e=>({k:"atk", e, ms:e.sk?600:320})));
+    }
+    if(fl.win) steps.push({k:"kill", fl, ms:700});
+    else steps.push({k:"dead", fl, ms:1000});
+  });
+  steps.push({k:"end", ms:0});
+
+  const maxHpE=fl=>fl.E.hp;
+  let curFl=null;
+  const alive=()=>!!$("bArena"); // モーダルが閉じられたら停止
+  const setHp=(el, nEl, v, max)=>{
+    const r=Math.max(0, Math.min(1, v/max));
+    el.style.width=(r*100)+"%";
+    el.style.background = r>0.5? "var(--ok)" : r>0.25? "var(--accent)" : "var(--ng)";
+    nEl.textContent=fmt(v);
   };
-  const finish=()=>{
-    clearInterval(logTimer); logTimer=null;
-    while(i<lines.length) put(lines[i++]);
-    $("skipLog").classList.add("hidden");
-    $("logDone").classList.remove("hidden");
-    renderAdv();
+  const pop=(unit, txt, cls)=>{
+    const p=document.createElement("div");
+    p.className="bpop "+(cls||"");
+    p.textContent=txt;
+    p.style.left=(25+Math.random()*30)+"%";
+    unit.appendChild(p);
+    setTimeout(()=>p.remove(), 950);
   };
-  logTimer=setInterval(()=>{ if(i>=lines.length){ finish(); return; } put(lines[i++]); }, 120);
-  $("skipLog").onclick=finish;
-  $("logDone").onclick=closeModal;
+  const shake=(el, big)=>{
+    el.classList.remove("bShake","bShakeBig");
+    void el.offsetWidth;
+    el.classList.add(big?"bShakeBig":"bShake");
+  };
+  const flash=el=>{
+    el.classList.remove("bFlash");
+    void el.offsetWidth;
+    el.classList.add("bFlash");
+  };
+  const act=(txt, cls)=>{
+    const a=$("bAct"); if(!a) return;
+    a.className=cls||"";
+    a.textContent=txt;
+  };
+
+  let i=0, timer=null;
+  const doStep=st=>{
+    switch(st.k){
+      case "floor":{
+        curFl=st.fl;
+        $("bFloorTxt").innerHTML=st.fl.f+"F <span class='small'>/ "+d.floors+"F</span>"+(st.fl.boss?" <b class='bBoss'>BOSS</b>":"");
+        $("bEFace").textContent=st.fl.icon;
+        $("bEFace").classList.toggle("boss", st.fl.boss);
+        $("bEFace").style.opacity=1; $("bEFace").style.transform="";
+        $("bEName").textContent=st.fl.E.name;
+        setHp($("bEHp"), $("bEHpN"), st.fl.E.hp, st.fl.E.hp);
+        setHp($("bPHp"), $("bPHpN"), st.fl.hpStart, P.hp);
+        act(st.fl.E.name+" が現れた!", st.fl.boss?"boss":"");
+        if(st.fl.boss) vibe(60);
+        break;
+      }
+      case "atk":{
+        const e=st.e;
+        if(e.side==="p"){
+          const eU=$("bE");
+          setHp($("bEHp"), $("bEHpN"), e.ehp, maxHpE(curFl));
+          $("bPFace").classList.remove("lunge"); void $("bPFace").offsetWidth; $("bPFace").classList.add("lunge");
+          if(e.sk){
+            pop(eU, fmt(e.dmg), "crit");
+            shake(eU, true); flash($("bEFace"));
+            act("⚡『"+e.sk+"』!", "skill");
+            vibe(35);
+          }else{
+            pop(eU, fmt(e.dmg));
+            shake(eU, false);
+          }
+        }else{
+          const pU=$("bP");
+          setHp($("bPHp"), $("bPHpN"), e.php, P.hp);
+          pop(pU, fmt(e.dmg), "hurt");
+          shake(pU, false);
+        }
+        break;
+      }
+      case "ff":{
+        act("…激しい攻防が続く…");
+        setHp($("bEHp"), $("bEHpN"), st.e.ehp, maxHpE(curFl));
+        setHp($("bPHp"), $("bPHpN"), st.e.php, P.hp);
+        shake($("bE"), false); shake($("bP"), false);
+        break;
+      }
+      case "kill":{
+        const f=$("bEFace");
+        flash(f);
+        f.style.transform="scale(1.25)"; f.style.opacity=0;
+        act(st.fl.E.name+"を倒した!", "win");
+        if(st.fl.hpAfter!=null && st.fl.hpAfter>0){
+          const healed=st.fl.hpAfter;
+          setHp($("bPHp"), $("bPHpN"), healed, P.hp);
+          pop($("bP"), "回復", "heal");
+        }
+        if(st.fl.boss) vibe([40,60,90]);
+        break;
+      }
+      case "dead":{
+        $("bPFace").textContent="💀";
+        act("力尽きた… "+st.fl.f+"Fで敗退", "lose");
+        shake($("bP"), true);
+        vibe(120);
+        break;
+      }
+      case "end": showResult(); return;
+    }
+  };
+
+  const showResult=()=>{
+    if(!alive()) return;
+    clearTimeout(timer); timer=null;
+    const scene=$("bScene");
+    scene.innerHTML=
+      '<div id="bResult" class="'+(R.full?"win":"lose")+'">'+
+      '<div class="brTitle">'+(R.full? "🏆 完全攻略!" : "⚔ "+(R.cleared+1)+"Fで敗退…")+'</div>'+
+      (R.full? "" : '<div class="small">'+R.cleared+'Fまで突破。カードを集めて再挑戦しよう</div>')+
+      '<div class="brRew">🪙 <b id="brGold">0</b>'+(R.tickets? ' &nbsp;🎫 <b>+'+R.tickets+'</b>':"")+'</div>'+
+      '</div>';
+    $("bCtrl").innerHTML='<button class="btn primary" style="flex:1" data-close>閉じる</button>';
+    $("bCtrl").querySelector("[data-close]").onclick=closeModal;
+    if(R.full) vibe([40,60,90]);
+    // ゴールドのカウントアップ
+    const gEl=$("brGold"), t0=Date.now(), dur=600;
+    const tick=()=>{
+      if(!$("brGold")) return;
+      const r=Math.min(1,(Date.now()-t0)/dur);
+      gEl.textContent="+"+fmt(R.gold*(2-r)*r); // ease-out
+      if(r<1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  };
+
+  const next=()=>{
+    if(!alive()) { clearTimeout(timer); return; }
+    if(i>=steps.length) return;
+    const st=steps[i++];
+    doStep(st);
+    if(st.k!=="end") timer=setTimeout(next, Math.max(120, st.ms/speed));
+  };
+  $("bSpeedBtn").onclick=()=>{
+    speed=speed>=3?1:speed+1;
+    localStorage.setItem("tq_bspeed", speed);
+    $("bSpeedBtn").textContent="⏩ ×"+speed;
+  };
+  $("bSkipBtn").onclick=showResult;
+  next();
 }
 
 /* ================= 無限回廊(放置探索) ================= */
@@ -169,16 +327,16 @@ function renderInfPanel(){
   const best=G.inf.best? "最深記録 "+G.inf.best+"F" : "";
   if(!run){
     p.innerHTML='<div class="row"><div class="grow">'+
-      '<div style="font-weight:800; font-size:13px">🌀 無限回廊</div>'+
-      '<div class="small" style="margin-top:2px">出発すると1階25秒で自動探索。クイズをしている間も進む。10階ごとに🎫1<br>'+best+'</div></div>'+
+      '<div style="font-weight:800; font-size:15px">🌀 無限回廊</div>'+
+      '<div class="small" style="margin-top:3px">クイズ中も自動で進む放置探索。10階ごとに🎫1'+(best?'<br>'+best:'')+'</div></div>'+
       '<button class="btn gold" id="infStartBtn" '+(dgUnlocked(1)?"":"disabled")+'>出発</button></div>';
     const b=$("infStartBtn"); if(b&&!b.disabled) b.onclick=infStart;
   }else{
     p.innerHTML='<div class="row"><div class="grow">'+
-      '<div style="font-weight:800; font-size:13px">🌀 探索'+(run.dead?"終了(敗退)":"中")+' ─ 現在 '+run.floor+'F</div>'+
-      '<div class="small" style="margin-top:2px">獲得予定: 🪙'+fmt(run.gold)+(run.tickets?" ／ 🎫"+run.tickets:"")+
-      '<br>'+best+'(編成は出発時の状態で固定)</div></div>'+
-      '<button class="btn primary" id="infColBtn">'+(run.dead?"報告する":"回収して終了")+'</button></div>';
+      '<div style="font-weight:800; font-size:15px">🌀 探索'+(run.dead?"終了(敗退)":"中")+' ─ '+run.floor+'F</div>'+
+      '<div class="small" style="margin-top:3px">獲得予定: 🪙'+fmt(run.gold)+(run.tickets?" ／ 🎫"+run.tickets:"")+
+      (best?'<br>'+best:'')+'</div></div>'+
+      '<button class="btn primary" id="infColBtn">'+(run.dead?"報告する":"回収")+'</button></div>';
     $("infColBtn").onclick=infCollect;
   }
 }
@@ -209,15 +367,61 @@ function slotAccepts(def, c){
   return true;
 }
 
+/* ---- おまかせ編成 ----
+   スロット毎にスコア最大のカードを自動装備。在庫数を超えて同キーを重複装備しない */
+function cardScore(c){
+  if(c.pos==="n"){ const s=c.stats;
+    return (s.atk||0)*4+(s.def||0)*3+(s.spd||0)*5+(s.hp||0)/6; } // powerと同じ重み
+  if(c.pos==="adj") return c.pct;
+  if(c.pos==="adv") return c.fieldType==="all"? c.pct*4 : c.fieldType==="proc"? c.pct*1.5 : c.pct*0.5;
+  return c.mult*Math.min(100,c.proc)/100; // 期待ダメージ
+}
+function autoEquip(){
+  const before=playerStats().power;
+  const groups={};
+  for(const k in G.inv){
+    const c=cardOf(k); if(!c) continue;
+    (groups[c.slot]=groups[c.slot]||[]).push(c);
+  }
+  for(const g in groups) groups[g].sort((a,b)=>cardScore(b)-cardScore(a));
+  const used={};
+  const pick=list=>{
+    if(!list) return null;
+    for(const c of list){
+      if((used[c.key]||0) < (G.inv[c.key]||0)){ used[c.key]=(used[c.key]||0)+1; return c.key; }
+    }
+    return null;
+  };
+  const eq=G.party.equip;
+  eq.weapon=pick(groups.weapon); eq.armor=pick(groups.armor); eq.acc=pick(groups.acc);
+  eq.field=pick(groups.field);
+  eq.buff1=pick(groups.buff); eq.buff2=pick(groups.buff);
+  eq.skill1=pick(groups.skill); eq.skill2=pick(groups.skill); eq.skill3=pick(groups.skill);
+  saveG();
+  const after=playerStats().power;
+  return {before, after};
+}
+function unequipAll(){
+  for(const s in G.party.equip) G.party.equip[s]=null;
+  saveG();
+}
+
 function openEquipModal(){
   const P=playerStats();
-  const owned=CHARS.filter(c=>G.chars[c.id]).sort((a,b)=>b.rar-a.rar);
   openModal('<h3>編成</h3>'+
-    '<div class="small">冒険者を選び、カードを装備する。戦闘力 <b id="eqPower" style="color:var(--accent)">'+fmt(P.power)+'</b></div>'+
+    '<div class="row"><div class="grow small">戦闘力 <b id="eqPower" style="color:var(--accent); font-size:16px">'+fmt(P.power)+'</b></div>'+
+    '<button class="btn primary" id="autoEqBtn">✨ おまかせ</button>'+
+    '<button class="btn" id="unEqBtn">解除</button></div>'+
     '<div class="charsel" id="eqChars"></div>'+
-    '<div class="slotgrid" id="eqSlots"></div>'+
-    '<div class="small" style="margin-top:10px">名詞=装備 ／ 形容詞=強化 ／ 副詞=場 ／ 動詞=技。カードはクイズ正解で入手。</div>');
+    '<div class="slotgrid" id="eqSlots"></div>');
   renderEqChars(); renderEqSlots();
+  $("autoEqBtn").onclick=()=>{
+    const r=autoEquip();
+    renderEqSlots();
+    toast(r.after>r.before? "おまかせ編成! 戦闘力 "+fmt(r.before)+" → "+fmt(r.after)
+        : "すでに最強の編成");
+  };
+  $("unEqBtn").onclick=()=>{ unequipAll(); renderEqSlots(); toast("装備をすべてはずした"); };
 }
 function renderEqChars(){
   const box=$("eqChars"); if(!box) return;

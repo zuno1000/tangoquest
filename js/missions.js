@@ -91,8 +91,55 @@ function missionRow(name, cur, target, rew, claimed, onClaim){
   return row;
 }
 
+/* 現在のタブ内で受け取れる報酬をまとめて受取 */
+function claimAllCurrent(){
+  const got={g:0,t:0}; let n=0;
+  const add=r=>{ got.g+=r.g||0; got.t+=r.t||0; n++; grantReward(r); };
+  if(missionMode==="daily"){
+    const d=dailyRec();
+    DAILY_DEFS.forEach(m=>{ if(!d.cl[m.id] && m.cur(d)>=m.target){ d.cl[m.id]=1; add(m.rew); } });
+    if(!d.cl.all && DAILY_DEFS.every(m=>d.cl[m.id])){ d.cl.all=1; add({t:1}); }
+  }else if(missionMode==="weekly"){
+    const w=weeklyRec();
+    WEEKLY_DEFS.forEach(m=>{ if(!w.cl[m.id] && m.cur(w)>=m.target){ w.cl[m.id]=1; add(m.rew); } });
+    if(!w.cl.all && WEEKLY_DEFS.every(m=>w.cl[m.id])){ w.cl.all=1; add({t:2}); }
+  }else{
+    ACH_DEFS.forEach(a=>{
+      let done=G.ach[a.id]||0;
+      while(done<a.tiers.length && a.cur()>=a.tiers[done][0]){ add(a.tiers[done][1]); done++; }
+      G.ach[a.id]=done;
+    });
+  }
+  if(!n) return;
+  saveG(); refreshHeader(); renderMissions(); refreshMissionDot();
+  toast("まとめて受取: "+rewardText(got));
+}
+function claimableInMode(){
+  if(missionMode==="daily"){
+    const d=dailyRec();
+    return DAILY_DEFS.some(m=>!d.cl[m.id] && m.cur(d)>=m.target) ||
+      (!d.cl.all && DAILY_DEFS.every(m=>d.cl[m.id]));
+  }
+  if(missionMode==="weekly"){
+    const w=weeklyRec();
+    return WEEKLY_DEFS.some(m=>!w.cl[m.id] && m.cur(w)>=m.target) ||
+      (!w.cl.all && WEEKLY_DEFS.every(m=>w.cl[m.id]));
+  }
+  return ACH_DEFS.some(a=>{
+    const done=G.ach[a.id]||0;
+    return done<a.tiers.length && a.cur()>=a.tiers[done][0];
+  });
+}
+
 function renderMissions(){
   const box=$("missionList"); box.innerHTML="";
+  if(claimableInMode()){
+    const r=document.createElement("div");
+    r.style.cssText="padding:4px 0 10px; border-bottom:1px solid var(--line)";
+    r.innerHTML='<button class="claimbtn" style="width:100%" id="claimAllBtn">✨ まとめて受取</button>';
+    r.querySelector("button").onclick=claimAllCurrent;
+    box.appendChild(r);
+  }
   if(missionMode==="daily"){
     const d=dailyRec();
     DAILY_DEFS.forEach(m=>{

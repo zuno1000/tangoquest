@@ -107,8 +107,9 @@ function answer(chosen, btn){
     rc.innerHTML='<span class="dropchip bd'+rar+'" id="dropChip">'+c.icon+
       ' <span class="rc'+rar+'">'+RAR_STARS[rar-1]+'</span> '+esc(w.en)+
       ' <span class="small">'+c.typeName+'</span></span>'+
-      (rar>=3? ' <span style="color:var(--accent); font-weight:800; font-size:11px">レア!</span>':"");
+      (rar>=3? ' <span style="color:var(--accent); font-weight:800; font-size:12px">レア!</span>':"");
     $("dropChip").onclick=()=>openCardModal(key);
+    if(rar>=3) vibe(30);
   }else{
     rc.innerHTML='<span class="small">'+esc(w.en)+' ─ '+esc(w.ja)+
       '<br>連続ミス'+st[5]+'回。次の正解でカードが強くなる('+POS_LABEL[w.pos]+')</span>';

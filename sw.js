@@ -1,5 +1,5 @@
 /* TangoQuest service worker — cache-first */
-const CACHE="tangoquest-v1";
+const CACHE="tangoquest-v2";
 const ASSETS=[
   "./", "index.html", "manifest.json",
   "css/style.css",

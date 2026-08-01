@@ -150,6 +150,8 @@ function openSettings(){
     '</table>'+
     '<h3 style="margin-top:16px">出題モード</h3>'+
     '<button class="btn" id="modeToggle">'+(G.mode==="e2j"?"EN → 日本語":"日本語 → EN")+' (タップで切替)</button>'+
+    '<h3 style="margin-top:16px">演出</h3>'+
+    '<button class="btn" id="vibeToggle">振動: '+(localStorage.getItem("tq_vibe")==="off"?"OFF":"ON")+'</button>'+
     '<h3 style="margin-top:16px">端末間同期(Googleドライブ)</h3>'+
     (syncClientId()
       ? '<div class="small">あなた自身のGoogleドライブ(アプリ専用領域)に保存。進捗を失わない方向でマージされる。</div>'+
@@ -157,11 +159,17 @@ function openSettings(){
       : '<div class="small">未設定。GCPでOAuthクライアントIDを発行し js/sync.js に設定すると使える(README参照)。データは端末内に保存されている。</div>')+
     '<h3 style="margin-top:16px">データ</h3>'+
     '<button class="btn danger" id="resetBtn">データをすべてリセット</button>'+
-    '<div class="small" style="margin-top:14px">タンゴクエスト v1.0.0 ─ 英単語×ローグライクRPG<br>単語データ: 英検1級レベル '+WORDS.length+'語(<a href="https://github.com/zuno1000/tango" style="color:var(--accent2)">tango</a> 由来)</div>');
+    '<div class="small" style="margin-top:14px">タンゴクエスト v1.1.0 ─ 英単語×ローグライクRPG<br>単語データ: 英検1級レベル '+WORDS.length+'語(<a href="https://github.com/zuno1000/tango" style="color:var(--accent2)">tango</a> 由来)</div>');
   $("modeToggle").onclick=()=>{
     G.mode=G.mode==="e2j"?"j2e":"e2j"; saveG();
     $("modeToggle").textContent=(G.mode==="e2j"?"EN → 日本語":"日本語 → EN")+" (タップで切替)";
     if(!answered && cur) renderQuestion();
+  };
+  $("vibeToggle").onclick=()=>{
+    const off=localStorage.getItem("tq_vibe")==="off";
+    localStorage.setItem("tq_vibe", off?"on":"off");
+    $("vibeToggle").textContent="振動: "+(off?"ON":"OFF");
+    if(off) vibe(30);
   };
   const sb=$("syncBtn"); if(sb) sb.onclick=syncNow;
   $("resetBtn").onclick=()=>{

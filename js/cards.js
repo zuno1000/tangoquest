@@ -120,7 +120,7 @@ function renderCards(){
   const frag=document.createDocumentFragment();
   items.forEach(c=>{
     const d=document.createElement("div");
-    d.className="ccard bd"+c.rar;
+    d.className="ccard bd"+c.rar+(eq.has(c.key)?" equipped":"");
     d.innerHTML=
       (c.lv>0? '<span class="clv">+'+c.lv+'</span>':"")+
       '<span class="ccnt">×'+G.inv[c.key]+'</span>'+
@@ -148,6 +148,20 @@ function cardDetailHTML(c){
   '</div>';
 }
 
+/* カード詳細からの直接装備。品詞に応じた空きスロット(無ければ先頭)に入れる */
+function quickEquip(key){
+  const c=cardOf(key); if(!c) return null;
+  const eq=G.party.equip;
+  let slot;
+  if(c.pos==="n") slot=c.slot;
+  else if(c.pos==="adv") slot="field";
+  else if(c.pos==="adj") slot=(!eq.buff1?"buff1": !eq.buff2?"buff2":"buff1");
+  else slot=(!eq.skill1?"skill1": !eq.skill2?"skill2": !eq.skill3?"skill3":"skill1");
+  eq[slot]=key;
+  saveG();
+  return slot;
+}
+
 function openCardModal(key){
   const c=cardOf(key); if(!c) return;
   const cnt=G.inv[key]||0;
@@ -155,8 +169,9 @@ function openCardModal(key){
   openModal(
     '<h3>カード詳細</h3>'+cardDetailHTML(c)+
     '<div class="small" style="text-align:center">所持 ×'+cnt+(eq?" ・ 装備中":"")+'</div>'+
-    '<div class="row" style="justify-content:center; margin-top:12px; gap:10px">'+
-      '<button class="btn primary" id="mergeBtn" '+(cnt<2?"disabled":"")+'>⚒ 合成する(2枚 → +'+(c.lv+1)+')</button>'+
+    '<div class="row" style="margin-top:12px; gap:10px">'+
+      '<button class="btn primary" style="flex:1" id="mergeBtn" '+(cnt<2?"disabled":"")+'>⚒ 合成 → +'+(c.lv+1)+'</button>'+
+      '<button class="btn" style="flex:1" id="quickEqBtn" '+(eq?"disabled":"")+'>'+(eq?"装備中":"🛡 装備する")+'</button>'+
     '</div>');
   $("mergeBtn").onclick=()=>{
     const nk=mergeOne(key);
@@ -164,6 +179,12 @@ function openCardModal(key){
     saveG(); toast("合成成功! +"+(c.lv+1)+" になった");
     renderCards(); openCardModal(nk);
     refreshHeader();
+  };
+  $("quickEqBtn").onclick=()=>{
+    const slot=quickEquip(key);
+    if(!slot) return;
+    toast(SLOT_NAME[slot.replace(/[0-9]/g,"")]+"に装備した");
+    renderCards(); openCardModal(key);
   };
 }
 
