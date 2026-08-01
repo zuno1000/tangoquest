@@ -1,4 +1,4 @@
-# タンゴクエスト (TangoQuest)
+# LEXICA(レキシカ) ─ 旧 タンゴクエスト (TangoQuest)
 
 英単語を覚えるほど強くなる、**英単語×ローグライクRPG** の Web アプリ(PWA)。
 

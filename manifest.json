@@ -1,6 +1,6 @@
 {
-  "name": "タンゴクエスト — 英単語×ローグライクRPG",
-  "short_name": "タンゴクエスト",
+  "name": "LEXICA(レキシカ) — 英単語×ローグライクRPG",
+  "short_name": "LEXICA",
   "description": "英単語クイズでカードを集め、ダンジョンを攻略する単語学習RPG",
   "start_url": "./",
   "display": "standalone",

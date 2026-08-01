@@ -71,7 +71,7 @@ function hasClaimable(){
   return false;
 }
 function refreshMissionDot(){
-  $("missionDot").classList.toggle("hidden", !hasClaimable());
+  $("navHomeDot").classList.toggle("hidden", !hasClaimable());
 }
 
 /* ---- 任務タブ描画 ---- */

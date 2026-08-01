@@ -6,24 +6,29 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#12141f">
-<meta name="description" content="英単語を解いてカードを集め、ダンジョンを攻略するローグライク単語学習RPG。">
+<meta name="description" content="LEXICA(レキシカ) ─ 英単語を解いてカードを集め、ダンジョンを攻略する単語学習RPG。">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="stylesheet" href="css/style.css">
-<title>タンゴクエスト</title>
+<title>LEXICA ─ 単語と冒険の書</title>
 </head>
 <body>
 
 <header>
-  <div class="title">⚔ タンゴクエスト</div>
+  <div class="title">⚔ LEXICA</div>
   <div class="res"><span class="ic">📖</span><span id="resLv">Lv1</span></div>
   <div class="res"><span class="ic">🪙</span><span id="resGold">0</span></div>
   <div class="res"><span class="ic">🎫</span><span id="resTicket">0</span></div>
   <button id="gearBtn">⚙</button>
 </header>
 
+<!-- ============ ホーム ============ -->
+<main id="homeView">
+  <div id="homeBox"></div>
+</main>
+
 <!-- ============ 学習(クイズ) ============ -->
-<main id="quizView">
+<main id="quizView" class="hidden">
   <div id="infPill"><span>🌀 無限回廊</span><b id="infPillTxt"></b></div>
   <div id="promptCard">
     <span id="qBadge">新規</span>
@@ -57,7 +62,16 @@
     </div>
     <div class="small" id="eqSets" style="margin-top:4px"></div>
     <div class="charsel" id="eqChars"></div>
-    <div class="slotgrid" id="eqSlots"></div>
+    <div id="doll">
+      <div class="dollcol" id="dollLeft"></div>
+      <div id="dollChar">
+        <div id="dollFace">🗡️</div>
+        <div id="dollName"></div>
+        <div id="dollStats" class="small"></div>
+      </div>
+      <div class="dollcol" id="dollRight"></div>
+    </div>
+    <div id="dollSkills"></div>
   </div>
   <div id="pCards" class="hidden">
     <div class="row">
@@ -97,19 +111,7 @@
 
 <!-- ============ ガチャ ============ -->
 <main id="gachaView" class="hidden">
-  <div class="gbanner">
-    <div class="gt">🔮 冒険者召喚</div>
-    <div class="gs">🎫 や 🪙 で新しい仲間を召喚しよう</div>
-    <div class="row" style="justify-content:center; gap:8px; margin-top:12px">
-      <button class="btn gold" id="pull1">1回 🎫1</button>
-      <button class="btn gold" id="pull10">10回 🎫10</button>
-    </div>
-    <div class="row" style="justify-content:center; gap:8px; margin-top:8px">
-      <button class="btn" id="pullG1">1回 🪙1000</button>
-      <button class="btn" id="pullG10">10回 🪙10000</button>
-    </div>
-    <div class="grates" id="rateInfo">提供割合・突破について ›</div>
-  </div>
+  <div id="gachaBox"></div>
 </main>
 
 <!-- ============ 任務 ============ -->
@@ -123,11 +125,11 @@
 </main>
 
 <nav>
-  <button id="navQuiz" class="active"><span class="nic">📖</span>学習</button>
+  <button id="navHome" class="active"><span class="nic badge">🏰<span class="dot hidden" id="navHomeDot"></span></span>ホーム</button>
+  <button id="navQuiz"><span class="nic">📖</span>学習</button>
   <button id="navParty"><span class="nic">🛡️</span>編成</button>
   <button id="navAdv"><span class="nic">🗺️</span>冒険</button>
   <button id="navGacha"><span class="nic">🔮</span>ガチャ</button>
-  <button id="navMission"><span class="nic badge">📜<span class="dot hidden" id="missionDot"></span></span>任務</button>
 </nav>
 
 <div id="overlay"><div id="modal"></div></div>

@@ -204,6 +204,28 @@ function run(){
     G.xp=x0;
   });
 
+  /* ---- 限定ガチャ・ダンジョン ---- */
+  t("限定キャラは恒常プールに出ない", ()=>{
+    for(let r=1;r<=4;r++){
+      const p=W.gachaPool(r,null);
+      ok(p.length>0, "pool r"+r);
+      ok(p.every(c=>!c.limited), "no limited r"+r);
+    }
+  });
+  t("バナー指定で限定がピックアップ対象になる", ()=>{
+    const p=W.gachaPool(4, {chars:["c22"]});
+    ok(p.feat && p.feat.length===1 && p.feat[0].id==="c22", "featured SSR");
+    ok(p.normal.every(c=>!c.limited), "normal side no limited");
+  });
+  t("ダンジョンは12種でtierが単調増加・定義が揃っている", ()=>{
+    eq(W.DUNGEONS.length, 12, "count");
+    for(let i=0;i<12;i++){
+      const d=W.DUNGEONS[i];
+      ok(d.eicons && d.eicons.length>=3 && d.bossIcon && d.boss, d.id+" defs");
+      if(i>0) ok(d.tier>W.DUNGEONS[i-1].tier, d.id+" tier order");
+    }
+  });
+
   /* ---- 同期マージ ---- */
   t("mergeDataは進捗を失わない", ()=>{
     const a={words:{x:[1,0,5,2,0,0,0]}, days:{}, inv:{"abate|1|0":1}, chars:{}, dungeons:{},

@@ -14,12 +14,26 @@ const DUNGEONS=[
    names:["火トカゲ","溶岩ゴーレム","ヘルハウンド"], eicons:["🦎","🪨","🔥"], boss:"火竜イフリート", bossIcon:"🐉"},
   {id:"d6", tier:6, floors:12, icon:"🗼", name:"星降る魔塔",
    names:["魔導兵","死霊術師","ガーゴイル卿"], eicons:["🧙","💀","🗿"], boss:"大魔王リヴェリオン", bossIcon:"👿"},
+  {id:"d7", tier:7, floors:12, icon:"🌊", name:"海淵の神殿",
+   names:["マーマン","深海クラゲ","海蛇"], eicons:["🧜","🪼","🐍"], boss:"深淵の主クラーケン", bossIcon:"🐙"},
+  {id:"d8", tier:8, floors:12, icon:"🧊", name:"永久凍土の城",
+   names:["アイスゴーレム","雪女","フロストウルフ"], eicons:["🧊","❄️","🐺"], boss:"氷帝グラキエス", bossIcon:"☃️"},
+  {id:"d9", tier:9, floors:14, icon:"📚", name:"幻影図書館",
+   names:["生きた辞書","インクの精","本の亡霊"], eicons:["📖","🖋️","👻"], boss:"禁書の王レキシス", bossIcon:"📕"},
+  {id:"d10", tier:10, floors:14, icon:"🏯", name:"天空回廊",
+   names:["ハーピー","雲海竜","天空騎士"], eicons:["🦅","☁️","🤺"], boss:"天翔ける王シエロ", bossIcon:"🌤️"},
+  {id:"d11", tier:11, floors:15, icon:"🌑", name:"常夜の墓所",
+   names:["グール","バンシー","デュラハン"], eicons:["🧟","🕯️","🎃"], boss:"冥王ノクターン", bossIcon:"🌑"},
+  {id:"d12", tier:12, floors:16, icon:"🌌", name:"星界の果て",
+   names:["星屑の獣","コメットドラゴン","銀河の番人"], eicons:["🐆","☄️","🛸"], boss:"創星神アストラル", bossIcon:"🌌"},
 ];
 
 function dgRec(id){ if(!G.dungeons[id]) G.dungeons[id]={clears:0, lastClearDay:null}; return G.dungeons[id]; }
 function dgUnlocked(i){ return i===0 || (G.dungeons[DUNGEONS[i-1].id]&&G.dungeons[DUNGEONS[i-1].id].clears>0); }
 
-/* ---- 冒険タブ描画 ---- */
+/* ---- 冒険タブ描画(世界マップ風の蛇行パス) ---- */
+function recPower(d){ return Math.round(Math.pow(1.55,d.tier-1)*(1+0.13*(d.floors-1))*430); } // 推奨戦闘力の目安
+
 function renderAdv(){
   const P=playerStats();
   const ch=byChar[G.party.char];
@@ -29,21 +43,43 @@ function renderAdv(){
     " ─ HP"+fmt(P.hp)+" 攻"+fmt(P.atk)+" 防"+fmt(P.def)+" 速"+fmt(P.spd);
 
   const list=$("dungeonList"); list.innerHTML="";
+  let frontier=-1; // 最前線 = 未クリアで解放済みの最初のダンジョン
+  DUNGEONS.forEach((d,i)=>{
+    const rec=G.dungeons[d.id];
+    if(frontier<0 && dgUnlocked(i) && !(rec&&rec.clears>0)) frontier=i;
+  });
   DUNGEONS.forEach((d,i)=>{
     const un=dgUnlocked(i), rec=G.dungeons[d.id];
-    const row=document.createElement("div");
-    row.className="dg"+(un?"":" locked");
-    const rp=Math.round(Math.pow(1.55,d.tier-1)*(1+0.13*(d.floors-1))*430); // 推奨戦闘力の目安
-    row.innerHTML=
-      '<div class="dic">'+d.icon+'</div>'+
-      '<div class="grow"><div class="dname">'+d.name+'</div>'+
-      '<div class="dinfo">全'+d.floors+'F ・ 推奨戦闘力 '+fmt(rp)+
-      (rec&&rec.clears? ' ・ クリア'+rec.clears+'回' : (un? ' ・ 初クリアで🎫3':''))+'</div></div>'+
-      '<button class="btn primary" '+(un?"":"disabled")+'>挑む</button>';
-    if(un) row.querySelector("button").onclick=()=>startRun(d);
-    list.appendChild(row);
+    const cleared=rec&&rec.clears>0;
+    const node=document.createElement("div");
+    node.className="dnode"+(i%2?" alt":"")+(un?"":" locked")+(i===frontier?" current":"");
+    node.innerHTML=
+      '<div class="dic">'+(un? d.icon : "🔒")+'</div>'+
+      '<div class="grow"><div class="dname">'+d.name+
+        (cleared? ' <span class="dclear">✓'+rec.clears+'</span>':'')+
+        (i===frontier? ' <span class="dnew">NEW</span>':'')+'</div>'+
+      '<div class="dinfo">'+(un? '全'+d.floors+'F ・ 推奨 '+fmt(recPower(d)) : '前のダンジョンをクリアで解放')+'</div></div>';
+    if(un) node.onclick=()=>openDungeonModal(d);
+    list.appendChild(node);
   });
   renderInfPanel();
+}
+
+function openDungeonModal(d){
+  const P=playerStats();
+  const rec=G.dungeons[d.id];
+  const rp=recPower(d);
+  const okp=P.power>=rp;
+  openModal('<h3>'+d.icon+' '+esc(d.name)+'</h3>'+
+    '<div class="small" style="line-height:1.9">'+
+    '全'+d.floors+'F ・ ボス『'+d.boss+'』'+d.bossIcon+'<br>'+
+    '推奨戦闘力 <b style="color:'+(okp?"var(--ok)":"var(--ng)")+'">'+fmt(rp)+'</b>(いまの戦闘力 '+fmt(P.power)+')<br>'+
+    (rec&&rec.clears? 'クリア'+rec.clears+'回 ・ 本日初クリアで🎫1' : '初クリア報酬: 🎫3')+'</div>'+
+    (okp? "" : '<div class="small" style="margin-top:6px; color:var(--ng)">戦闘力が足りない。クイズでカードを集めよう</div>')+
+    '<div class="row" style="margin-top:14px; gap:8px">'+
+    '<button class="btn" style="flex:1" data-close>やめる</button>'+
+    '<button class="btn primary" style="flex:2" id="dgGo">⚔ 挑む</button></div>');
+  $("dgGo").onclick=()=>startRun(d);
 }
 
 /* ---- ダンジョン攻略(即時シミュレーション → ビジュアルバトル演出) ---- */
@@ -430,9 +466,14 @@ function renderEqChars(){
     box.appendChild(d);
   });
 }
+/* 人型レイアウト: 左=武器・強化 / 中央=キャラ / 右=防具・装飾・場 / 下=技 */
+const DOLL_POS={weapon:"dollLeft", buff1:"dollLeft", buff2:"dollLeft",
+                armor:"dollRight", acc:"dollRight", field:"dollRight",
+                skill1:"dollSkills", skill2:"dollSkills", skill3:"dollSkills"};
+
 function renderEqSlots(){
-  const box=$("eqSlots"); if(!box) return;
-  box.innerHTML="";
+  if(!$("dollLeft")) return;
+  ["dollLeft","dollRight","dollSkills"].forEach(id=>$(id).innerHTML="");
   SLOT_DEFS.forEach(def=>{
     const k=G.party.equip[def.s];
     const c=k? cardOf(k) : null;
@@ -442,9 +483,14 @@ function renderEqSlots(){
       ? '<div class="sic">'+c.icon+'</div><div class="sname">'+esc(c.en)+lvLabel(c)+'</div><div class="stype rc'+c.rar+'">'+c.elemIcon+' '+RAR_STARS[c.rar-1]+'</div>'
       : '<div class="sic" style="opacity:.4">'+SLOT_ICON[def.s.replace(/[0-9]/g,"")]+'</div><div class="stype">'+def.label+'</div>';
     d.onclick=()=>openSlotPicker(def);
-    box.appendChild(d);
+    $(DOLL_POS[def.s]).appendChild(d);
   });
+  // 中央のキャラ表示
   const P=playerStats();
+  const ch=byChar[G.party.char];
+  $("dollFace").textContent=ch? ch.face : "🗡️";
+  $("dollName").textContent=P.name;
+  $("dollStats").innerHTML="HP"+fmt(P.hp)+"<br>攻"+fmt(P.atk)+" 防"+fmt(P.def)+"<br>速"+fmt(P.spd);
   const pw=$("eqPower"); if(pw) pw.textContent=fmt(P.power);
   const es=$("eqSets");
   if(es) es.innerHTML = P.sets && P.sets.length
