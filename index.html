@@ -5,10 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#12141f">
+<meta name="theme-color" content="#E8EDF5">
 <meta name="description" content="LEXICA(レキシカ) ─ 英単語を解いてカードを集め、ダンジョンを攻略する単語学習RPG。">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 <title>LEXICA ─ 単語と冒険の書</title>
 </head>
@@ -95,18 +98,9 @@
 
 <!-- ============ 冒険 ============ -->
 <main id="advView" class="hidden">
-  <div class="panel partycard">
-    <div class="charface" id="pcFace">🗡️</div>
-    <div class="grow">
-      <div style="font-weight:800; font-size:15px" id="pcName"></div>
-      <div class="small" id="pcPower"></div>
-    </div>
-    <button class="btn primary" id="equipBtn">編成</button>
-  </div>
+  <div class="panel" id="infPanel" style="margin-top:6px"></div>
   <h2>ダンジョン</h2>
   <div id="dungeonList"></div>
-  <h2>無限回廊(放置探索)</h2>
-  <div class="panel" id="infPanel"></div>
 </main>
 
 <!-- ============ ガチャ ============ -->
@@ -117,9 +111,9 @@
 <!-- ============ 任務 ============ -->
 <main id="missionView" class="hidden">
   <div class="seg" id="missionSeg">
-    <button data-m="daily" class="active">デイリー</button>
-    <button data-m="weekly">ウィークリー</button>
-    <button data-m="ach">実績</button>
+    <button data-m="daily" class="active">デイリー<span class="segdot hidden" id="segDotD"></span></button>
+    <button data-m="weekly">ウィークリー<span class="segdot hidden" id="segDotW"></span></button>
+    <button data-m="ach">実績<span class="segdot hidden" id="segDotA"></span></button>
   </div>
   <div class="panel" id="missionList"></div>
 </main>

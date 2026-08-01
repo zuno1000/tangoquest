@@ -8,20 +8,28 @@ function grantReward(r){ if(r.g) G.gold+=r.g; if(r.t) G.tickets+=r.t; }
 
 function checkLogin(){
   const k=todayKey();
-  if(G.login.last===k) return;
-  G.login.last=k;
-  G.login.day=(G.login.day%7)+1;
-  const r=LOGIN_BONUS[G.login.day-1];
-  grantReward(r);
+  const gift=!G.gift10;               // 初回プレゼント(10連分チケット)未受取か
+  const newDay=G.login.last!==k;
+  if(!gift && !newDay) return;
+  if(gift){ G.gift10=1; G.tickets+=10; }
+  let r=null;
+  if(newDay){
+    G.login.last=k;
+    G.login.day=(G.login.day%7)+1;
+    r=LOGIN_BONUS[G.login.day-1];
+    grantReward(r);
+  }
   saveG(); refreshHeader();
-  openModal('<h3>🎁 ログインボーナス</h3>'+
-    '<div class="small">'+G.login.day+'日目の報酬: <b style="color:var(--accent)">'+rewardText(r)+'</b></div>'+
-    '<div class="lgrid">'+LOGIN_BONUS.map((b,i)=>{
-      const day=i+1;
-      const cls=day<G.login.day?" got":(day===G.login.day?" now":"");
-      return '<div class="lday'+cls+'"><div class="ln">'+day+'日目</div><div class="lr">'+rewardText(b)+'</div></div>';
-    }).join("")+'</div>'+
-    '<div class="row" style="justify-content:center"><button class="btn primary" data-close>受け取る</button></div>');
+  openModal('<h3>🎁 '+(newDay?"ログインボーナス":"プレゼント")+'</h3>'+
+    (gift? '<div class="giftbox">✨ はじめまして記念<br><b style="font-size:18px">🎫10(10連ガチャ分)</b> をプレゼント!</div>':'')+
+    (newDay?
+      '<div class="small">'+G.login.day+'日目の報酬: <b style="color:var(--accent)">'+rewardText(r)+'</b></div>'+
+      '<div class="lgrid">'+LOGIN_BONUS.map((b,i)=>{
+        const day=i+1;
+        const cls=day<G.login.day?" got":(day===G.login.day?" now":"");
+        return '<div class="lday'+cls+'"><div class="ln">'+day+'日目</div><div class="lr">'+rewardText(b)+'</div></div>';
+      }).join("")+'</div>' : '')+
+    '<div class="row" style="justify-content:center"><button class="btn primary" style="flex:1" data-close>受け取る</button></div>');
 }
 
 /* ---- 任務定義 ---- */
@@ -72,6 +80,7 @@ function hasClaimable(){
 }
 function refreshMissionDot(){
   $("navHomeDot").classList.toggle("hidden", !hasClaimable());
+  refreshMissionSegDots();
 }
 
 /* ---- 任務タブ描画 ---- */
@@ -91,52 +100,56 @@ function missionRow(name, cur, target, rew, claimed, onClaim){
   return row;
 }
 
-/* 現在のタブ内で受け取れる報酬をまとめて受取 */
+/* デイリー・ウィークリー・実績を横断してすべて受け取る */
 function claimAllCurrent(){
   const got={g:0,t:0}; let n=0;
   const add=r=>{ got.g+=r.g||0; got.t+=r.t||0; n++; grantReward(r); };
-  if(missionMode==="daily"){
-    const d=dailyRec();
-    DAILY_DEFS.forEach(m=>{ if(!d.cl[m.id] && m.cur(d)>=m.target){ d.cl[m.id]=1; add(m.rew); } });
-    if(!d.cl.all && DAILY_DEFS.every(m=>d.cl[m.id])){ d.cl.all=1; add({t:1}); }
-  }else if(missionMode==="weekly"){
-    const w=weeklyRec();
-    WEEKLY_DEFS.forEach(m=>{ if(!w.cl[m.id] && m.cur(w)>=m.target){ w.cl[m.id]=1; add(m.rew); } });
-    if(!w.cl.all && WEEKLY_DEFS.every(m=>w.cl[m.id])){ w.cl.all=1; add({t:2}); }
-  }else{
-    ACH_DEFS.forEach(a=>{
-      let done=G.ach[a.id]||0;
-      while(done<a.tiers.length && a.cur()>=a.tiers[done][0]){ add(a.tiers[done][1]); done++; }
-      G.ach[a.id]=done;
-    });
-  }
+  const d=dailyRec();
+  DAILY_DEFS.forEach(m=>{ if(!d.cl[m.id] && m.cur(d)>=m.target){ d.cl[m.id]=1; add(m.rew); } });
+  if(!d.cl.all && DAILY_DEFS.every(m=>d.cl[m.id])){ d.cl.all=1; add({t:1}); }
+  const w=weeklyRec();
+  WEEKLY_DEFS.forEach(m=>{ if(!w.cl[m.id] && m.cur(w)>=m.target){ w.cl[m.id]=1; add(m.rew); } });
+  if(!w.cl.all && WEEKLY_DEFS.every(m=>w.cl[m.id])){ w.cl.all=1; add({t:2}); }
+  ACH_DEFS.forEach(a=>{
+    let done=G.ach[a.id]||0;
+    while(done<a.tiers.length && a.cur()>=a.tiers[done][0]){ add(a.tiers[done][1]); done++; }
+    G.ach[a.id]=done;
+  });
   if(!n) return;
   saveG(); refreshHeader(); renderMissions(); refreshMissionDot();
-  toast("まとめて受取: "+rewardText(got));
+  toast("すべて受け取った: "+rewardText(got));
 }
-function claimableInMode(){
-  if(missionMode==="daily"){
-    const d=dailyRec();
-    return DAILY_DEFS.some(m=>!d.cl[m.id] && m.cur(d)>=m.target) ||
-      (!d.cl.all && DAILY_DEFS.every(m=>d.cl[m.id]));
-  }
-  if(missionMode==="weekly"){
-    const w=weeklyRec();
-    return WEEKLY_DEFS.some(m=>!w.cl[m.id] && m.cur(w)>=m.target) ||
-      (!w.cl.all && WEEKLY_DEFS.every(m=>w.cl[m.id]));
-  }
+/* グループごとの受取可能判定(セグメントの通知バッジ用) */
+function claimableDaily(){
+  const d=dailyRec();
+  return DAILY_DEFS.some(m=>!d.cl[m.id] && m.cur(d)>=m.target) ||
+    (!d.cl.all && DAILY_DEFS.every(m=>d.cl[m.id]));
+}
+function claimableWeekly(){
+  const w=weeklyRec();
+  return WEEKLY_DEFS.some(m=>!w.cl[m.id] && m.cur(w)>=m.target) ||
+    (!w.cl.all && WEEKLY_DEFS.every(m=>w.cl[m.id]));
+}
+function claimableAch(){
   return ACH_DEFS.some(a=>{
     const done=G.ach[a.id]||0;
     return done<a.tiers.length && a.cur()>=a.tiers[done][0];
   });
 }
+function refreshMissionSegDots(){
+  if(!$("segDotD")) return;
+  $("segDotD").classList.toggle("hidden", !claimableDaily());
+  $("segDotW").classList.toggle("hidden", !claimableWeekly());
+  $("segDotA").classList.toggle("hidden", !claimableAch());
+}
 
 function renderMissions(){
+  refreshMissionSegDots();
   const box=$("missionList"); box.innerHTML="";
-  if(claimableInMode()){
+  if(hasClaimable()){
     const r=document.createElement("div");
     r.style.cssText="padding:4px 0 10px; border-bottom:1px solid var(--line)";
-    r.innerHTML='<button class="claimbtn" style="width:100%" id="claimAllBtn">✨ まとめて受取</button>';
+    r.innerHTML='<button class="claimbtn" style="width:100%" id="claimAllBtn">✨ すべて受け取る(3タブぶん)</button>';
     r.querySelector("button").onclick=claimAllCurrent;
     box.appendChild(r);
   }

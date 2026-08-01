@@ -246,6 +246,10 @@ function run(){
     ok(W.document.getElementById("promptWord").textContent.length>0);
   });
   t("初期キャラを所持している", ()=>ok(W.G.chars.c01));
+  t("初回プレゼント(🎫10)が付与される", ()=>{
+    eq(W.G.gift10, 1, "flag");
+    ok(W.G.tickets>=10, "tickets="+W.G.tickets);
+  });
 
   }catch(e){
     results.push(["(test harness)", false, String(e.message||e)]);

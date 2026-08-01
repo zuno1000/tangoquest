@@ -35,13 +35,7 @@ function dgUnlocked(i){ return i===0 || (G.dungeons[DUNGEONS[i-1].id]&&G.dungeon
 function recPower(d){ return Math.round(Math.pow(1.55,d.tier-1)*(1+0.13*(d.floors-1))*430); } // 推奨戦闘力の目安
 
 function renderAdv(){
-  const P=playerStats();
-  const ch=byChar[G.party.char];
-  $("pcFace").textContent=ch? ch.face : "🗡️";
-  $("pcName").textContent=ch? ch.name : "-";
-  $("pcPower").innerHTML="戦闘力 <b style='color:var(--accent)'>"+fmt(P.power)+"</b>"+
-    " ─ HP"+fmt(P.hp)+" 攻"+fmt(P.atk)+" 防"+fmt(P.def)+" 速"+fmt(P.spd);
-
+  renderInfPanel();
   const list=$("dungeonList"); list.innerHTML="";
   let frontier=-1; // 最前線 = 未クリアで解放済みの最初のダンジョン
   DUNGEONS.forEach((d,i)=>{
@@ -62,7 +56,6 @@ function renderAdv(){
     if(un) node.onclick=()=>openDungeonModal(d);
     list.appendChild(node);
   });
-  renderInfPanel();
 }
 
 function openDungeonModal(d){
@@ -532,4 +525,3 @@ function openSlotPicker(def){
   const un=$("unequipRow");
   if(un) un.onclick=()=>{ G.party.equip[def.s]=null; saveG(); closeModal(); renderEqSlots(); };
 }
-$("equipBtn").onclick=()=>{ setPartyMode("equip"); switchTab("party"); };

@@ -106,9 +106,9 @@ function answer(chosen, btn){
     if(l1>l0){ lvUp=l1; }
   }
 
-  // 結果表示 + カードドロップ
+  // 結果表示 + カードドロップ(文言は簡潔に・縦を圧縮)
   const head=$("resultHead");
-  head.textContent = ok? "⭕ 正解！" : "❌ 不正解";
+  head.textContent = ok? "⭕ 正解" : "❌ "+w.en;
   head.className = ok? "ok" : "ng";
   const rc=$("resultCard");
   if(ok){
@@ -118,12 +118,9 @@ function answer(chosen, btn){
     const gain=equipGainFor(key);
     rc.innerHTML='<span class="dropchip bd'+rar+'" id="dropChip">'+c.icon+
       ' <span class="rc'+rar+'">'+RAR_STARS[rar-1]+'</span> '+esc(w.en)+'</span>'+
-      (rar>=3? ' <span style="color:var(--accent); font-weight:800; font-size:12px">レア!</span>':"")+
-      '<div class="row" style="margin-top:6px; gap:8px">'+
-      '<span class="small">📖 +'+xpGain+'XP'+
+      ' <span class="small">+'+xpGain+'XP'+
         (lvUp? ' <b style="color:var(--accent)">Lv'+lvUp+'!</b>':'')+'</span>'+
-      (gain>0? '<button class="minibtn" id="eqNowBtn">⬆ 装備する (戦闘力+'+fmt(gain)+')</button>':'')+
-      '</div>';
+      (gain>0? '<div style="margin-top:5px"><button class="minibtn" id="eqNowBtn">⬆ 装備 (+'+fmt(gain)+')</button></div>':'');
     $("dropChip").onclick=()=>openCardModal(key);
     const eb=$("eqNowBtn");
     if(eb) eb.onclick=()=>{
@@ -135,8 +132,8 @@ function answer(chosen, btn){
     if(lvUp){ toast("📖 レベルアップ! Lv"+lvUp+" ─ 全ステータス強化"); vibe(40); }
     else if(rar>=3) vibe(30);
   }else{
-    rc.innerHTML='<span class="small">'+esc(w.en)+' ─ '+esc(w.ja)+
-      '<br>連続ミス'+st[5]+'回。次の正解でカードが強くなる('+POS_LABEL[w.pos]+')</span>';
+    rc.innerHTML='<span class="small">'+esc(w.ja)+
+      ((st[5]||0)>=2? ' <span style="color:var(--accent)">🔥ミス'+st[5]+'</span>':'')+'</span>';
   }
   $("resultBar").classList.add("show");
   saveG();

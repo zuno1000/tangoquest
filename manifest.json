@@ -4,8 +4,8 @@
   "description": "英単語クイズでカードを集め、ダンジョンを攻略する単語学習RPG",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#12141f",
-  "theme_color": "#12141f",
+  "background_color": "#E8EDF5",
+  "theme_color": "#E8EDF5",
   "icons": [
     {"src": "icon-192.png", "sizes": "192x192", "type": "image/png"},
     {"src": "icon-512.png", "sizes": "512x512", "type": "image/png"}
