@@ -93,6 +93,8 @@ function mergeData(a, b){
   // 通貨・累計・記録: 大きい方
   m.gold=Math.max(m.gold||0, b.gold||0);
   m.tickets=Math.max(m.tickets||0, b.tickets||0);
+  m.shards=Math.max(m.shards||0, b.shards||0);
+  m.xp=Math.max(m.xp||0, b.xp||0);
   for(const k in b.counters||{}) m.counters[k]=Math.max(m.counters[k]||0, b.counters[k]||0);
   m.inf=m.inf||{best:0,run:null};
   m.inf.best=Math.max(m.inf.best||0, (b.inf&&b.inf.best)||0);
@@ -159,7 +161,7 @@ function openSettings(){
       : '<div class="small">未設定。GCPでOAuthクライアントIDを発行し js/sync.js に設定すると使える(README参照)。データは端末内に保存されている。</div>')+
     '<h3 style="margin-top:16px">データ</h3>'+
     '<button class="btn danger" id="resetBtn">データをすべてリセット</button>'+
-    '<div class="small" style="margin-top:14px">タンゴクエスト v1.1.0 ─ 英単語×ローグライクRPG<br>単語データ: 英検1級レベル '+WORDS.length+'語(<a href="https://github.com/zuno1000/tango" style="color:var(--accent2)">tango</a> 由来)</div>');
+    '<div class="small" style="margin-top:14px">タンゴクエスト v1.2.0 ─ 英単語×ローグライクRPG<br>単語データ: 英検1級レベル '+WORDS.length+'語(<a href="https://github.com/zuno1000/tango" style="color:var(--accent2)">tango</a> 由来)</div>');
   $("modeToggle").onclick=()=>{
     G.mode=G.mode==="e2j"?"j2e":"e2j"; saveG();
     $("modeToggle").textContent=(G.mode==="e2j"?"EN → 日本語":"日本語 → EN")+" (タップで切替)";

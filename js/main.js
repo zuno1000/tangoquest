@@ -3,9 +3,9 @@
 
 const TABS={
   quiz:    {view:"quizView",    nav:"navQuiz",    on:()=>refreshInfPill()},
-  cards:   {view:"cardsView",   nav:"navCards",   on:()=>renderCards()},
+  party:   {view:"partyView",   nav:"navParty",   on:()=>renderParty()},
   adv:     {view:"advView",     nav:"navAdv",     on:()=>renderAdv()},
-  gacha:   {view:"gachaView",   nav:"navGacha",   on:()=>renderChars()},
+  gacha:   {view:"gachaView",   nav:"navGacha",   on:()=>{}},
   mission: {view:"missionView", nav:"navMission", on:()=>{ renderMissions(); refreshMissionDot(); }},
 };
 function switchTab(name){
@@ -17,12 +17,31 @@ function switchTab(name){
   TABS[name].on();
 }
 $("navQuiz").onclick=()=>switchTab("quiz");
-$("navCards").onclick=()=>switchTab("cards");
+$("navParty").onclick=()=>switchTab("party");
 $("navAdv").onclick=()=>switchTab("adv");
 $("navGacha").onclick=()=>switchTab("gacha");
 $("navMission").onclick=()=>switchTab("mission");
 
+/* ---- 編成タブ(そうび / カード / なかま) ---- */
+let partyMode="equip";
+function setPartyMode(m){
+  partyMode=m;
+  $("partySeg").querySelectorAll("button").forEach(x=>x.classList.toggle("active", x.dataset.p===m));
+}
+function renderParty(){
+  $("pEquip").classList.toggle("hidden", partyMode!=="equip");
+  $("pCards").classList.toggle("hidden", partyMode!=="cards");
+  $("pChars").classList.toggle("hidden", partyMode!=="chars");
+  if(partyMode==="equip"){ renderEqChars(); renderEqSlots(); }
+  else if(partyMode==="cards") renderCards();
+  else renderChars();
+}
+$("partySeg").querySelectorAll("button").forEach(b=>{
+  b.onclick=()=>{ setPartyMode(b.dataset.p); renderParty(); };
+});
+
 function refreshHeader(){
+  $("resLv").textContent="Lv"+accountLevel();
   $("resGold").textContent=fmt(G.gold);
   $("resTicket").textContent=fmt(G.tickets);
   refreshMissionDot();

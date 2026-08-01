@@ -91,9 +91,20 @@ function answer(chosen, btn){
   st[1]=now+INTERVALS[st[0]];
   if(ok){ st[2]++; st[5]=0; st[6]=now; } else { st[3]++; st[5]=(st[5]||0)+1; }
   const d=dayRec(); d.a++; if(ok) d.c++;
-  if(ok && st[0]>=MASTER_BOX && !st[4]){ st[4]=1; d.m++; }
+  let justMastered=false;
+  if(ok && st[0]>=MASTER_BOX && !st[4]){ st[4]=1; d.m++; justMastered=true; }
   track("ans"); if(ok) track("cor");
   lastEn=w.en;
+
+  // 知識XP: 正解が直接キャラの強さになる
+  let xpGain=0, lvUp=0;
+  if(ok){
+    const l0=accountLevel();
+    xpGain=10+(justMastered?40:0);
+    G.xp+=xpGain;
+    const l1=accountLevel();
+    if(l1>l0){ lvUp=l1; }
+  }
 
   // 結果表示 + カードドロップ
   const head=$("resultHead");
@@ -104,12 +115,25 @@ function answer(chosen, btn){
     const rar=dropRarity(preSt);
     const key=addCard(w.en, rar);
     const c=cardOf(key);
+    const gain=equipGainFor(key);
     rc.innerHTML='<span class="dropchip bd'+rar+'" id="dropChip">'+c.icon+
-      ' <span class="rc'+rar+'">'+RAR_STARS[rar-1]+'</span> '+esc(w.en)+
-      ' <span class="small">'+c.typeName+'</span></span>'+
-      (rar>=3? ' <span style="color:var(--accent); font-weight:800; font-size:12px">レア!</span>':"");
+      ' <span class="rc'+rar+'">'+RAR_STARS[rar-1]+'</span> '+esc(w.en)+'</span>'+
+      (rar>=3? ' <span style="color:var(--accent); font-weight:800; font-size:12px">レア!</span>':"")+
+      '<div class="row" style="margin-top:6px; gap:8px">'+
+      '<span class="small">📖 +'+xpGain+'XP'+
+        (lvUp? ' <b style="color:var(--accent)">Lv'+lvUp+'!</b>':'')+'</span>'+
+      (gain>0? '<button class="minibtn" id="eqNowBtn">⬆ 装備する (戦闘力+'+fmt(gain)+')</button>':'')+
+      '</div>';
     $("dropChip").onclick=()=>openCardModal(key);
-    if(rar>=3) vibe(30);
+    const eb=$("eqNowBtn");
+    if(eb) eb.onclick=()=>{
+      if(!quickEquip(key)) return;
+      eb.disabled=true; eb.textContent="装備した!";
+      toast("戦闘力 "+fmt(playerStats().power)+" になった");
+      refreshHeader();
+    };
+    if(lvUp){ toast("📖 レベルアップ! Lv"+lvUp+" ─ 全ステータス強化"); vibe(40); }
+    else if(rar>=3) vibe(30);
   }else{
     rc.innerHTML='<span class="small">'+esc(w.en)+' ─ '+esc(w.ja)+
       '<br>連続ミス'+st[5]+'回。次の正解でカードが強くなる('+POS_LABEL[w.pos]+')</span>';

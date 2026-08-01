@@ -22,6 +22,8 @@ G.party.equip=Object.assign(
   G.party.equip||{});
 G.gold=G.gold||0;
 G.tickets=G.tickets||0;
+G.shards=G.shards||0;   // カードのかけら(分解で入手・強化に使う)
+G.xp=G.xp||0;           // 知識XP(クイズ正解で獲得)
 G.dungeons=G.dungeons||{};   // id -> {clears, lastClearDay}
 G.inf=G.inf||{best:0, run:null};
 G.daily=G.daily||{};    // ymd -> {a,c,card,merge,run,clear, cl:{missionId:1}}
@@ -72,5 +74,9 @@ function track(ev, n){
   for(const k in G.daily){ const t=new Date(k).getTime(); if(t && t<cut) delete G.daily[k]; }
   for(const k in G.weekly){ const t=new Date(k.slice(1)).getTime(); if(t && t<cut) delete G.weekly[k]; }
 })();
+
+/* ---- 知識レベル: クイズ正解の積み重ねが直接強さになる ---- */
+function accountLevel(){ return Math.floor(Math.pow((G.xp||0)/50, 0.55))+1; }
+function lvMult(){ return 1+0.01*(accountLevel()-1); } // Lvごとに全ステータス+1%
 
 const byEn={}; WORDS.forEach(w=>byEn[w.en]=w);

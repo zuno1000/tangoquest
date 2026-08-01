@@ -21,11 +21,11 @@ body{
 button{font-family:inherit}
 
 /* ---- header ---- */
-header{display:flex; align-items:center; gap:8px; padding:10px 14px 6px}
-header .title{font-weight:800; font-size:16px; color:var(--accent); margin-right:auto}
-.res{display:flex; align-items:center; gap:4px; background:var(--card); border:1px solid var(--line);
-  border-radius:999px; padding:6px 12px; font-size:13px; font-weight:700}
-.res .ic{font-size:13px}
+header{display:flex; align-items:center; gap:6px; padding:10px 12px 6px}
+header .title{font-weight:800; font-size:14px; color:var(--accent); margin-right:auto; white-space:nowrap}
+.res{display:flex; align-items:center; gap:3px; background:var(--card); border:1px solid var(--line);
+  border-radius:999px; padding:5px 9px; font-size:12px; font-weight:700; white-space:nowrap}
+.res .ic{font-size:12px}
 #gearBtn{border:none; background:var(--card); color:var(--sub); border-radius:999px;
   width:36px; height:36px; font-size:17px; cursor:pointer}
 
@@ -121,6 +121,9 @@ h2{font-size:14px; margin:14px 2px 8px; color:var(--sub); font-weight:700}
 .row{display:flex; align-items:center; gap:8px}
 .grow{flex:1; min-width:0}
 .small{font-size:12px; color:var(--sub)}
+.minibtn{border:none; border-radius:10px; padding:8px 12px; min-height:36px; font-size:12px; font-weight:800;
+  cursor:pointer; background:linear-gradient(135deg,var(--accent2),#8b5cf6); color:#fff}
+.minibtn:disabled{opacity:.6}
 
 /* ---- cards tab ---- */
 #cardGrid{display:grid; grid-template-columns:repeat(3,1fr); gap:9px}

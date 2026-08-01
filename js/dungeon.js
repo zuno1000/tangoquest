@@ -406,23 +406,15 @@ function unequipAll(){
   saveG();
 }
 
-function openEquipModal(){
-  const P=playerStats();
-  openModal('<h3>編成</h3>'+
-    '<div class="row"><div class="grow small">戦闘力 <b id="eqPower" style="color:var(--accent); font-size:16px">'+fmt(P.power)+'</b></div>'+
-    '<button class="btn primary" id="autoEqBtn">✨ おまかせ</button>'+
-    '<button class="btn" id="unEqBtn">解除</button></div>'+
-    '<div class="charsel" id="eqChars"></div>'+
-    '<div class="slotgrid" id="eqSlots"></div>');
-  renderEqChars(); renderEqSlots();
-  $("autoEqBtn").onclick=()=>{
-    const r=autoEquip();
-    renderEqSlots();
-    toast(r.after>r.before? "おまかせ編成! 戦闘力 "+fmt(r.before)+" → "+fmt(r.after)
-        : "すでに最強の編成");
-  };
-  $("unEqBtn").onclick=()=>{ unequipAll(); renderEqSlots(); toast("装備をすべてはずした"); };
-}
+/* 編成タブ(そうび)のボタン。要素は静的DOMにあるため一度だけバインド */
+$("autoEqBtn").onclick=()=>{
+  const r=autoEquip();
+  renderEqSlots();
+  toast(r.after>r.before? "おまかせ編成! 戦闘力 "+fmt(r.before)+" → "+fmt(r.after)
+      : "すでに最強の編成");
+};
+$("unEqBtn").onclick=()=>{ unequipAll(); renderEqSlots(); toast("装備をすべてはずした"); };
+
 function renderEqChars(){
   const box=$("eqChars"); if(!box) return;
   box.innerHTML="";
@@ -433,7 +425,7 @@ function renderEqChars(){
     d.innerHTML='<div class="cf">'+c.face+'</div>'+
       '<div class="cr '+CHAR_RAR_CLASS[c.rar-1]+'">'+CHAR_RAR[c.rar-1]+'</div>'+
       '<div class="cn">'+esc(c.name)+'</div>'+
-      '<div class="small" style="font-size:8px">HP'+st.hp+' 攻'+st.atk+'</div>';
+      '<div class="small" style="font-size:10px">HP'+st.hp+' 攻'+st.atk+'</div>';
     d.onclick=()=>{ G.party.char=c.id; saveG(); renderEqChars(); renderEqSlots(); };
     box.appendChild(d);
   });
@@ -447,12 +439,17 @@ function renderEqSlots(){
     const d=document.createElement("div");
     d.className="slot"+(c?" filled bd"+c.rar:"");
     d.innerHTML= c
-      ? '<div class="sic">'+c.icon+'</div><div class="sname">'+esc(c.en)+lvLabel(c)+'</div><div class="stype rc'+c.rar+'">'+RAR_STARS[c.rar-1]+'</div>'
+      ? '<div class="sic">'+c.icon+'</div><div class="sname">'+esc(c.en)+lvLabel(c)+'</div><div class="stype rc'+c.rar+'">'+c.elemIcon+' '+RAR_STARS[c.rar-1]+'</div>'
       : '<div class="sic" style="opacity:.4">'+SLOT_ICON[def.s.replace(/[0-9]/g,"")]+'</div><div class="stype">'+def.label+'</div>';
     d.onclick=()=>openSlotPicker(def);
     box.appendChild(d);
   });
-  const pw=$("eqPower"); if(pw) pw.textContent=fmt(playerStats().power);
+  const P=playerStats();
+  const pw=$("eqPower"); if(pw) pw.textContent=fmt(P.power);
+  const es=$("eqSets");
+  if(es) es.innerHTML = P.sets && P.sets.length
+    ? "セット効果: "+P.sets.map(s=>ELEM_ICON[s.elem]+"×"+s.n+" <b style='color:var(--ok)'>+"+Math.round(s.b*100)+"%</b>").join(" ・ ")
+    : "同じ属性のカードを2枚そろえるとセット効果(全ステ+5%〜)";
 }
 function openSlotPicker(def){
   const cands=[];
@@ -474,14 +471,19 @@ function openSlotPicker(def){
     const row=document.createElement("div");
     row.className="prow";
     row.innerHTML='<div class="sic">'+c.icon+'</div>'+
-      '<div class="grow"><div style="font-size:12px; font-weight:800">'+esc(c.en)+lvLabel(c)+
-      ' <span class="rc'+c.rar+'" style="font-size:10px">'+RAR_STARS[c.rar-1]+'</span>'+
+      '<div class="grow"><div style="font-size:14px; font-weight:800">'+esc(c.en)+lvLabel(c)+
+      ' <span class="rc'+c.rar+'" style="font-size:11px">'+c.elemIcon+' '+RAR_STARS[c.rar-1]+'</span>'+
       (cur===c.key? ' <span class="small" style="color:var(--accent)">装備中</span>':"")+'</div>'+
-      '<div class="small" style="font-size:10px">'+effectText(c)+' ─ '+esc(c.ja)+'</div></div>';
-    row.onclick=()=>{ G.party.equip[def.s]=c.key; saveG(); openEquipModal(); };
+      '<div class="small" style="font-size:11px">'+effectText(c)+' ─ '+esc(c.ja)+'</div></div>';
+    row.onclick=()=>{
+      const already=equippedCountOf(c.key, G.party.equip) - (cur===c.key?1:0);
+      if(already >= (G.inv[c.key]||0)){ toast("在庫が足りない(別スロットで装備中)"); return; }
+      G.party.equip[def.s]=c.key; saveG();
+      closeModal(); renderEqSlots();
+    };
     list.appendChild(row);
   });
   const un=$("unequipRow");
-  if(un) un.onclick=()=>{ G.party.equip[def.s]=null; saveG(); openEquipModal(); };
+  if(un) un.onclick=()=>{ G.party.equip[def.s]=null; saveG(); closeModal(); renderEqSlots(); };
 }
-$("equipBtn").onclick=openEquipModal;
+$("equipBtn").onclick=()=>{ setPartyMode("equip"); switchTab("party"); };

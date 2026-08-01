@@ -1,17 +1,20 @@
 "use strict";
 /* ================= 戦闘計算 ================= */
 
-/* 現在の編成からプレイヤーステータスを算出(JSON化可能なスナップショット) */
-function playerStats(){
-  // 在庫に無いカードが装備されていたら外す
-  for(const s in G.party.equip){
-    const k=G.party.equip[s];
-    if(k && !G.inv[k]) G.party.equip[s]=null;
+/* 現在の編成からプレイヤーステータスを算出(JSON化可能なスナップショット)。
+   eqOpt を渡すとその装備案で試算する(状態は変更しない) */
+function playerStats(eqOpt){
+  const eq=eqOpt||G.party.equip;
+  if(!eqOpt){
+    // 在庫に無いカードが装備されていたら外す
+    for(const s in eq){
+      const k=eq[s];
+      if(k && !G.inv[k]) eq[s]=null;
+    }
   }
   const ch=byChar[G.party.char]||CHARS[0];
   const base=charStats(ch.id);
   let hp=base.hp, atk=base.atk, def=base.def, spd=base.spd;
-  const eq=G.party.equip;
   const card=s=>eq[s]? cardOf(eq[s]) : null;
 
   // 名詞=装備(固定値)
@@ -36,9 +39,24 @@ function playerStats(){
   ["skill1","skill2","skill3"].forEach(s=>{
     const c=card(s); if(c&&c.mult) skills.push({name:c.en, mult:c.mult, proc:c.proc});
   });
+  // 属性セット効果: 同属性を並べるほど強い(2枚+5% / 4枚+12% / 6枚+20%)
+  const ecnt=[0,0,0,0,0];
+  for(const s in eq){ const c=card(s); if(c) ecnt[c.elem]++; }
+  const sets=[];
+  ecnt.forEach((n,i)=>{
+    const b = n>=6? 0.20 : n>=4? 0.12 : n>=2? 0.05 : 0;
+    if(b){ sets.push({elem:i, n, b}); const m=1+b; hp*=m; atk*=m; def*=m; spd*=m; }
+  });
   hp=Math.round(hp); atk=Math.round(atk); def=Math.round(def); spd=Math.round(spd);
-  const power=Math.round(hp/6 + atk*4 + def*3 + spd*5);
-  return {name:ch.name.split(" ").pop(), face:ch.face, hp, atk, def, spd, skills, procBonus, goldBonus, power};
+  // 戦闘力: 技の期待ダメージ倍率も攻撃に織り込む(技・発動率も戦闘力に反映される)
+  let em=1;
+  if(skills.length){
+    let s=0;
+    skills.forEach(k=>{ s+=Math.min(100, k.proc+procBonus)/100*(k.mult/100-1); });
+    em=1+s/skills.length;
+  }
+  const power=Math.round(hp/6 + atk*em*4 + def*3 + spd*5);
+  return {name:ch.name.split(" ").pop(), face:ch.face, hp, atk, def, spd, skills, procBonus, goldBonus, sets, power};
 }
 
 /* 敵の名前(ダンジョン定義 dungeon.js から参照) */

@@ -29,7 +29,7 @@ if(!G.chars[G.party.char]) G.chars[G.party.char]={dup:0};
 function charStats(id){
   const c=byChar[id]; if(!c) return {hp:1,atk:1,def:1,spd:1};
   const dup=Math.min((G.chars[id]&&G.chars[id].dup)||0, 10);
-  const m=1+0.06*dup;
+  const m=(1+0.06*dup)*lvMult(); // 突破 + 知識レベル(クイズ正解で成長)
   return {hp:Math.round(c.hp*m), atk:Math.round(c.atk*m), def:Math.round(c.def*m), spd:Math.round(c.spd*m)};
 }
 

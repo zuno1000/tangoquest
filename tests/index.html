@@ -140,16 +140,81 @@ function run(){
     ok(W.hasClaimable(), "claimable");
   });
 
+  /* ---- かけら経済 ---- */
+  t("分解でかけらが増え在庫が減る", ()=>{
+    const G=W.G;
+    const en=W.WORDS[20].en;
+    W.addCard(en,3);
+    const s0=G.shards;
+    const gain=W.disassemble(en+"|3|0",1);
+    eq(gain, 8, "★3=8かけら");
+    eq(G.shards, s0+8, "shards added");
+    ok(!G.inv[en+"|3|0"], "consumed");
+  });
+  t("かけら強化でLvが上がりかけらが減る", ()=>{
+    const G=W.G;
+    const en=W.WORDS[21].en;
+    W.addCard(en,1);
+    G.shards=100;
+    const nk=W.enhanceOne(en+"|1|0");
+    eq(nk, en+"|1|1", "new key");
+    eq(G.shards, 98, "cost=★1は2");
+    eq(G.inv[nk], 1, "inventory");
+  });
+  t("一括分解は装備中カードを1枚残す", ()=>{
+    const G=W.G;
+    const w=W.WORDS.find(x=>W.genCard(x,1,0).slot==="weapon");
+    G.inv={};
+    W.addCard(w.en,1); W.addCard(w.en,1);
+    G.party.equip.weapon=w.en+"|1|0";
+    const r=W.bulkDisassemble(1,false);
+    eq(G.inv[w.en+"|1|0"], 1, "equipped keeps 1");
+    ok(r.cnt>=1, "some disassembled");
+  });
+
+  /* ---- 属性・セット効果 ---- */
+  t("属性は決定的(レア・Lvで不変)で0〜4", ()=>{
+    const a=W.genCard(W.WORDS[0],1,0), b=W.genCard(W.WORDS[0],3,2);
+    ok(a.elem>=0 && a.elem<5, "range");
+    eq(a.elem, b.elem, "stable");
+  });
+  t("同属性2枚でセット効果が発動する", ()=>{
+    const cards=W.WORDS.filter(x=>x.pos==="n").map(x=>W.genCard(x,1,0));
+    const wpn=cards.find(c=>c.slot==="weapon");
+    const arm=cards.find(c=>c.slot==="armor" && c.elem===wpn.elem);
+    ok(arm, "同属性ペアが存在");
+    const eqo={weapon:wpn.key, armor:arm.key, acc:null, buff1:null, buff2:null,
+               field:null, skill1:null, skill2:null, skill3:null};
+    const P=W.playerStats(eqo);
+    ok(P.sets && P.sets.length===1, "set reported");
+    eq(P.sets[0].n, 2, "count=2");
+    eq(P.sets[0].b, 0.05, "+5%");
+  });
+
+  /* ---- 知識レベル ---- */
+  t("知識レベルでステータスが伸びる", ()=>{
+    const G=W.G;
+    const x0=G.xp;
+    G.xp=0;
+    const a0=W.charStats(G.party.char).atk;
+    eq(W.accountLevel(), 1, "xp0はLv1");
+    G.xp=100000;
+    ok(W.accountLevel()>10, "level grows");
+    ok(W.charStats(G.party.char).atk>a0, "stats grow");
+    G.xp=x0;
+  });
+
   /* ---- 同期マージ ---- */
   t("mergeDataは進捗を失わない", ()=>{
     const a={words:{x:[1,0,5,2,0,0,0]}, days:{}, inv:{"abate|1|0":1}, chars:{}, dungeons:{},
-             gold:100, tickets:0, counters:{cor:5}, inf:{best:3}, ach:{}, updatedAt:1};
+             gold:100, tickets:0, shards:5, xp:120, counters:{cor:5}, inf:{best:3}, ach:{}, updatedAt:1};
     const b={words:{x:[0,0,9,3,0,0,0]}, days:{}, inv:{"abate|1|0":4}, chars:{c05:{dup:2}}, dungeons:{},
-             gold:50, tickets:7, counters:{cor:9}, inf:{best:8}, ach:{acor:1}, updatedAt:2};
+             gold:50, tickets:7, shards:9, xp:80, counters:{cor:9}, inf:{best:8}, ach:{acor:1}, updatedAt:2};
     const m=W.mergeData(a,b);
     eq(m.words.x[2], 9, "words: 解答回数が多い方");
     eq(m.inv["abate|1|0"], 4, "inv max");
     eq(m.gold, 100, "gold max"); eq(m.tickets, 7, "tickets max");
+    eq(m.shards, 9, "shards max"); eq(m.xp, 120, "xp max");
     eq(m.counters.cor, 9); eq(m.inf.best, 8); eq(m.ach.acor, 1);
     ok(m.chars.c05, "chars union");
   });
