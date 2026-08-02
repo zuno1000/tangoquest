@@ -16,8 +16,12 @@ function pickWord(){
   const notLast=a=>a.length>1? a.filter(w=>w.en!==lastEn) : a;
   const d=notLast(due), u=notLast(unseen);
   if(d.length && (u.length===0 || Math.random()<0.8)){
-    d.sort((a,b)=>G.words[a.en][1]-G.words[b.en][1]);
-    const pool=d.slice(0, Math.min(8,d.length));
+    // 編成中の単語が復習期限なら優先出題(野生語の記憶Lv維持ループ)
+    const eqEn=equippedEnSet();
+    const ed=d.filter(w=>eqEn.has(w.en));
+    const src=ed.length? ed : d;
+    src.sort((a,b)=>G.words[a.en][1]-G.words[b.en][1]);
+    const pool=src.slice(0, Math.min(8,src.length));
     return pool[Math.floor(Math.random()*pool.length)];
   }
   if(u.length) return u[Math.floor(Math.random()*u.length)];
@@ -114,12 +118,14 @@ function answer(chosen, btn){
     const rar=dropRarity(preSt);
     const key=addCard(w.en, rar);
     const c=cardOf(key);
-    const rt=rootText(w.en);
+    const meta=[];
+    if(rootText(w.en)) meta.push('🧬 '+rootText(w.en));
+    if(c.wild) meta.push('<span style="color:var(--accent)">🐺 野生語 ─ 記憶Lv'+memBox(w.en)+'(装備で節×'+wildMult(w.en)+')</span>');
     rc.innerHTML='<span class="dropchip bd'+rar+'" id="dropChip">'+c.icon+
       ' <span class="rc'+rar+'">'+RAR_STARS[rar-1]+'</span> '+esc(w.en)+'</span>'+
       ' <span class="small">+'+xpGain+'XP'+
         (lvUp? ' <b style="color:var(--accent)">Lv'+lvUp+'!</b>':'')+'</span>'+
-      (rt? '<div class="small" style="margin-top:3px">🧬 '+rt+'</div>':'');
+      (meta.length? '<div class="small" style="margin-top:3px">'+meta.join(' ・ ')+'</div>':'');
     $("dropChip").onclick=()=>openCardModal(key);
     if(lvUp){ toast("📖 レベルアップ! Lv"+lvUp+" ─ 全ステータス強化"); vibe(40); }
     else if(rar>=3) vibe(30);
@@ -127,7 +133,8 @@ function answer(chosen, btn){
     const rt2=rootText(w.en);
     rc.innerHTML='<span class="small">'+esc(w.ja)+
       ((st[5]||0)>=2? ' <span style="color:var(--accent)">🔥ミス'+st[5]+'</span>':'')+
-      (rt2? '<br>🧬 '+rt2+' から覚えよう':'')+'</span>';
+      (rt2? '<br>🧬 '+rt2+' から覚えよう'
+          : (isWild(w.en)? '<br>🐺 野生語(語根なし) ─ くり返しで研ごう':''))+'</span>';
   }
   $("resultBar").classList.add("show");
   saveG();

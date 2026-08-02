@@ -391,6 +391,44 @@ function run(){
     eq(ev.clauses[0].V, Math.round(ca.val+cb.val), "素の和");
   });
 
+  /* ---- 野生語(v3.3.0) ---- */
+  t("野生語: 語根なしカードは記憶Lvで節が強化される", ()=>{
+    const G=W.G;
+    const wn=W.WORDS.find(x=>x.pos==="n" && W.rootIdsOf(x.en).length===0);
+    ok(wn, "野生の名詞が存在");
+    const c=W.genCard(wn,1,0);
+    ok(c.wild, "wildフラグ");
+    const old=G.words[wn.en];
+    delete G.words[wn.en];
+    eq(W.evalSentence([c.key]).clauses[0].V, Math.round(c.val), "記憶Lv0は等倍");
+    G.words[wn.en]=[4, Date.now()+864e5, 5,0,1,0,0];
+    const ev=W.evalSentence([c.key]);
+    eq(ev.clauses[0].V, Math.round(c.val*1.32), "Lv4で×1.32");
+    ok(Math.abs(ev.clauses[0].wildM-1.32)<1e-9, "wildM報告");
+    if(old) G.words[wn.en]=old; else delete G.words[wn.en];
+  });
+  t("語根カードは野生語にならない", ()=>{
+    const rn=W.WORDS.find(x=>x.pos==="n" && W.rootIdsOf(x.en).length>0);
+    ok(!W.genCard(rn,1,0).wild);
+  });
+  t("復習期限の編成中単語が優先出題される", ()=>{
+    const G=W.G;
+    const oldWords=G.words, oldSent=G.party.sentence;
+    const a=W.WORDS[40].en, b=W.WORDS[41].en;
+    G.words={};
+    G.words[a]=[1, Date.now()-1000, 1,0,0,0,0];
+    G.words[b]=[1, Date.now()-2000, 1,0,0,0,0];
+    G.party.sentence=[a+"|1|0"];
+    let sawDue=false, onlyA=true;
+    for(let i=0;i<40;i++){
+      const w=W.pickWord();
+      if(w.en===b) onlyA=false;
+      if(w.en===a) sawDue=true;
+    }
+    ok(sawDue && onlyA, "復習対象のうち編成中の単語だけが出る");
+    G.words=oldWords; G.party.sentence=oldSent;
+  });
+
   /* ---- 知識レベル ---- */
   t("知識レベルでステータスが伸びる", ()=>{
     const G=W.G;

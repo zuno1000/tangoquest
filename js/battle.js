@@ -23,18 +23,23 @@ function elemMatch(elems, eElem){
 /* ---- 文の評価 ----
    戻り値: {clauses:[{V,raw,res,resRoots,vt,w,rep,name,words}], guard, amp, dead:{idx:理由}}
    係り先の無い形容詞・値なしの動詞・節の無い反復は「不発」(dead) として位置と理由を返す。
-   共鳴: 同じ語根のカードが同じ節に2枚以上あると、節の値×(1+0.35×超過枚数) */
+   共鳴: 同じ語根のカードが同じ節に2枚以上あると、節の値×(1+0.35×超過枚数)。
+   野生語: 語根なしカードは節に置くと×(1+0.08×記憶Lv)。覚えているほど強い */
 function evalSentence(keys){
   const out={clauses:[], guard:0, amp:1, dead:{}};
-  let V=0, adjs=[], words=[], rootCnt={};
-  const addRoots=c=>{ (c.roots||[]).forEach(r=>rootCnt[r]=(rootCnt[r]||0)+1); };
+  let V=0, adjs=[], words=[], rootCnt={}, wildM=1, wildN=0;
+  const addRoots=c=>{
+    (c.roots||[]).forEach(r=>rootCnt[r]=(rootCnt[r]||0)+1);
+    if(c.wild){ wildM*=wildMult(c.en); wildN++; }
+  };
   const closeClause=(vt,w,name)=>{
     let extra=0; const resRoots=[];
     for(const r in rootCnt){ if(rootCnt[r]>=2){ extra+=rootCnt[r]-1; resRoots.push({r:+r, n:rootCnt[r]}); } }
     const res=+(1+0.35*extra).toFixed(2);
-    out.clauses.push({V:Math.round(V*res), raw:Math.round(V), res, resRoots,
+    const wm=+wildM.toFixed(2);
+    out.clauses.push({V:Math.round(V*res*wm), raw:Math.round(V), res, resRoots, wildM:wm, wildN,
                       vt, w, name, words:words.slice()});
-    V=0; words=[]; rootCnt={};
+    V=0; words=[]; rootCnt={}; wildM=1; wildN=0;
   };
   (keys||[]).forEach((k,idx)=>{
     const c=k? cardOf(k):null;

@@ -229,6 +229,8 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
 .wslot .wplus{font-size:20px; color:var(--sub); opacity:.6}
 .wslot.wdead{opacity:.55}
 .wslot .wwarn{font-size:9px; color:var(--ng); font-weight:800}
+.wslot .wmem{font-size:9px; font-weight:800; color:var(--accent)}
+.wslot .wmem .wdue{color:var(--ng)}
 
 /* ---- 数式プレビュー ---- */
 .frow{display:flex; align-items:center; gap:8px; padding:7px 2px;

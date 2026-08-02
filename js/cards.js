@@ -48,8 +48,14 @@ function genCard(w, rar, lv){
   c.elem=Math.floor(h/7)%5; // 属性(セット効果・相性用)。他の判定と別ビットで決める
   c.elemIcon=ELEM_ICON[c.elem];
   c.roots=rootIdsOf(w.en);  // 語根タグ(共鳴判定用。表示は rootText)
+  c.wild=c.roots.length===0; // 野生語: 語根なし。プレイヤーの記憶Lvが力になる
   return c;
 }
+/* ---- 野生語: SRSの記憶レベル(box 0〜7)がそのまま強さになる ---- */
+function isWild(en){ return rootIdsOf(en).length===0; }
+function memBox(en){ const st=G.words[en]; return st? Math.min(7, st[0]||0) : 0; }
+function wildMult(en){ return +(1+0.08*memBox(en)).toFixed(2); }
+function wildOverdue(en){ const st=G.words[en]; return !!st && st[1]<=Date.now(); }
 function cardOf(key){
   const p=parseKey(key), w=byEn[p.en];
   return w? genCard(w,p.rar,p.lv) : null;
@@ -176,6 +182,9 @@ let cardFilter="all";
 function equippedKeys(){
   return new Set((G.party.sentence||[]).filter(Boolean));
 }
+function equippedEnSet(){
+  return new Set((G.party.sentence||[]).filter(Boolean).map(k=>parseKey(k).en));
+}
 
 function renderCards(){
   const grid=$("cardGrid"); grid.innerHTML="";
@@ -220,6 +229,8 @@ function cardDetailHTML(c){
       ' <span class="small">'+c.elemIcon+' '+ELEM_NAME[c.elem]+'</span></div>'+
     '<div class="bceffect">'+effectText(c)+'</div>'+
     (rootText(c.en)? '<div class="small" style="margin-top:7px">🧬 '+rootText(c.en)+'</div>':'')+
+    (c.wild? '<div class="small" style="margin-top:7px; color:var(--accent)">🐺 野生語 ─ 記憶Lv'+memBox(c.en)+
+      '(節×'+wildMult(c.en)+')'+(wildOverdue(c.en)? ' <b style="color:var(--ng)">⏳復習どき</b>':'')+'</div>':'')+
   '</div>';
 }
 
