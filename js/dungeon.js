@@ -400,71 +400,55 @@ function refreshInfPill(){
 }
 $("infPill").onclick=()=>switchTab("adv");
 
-/* ================= 編成モーダル ================= */
-const SLOT_DEFS=[
-  {s:"weapon", label:"武器",   pos:"n"},
-  {s:"armor",  label:"防具",   pos:"n"},
-  {s:"acc",    label:"装飾品", pos:"n"},
-  {s:"field",  label:"場",     pos:"adv"},
-  {s:"buff1",  label:"強化1",  pos:"adj"},
-  {s:"buff2",  label:"強化2",  pos:"adj"},
-  {s:"skill1", label:"技1",    pos:"v"},
-  {s:"skill2", label:"技2",    pos:"v"},
-  {s:"skill3", label:"技3",    pos:"v"},
-];
-function slotAccepts(def, c){
-  if(def.pos!==c.pos) return false;
-  if(def.pos==="n") return c.slot===def.s; // 名詞はさらに部位(武器/防具/装飾品)一致
-  return true;
-}
+/* ================= 編成(呪文文) =================
+   文のスロットUI・ライブ数式プレビュー・おまかせ編成(山登り法)。
+   おまかせは戦闘力しか見ない(属性対策・累乗の並び最適化は手動が勝つ=考える余地) */
 
-/* ---- おまかせ編成 ----
-   スロット毎にスコア最大のカードを自動装備。在庫数を超えて同キーを重複装備しない */
 function cardScore(c){
-  if(c.pos==="n"){ const s=c.stats;
-    return (s.atk||0)*4+(s.def||0)*3+(s.spd||0)*5+(s.hp||0)/6; } // powerと同じ重み
-  if(c.pos==="adj") return c.pct;
-  if(c.pos==="adv") return c.fieldType==="all"? c.pct*4 : c.fieldType==="proc"? c.pct*1.5 : c.pct*0.5;
-  return c.mult*SKILL_TYPES[c.skType||0].powerF*Math.min(100,c.proc)/100; // 期待ダメージ(タイプ補正込み)
+  if(c.pos==="n") return c.val;
+  if(c.pos==="adj") return c.sub===0? c.m*30 : c.p*40; // 累乗は大きい値に係ると化ける
+  if(c.pos==="adv") return c.sub===0? c.r*50 : c.sub===1? c.m*40 : c.g;
+  return c.w*VERB_TYPES[c.vt||0].expF*40;
 }
 function autoEquip(){
   const before=playerStats().power;
-  const groups={};
-  for(const k in G.inv){
-    const c=cardOf(k); if(!c) continue;
-    (groups[c.slot]=groups[c.slot]||[]).push(c);
-  }
-  for(const g in groups) groups[g].sort((a,b)=>cardScore(b)-cardScore(a));
-  const used={};
-  const pick=list=>{
-    if(!list) return null;
-    for(const c of list){
-      if((used[c.key]||0) < (G.inv[c.key]||0)){ used[c.key]=(used[c.key]||0)+1; return c.key; }
+  const max=sentenceSlots();
+  const cands=[];
+  for(const k in G.inv){ const c=cardOf(k); if(c) cands.push(c); }
+  cands.sort((a,b)=>cardScore(b)-cardScore(a));
+  const top=cands.slice(0,40);
+  let best=new Array(max).fill(null);
+  let bestP=playerStats(best).power;
+  let improved=true, iter=0;
+  while(improved && iter++<30){
+    improved=false;
+    for(const c of top){
+      for(let i=0;i<max;i++){
+        if(best[i]===c.key) continue;
+        const trial=best.slice(); trial[i]=c.key;
+        if(trial.filter(k=>k===c.key).length > (G.inv[c.key]||0)) continue; // 在庫超過
+        const p=playerStats(trial).power;
+        if(p>bestP){ best=trial; bestP=p; improved=true; }
+      }
     }
-    return null;
-  };
-  const eq=G.party.equip;
-  eq.weapon=pick(groups.weapon); eq.armor=pick(groups.armor); eq.acc=pick(groups.acc);
-  eq.field=pick(groups.field);
-  eq.buff1=pick(groups.buff); eq.buff2=pick(groups.buff);
-  eq.skill1=pick(groups.skill); eq.skill2=pick(groups.skill); eq.skill3=pick(groups.skill);
+  }
+  G.party.sentence=best;
   saveG();
-  const after=playerStats().power;
-  return {before, after};
+  return {before, after:playerStats().power};
 }
 function unequipAll(){
-  for(const s in G.party.equip) G.party.equip[s]=null;
+  G.party.sentence=new Array(sentenceSlots()).fill(null);
   saveG();
 }
 
-/* 編成タブ(そうび)のボタン。要素は静的DOMにあるため一度だけバインド */
+/* 編成タブのボタン。要素は静的DOMにあるため一度だけバインド */
 $("autoEqBtn").onclick=()=>{
   const r=autoEquip();
   renderEqSlots();
   toast(r.after>r.before? "おまかせ編成! 戦闘力 "+fmt(r.before)+" → "+fmt(r.after)
-      : "戦闘力は最大。属性対策は手動で組もう");
+      : "戦闘力は最大。並び替えや属性対策は手動で勝てる");
 };
-$("unEqBtn").onclick=()=>{ unequipAll(); renderEqSlots(); toast("装備をすべてはずした"); };
+$("unEqBtn").onclick=()=>{ unequipAll(); renderEqSlots(); toast("文をすべて空にした"); };
 
 function renderEqChars(){
   const box=$("eqChars"); if(!box) return;
@@ -481,69 +465,134 @@ function renderEqChars(){
     box.appendChild(d);
   });
 }
-/* 人型レイアウト: 左=武器・強化 / 中央=キャラ / 右=防具・装飾・場 / 下=技 */
-const DOLL_POS={weapon:"dollLeft", buff1:"dollLeft", buff2:"dollLeft",
-                armor:"dollRight", acc:"dollRight", field:"dollRight",
-                skill1:"dollSkills", skill2:"dollSkills", skill3:"dollSkills"};
 
+/* ---- 文スロットの描画 ---- */
 function renderEqSlots(){
-  if(!$("dollLeft")) return;
-  ["dollLeft","dollRight","dollSkills"].forEach(id=>$(id).innerHTML="");
-  SLOT_DEFS.forEach(def=>{
-    const k=G.party.equip[def.s];
-    const c=k? cardOf(k) : null;
-    const d=document.createElement("div");
-    d.className="slot"+(c?" filled bd"+c.rar:"");
-    d.innerHTML= c
-      ? '<div class="sic">'+c.icon+'</div><div class="sname">'+esc(c.en)+lvLabel(c)+'</div><div class="stype rc'+c.rar+'">'+c.elemIcon+' '+RAR_STARS[c.rar-1]+'</div>'
-      : '<div class="sic" style="opacity:.4">'+SLOT_ICON[def.s.replace(/[0-9]/g,"")]+'</div><div class="stype">'+def.label+'</div>';
-    d.onclick=()=>openSlotPicker(def);
-    $(DOLL_POS[def.s]).appendChild(d);
-  });
-  // 中央のキャラ表示
+  const row=$("sentenceRow"); if(!row) return;
+  const max=sentenceSlots();
+  const s=G.party.sentence;
+  if(s.length>max) s.length=max;
+  while(s.length<max) s.push(null);
   const P=playerStats();
-  const ch=byChar[G.party.char];
-  $("dollFace").textContent=ch? ch.face : "🗡️";
-  $("dollName").textContent=P.name;
-  $("dollStats").innerHTML="HP"+fmt(P.hp)+"<br>攻"+fmt(P.atk)+" 防"+fmt(P.def)+"<br>速"+fmt(P.spd);
+  row.innerHTML="";
+  for(let i=0;i<max;i++){
+    const k=s[i], c=k? cardOf(k):null;
+    const d=document.createElement("div");
+    d.className="wslot"+(c?" filled bd"+c.rar:"")+(P.dead[i]!=null?" wdead":"");
+    d.innerHTML= c
+      ? '<div class="wpos pos'+c.pos+'">'+POS_LABEL[c.pos]+'</div>'+
+        '<div class="wen">'+esc(c.en)+lvLabel(c)+'</div>'+
+        '<div class="wfx">'+c.elemIcon+' '+shortEffect(c)+'</div>'+
+        (P.dead[i]!=null? '<div class="wwarn">⚠不発</div>':'')
+      : '<div class="wplus">＋</div><div class="wfx">'+(i+1)+'語目</div>';
+    d.onclick=()=>openSlotModal(i);
+    row.appendChild(d);
+  }
+  $("slotInfo").textContent="いま"+max+"語まで(知識Lvで最大8語)";
+  renderFormula(P);
   const pw=$("eqPower"); if(pw) pw.textContent=fmt(P.power);
   const es=$("eqSets");
   if(es) es.innerHTML = P.sets && P.sets.length
-    ? "セット効果: "+P.sets.map(s=>ELEM_ICON[s.elem]+"×"+s.n+" <b style='color:var(--ok)'>+"+Math.round(s.b*100)+"%</b>").join(" ・ ")
+    ? "セット効果: "+P.sets.map(x=>ELEM_ICON[x.elem]+"×"+x.n+" <b style='color:var(--ok)'>+"+Math.round(x.b*100)+"%</b>").join(" ・ ")
     : "同じ属性を2枚そろえるとセット効果。冒険先の弱点属性で固めるのも有効";
 }
-function openSlotPicker(def){
-  const cands=[];
-  for(const k in G.inv){
-    const c=cardOf(k); if(!c) continue;
-    if(!slotAccepts(def,c)) continue;
-    cands.push(c);
+
+/* ---- ライブ数式プレビュー: 文がそのままダメージ式になる ---- */
+function renderFormula(P){
+  const box=$("formulaBox"); if(!box) return;
+  if(!P.clauses.length){
+    box.innerHTML='<div class="empty">カードを置くと、ここにダメージの式が出る<br>'+
+      '<span class="small">基本形: ✨形容詞 → 💎名詞 → ⚔️動詞。並び順で結果が変わる</span></div>';
+    return;
   }
-  cands.sort((a,b)=> b.rar-a.rar || b.lv-a.lv || a.en.localeCompare(b.en));
-  const cur=G.party.equip[def.s];
-  openModal('<h3>'+def.label+' を選ぶ</h3>'+
-    '<div class="panel picker" id="pickList">'+
-    (cur? '<div class="prow" id="unequipRow"><div class="sic">🚫</div><div class="grow" style="font-size:12px; font-weight:700">はずす</div></div>':"")+
-    (cands.length? "" : '<div class="empty">装備できるカードがない<br><span class="small">'+
-      ({n:"名詞",adj:"形容詞",adv:"副詞",v:"動詞"})[def.pos]+'の単語に正解すると入手</span></div>')+
-    '</div>');
-  const list=$("pickList");
-  cands.forEach(c=>{
-    const row=document.createElement("div");
-    row.className="prow";
-    row.innerHTML='<div class="sic">'+c.icon+'</div>'+
-      '<div class="grow"><div style="font-size:14px; font-weight:800">'+esc(c.en)+lvLabel(c)+
-      ' <span class="rc'+c.rar+'" style="font-size:11px">'+c.elemIcon+' '+RAR_STARS[c.rar-1]+'</span>'+
-      (cur===c.key? ' <span class="small" style="color:var(--accent)">装備中</span>':"")+'</div>'+
-      '<div class="small" style="font-size:11px">'+effectText(c)+' ─ '+esc(c.ja)+'</div></div>';
-    row.onclick=()=>{
-      const already=equippedCountOf(c.key, G.party.equip) - (cur===c.key?1:0);
-      if(already >= (G.inv[c.key]||0)){ toast("在庫が足りない(別スロットで装備中)"); return; }
-      G.party.equip[def.s]=c.key; saveG();
-      closeModal(); renderEqSlots();
-    };
-    list.appendChild(row);
+  let h="";
+  P.clauses.forEach(cl=>{
+    const dmg=Math.round(clauseExp(cl)*P.charM*P.setM*P.amp);
+    h+='<div class="frow"><div class="grow">'+
+      '<span class="small">'+esc(cl.words.join(" + ")||"-")+'</span> '+
+      '<b>'+fmt(cl.V)+'</b>'+
+      (cl.name? ' → ⚔<b>'+esc(cl.name)+'</b><span class="small">【'+VERB_TYPES[cl.vt||0].name+'×'+cl.w+'】</span>' : ' <span class="small">→ 素の一撃</span>')+
+      (cl.rep? ' <span style="color:var(--accent)">🌀反復×'+cl.rep+'</span>':'')+
+      '</div><b style="color:var(--accent2); font-size:15px">'+fmt(dmg)+'</b></div>';
   });
-  const un=$("unequipRow");
-  if(un) un.onclick=()=>{ G.party.equip[def.s]=null; saveG(); closeModal(); renderEqSlots(); };
+  h+='<div class="ftotal">▶ ダメージ/ターン <b>'+fmt(P.dpt)+'</b></div>'+
+     '<div class="small" style="margin-top:3px">キャラ×'+P.charM.toFixed(2)+
+     (P.setM>1? ' ・ セット×'+P.setM.toFixed(2):'')+
+     (P.amp>1? ' ・ 増幅×'+P.amp.toFixed(2):'')+
+     (P.guard? ' ・ 守護 被ダメ-'+P.guard+'%':'')+'</div>';
+  box.innerHTML=h;
+}
+
+/* ---- スロット操作(入替・移動・はずす) ---- */
+function openSlotModal(i){
+  const k=G.party.sentence[i];
+  if(!k){ openWordPicker(i); return; }
+  const c=cardOf(k);
+  const P=playerStats();
+  openModal('<h3>'+(i+1)+'語目: '+esc(c.en)+'</h3>'+
+    cardDetailHTML(c)+
+    (P.dead[i]!=null? '<div class="small" style="text-align:center; color:var(--ng); margin-top:6px">⚠不発: '+P.dead[i]+'</div>':'')+
+    '<div class="row" style="margin-top:12px; gap:8px">'+
+      '<button class="btn" style="flex:1" id="mvL" '+(i===0?"disabled":"")+'>◀ 左へ</button>'+
+      '<button class="btn" style="flex:1" id="mvR" '+(i>=sentenceSlots()-1?"disabled":"")+'>右へ ▶</button>'+
+    '</div>'+
+    '<div class="row" style="margin-top:8px; gap:8px">'+
+      '<button class="btn primary" style="flex:2" id="swapBtn">🔁 別のカードにする</button>'+
+      '<button class="btn danger" style="flex:1" id="rmBtn">はずす</button>'+
+    '</div>');
+  const s=G.party.sentence;
+  const swap=j=>{ const t=s[i]; s[i]=s[j]; s[j]=t; saveG(); closeModal(); renderEqSlots(); };
+  $("mvL").onclick=()=>{ if(i>0) swap(i-1); };
+  $("mvR").onclick=()=>{ if(i<sentenceSlots()-1) swap(i+1); };
+  $("swapBtn").onclick=()=>openWordPicker(i);
+  $("rmBtn").onclick=()=>{ s[i]=null; saveG(); closeModal(); renderEqSlots(); };
+}
+
+/* ---- カード選択(品詞フィルタ付き・どの品詞もどこにでも置ける) ---- */
+let pickerPos="all";
+function openWordPicker(i){
+  openModal('<h3>'+(i+1)+'語目に置くカード</h3>'+
+    '<div class="seg" id="pkSeg">'+["all","n","adj","v","adv"].map(p=>
+      '<button data-p="'+p+'" class="'+(p===pickerPos?"active":"")+'">'+(p==="all"?"全て":POS_LABEL[p])+'</button>').join("")+'</div>'+
+    '<div class="panel picker" id="pickList"></div>');
+  const render=()=>{
+    const list=$("pickList"); list.innerHTML="";
+    const cands=[];
+    for(const k in G.inv){
+      const c=cardOf(k); if(!c) continue;
+      if(pickerPos!=="all" && c.pos!==pickerPos) continue;
+      cands.push(c);
+    }
+    cands.sort((a,b)=> b.rar-a.rar || b.lv-a.lv || a.en.localeCompare(b.en));
+    if(!cands.length){
+      list.innerHTML='<div class="empty">カードがない<br><span class="small">クイズに正解すると入手できる</span></div>';
+      return;
+    }
+    const cur=G.party.sentence[i];
+    cands.forEach(c=>{
+      const free=(G.inv[c.key]||0) - equippedCountOf(c.key) + (cur===c.key?1:0);
+      const row=document.createElement("div");
+      row.className="prow"+(free<=0?" dim":"");
+      row.innerHTML='<div class="sic">'+c.icon+'</div>'+
+        '<div class="grow"><div style="font-size:14px; font-weight:800">'+esc(c.en)+lvLabel(c)+
+        ' <span class="rc'+c.rar+'" style="font-size:11px">'+c.elemIcon+' '+RAR_STARS[c.rar-1]+'</span>'+
+        (cur===c.key? ' <span class="small" style="color:var(--accent)">配置中</span>':"")+'</div>'+
+        '<div class="small" style="font-size:11px">'+effectText(c)+' ─ '+esc(c.ja)+'</div></div>'+
+        '<b style="color:var(--accent2); white-space:nowrap">'+shortEffect(c)+'</b>';
+      row.onclick=()=>{
+        if(free<=0){ toast("在庫が足りない(他の語で使用中)"); return; }
+        G.party.sentence[i]=c.key; saveG();
+        closeModal(); renderEqSlots();
+      };
+      list.appendChild(row);
+    });
+  };
+  $("pkSeg").querySelectorAll("button").forEach(b=>{
+    b.onclick=()=>{
+      pickerPos=b.dataset.p;
+      $("pkSeg").querySelectorAll("button").forEach(x=>x.classList.toggle("active", x===b));
+      render();
+    };
+  });
+  render();
 }

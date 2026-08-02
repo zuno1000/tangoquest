@@ -1,79 +1,99 @@
 "use strict";
-/* ================= 戦闘計算 ================= */
+/* ================= 戦闘計算(呪文文法) =================
+   編成は「文」= カードkeyの配列。左から評価して節(クローズ)の列に変換し、
+   毎ターン全ての節が発動する。文法ルールは4つだけ:
+     1. 名詞: 値を足す(基礎値)
+     2. 形容詞: 直後の名詞を修飾(×m か ^p。名詞に近い方から適用 → 並び順で結果が変わる)
+     3. 動詞: 溜めた値で発動し、節を区切る(強撃/貫通/吸収/連撃)
+     4. 副詞: 文末効果(反復=直前の節をもう一度 / 増幅=全体× / 守護=被ダメ-%) */
 
 /* ---- 属性相性 ----
    ELEM_BEATS[a]=b : 属性aは属性bに強い(火→風→水→火 / 光⇔闇)。
-   編成中の「敵に有利な属性」のカード1枚ごとに与ダメ+7%・被ダメ-4%、
-   「敵に弱い属性」のカード1枚ごとに被ダメ+4%。編成を敵に合わせる意味を作る */
+   文中の「敵に有利な属性」のカード1枚ごとに与ダメ+7%・被ダメ-4%、
+   「敵に弱い属性」のカード1枚ごとに被ダメ+4%。 */
 const ELEM_BEATS=[2,0,1,4,3];
 function elemMatch(elems, eElem){
   if(eElem==null || eElem<0 || !elems) return {adv:0, dis:0, dealt:1, taken:1};
-  const adv=elems[ELEM_BEATS.indexOf(eElem)]||0; // 敵属性に強い属性のカード枚数
-  const dis=elems[ELEM_BEATS[eElem]]||0;         // 敵属性に弱い属性のカード枚数
+  const adv=elems[ELEM_BEATS.indexOf(eElem)]||0;
+  const dis=elems[ELEM_BEATS[eElem]]||0;
   return {adv, dis, dealt:1+0.07*adv,
           taken:Math.min(1.6, Math.max(0.4, 1-0.04*adv+0.04*dis))};
 }
 
-/* 現在の編成からプレイヤーステータスを算出(JSON化可能なスナップショット)。
-   eqOpt を渡すとその装備案で試算する(状態は変更しない) */
-function playerStats(eqOpt){
-  const eq=eqOpt||G.party.equip;
-  if(!eqOpt){
-    // 在庫に無いカードが装備されていたら外す
-    for(const s in eq){
-      const k=eq[s];
-      if(k && !G.inv[k]) eq[s]=null;
+/* ---- 文の評価 ----
+   戻り値: {clauses:[{V,vt,w,rep,name,words}], guard, amp, dead:{idx:理由}}
+   係り先の無い形容詞・値なしの動詞・節の無い反復は「不発」(dead) として位置と理由を返す */
+function evalSentence(keys){
+  const out={clauses:[], guard:0, amp:1, dead:{}};
+  let V=0, adjs=[], words=[];
+  (keys||[]).forEach((k,idx)=>{
+    const c=k? cardOf(k):null;
+    if(!c) return;
+    if(c.pos==="adj"){
+      adjs.push({c,idx});
+    }else if(c.pos==="n"){
+      let v=c.val;
+      // 名詞に近い形容詞から順に適用: [×2, ^1.1, sword40] → (40^1.1)×2
+      for(let i=adjs.length-1;i>=0;i--){
+        const a=adjs[i].c;
+        v = a.sub===0? v*a.m : Math.pow(Math.max(1,v), a.p);
+      }
+      adjs.forEach(a=>words.push(a.c.en)); // 数式表示用に修飾語も残す
+      adjs=[]; V+=v; words.push(c.en);
+    }else if(c.pos==="v"){
+      adjs.forEach(a=>out.dead[a.idx]="係る名詞がない"); adjs=[];
+      if(V<=0){ out.dead[idx]="前に名詞がない"; return; }
+      out.clauses.push({V:Math.round(V), vt:c.vt||0, w:c.w||1, name:c.en, words:words.slice()});
+      V=0; words=[];
+    }else{ // adv
+      if(c.sub===0){
+        const last=out.clauses[out.clauses.length-1];
+        if(last) last.rep=Math.min(2, Math.round(((last.rep||0)+c.r)*100)/100);
+        else out.dead[idx]="直前に発動(動詞)がない";
+      }
+      else if(c.sub===1) out.amp*=c.m;
+      else out.guard=Math.min(60, out.guard+c.g);
     }
+  });
+  adjs.forEach(a=>out.dead[a.idx]="係る名詞がない");
+  if(V>0) out.clauses.push({V:Math.round(V), vt:0, w:1, name:null, words:words.slice()}); // 動詞なし=素の一撃
+  return out;
+}
+/* 節1つの期待威力(防御0・等倍時) */
+function clauseExp(cl){
+  return cl.V*cl.w*VERB_TYPES[cl.vt||0].expF*(1+(cl.rep||0));
+}
+
+/* ---- プレイヤーステータス ----
+   sentOpt を渡すとその文で試算する(状態は変更しない)。
+   HP/防御/素早さはキャラ由来。文はダメージ/ターン(dpt)を決める。キャラの攻撃は文全体の係数 */
+function playerStats(sentOpt){
+  let sent=sentOpt||G.party.sentence;
+  if(!sentOpt){
+    if(sent.length>sentenceSlots()) sent.length=sentenceSlots(); // レベル相応に切り詰め
+    for(let i=0;i<sent.length;i++){ if(sent[i] && !G.inv[sent[i]]) sent[i]=null; } // 在庫切れは外す
   }
   const ch=byChar[G.party.char]||CHARS[0];
   const base=charStats(ch.id);
-  let hp=base.hp, atk=base.atk, def=base.def, spd=base.spd;
-  const card=s=>eq[s]? cardOf(eq[s]) : null;
-
-  // 名詞=装備(固定値)
-  ["weapon","armor","acc"].forEach(s=>{
-    const c=card(s); if(!c||!c.stats) return;
-    hp+=c.stats.hp||0; atk+=c.stats.atk||0; def+=c.stats.def||0; spd+=c.stats.spd||0;
-  });
-  // 形容詞=強化(%)
-  const pct={hp:0,atk:0,def:0,spd:0};
-  ["buff1","buff2"].forEach(s=>{ const c=card(s); if(c&&c.buffStat) pct[c.buffStat]+=c.pct; });
-  hp*=(1+pct.hp/100); atk*=(1+pct.atk/100); def*=(1+pct.def/100); spd*=(1+pct.spd/100);
-  // 副詞=フィールド(全体効果)
-  let procBonus=0, goldBonus=0;
-  const f=card("field");
-  if(f){
-    if(f.fieldType==="all"){ const m=1+f.pct/100; hp*=m; atk*=m; def*=m; spd*=m; }
-    else if(f.fieldType==="proc") procBonus=f.pct;
-    else goldBonus=f.pct;
-  }
-  // 動詞=攻撃技(タイプ付き)
-  const skills=[];
-  ["skill1","skill2","skill3"].forEach(s=>{
-    const c=card(s); if(c&&c.mult) skills.push({name:c.en, mult:c.mult, proc:c.proc, type:c.skType||0});
-  });
-  // 属性セット効果: 同属性を並べるほど強い(2枚+5% / 4枚+12% / 6枚+20%)
+  const cards=sent.filter(Boolean).map(cardOf).filter(Boolean);
+  // 属性: セット効果(同属性2/4/6枚 → ダメージ×1.05/1.12/1.20)と相性判定に使う
   const ecnt=[0,0,0,0,0];
-  for(const s in eq){ const c=card(s); if(c) ecnt[c.elem]++; }
-  const sets=[];
+  cards.forEach(c=>ecnt[c.elem]++);
+  let setM=1; const sets=[];
   ecnt.forEach((n,i)=>{
     const b = n>=6? 0.20 : n>=4? 0.12 : n>=2? 0.05 : 0;
-    if(b){ sets.push({elem:i, n, b}); const m=1+b; hp*=m; atk*=m; def*=m; spd*=m; }
+    if(b){ sets.push({elem:i, n, b}); setM*=(1+b); }
   });
-  hp=Math.round(hp); atk=Math.round(atk); def=Math.round(def); spd=Math.round(spd);
-  // 戦闘力: 技の期待ダメージ倍率も攻撃に織り込む(技・発動率も戦闘力に反映される)
-  let em=1;
-  if(skills.length){
-    let s=0;
-    skills.forEach(k=>{
-      const f=SKILL_TYPES[k.type||0].powerF;
-      s+=Math.min(100, k.proc+procBonus)/100*(k.mult/100*f-1);
-    });
-    em=1+s/skills.length;
-  }
-  const power=Math.round(hp/6 + atk*em*4 + def*3 + spd*5);
-  return {name:ch.name.split(" ").pop(), face:ch.face, hp, atk, def, spd, skills,
-          procBonus, goldBonus, sets, elems:ecnt, power};
+  const ev=evalSentence(sent);
+  const charM=base.atk/40;
+  let dpt=0; ev.clauses.forEach(cl=>dpt+=clauseExp(cl));
+  dpt=Math.round(dpt*charM*setM*ev.amp);
+  const power=Math.round(base.hp/6 + dpt*4 + base.def*3*(1+ev.guard/100) + base.spd*5);
+  return {name:ch.name.split(" ").pop(), face:ch.face,
+          hp:base.hp, def:base.def, spd:base.spd, catk:base.atk,
+          charM, setM, amp:ev.amp, guard:ev.guard,
+          clauses:ev.clauses, dead:ev.dead, elems:ecnt, sets,
+          dpt, goldBonus:0, power};
 }
 
 /* 敵の生成(ダンジョン定義 dungeon.js から参照)。
@@ -93,53 +113,52 @@ function enemyFor(tier, floor, floors, boss, names, bossName, opts){
   return e;
 }
 
-/* オート戦闘シミュレーション。P/E は {hp,atk,def,spd,...}。P.skills使用。
-   属性相性(P.elems vs E.elem)と技タイプ(強撃/貫通/吸収/連撃)を反映。
+/* オート戦闘シミュレーション。P は playerStats() のスナップショット。
+   毎ターン: プレイヤーが文の全ての節を発動 → 敵の攻撃。
    log 要素は演出用の構造化データも持つ: {t, s, side, dmg, sk, heal, php, ehp} */
 function simBattle(P, E){
   let php=P.hp, ehp=E.hp;
   const log=[];
   const em=elemMatch(P.elems, E.elem);
-  const pAtk=()=>{
-    let sk=null;
-    if(P.skills && P.skills.length){
-      sk=P.skills[Math.floor(Math.random()*P.skills.length)];
-      if(Math.random()*100 >= sk.proc+(P.procBonus||0)) sk=null;
-    }
-    const rnd=0.9+Math.random()*0.2;
-    let base, heal=0, txt;
-    if(!sk){
-      base=Math.max(1, P.atk - E.def*0.55);
-    }else{
-      const m=sk.mult/100, t=sk.type||0;
-      if(t===1)      base=Math.max(1, P.atk*m*0.85 - E.def*0.1);            // 貫通: 防御をほぼ無視
-      else if(t===2) base=Math.max(1, P.atk*m*0.8  - E.def*0.55);           // 吸収: 与ダメの45%回復
-      else if(t===3) base=Math.max(1, P.atk*m*0.6 - E.def*0.55)
-                         +Math.max(1, P.atk*m*0.6 - E.def*0.55);            // 連撃: 60%×2回
-      else           base=Math.max(1, P.atk*m - E.def*0.55);                // 強撃
-    }
-    const v=Math.round(rnd*base*em.dealt);
-    ehp-=v;
-    if(sk && (sk.type||0)===2){ heal=Math.round(v*0.45); php=Math.min(P.hp, php+heal); }
-    if(sk){
-      const tn=SKILL_TYPES[sk.type||0].name;
-      txt="『"+sk.name+"』("+tn+")! "+fmt(v)+"ダメージ"+(heal? " & "+fmt(heal)+"回復":"");
-      log.push({t:"sk", side:"p", dmg:v, sk:sk.name, heal, php:Math.max(0,php), ehp:Math.max(0,ehp), s:txt});
-    }else{
-      log.push({t:"pl", side:"p", dmg:v, php:Math.max(0,php), ehp:Math.max(0,ehp),
-                s:P.name+"の攻撃 "+fmt(v)+"ダメージ"});
+  // v2以前の探索スナップショット互換: 文が無ければ攻撃力の素の一撃に変換
+  const clauses=(P.clauses&&P.clauses.length)? P.clauses : [{V:P.atk||10, vt:0, w:1, name:null, words:[]}];
+  const charM=P.charM||1, setM=P.setM||1, amp=P.amp||1, guard=P.guard||0;
+  const rnd=()=>0.9+Math.random()*0.2;
+  const castOnce=(cl, powF)=>{
+    const baseV=cl.V*cl.w*charM*setM*amp*em.dealt*(powF||1);
+    let v;
+    if(cl.vt===1)      v=Math.round(rnd()*Math.max(1, baseV*0.85 - E.def*0.1));   // 貫通
+    else if(cl.vt===2) v=Math.round(rnd()*Math.max(1, baseV*0.8  - E.def*0.55));  // 吸収
+    else if(cl.vt===3) v=Math.round(rnd()*Math.max(1, baseV*0.6 - E.def*0.55))
+                        +Math.round(rnd()*Math.max(1, baseV*0.6 - E.def*0.55));   // 連撃
+    else               v=Math.round(rnd()*Math.max(1, baseV - E.def*0.55));       // 強撃
+    let heal=0;
+    if(cl.vt===2){ heal=Math.round(v*0.45); php=Math.min(P.hp, php+heal); }
+    return {v, heal};
+  };
+  const pushP=(cl,r,repTag)=>{
+    const label=cl.name? "『"+cl.name+"』("+VERB_TYPES[cl.vt||0].name+")" : (cl.words&&cl.words.length? cl.words[0]:P.name)+"の一撃";
+    log.push({t: cl.name?"sk":"pl", side:"p", dmg:r.v, sk:cl.name||null, heal:r.heal,
+              php:Math.max(0,php), ehp:Math.max(0,ehp),
+              s:(repTag?"🌀反復! ":"")+label+" "+fmt(r.v)+"ダメージ"+(r.heal? " & "+fmt(r.heal)+"回復":"")});
+  };
+  const pTurn=()=>{
+    for(const cl of clauses){
+      let r=castOnce(cl,1); ehp-=r.v; pushP(cl,r,false);
+      if(ehp<=0) return;
+      if(cl.rep){ r=castOnce(cl,cl.rep); ehp-=r.v; pushP(cl,r,true); if(ehp<=0) return; }
     }
   };
   const eAtk=()=>{
-    const v=Math.round((0.9+Math.random()*0.2)*Math.max(1, E.atk - P.def*0.55)*em.taken);
+    const v=Math.round(rnd()*Math.max(1, E.atk - P.def*0.55)*em.taken*(1-guard/100));
     php-=v;
     log.push({t:"en", side:"e", dmg:v, php:Math.max(0,php), ehp:Math.max(0,ehp),
               s:E.name+"の攻撃 "+fmt(v)+"ダメージ"});
   };
   const pFirst=P.spd>=E.spd;
   for(let t=0; t<200 && php>0 && ehp>0; t++){
-    if(pFirst){ pAtk(); if(ehp>0) eAtk(); }
-    else { eAtk(); if(php>0) pAtk(); }
+    if(pFirst){ pTurn(); if(ehp>0) eAtk(); }
+    else { eAtk(); if(php>0) pTurn(); }
   }
   const win=ehp<=0 && php>0;
   return {win, php:Math.max(0,Math.round(php)), log};

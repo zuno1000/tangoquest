@@ -52,7 +52,7 @@
 <!-- ============ 編成(そうび・カード・なかま) ============ -->
 <main id="partyView" class="hidden">
   <div class="seg" id="partySeg">
-    <button data-p="equip" class="active">そうび</button>
+    <button data-p="equip" class="active">呪文</button>
     <button data-p="cards">カード</button>
     <button data-p="chars">なかま</button>
   </div>
@@ -62,18 +62,11 @@
       <button class="btn primary" id="autoEqBtn">✨ おまかせ</button>
       <button class="btn" id="unEqBtn">解除</button>
     </div>
-    <div class="small" id="eqSets" style="margin-top:4px"></div>
     <div class="charsel" id="eqChars"></div>
-    <div id="doll">
-      <div class="dollcol" id="dollLeft"></div>
-      <div id="dollChar">
-        <div id="dollFace">🗡️</div>
-        <div id="dollName"></div>
-        <div id="dollStats" class="small"></div>
-      </div>
-      <div class="dollcol" id="dollRight"></div>
-    </div>
-    <div id="dollSkills"></div>
+    <h2 style="margin:10px 4px 6px">📜 呪文の文 <span class="small" id="slotInfo"></span></h2>
+    <div id="sentenceRow"></div>
+    <div class="panel" id="formulaBox" style="margin-top:10px"></div>
+    <div class="small" id="eqSets" style="margin-top:8px"></div>
   </div>
   <div id="pCards" class="hidden">
     <div class="row">
@@ -83,10 +76,10 @@
     </div>
     <div class="seg" id="cardFilter">
       <button data-f="all" class="active">すべて</button>
-      <button data-f="n">装備</button>
-      <button data-f="adj">強化</button>
-      <button data-f="adv">場</button>
-      <button data-f="v">技</button>
+      <button data-f="n">名詞</button>
+      <button data-f="adj">形容詞</button>
+      <button data-f="v">動詞</button>
+      <button data-f="adv">副詞</button>
     </div>
     <div id="cardGrid"></div>
   </div>

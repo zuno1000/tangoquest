@@ -51,17 +51,21 @@ function run(){
     const a=W.cardOf("abate|3|2"), b=W.cardOf("abate|3|2");
     eq(JSON.stringify(a), JSON.stringify(b));
   });
-  t("品詞→役割のマッピング", ()=>{
+  t("品詞→役割のマッピング(v3文法)", ()=>{
     const find=p=>W.WORDS.find(w=>w.pos===p);
-    ok(W.genCard(find("n"),1,0).stats, "noun stats");
-    ok(W.genCard(find("adj"),1,0).buffStat, "adj buff");
-    ok(W.genCard(find("adv"),1,0).fieldType, "adv field");
-    ok(W.genCard(find("v"),1,0).mult>0, "verb mult");
+    ok(W.genCard(find("n"),1,0).val>0, "noun val");
+    const a=W.genCard(find("adj"),1,0); ok((a.m>1)||(a.p>1), "adj m/p");
+    const d=W.genCard(find("adv"),1,0); ok(d.sub>=0&&d.sub<3, "adv sub");
+    const v=W.genCard(find("v"),1,0); ok(v.w>=1&&v.vt>=0, "verb");
   });
-  t("レア度・Lvで性能が伸びる", ()=>{
-    const w=W.WORDS.find(x=>W.genCard(x,1,0).slot==="weapon");
-    ok(W.genCard(w,5,0).stats.atk > W.genCard(w,1,0).stats.atk, "rar");
-    ok(W.genCard(w,1,3).stats.atk > W.genCard(w,1,0).stats.atk, "lv");
+  t("レア度・Lvで性能が伸び、長い単語ほど基礎値が大きい", ()=>{
+    const w=W.WORDS.find(x=>x.pos==="n");
+    ok(W.genCard(w,5,0).val > W.genCard(w,1,0).val, "rar");
+    ok(W.genCard(w,1,3).val > W.genCard(w,1,0).val, "lv");
+    const sh=W.WORDS.find(x=>x.pos==="n"&&x.en.length<=4);
+    const lo=W.WORDS.find(x=>x.pos==="n"&&x.en.length>=10);
+    ok(sh&&lo, "sample");
+    ok(W.genCard(lo,1,0).val > W.genCard(sh,1,0).val, "len");
   });
   t("ドロップレア度: 新規=★1〜2 / 連続ミス10=★5", ()=>{
     for(let i=0;i<50;i++){
@@ -82,14 +86,14 @@ function run(){
     ok(!G.inv[k], "old key removed");
     eq(G.inv[nk],1,"new key");
   });
-  t("装備中カードの在庫が尽きたら合成後カードへ引き継ぐ", ()=>{
+  t("編成中カードの在庫が尽きたら合成後カードへ引き継ぐ", ()=>{
     const G=W.G;
-    const w=W.WORDS.find(x=>W.genCard(x,1,0).slot==="weapon");
+    const w=W.WORDS.filter(x=>x.pos==="n")[1];
     const k=w.en+"|1|0";
     W.addCard(w.en,1); W.addCard(w.en,1);
-    G.party.equip.weapon=k;
+    G.party.sentence=[k];
     const nk=W.mergeOne(k);
-    eq(G.party.equip.weapon, nk);
+    eq(G.party.sentence[0], nk);
   });
   t("一括合成: 4枚→+2が1枚", ()=>{
     const G=W.G;
@@ -101,8 +105,9 @@ function run(){
   });
 
   /* ---- 戦闘 ---- */
-  t("強者は勝ち弱者は負ける(戦闘は必ず終わる)", ()=>{
-    const strong={name:"S",hp:1000,atk:500,def:100,spd:20,skills:[]};
+  t("強者は勝ち弱者は負ける(v2スナップショット互換も含む)", ()=>{
+    // atkのみのv2形式スナップショットでも動く(無限回廊の旧セーブ互換)
+    const strong={name:"S",hp:1000,atk:500,def:100,spd:20};
     const weak={name:"W",hp:100,atk:5,def:0,spd:5};
     ok(W.simBattle(strong, Object.assign({},weak)).win, "strong wins");
     ok(!W.simBattle(Object.assign({},weak,{name:"W2"}), Object.assign({},strong)).win, "weak loses");
@@ -113,15 +118,15 @@ function run(){
     const e3=W.enemyFor(1,4,5,false,["a"],"b");
     ok(e2.hp>e1.hp, "tier"); ok(e3.hp>e1.hp, "floor");
   });
-  t("編成でステータスが上がる", ()=>{
+  t("文に名詞を置くとダメージ/ターンと戦闘力が上がる", ()=>{
     const G=W.G;
-    G.party.equip={weapon:null,armor:null,acc:null,buff1:null,buff2:null,field:null,skill1:null,skill2:null,skill3:null};
+    G.party.sentence=[];
     const p0=W.playerStats();
-    const w=W.WORDS.find(x=>W.genCard(x,1,0).slot==="weapon");
+    const w=W.WORDS.filter(x=>x.pos==="n")[2];
     W.addCard(w.en,3);
-    G.party.equip.weapon=w.en+"|3|0";
+    G.party.sentence=[w.en+"|3|0"];
     const p1=W.playerStats();
-    ok(p1.atk>p0.atk, "weapon atk");
+    ok(p1.dpt>p0.dpt, "dpt");
     ok(p1.power>p0.power, "power");
   });
 
@@ -161,12 +166,12 @@ function run(){
     eq(G.shards, 98, "cost=★1は2");
     eq(G.inv[nk], 1, "inventory");
   });
-  t("一括分解は装備中カードを1枚残す", ()=>{
+  t("一括分解は編成中カードを1枚残す", ()=>{
     const G=W.G;
-    const w=W.WORDS.find(x=>W.genCard(x,1,0).slot==="weapon");
+    const w=W.WORDS.filter(x=>x.pos==="n")[3];
     G.inv={};
     W.addCard(w.en,1); W.addCard(w.en,1);
-    G.party.equip.weapon=w.en+"|1|0";
+    G.party.sentence=[w.en+"|1|0"];
     const r=W.bulkDisassemble(1,false);
     eq(G.inv[w.en+"|1|0"], 1, "equipped keeps 1");
     ok(r.cnt>=1, "some disassembled");
@@ -178,28 +183,27 @@ function run(){
     ok(a.elem>=0 && a.elem<5, "range");
     eq(a.elem, b.elem, "stable");
   });
-  t("同属性2枚でセット効果が発動する", ()=>{
+  t("同属性2枚でセット効果(ダメージ×1.05)が発動する", ()=>{
     const cards=W.WORDS.filter(x=>x.pos==="n").map(x=>W.genCard(x,1,0));
-    const wpn=cards.find(c=>c.slot==="weapon");
-    const arm=cards.find(c=>c.slot==="armor" && c.elem===wpn.elem);
-    ok(arm, "同属性ペアが存在");
-    const eqo={weapon:wpn.key, armor:arm.key, acc:null, buff1:null, buff2:null,
-               field:null, skill1:null, skill2:null, skill3:null};
-    const P=W.playerStats(eqo);
+    const a=cards[0];
+    const b=cards.find(c=>c.en!==a.en && c.elem===a.elem);
+    ok(b, "同属性ペアが存在");
+    const P=W.playerStats([a.key, b.key]);
     ok(P.sets && P.sets.length===1, "set reported");
     eq(P.sets[0].n, 2, "count=2");
     eq(P.sets[0].b, 0.05, "+5%");
+    ok(Math.abs(P.setM-1.05)<1e-9, "setM");
   });
 
-  /* ---- 技タイプ・属性相性・敵の特性(v2.3.0) ---- */
-  t("動詞カードに技タイプ(0〜3)が決定的に付く", ()=>{
+  /* ---- 発動タイプ・属性相性・敵の特性 ---- */
+  t("動詞カードに発動タイプ(0〜3)が決定的に付く", ()=>{
     const v=W.WORDS.find(w=>w.pos==="v");
     const a=W.genCard(v,1,0), b=W.genCard(v,4,3);
-    ok(a.skType>=0 && a.skType<4, "range");
-    eq(a.skType, b.skType, "レア・Lvで不変");
+    ok(a.vt>=0 && a.vt<4, "range");
+    eq(a.vt, b.vt, "レア・Lvで不変");
   });
-  t("技タイプは4種すべて存在する", ()=>{
-    const types=new Set(W.WORDS.filter(w=>w.pos==="v").map(w=>W.genCard(w,1,0).skType));
+  t("発動タイプは4種すべて存在する", ()=>{
+    const types=new Set(W.WORDS.filter(w=>w.pos==="v").map(w=>W.genCard(w,1,0).vt));
     eq(types.size, 4, "found="+[...types].join(","));
   });
   t("属性相性: 有利カードで与ダメ増・被ダメ減", ()=>{
@@ -210,15 +214,17 @@ function run(){
     const n=W.elemMatch([0,0,3,0,0], null);
     eq(n.dealt, 1, "属性なしは等倍");
   });
-  t("貫通技は高防御の敵に有効", ()=>{
+  t("貫通は高防御の敵に有効", ()=>{
     const E=()=>({name:"e",hp:2000,atk:1,def:900,spd:1});
-    const P=t2=>({name:"p",hp:500,atk:100,def:0,spd:10,skills:[{name:"x",mult:300,proc:100,type:t2}]});
+    const P=vt=>({name:"p",hp:500,def:0,spd:10,charM:1,setM:1,amp:1,guard:0,
+                  clauses:[{V:300,vt,w:1,name:"x",words:[]}]});
     ok(W.simBattle(P(1),E()).win, "貫通は倒せる");
     ok(!W.simBattle(P(0),E()).win, "強撃は防御に阻まれる");
   });
-  t("吸収技は回復する", ()=>{
-    const r=W.simBattle({name:"p",hp:1000,atk:200,def:0,spd:10,
-      skills:[{name:"d",mult:200,proc:100,type:2}]}, {name:"e",hp:5000,atk:50,def:0,spd:1});
+  t("吸収は回復する", ()=>{
+    const r=W.simBattle({name:"p",hp:1000,def:0,spd:10,charM:1,setM:1,amp:1,guard:0,
+      clauses:[{V:250,vt:2,w:1,name:"d",words:[]}]},
+      {name:"e",hp:5000,atk:50,def:0,spd:1});
     ok(r.log.some(e=>e.heal>0), "healログ");
   });
   t("敵の特性: toughは防御が上がりswiftは速くなる", ()=>{
@@ -228,6 +234,94 @@ function run(){
     ok(tough.def>base.def*2, "tough def");
     ok(swift.spd>base.spd, "swift spd");
     eq(W.enemyFor(3,1,5,false,["a"],"b",{elem:2}).elem, 2, "elem引き継ぎ");
+  });
+
+  /* ---- 呪文文法(v3.0.0) ---- */
+  t("文評価: 形容詞は直後の名詞に係る", ()=>{
+    const adjM=W.WORDS.filter(x=>x.pos==="adj").map(x=>W.genCard(x,1,0)).find(c=>c.sub===0);
+    const noun=W.genCard(W.WORDS.find(x=>x.pos==="n"),1,0);
+    const ev=W.evalSentence([adjM.key, noun.key]);
+    eq(ev.clauses.length, 1, "節1つ");
+    eq(ev.clauses[0].V, Math.round(noun.val*adjM.m), "×m適用");
+  });
+  t("文評価: 乗算と累乗の並び順で結果が変わる(名詞に近い方から適用)", ()=>{
+    const adjs=W.WORDS.filter(x=>x.pos==="adj").map(x=>W.genCard(x,4,0));
+    const m=adjs.find(c=>c.sub===0), p=adjs.find(c=>c.sub===1);
+    const n=W.genCard(W.WORDS.filter(x=>x.pos==="n")[3],4,0);
+    const a=W.evalSentence([m.key, p.key, n.key]).clauses[0].V; // (v^p)×m
+    const b=W.evalSentence([p.key, m.key, n.key]).clauses[0].V; // (v×m)^p
+    eq(a, Math.round(Math.pow(n.val,p.p)*m.m), "近い方から適用");
+    ok(Math.abs(a-b)>=2, "並び順で差が出る a="+a+" b="+b);
+  });
+  t("文評価: 動詞で節が区切られ、動詞なしの残りは素の一撃", ()=>{
+    const ns=W.WORDS.filter(x=>x.pos==="n");
+    const v=W.genCard(W.WORDS.find(x=>x.pos==="v"),1,0);
+    const ev=W.evalSentence([ns[0].en+"|1|0", v.key, ns[1].en+"|1|0"]);
+    eq(ev.clauses.length, 2, "節2つ");
+    eq(ev.clauses[0].name, v.en, "節1=動詞");
+    eq(ev.clauses[1].name, null, "節2=素の一撃");
+  });
+  t("文評価: 係り先の無いカードは不発として報告される", ()=>{
+    const adj=W.genCard(W.WORDS.find(x=>x.pos==="adj"),1,0);
+    const v=W.genCard(W.WORDS.find(x=>x.pos==="v"),1,0);
+    const e1=W.evalSentence([adj.key]);
+    ok(e1.dead[0]!=null && e1.clauses.length===0, "形容詞のみ=不発");
+    const e2=W.evalSentence([v.key]);
+    ok(e2.dead[0]!=null, "名詞なし動詞=不発");
+  });
+  t("文評価: 増幅は全体に掛かり、守護は60%で頭打ち", ()=>{
+    const advs=W.WORDS.filter(x=>x.pos==="adv");
+    const amp=advs.map(x=>W.genCard(x,1,0)).find(c=>c.sub===1);
+    const gs=advs.map(x=>W.genCard(x,5,9)).filter(c=>c.sub===2).slice(0,3);
+    ok(amp && gs.length>=3, "サンプル確保");
+    const n=W.WORDS.find(x=>x.pos==="n");
+    const e1=W.evalSentence([n.en+"|1|0", amp.key]);
+    ok(Math.abs(e1.amp-amp.m)<1e-9, "amp");
+    const e2=W.evalSentence(gs.map(c=>c.key));
+    eq(e2.guard, 60, "guard cap");
+  });
+  t("文評価: 反復は直前の発動をもう一度", ()=>{
+    const rep=W.WORDS.filter(x=>x.pos==="adv").map(x=>W.genCard(x,1,0)).find(c=>c.sub===0);
+    const n=W.WORDS.find(x=>x.pos==="n"), v=W.genCard(W.WORDS.find(x=>x.pos==="v"),1,0);
+    const ev=W.evalSentence([n.en+"|1|0", v.key, rep.key]);
+    ok(Math.abs(ev.clauses[0].rep-rep.r)<1e-9, "rep付与");
+  });
+  t("quickEquipは文の最初の空きスロットに置く", ()=>{
+    const G=W.G;
+    G.party.sentence=[null,null,null,null];
+    const w=W.WORDS.filter(x=>x.pos==="n")[4];
+    W.addCard(w.en,1);
+    const pos=W.quickEquip(w.en+"|1|0");
+    eq(pos, 1, "1語目に配置");
+    eq(G.party.sentence[0], w.en+"|1|0");
+  });
+  t("v2セーブの装備は文に移行される", ()=>{
+    const g={party:{equip:{weapon:"a|1|0", buff1:"b|1|0", skill1:"c|1|0"}}};
+    W.migrateEquipToSentence(g);
+    ok(Array.isArray(g.party.sentence), "配列化");
+    eq(g.party.sentence[0], "b|1|0", "形容詞が文頭");
+    eq(g.party.sentence[1], "a|1|0", "名詞が続く");
+    ok(!g.party.equip, "旧形式は消える");
+  });
+  t("文の長さは知識レベルで4→8語に伸びる", ()=>{
+    const G=W.G; const x0=G.xp;
+    G.xp=0;   eq(W.sentenceSlots(), 4, "Lv1");
+    G.xp=1e6; eq(W.sentenceSlots(), 8, "高Lv");
+    G.xp=x0;
+  });
+  t("バランス: 少し集めた文(★2〜3)で草原を完全攻略できる", ()=>{
+    const ns=W.WORDS.filter(x=>x.pos==="n").slice(5,7);
+    const adj=W.WORDS.filter(x=>x.pos==="adj").map(x=>W.genCard(x,3,0)).find(c=>c.sub===0);
+    const vb=W.genCard(W.WORDS.find(x=>x.pos==="v"),2,0);
+    const P=W.playerStats([adj.key, ns[0].en+"|3|0", ns[1].en+"|2|0", vb.key]);
+    let hp=P.hp, full=true;
+    for(let f=1; f<=5; f++){
+      const E=W.enemyFor(1,f,5,f===5,["a"],"b",{elem:2});
+      const r=W.simBattle(Object.assign({},P,{hp}), E);
+      if(!r.win){ full=false; break; }
+      hp=Math.min(P.hp, Math.round(r.php+P.hp*0.25));
+    }
+    ok(full, "d1 full clear (power="+P.power+")");
   });
 
   /* ---- 知識レベル ---- */

@@ -5,7 +5,7 @@ const KEY="tangoquest_v1";
 const RAR_MULT=[1, 1.6, 2.5, 3.8, 5.5];
 const RAR_STARS=["★","★★","★★★","★★★★","★★★★★"];
 const POS_LABEL={v:"動詞", n:"名詞", adj:"形容詞", adv:"副詞"};
-const POS_ROLE={v:"攻撃技", n:"装備", adj:"強化", adv:"フィールド"};
+const POS_ROLE={v:"発動", n:"基礎値", adj:"修飾", adv:"文末効果"};
 
 let G;
 try{ G=JSON.parse(localStorage.getItem(KEY)) }catch(e){ G=null }
@@ -16,10 +16,17 @@ G.words=G.words||{};   // en -> [box, due, correct, wrong, mastered, wrongStreak
 G.days=G.days||{};     // ymd -> {a,c,m}
 G.inv=G.inv||{};       // "en|rar|lv" -> 枚数
 G.chars=G.chars||{};   // charId -> {dup}
-G.party=G.party||{char:null, equip:{}};
-G.party.equip=Object.assign(
-  {weapon:null, armor:null, acc:null, buff1:null, buff2:null, field:null, skill1:null, skill2:null, skill3:null},
-  G.party.equip||{});
+G.party=G.party||{char:null};
+/* v3移行: 旧9スロット装備 → 文(カードkeyの配列・左から評価)。旧装備を文らしい語順で引き継ぐ */
+function migrateEquipToSentence(g){
+  if(g.party.sentence || !g.party.equip) return;
+  const e=g.party.equip;
+  const order=["buff1","weapon","skill1","buff2","armor","skill2","field","acc"];
+  g.party.sentence=order.map(s=>e[s]).filter(Boolean).slice(0,8);
+  delete g.party.equip;
+}
+migrateEquipToSentence(G);
+G.party.sentence=G.party.sentence||[];
 G.gold=G.gold||0;
 G.tickets=G.tickets||0;
 G.shards=G.shards||0;   // カードのかけら(分解で入手・強化に使う)
@@ -78,5 +85,7 @@ function track(ev, n){
 /* ---- 知識レベル: クイズ正解の積み重ねが直接強さになる ---- */
 function accountLevel(){ return Math.floor(Math.pow((G.xp||0)/50, 0.55))+1; }
 function lvMult(){ return 1+0.01*(accountLevel()-1); } // Lvごとに全ステータス+1%
+/* 文の長さ(スロット数)は知識レベルで伸びる: Lv1=4語 → Lv24で最大8語 */
+function sentenceSlots(){ return Math.min(8, 4+Math.floor(accountLevel()/6)); }
 
 const byEn={}; WORDS.forEach(w=>byEn[w.en]=w);

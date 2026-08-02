@@ -27,7 +27,7 @@ button{font-family:inherit; color:var(--ink)}
 
 /* Soft UI 影レシピ: 浮き(raised)と窪み(inset) */
 .panel,.ccard,.tile,.dnode,.charcard,.gres,.gbanner,.hero,
-.choice,.dropchip,.slot.filled,.charopt{
+.choice,.dropchip,.wslot.filled,.charopt{
   box-shadow:-5px -5px 10px var(--shl), 5px 5px 10px var(--shd);
 }
 
@@ -216,27 +216,26 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
 .dclear{color:var(--ok); font-size:11px; font-weight:800}
 .dnew{color:#fff; background:var(--accent2); font-size:10px; font-weight:800; border-radius:6px; padding:1px 6px}
 
-/* ---- doll(人型編成) ---- */
-#doll{display:flex; gap:10px; margin-top:12px; align-items:stretch}
-.dollcol{flex:1; min-width:0; display:flex; flex-direction:column; gap:10px}
-#dollChar{flex:1.15; min-width:0; background:var(--bg);
-  border-radius:20px; display:flex; flex-direction:column;
-  align-items:center; justify-content:center; padding:10px 4px; text-align:center;
-  box-shadow:inset 4px 4px 8px var(--shd), inset -4px -4px 8px var(--shl)}
-#dollFace{font-size:54px; line-height:1.1}
-#dollName{font-size:12px; font-weight:800; margin-top:6px}
-#dollStats{font-size:11px; margin-top:4px; line-height:1.5}
-#dollSkills{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:10px}
-
-/* ---- equip slots: 空き=窪み / 装備中=浮き(ポケポケのコンプ欲設計) ---- */
-.slot{background:var(--bg); border:1.5px solid transparent; border-radius:16px; padding:8px 4px;
-  text-align:center; cursor:pointer; min-height:76px; display:flex; flex-direction:column; justify-content:center;
+/* ---- 呪文の文(語順スロット): 空き=窪み / 配置済み=浮き ---- */
+#sentenceRow{display:grid; grid-template-columns:repeat(4,1fr); gap:9px}
+.wslot{background:var(--bg); border:1.5px solid transparent; border-radius:14px; padding:8px 3px;
+  text-align:center; cursor:pointer; min-height:80px; display:flex; flex-direction:column;
+  justify-content:center; gap:2px; position:relative; overflow:hidden;
   box-shadow:inset 3px 3px 7px var(--shd), inset -3px -3px 7px var(--shl)}
-.slot.filled{background:var(--card2);
-  box-shadow:-4px -4px 8px var(--shl), 4px 4px 8px var(--shd)}
-.slot .sic{font-size:22px}
-.slot .sname{font-size:11px; font-weight:700; word-break:break-word; line-height:1.15; margin-top:3px}
-.slot .stype{font-size:10px; color:var(--sub); margin-top:2px}
+.wslot.filled{background:var(--card2)}
+.wslot .wpos{font-size:9px; font-weight:800}
+.wslot .wen{font-size:12px; font-weight:800; word-break:break-word; line-height:1.15}
+.wslot .wfx{font-size:10px; color:var(--sub); font-weight:700}
+.wslot .wplus{font-size:20px; color:var(--sub); opacity:.6}
+.wslot.wdead{opacity:.55}
+.wslot .wwarn{font-size:9px; color:var(--ng); font-weight:800}
+
+/* ---- 数式プレビュー ---- */
+.frow{display:flex; align-items:center; gap:8px; padding:7px 2px;
+  border-bottom:1px solid var(--line); line-height:1.5; word-break:break-word}
+.ftotal{margin-top:8px; font-weight:800; font-size:14px}
+.ftotal b{color:var(--accent2); font-size:19px}
+.prow.dim{opacity:.45}
 .charsel{display:flex; gap:10px; overflow-x:auto; padding:8px 4px; margin-top:8px}
 .charopt{flex:0 0 auto; width:86px; background:var(--bg); border:1.5px solid transparent; border-radius:16px;
   padding:10px 4px; text-align:center; cursor:pointer}

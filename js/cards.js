@@ -1,53 +1,51 @@
 "use strict";
-/* ================= 単語カード =================
+/* ================= 単語カード(呪文文法) =================
    カードは (英単語, レア度, 強化Lv) で一意。性能は単語のハッシュから決定的に生成する。
-   品詞→役割: 名詞=装備(固定値) / 形容詞=強化(基礎ステ%) / 副詞=フィールド(全体効果) / 動詞=攻撃技 */
+   v3: カードは「文」に左から並べる演算子。品詞が文法上の役割を決める(Noita/Balatro参考):
+     名詞=基礎値(+n。綴りが長い単語ほど大きい) / 形容詞=直後の名詞を修飾(×m or ^p)
+     動詞=発動(溜めた値で行動し節を区切る) / 副詞=文末効果(反復・増幅・守護) */
 
 function keyOf(en,rar,lv){ return en+"|"+rar+"|"+lv; }
 function parseKey(k){ const p=k.split("|"); return {en:p[0], rar:+p[1], lv:+p[2]}; }
 
-const SLOT_ICON={weapon:"⚔️", armor:"🛡️", acc:"💍", buff:"💪", field:"🌟", skill:"🗡️"};
-const SLOT_NAME={weapon:"武器", armor:"防具", acc:"装飾品", buff:"強化", field:"フィールド", skill:"攻撃技"};
-const STAT_NAME={hp:"HP", atk:"攻撃", def:"防御", spd:"素早さ"};
+const POS_ICON={n:"💎", adj:"✨", v:"⚔️", adv:"🌀"};
 const ELEM_ICON=["🔥","💧","🍃","☀️","🌙"];
 const ELEM_NAME=["火","水","風","光","闇"];
-/* 技タイプ: 動詞カードの個性。敵に合わせて選ぶ意味を作る
-   powerF は戦闘力・おまかせ編成用の期待値係数(防御無視や回復の価値を近似) */
-const SKILL_TYPES=[
-  {id:0, name:"強撃", note:"",                    powerF:1},
-  {id:1, name:"貫通", note:"敵の防御をほぼ無視",   powerF:1.06},
-  {id:2, name:"吸収", note:"与ダメージの45%を回復", powerF:0.95},
-  {id:3, name:"連撃", note:"60%×2回攻撃",          powerF:1.0},
+/* 動詞の発動タイプ。expF は期待ダメージ係数(戦闘力・おまかせ編成用) */
+const VERB_TYPES=[
+  {name:"強撃", note:"溜めた値で一撃",       expF:1},
+  {name:"貫通", note:"敵の防御をほぼ無視",   expF:0.85},
+  {name:"吸収", note:"与ダメージの45%を回復", expF:0.8},
+  {name:"連撃", note:"60%×2回攻撃",          expF:1.2},
 ];
+const ADV_KIND=["反復","増幅","守護"];
 
 function genCard(w, rar, lv){
   const h=hashStr(w.en);
   const rm=RAR_MULT[rar-1], lm=1+0.3*lv;
   const c={en:w.en, ja:w.ja, pos:w.pos, rar, lv, key:keyOf(w.en,rar,lv)};
   if(w.pos==="n"){
-    c.slot=["weapon","armor","acc"][h%3];
-    if(c.slot==="weapon")      c.stats={atk:Math.round((10+h%7)*rm*lm)};
-    else if(c.slot==="armor")  c.stats={def:Math.round((6+h%5)*rm*lm), hp:Math.round((34+h%25)*rm*lm)};
-    else                       c.stats={spd:Math.round((4+h%4)*rm*lm), atk:Math.round((4+h%3)*rm*lm)};
+    // 基礎値: 長い(=難しい)単語ほど強い
+    c.val=Math.round((8+Math.min(12,w.en.length)*2+h%9)*rm*lm);
   }else if(w.pos==="adj"){
-    c.slot="buff";
-    c.buffStat=["atk","def","hp","spd"][h%4];
-    c.pct=(5+h%4)+3*(rar-1)+2*lv;
-  }else if(w.pos==="adv"){
-    c.slot="field";
-    c.fieldType=["all","proc","gold"][h%3];
-    c.pct = c.fieldType==="all"  ? (3+h%3)+2*(rar-1)+Math.round(1.5*lv)
-          : c.fieldType==="proc" ? (6+h%4)+3*(rar-1)+2*lv
-          :                        (10+h%6)+5*(rar-1)+3*lv;
-  }else{ // v
-    c.slot="skill";
-    c.mult=150+10*(h%6)+25*(rar-1)+15*lv;   // 攻撃倍率%
-    c.proc=Math.min(60, 20+(h%3)*4+2*(rar-1)+2*lv); // 発動率%
-    c.skType=Math.floor(h/31)%4; // 技タイプ(mult/proc/elemと別ビットから導出)
+    c.sub=Math.floor(h/13)%2; // 0=乗算 / 1=累乗
+    if(c.sub===0) c.m=+((1+(0.2+(h%6)*0.05)*(1+0.35*(rar-1))*(1+0.15*lv)).toFixed(2));
+    else          c.p=+((1+(0.04+(h%5)*0.01)*(1+0.3*(rar-1))*(1+0.12*lv)).toFixed(3));
+  }else if(w.pos==="v"){
+    c.vt=Math.floor(h/31)%4;  // 発動タイプ
+    c.w=+(((100+10*(h%6)+20*(rar-1)+12*lv)/100).toFixed(2)); // 発動倍率
+  }else{ // adv
+    c.sub=Math.floor(h/17)%3; // 0=反復 / 1=増幅 / 2=守護
+    if(c.sub===0)      c.r=+(Math.min(0.9, 0.35+(h%4)*0.05+0.06*(rar-1)+0.04*lv).toFixed(2));
+    else if(c.sub===1) c.m=+((1+(0.08+(h%5)*0.02)*(1+0.3*(rar-1))*(1+0.12*lv)).toFixed(2));
+    else               c.g=Math.min(30, (5+h%5)+3*(rar-1)+2*lv);
   }
-  c.icon=SLOT_ICON[c.slot];
-  c.typeName=SLOT_NAME[c.slot];
-  c.elem=Math.floor(h/7)%5; // 属性(セット効果用)。slot判定と別ビットで決める
+  c.icon=POS_ICON[c.pos];
+  c.typeName = c.pos==="n"? "基礎値"
+             : c.pos==="adj"? (c.sub===0?"乗算":"累乗")
+             : c.pos==="v"? VERB_TYPES[c.vt].name
+             : ADV_KIND[c.sub];
+  c.elem=Math.floor(h/7)%5; // 属性(セット効果・相性用)。他の判定と別ビットで決める
   c.elemIcon=ELEM_ICON[c.elem];
   return c;
 }
@@ -56,13 +54,20 @@ function cardOf(key){
   return w? genCard(w,p.rar,p.lv) : null;
 }
 function effectText(c){
-  if(c.pos==="n") return Object.keys(c.stats).map(k=>STAT_NAME[k]+" +"+fmt(c.stats[k])).join(" / ");
-  if(c.pos==="adj") return STAT_NAME[c.buffStat]+" +"+c.pct+"%";
-  if(c.pos==="adv") return c.fieldType==="all"? "全ステータス +"+c.pct+"%"
-                    : c.fieldType==="proc"? "技の発動率 +"+c.pct+"%"
-                    : "獲得ゴールド +"+c.pct+"%";
-  const st=SKILL_TYPES[c.skType||0];
-  return "【"+st.name+"】威力 "+c.mult+"% ／ 発動率 "+c.proc+"%"+(st.note? "("+st.note+")":"");
+  if(c.pos==="n") return "基礎値 +"+fmt(c.val);
+  if(c.pos==="adj") return c.sub===0? "修飾: 次の名詞を ×"+c.m : "修飾: 次の名詞を ^"+c.p+"(累乗)";
+  if(c.pos==="adv") return c.sub===0? "文末: 直前の発動をもう一度(威力×"+c.r+")"
+                    : c.sub===1? "文末: ダメージ全体 ×"+c.m
+                    : "文末: 受けるダメージ -"+c.g+"%";
+  const vt=VERB_TYPES[c.vt||0];
+  return "発動:【"+vt.name+"】×"+c.w+"("+vt.note+")";
+}
+/* 編成チップ等に出す短い表記 */
+function shortEffect(c){
+  if(c.pos==="n") return "+"+fmt(c.val);
+  if(c.pos==="adj") return c.sub===0? "×"+c.m : "^"+c.p;
+  if(c.pos==="adv") return c.sub===0? "反復×"+c.r : c.sub===1? "全体×"+c.m : "守護-"+c.g+"%";
+  return VERB_TYPES[c.vt||0].name+"×"+c.w;
 }
 function lvLabel(c){ return c.lv>0? " +"+c.lv : ""; }
 
@@ -73,7 +78,12 @@ function addCard(en, rar){
   track("card");
   return k;
 }
-/* 同キー2枚 → Lv+1 を1枚。装備中カードの在庫が尽きたら装備参照を合成後カードへ引き継ぐ */
+/* 文の中のkey参照を書き換える(nk=nullなら外す) */
+function replaceInSentence(key, nk){
+  const s=G.party.sentence||[];
+  for(let i=0;i<s.length;i++){ if(s[i]===key) s[i]=nk; }
+}
+/* 同キー2枚 → Lv+1 を1枚。編成中カードの在庫が尽きたら参照を合成後カードへ引き継ぐ */
 function mergeOne(key){
   if((G.inv[key]||0)<2) return null;
   const p=parseKey(key);
@@ -81,9 +91,7 @@ function mergeOne(key){
   if(G.inv[key]<=0) delete G.inv[key];
   const nk=keyOf(p.en,p.rar,p.lv+1);
   G.inv[nk]=(G.inv[nk]||0)+1;
-  if(!G.inv[key]){
-    for(const s in G.party.equip){ if(G.party.equip[s]===key) G.party.equip[s]=nk; }
-  }
+  if(!G.inv[key]) replaceInSentence(key, nk);
   track("merge");
   return nk;
 }
@@ -111,7 +119,7 @@ function disassemble(key, n){
   G.inv[key]-=n;
   if(G.inv[key]<=0){
     delete G.inv[key];
-    for(const s in G.party.equip){ if(G.party.equip[s]===key) G.party.equip[s]=null; }
+    replaceInSentence(key, null);
   }
   G.shards+=gain;
   return gain;
@@ -127,7 +135,7 @@ function enhanceOne(key){
   G.inv[nk]=(G.inv[nk]||0)+1;
   if(G.inv[key]<=0){
     delete G.inv[key];
-    for(const s in G.party.equip){ if(G.party.equip[s]===key) G.party.equip[s]=nk; }
+    replaceInSentence(key, nk);
   }
   track("merge");
   return nk;
@@ -165,9 +173,7 @@ function dropRarity(st){
 let cardFilter="all";
 
 function equippedKeys(){
-  const s=new Set();
-  for(const k in G.party.equip){ if(G.party.equip[k]) s.add(G.party.equip[k]); }
-  return s;
+  return new Set((G.party.sentence||[]).filter(Boolean));
 }
 
 function renderCards(){
@@ -215,30 +221,22 @@ function cardDetailHTML(c){
   '</div>';
 }
 
-/* カード詳細からの直接装備。空きスロット、無ければ一番弱いスロットと交代 */
-function chooseSlotFor(c, eq){
-  if(c.pos==="n") return c.slot;
-  if(c.pos==="adv") return "field";
-  const group=c.pos==="adj"? ["buff1","buff2"] : ["skill1","skill2","skill3"];
-  for(const s of group){ if(!eq[s]) return s; }
-  let worst=group[0], wv=Infinity;
-  for(const s of group){
-    const cc=cardOf(eq[s]);
-    const v=cc? cardScore(cc) : -1;
-    if(v<wv){ wv=v; worst=s; }
-  }
-  return worst;
+/* 文の中で同じキーを何枚使っているか(在庫を超える重複配置はしない) */
+function equippedCountOf(key, sentence){
+  return (sentence||G.party.sentence||[]).filter(k=>k===key).length;
 }
-function equippedCountOf(key, eq){ let n=0; for(const s in eq){ if(eq[s]===key) n++; } return n; }
 
+/* カード詳細からの直接配置: 文の最初の空きスロットに置く */
 function quickEquip(key){
   const c=cardOf(key); if(!c) return null;
-  const eq=G.party.equip;
-  if(equippedCountOf(key,eq) >= (G.inv[key]||0)) return null; // 在庫を超える重複装備はしない
-  const slot=chooseSlotFor(c, eq);
-  eq[slot]=key;
-  saveG();
-  return slot;
+  const s=G.party.sentence;
+  if(equippedCountOf(key,s) >= (G.inv[key]||0)) return null;
+  const max=sentenceSlots();
+  while(s.length<max) s.push(null);
+  for(let i=0;i<max;i++){
+    if(!s[i]){ s[i]=key; saveG(); return i+1; }
+  }
+  return null; // 文が満杯
 }
 function openCardModal(key){
   const c=cardOf(key); if(!c) return;
@@ -253,7 +251,7 @@ function openCardModal(key){
       '<button class="btn" style="flex:1" id="mergeBtn" '+(cnt<2?"disabled":"")+'>⚒ 合成(2枚)</button>'+
     '</div>'+
     '<div class="row" style="margin-top:8px; gap:8px">'+
-      '<button class="btn" style="flex:1" id="quickEqBtn" '+(eq?"disabled":"")+'>'+(eq?"装備中":"🛡 装備する")+'</button>'+
+      '<button class="btn" style="flex:1" id="quickEqBtn" '+(eq?"disabled":"")+'>'+(eq?"文に配置中":"📜 文に置く")+'</button>'+
       '<button class="btn" style="flex:1" id="disBtn">分解 → ✨'+fmt(shardValue(c))+'</button>'+
     '</div>');
   $("enhBtn").onclick=()=>{
@@ -270,8 +268,8 @@ function openCardModal(key){
   };
   $("quickEqBtn").onclick=()=>{
     const slot=quickEquip(key);
-    if(!slot){ toast("在庫が足りない"); return; }
-    toast(SLOT_NAME[slot.replace(/[0-9]/g,"")]+"に装備した");
+    if(!slot){ toast("文が満杯か、在庫が足りない"); return; }
+    toast("文の"+slot+"語目に置いた");
     renderCards(); openCardModal(key);
   };
   $("disBtn").onclick=()=>{

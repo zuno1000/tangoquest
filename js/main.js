@@ -25,6 +25,7 @@ $("navGacha").onclick=()=>switchTab("gacha");
 
 /* ---- ホーム画面(各機能へのハブ) ---- */
 const NEWS=[
+  {d:"2026-08-02", t:"📜 v3.0.0 呪文文法システム! カードを「文」に並べてダメージ式を組み立てよう"},
   {d:"2026-08-02", t:"⚔ v2.3.0 属性相性・技タイプ・敵の特性を追加! 敵の弱点に合わせて編成しよう"},
   {d:"2026-08-02", t:"🌤️ v2.2.0 白×青の新デザイン! 初回🎫10プレゼント・任務の一括受取も"},
   {d:"2026-08-02", t:"✨ v2.1.0 UI刷新! パック開封演出・カードのホロ光沢を追加"},
@@ -60,8 +61,8 @@ function renderHome(){
         '<div class="tsub">'+(run? "🌀 "+run.floor+"F探索中" : "ダンジョンへ")+'</div></div>'+
       '<div class="tile'+(b?" ltd":"")+'" data-go="gacha"><div class="tic">🔮</div><div class="tname">ガチャ</div>'+
         '<div class="tsub">'+(b? "☄️ 限定開催中!" : "🎫"+fmt(G.tickets))+'</div></div>'+
-      '<div class="tile" data-go="party"><div class="tic">🛡️</div><div class="tname">編成</div>'+
-        '<div class="tsub">カード・なかま</div></div>'+
+      '<div class="tile" data-go="party"><div class="tic">📜</div><div class="tname">編成</div>'+
+        '<div class="tsub">呪文の文・カード</div></div>'+
       '<div class="tile" data-go="mission"><div class="tic">📜'+(hasClaimable()?'<span class="dot" style="position:static; display:inline-block; margin-left:4px"></span>':'')+'</div><div class="tname">任務</div>'+
         '<div class="tsub">'+(hasClaimable()? "報酬を受け取れる!" : "デイリー・実績")+'</div></div>'+
     '</div>'+
