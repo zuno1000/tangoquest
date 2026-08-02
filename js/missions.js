@@ -78,6 +78,21 @@ function hasClaimable(){
   }
   return false;
 }
+/* 受取可能な報酬の件数(ホームの表示用。実績は現時点で受け取れる段階まで数える) */
+function claimableCount(){
+  let n=0;
+  const d=dailyRec();
+  DAILY_DEFS.forEach(m=>{ if(!d.cl[m.id] && m.cur(d)>=m.target) n++; });
+  if(!d.cl.all && DAILY_DEFS.every(m=>d.cl[m.id])) n++;
+  const w=weeklyRec();
+  WEEKLY_DEFS.forEach(m=>{ if(!w.cl[m.id] && m.cur(w)>=m.target) n++; });
+  if(!w.cl.all && WEEKLY_DEFS.every(m=>w.cl[m.id])) n++;
+  ACH_DEFS.forEach(a=>{
+    let done=G.ach[a.id]||0;
+    while(done<a.tiers.length && a.cur()>=a.tiers[done][0]){ n++; done++; }
+  });
+  return n;
+}
 function refreshMissionDot(){
   $("navHomeDot").classList.toggle("hidden", !hasClaimable());
   refreshMissionSegDots();
@@ -149,7 +164,7 @@ function renderMissions(){
   if(hasClaimable()){
     const r=document.createElement("div");
     r.style.cssText="padding:4px 0 10px; border-bottom:1px solid var(--line)";
-    r.innerHTML='<button class="claimbtn" style="width:100%" id="claimAllBtn">✨ すべて受け取る(3タブぶん)</button>';
+    r.innerHTML='<button class="claimbtn" style="width:100%" id="claimAllBtn">✨ すべて受け取る(3タブ分)</button>';
     r.querySelector("button").onclick=claimAllCurrent;
     box.appendChild(r);
   }

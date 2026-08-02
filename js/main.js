@@ -25,6 +25,7 @@ $("navGacha").onclick=()=>switchTab("gacha");
 
 /* ---- ホーム画面(各機能へのハブ) ---- */
 const NEWS=[
+  {d:"2026-08-02", t:"🔥 v3.4.0 連続学習ボーナス! 続けた日数だけ獲得XPアップ(最大×2)。任務報酬はホームから一括受取"},
   {d:"2026-08-02", t:"🐺 v3.3.0 野生語システム! 語根のない単語は「覚えているほど強くなる」。編成中の単語は優先出題"},
   {d:"2026-08-02", t:"🧬 v3.2.0 語源辞書を大幅拡充! 語根333種・全単語の52%に正確な語源タグ"},
   {d:"2026-08-02", t:"🧬 v3.1.0 語源システム! 同じ語根の単語を並べると「共鳴」で強化。語根から単語を覚えよう"},
@@ -45,6 +46,8 @@ function renderHome(){
   const pct=Math.min(100, Math.round(100*(G.xp-cur)/Math.max(1, next-cur)));
   const b=activeBanner();
   const run=G.inf.run;
+  const stk=studyStreak();
+  const mn=claimableCount();
   $("homeBox").innerHTML=
     // ヒーロー(出撃キャラ)
     '<div class="panel hero" data-go="party">'+
@@ -52,12 +55,15 @@ function renderHome(){
       '<div class="grow">'+
         '<div style="font-weight:800; font-size:16px">'+(ch?esc(ch.name):"-")+'</div>'+
         '<div class="small" style="margin-top:2px">戦闘力 <b style="color:var(--accent); font-size:15px">'+fmt(P.power)+'</b></div>'+
-        '<div class="small" style="margin-top:6px">📖 Lv'+lv+'</div>'+
+        '<div class="small" style="margin-top:6px">📖 Lv'+lv+
+          (stk>=2? ' <span style="color:var(--accent); font-weight:800">🔥'+stk+'日連続(XP×'+(+streakXpMult().toFixed(2))+')</span>':'')+'</div>'+
         '<div class="mbar" style="margin-top:3px"><i style="width:'+pct+'%"></i></div>'+
       '</div></div>'+
     // 学習CTA
     '<button id="homeStudy" class="studycta shine">📖 学習をはじめる'+
       '<span class="ctasub">今日 '+d.a+'問(正解'+d.c+')</span></button>'+
+    // 任務報酬の一括受取(受け取れるものがあるときだけ出す)
+    (mn? '<button id="homeClaim" class="claimbtn homeclaim">🎁 任務報酬をすべて受け取る</button>':'')+
     // ショートカット
     '<div class="tilegrid">'+
       '<div class="tile" data-go="adv"><div class="tic">🗺️</div><div class="tname">冒険</div>'+
@@ -66,8 +72,8 @@ function renderHome(){
         '<div class="tsub">'+(b? "☄️ 限定開催中!" : "🎫"+fmt(G.tickets))+'</div></div>'+
       '<div class="tile" data-go="party"><div class="tic">📜</div><div class="tname">編成</div>'+
         '<div class="tsub">呪文の文・カード</div></div>'+
-      '<div class="tile" data-go="mission"><div class="tic">📜'+(hasClaimable()?'<span class="dot" style="position:static; display:inline-block; margin-left:4px"></span>':'')+'</div><div class="tname">任務</div>'+
-        '<div class="tsub">'+(hasClaimable()? "報酬を受け取れる!" : "デイリー・実績")+'</div></div>'+
+      '<div class="tile'+(mn?" claim":"")+'" data-go="mission"><div class="tic">📜'+(mn?'<span class="dot" style="position:static; display:inline-block; margin-left:4px"></span>':'')+'</div><div class="tname">任務</div>'+
+        '<div class="tsub">'+(mn? '<b style="color:var(--accent)">達成'+mn+'件!</b>' : "デイリー・実績")+'</div></div>'+
     '</div>'+
     // お知らせ
     '<h2>お知らせ</h2>'+
@@ -78,6 +84,7 @@ function renderHome(){
     el.onclick=()=>switchTab(el.dataset.go);
   });
   $("homeStudy").onclick=()=>switchTab("quiz");
+  if(mn) $("homeClaim").onclick=()=>{ claimAllCurrent(); renderHome(); };
 }
 
 /* ---- 編成タブ(そうび / カード / なかま) ---- */

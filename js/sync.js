@@ -134,22 +134,14 @@ async function syncNow(){
 /* ================= 設定モーダル ================= */
 function openSettings(){
   const d=dayRec();
-  const streak=(()=>{ let n=0; const t=new Date();
-    for(let i=0;;i++){
-      const dt=new Date(t.getFullYear(),t.getMonth(),t.getDate()-i);
-      const k=dt.getFullYear()+"-"+String(dt.getMonth()+1).padStart(2,"0")+"-"+String(dt.getDate()).padStart(2,"0");
-      const r=G.days[k];
-      if(r&&r.a>0) n++;
-      else if(i===0) continue;
-      else break;
-    } return n; })();
+  const streak=studyStreak();
   let mastered=0; for(const en in G.words){ if(G.words[en][0]>=MASTER_BOX) mastered++; }
   openModal('<h3>⚙ 設定・記録</h3>'+
     '<table class="stt">'+
     '<tr><td>今日の解答</td><td>'+d.a+'問(正解'+d.c+')</td></tr>'+
     '<tr><td>覚えた単語</td><td>'+mastered+' / '+WORDS.length+'</td></tr>'+
     '<tr><td>学習した単語</td><td>'+Object.keys(G.words).length+'</td></tr>'+
-    '<tr><td>連続学習日数</td><td>'+streak+'日</td></tr>'+
+    '<tr><td>連続学習日数</td><td>'+streak+'日(XPボーナス ×'+(+streakXpMult().toFixed(2))+')</td></tr>'+
     '</table>'+
     '<h3 style="margin-top:16px">出題モード</h3>'+
     '<button class="btn" id="modeToggle">'+(G.mode==="e2j"?"EN → 日本語":"日本語 → EN")+' (タップで切替)</button>'+
@@ -166,7 +158,7 @@ function openSettings(){
       : '<div class="small">未設定。GCPでOAuthクライアントIDを発行し js/sync.js に設定すると使える(README参照)。データは端末内に保存されている。</div>')+
     '<h3 style="margin-top:16px">データ</h3>'+
     '<button class="btn danger" id="resetBtn">データをすべてリセット</button>'+
-    '<div class="small" style="margin-top:14px">LEXICA(レキシカ) v3.3.0 ─ 英単語×ローグライクRPG<br>単語データ: 英検1級レベル '+WORDS.length+'語(<a href="https://github.com/zuno1000/tango" style="color:var(--accent2)">tango</a> 由来)</div>');
+    '<div class="small" style="margin-top:14px">LEXICA(レキシカ) v3.4.0 ─ 英単語×ローグライクRPG<br>単語データ: 英検1級レベル '+WORDS.length+'語(<a href="https://github.com/zuno1000/tango" style="color:var(--accent2)">tango</a> 由来)</div>');
   $("modeToggle").onclick=()=>{
     G.mode=G.mode==="e2j"?"j2e":"e2j"; saveG();
     $("modeToggle").textContent=(G.mode==="e2j"?"EN → 日本語":"日本語 → EN")+" (タップで切替)";

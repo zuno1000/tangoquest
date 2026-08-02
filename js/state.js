@@ -84,6 +84,21 @@ function track(ev, n){
 
 /* ---- 知識レベル: クイズ正解の積み重ねが直接強さになる ---- */
 function accountLevel(){ return Math.floor(Math.pow((G.xp||0)/50, 0.55))+1; }
+/* 連続学習日数(1問以上解いた日が対象。今日まだ解いていなくても途切れ扱いにしない) */
+function studyStreak(){
+  let n=0; const t=new Date();
+  for(let i=0;;i++){
+    const dt=new Date(t.getFullYear(), t.getMonth(), t.getDate()-i);
+    const k=dt.getFullYear()+"-"+String(dt.getMonth()+1).padStart(2,"0")+"-"+String(dt.getDate()).padStart(2,"0");
+    const r=G.days[k];
+    if(r && r.a>0) n++;
+    else if(i===0) continue;
+    else break;
+  }
+  return n;
+}
+/* 連続日数XPボーナス: 2日目から+5%/日、21日目以降は×2.0で頭打ち */
+function streakXpMult(){ return 1+0.05*Math.min(Math.max(studyStreak()-1,0), 20); }
 function lvMult(){ return 1+0.01*(accountLevel()-1); } // Lvごとに全ステータス+1%
 /* 文の長さ(スロット数)は知識レベルで伸びる: Lv1=4語 → Lv24で最大8語 */
 function sentenceSlots(){ return Math.min(8, 4+Math.floor(accountLevel()/6)); }

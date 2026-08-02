@@ -50,14 +50,15 @@ function renderQuestion(){
   const st=G.words[w.en];
   $("qBadge").textContent = !st? "新規" : (st[0]>=MASTER_BOX? "覚えた・復習" : "復習");
   $("qBadge").style.color = !st? "var(--accent2)" : (st[0]>=MASTER_BOX? "var(--ok)" : "var(--accent)");
-  const d=dayRec(); $("qCount").textContent="今日 "+d.a+"問";
+  const d=dayRec(), stk=studyStreak();
+  $("qCount").textContent="今日 "+d.a+"問"+(stk>=2? " ・🔥"+stk+"日":"");
   const pw=$("promptWord");
   pw.textContent = e2j? w.en : w.ja;
   pw.className = e2j? "" : "ja";
   $("qStats").innerHTML = !st
     ? ''
     : 'これまで <span class="qo">正解 '+st[2]+'</span> ・ <span class="qx">ミス '+st[3]+'</span>'+
-      ((st[5]||0)>=3? ' <span style="color:var(--accent)">🔥連続ミス'+st[5]+'(正解で強カード!)</span>':"");
+      ((st[5]||0)>=3? ' <span class="qfire">🔥連続ミス'+st[5]+'(正解で強カード!)</span>':"");
   const box=$("choices"); box.innerHTML="";
   cur.choices.forEach(c=>{
     const b=document.createElement("button");
@@ -99,42 +100,27 @@ function answer(chosen, btn){
   track("ans"); if(ok) track("cor");
   lastEn=w.en;
 
-  // 知識XP: 正解が直接キャラの強さになる
+  // 知識XP: 正解が直接キャラの強さになる(連続学習日数でボーナス)
   let xpGain=0, lvUp=0;
   if(ok){
     const l0=accountLevel();
-    xpGain=10+(justMastered?40:0);
+    xpGain=Math.round((10+(justMastered?40:0))*streakXpMult());
     G.xp+=xpGain;
     const l1=accountLevel();
     if(l1>l0){ lvUp=l1; }
   }
 
-  // 結果表示 + カードドロップ(文言は簡潔に・縦を圧縮)
-  const head=$("resultHead");
-  head.textContent = ok? "⭕ 正解" : "❌ "+w.en;
-  head.className = ok? "ok" : "ng";
+  // 結果表示: 品詞と語源・野生語だけを見せる(正誤は選択肢の色で伝わる)
   const rc=$("resultCard");
+  const rt=rootText(w.en), meta=[];
+  if(rt) meta.push('<span class="rmeta">🧬 '+esc(rt)+'</span>');
+  if(isWild(w.en)) meta.push('<span class="rmeta wildm">🐺 野生語 ─ 記憶Lv'+memBox(w.en)+'(節×'+wildMult(w.en)+')</span>');
+  rc.innerHTML='<span class="poschip pos'+w.pos+'">'+POS_LABEL[w.pos]+'</span>'+meta.join(' ');
   if(ok){
     const rar=dropRarity(preSt);
-    const key=addCard(w.en, rar);
-    const c=cardOf(key);
-    const meta=[];
-    if(rootText(w.en)) meta.push('🧬 '+rootText(w.en));
-    if(c.wild) meta.push('<span style="color:var(--accent)">🐺 野生語 ─ 記憶Lv'+memBox(w.en)+'(装備で節×'+wildMult(w.en)+')</span>');
-    rc.innerHTML='<span class="dropchip bd'+rar+'" id="dropChip">'+c.icon+
-      ' <span class="rc'+rar+'">'+RAR_STARS[rar-1]+'</span> '+esc(w.en)+'</span>'+
-      ' <span class="small">+'+xpGain+'XP'+
-        (lvUp? ' <b style="color:var(--accent)">Lv'+lvUp+'!</b>':'')+'</span>'+
-      (meta.length? '<div class="small" style="margin-top:3px">'+meta.join(' ・ ')+'</div>':'');
-    $("dropChip").onclick=()=>openCardModal(key);
+    addCard(w.en, rar);
     if(lvUp){ toast("📖 レベルアップ! Lv"+lvUp+" ─ 全ステータス強化"); vibe(40); }
     else if(rar>=3) vibe(30);
-  }else{
-    const rt2=rootText(w.en);
-    rc.innerHTML='<span class="small">'+esc(w.ja)+
-      ((st[5]||0)>=2? ' <span style="color:var(--accent)">🔥ミス'+st[5]+'</span>':'')+
-      (rt2? '<br>🧬 '+rt2+' から覚えよう'
-          : (isWild(w.en)? '<br>🐺 野生語(語根なし) ─ くり返しで研ごう':''))+'</span>';
   }
   $("resultBar").classList.add("show");
   saveG();

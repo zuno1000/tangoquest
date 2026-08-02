@@ -137,6 +137,7 @@ function vibe(pat){
   try{ navigator.vibrate(pat); }catch(e){}
 }
 
+const SPEED_ICONS={1:"🚶", 2:"🏃", 3:"⚡"};
 function playRun(d, P, floors, R){
   let speed=+(localStorage.getItem("tq_bspeed")||1);
   if(![1,2,3].includes(speed)) speed=1;
@@ -156,7 +157,7 @@ function playRun(d, P, floors, R){
       '<div id="bAct"></div>'+
     '</div>'+
     '<div class="row" id="bCtrl" style="margin-top:10px">'+
-      '<button class="btn" id="bSpeedBtn">⏩ ×'+speed+'</button>'+
+      '<button class="btn" id="bSpeedBtn">'+SPEED_ICONS[speed]+' ×'+speed+'</button>'+
       '<div class="grow"></div>'+
       '<button class="btn" id="bSkipBtn">結果へ ▶▶</button>'+
     '</div>');
@@ -317,7 +318,7 @@ function playRun(d, P, floors, R){
   $("bSpeedBtn").onclick=()=>{
     speed=speed>=3?1:speed+1;
     localStorage.setItem("tq_bspeed", speed);
-    $("bSpeedBtn").textContent="⏩ ×"+speed;
+    $("bSpeedBtn").textContent=SPEED_ICONS[speed]+" ×"+speed;
   };
   $("bSkipBtn").onclick=showResult;
   next();

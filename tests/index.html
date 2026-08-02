@@ -442,6 +442,46 @@ function run(){
     G.xp=x0;
   });
 
+  /* ---- 連続学習ボーナス(v3.4.0) ---- */
+  t("連続学習日数でXPボーナスが増え×2で頭打ち", ()=>{
+    const G=W.G;
+    const old=G.days; G.days={};
+    const key=i=>{ const dt=new Date(Date.now()-i*864e5);
+      return dt.getFullYear()+"-"+String(dt.getMonth()+1).padStart(2,"0")+"-"+String(dt.getDate()).padStart(2,"0"); };
+    eq(W.studyStreak(), 0, "無学習=0");
+    ok(Math.abs(W.streakXpMult()-1)<1e-9, "0日=×1");
+    G.days[key(0)]={a:1,c:1,m:0};
+    eq(W.studyStreak(), 1, "今日のみ=1日");
+    ok(Math.abs(W.streakXpMult()-1)<1e-9, "1日=×1(ボーナスは2日目から)");
+    G.days[key(1)]={a:1,c:1,m:0}; G.days[key(2)]={a:1,c:1,m:0};
+    eq(W.studyStreak(), 3, "3日連続");
+    ok(Math.abs(W.streakXpMult()-1.10)<1e-9, "3日=×1.1");
+    for(let i=0;i<40;i++) G.days[key(i)]={a:1,c:1,m:0};
+    ok(Math.abs(W.streakXpMult()-2)<1e-9, "21日以降=×2で頭打ち");
+    G.days=old;
+  });
+  t("今日まだ解いていなくても連続は途切れ扱いにならない", ()=>{
+    const G=W.G;
+    const old=G.days; G.days={};
+    const key=i=>{ const dt=new Date(Date.now()-i*864e5);
+      return dt.getFullYear()+"-"+String(dt.getMonth()+1).padStart(2,"0")+"-"+String(dt.getDate()).padStart(2,"0"); };
+    G.days[key(1)]={a:1,c:1,m:0}; G.days[key(2)]={a:1,c:1,m:0};
+    eq(W.studyStreak(), 2, "昨日までの2日分を維持");
+    G.days=old;
+  });
+
+  /* ---- 任務の一括受取(ホーム) ---- */
+  t("claimableCountは受取可能件数を数え、一括受取で0件になる", ()=>{
+    const d=W.dailyRec();
+    d.cl={}; d.c=0;
+    const n0=W.claimableCount();
+    d.c=10;                          // 「10問正解」だけが新たに達成
+    eq(W.claimableCount(), n0+1, "1件増える");
+    ok(W.hasClaimable(), "hasClaimableと整合");
+    W.claimAllCurrent();
+    eq(W.claimableCount(), 0, "受取後は0件");
+  });
+
   /* ---- 限定ガチャ・ダンジョン ---- */
   t("限定キャラは恒常プールに出ない", ()=>{
     for(let r=1;r<=4;r++){

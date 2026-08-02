@@ -27,7 +27,7 @@ button{font-family:inherit; color:var(--ink)}
 
 /* Soft UI 影レシピ: 浮き(raised)と窪み(inset) */
 .panel,.ccard,.tile,.dnode,.charcard,.gres,.gbanner,.hero,
-.choice,.dropchip,.wslot.filled,.charopt{
+.choice,.wslot.filled,.charopt{
   box-shadow:-5px -5px 10px var(--shl), 5px 5px 10px var(--shd);
 }
 
@@ -111,7 +111,7 @@ nav button .dot{position:absolute; top:-2px; right:-8px; width:9px; height:9px; 
 .choice.dim{opacity:.45}
 .choice:disabled{cursor:default}
 #resultBar{
-  flex:0 0 auto; margin-top:10px; min-height:64px;
+  flex:0 0 auto; margin-top:10px; height:78px; /* 固定高: 表示前後でレイアウトが動かない */
   background:var(--card2); border-radius:18px;
   box-shadow:-4px -4px 8px var(--shl), 4px 4px 8px var(--shd);
   padding:8px 12px; display:flex; align-items:center; gap:10px; visibility:hidden;
@@ -119,11 +119,15 @@ nav button .dot{position:absolute; top:-2px; right:-8px; width:9px; height:9px; 
 #resultBar.show{visibility:visible; animation:pop .15s ease-out}
 @keyframes pop{from{opacity:0; transform:translateY(6px)} to{opacity:1; transform:none}}
 #resultInfo{flex:1; min-width:0}
-#resultHead{font-size:14px; font-weight:800; margin-bottom:3px}
-#resultHead.ok{color:var(--ok)} #resultHead.ng{color:var(--ng)}
-#resultCard{font-size:13px; line-height:1.45; overflow:hidden}
-.dropchip{display:inline-flex; align-items:center; gap:5px; border-radius:10px; padding:4px 9px;
-  font-weight:700; font-size:12px; background:var(--bg); border:1.5px solid var(--line); cursor:pointer}
+#resultCard{font-size:13px; line-height:1.5; overflow:hidden;
+  display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2}
+.poschip{display:inline-block; border-radius:9px; padding:3px 10px; margin-right:7px;
+  font-size:12px; font-weight:800; background:var(--bg);
+  box-shadow:inset 2px 2px 4px var(--shd), inset -2px -2px 4px var(--shl)}
+.poschip.posv{color:var(--pos-v)} .poschip.posn{color:var(--pos-n)}
+.poschip.posadj{color:var(--pos-adj)} .poschip.posadv{color:var(--pos-adv)}
+.rmeta{font-weight:700}
+.rmeta.wildm{color:var(--accent)}
 #nextBtn{
   flex:0 0 44%; align-self:stretch; min-height:52px; border:none; border-radius:16px;
   background:linear-gradient(135deg,var(--accent2),#7B8CFF);
@@ -163,6 +167,15 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
 .row{display:flex; align-items:center; gap:8px}
 .grow{flex:1; min-width:0}
 .small{font-size:12px; color:var(--sub)}
+
+/* ---- 日本語の改行位置 ----
+   文の途中の不自然な折返しを防ぐ: 対応ブラウザ(Chrome系)は文節単位で折り返す。
+   非対応ブラウザではこの宣言だけ無視されて従来どおり */
+.newsrow span, .mrow .mname, .tile .tsub, #resultCard, .giftbox, .empty, #modal .small{
+  word-break:auto-phrase}
+/* 絵文字+数値のかたまり(🔥連続ミスN 等)は途中で折り返さない */
+.qfire{display:inline-block; color:var(--accent)}
+.mrow .mprog{white-space:nowrap}
 .minibtn{border:none; border-radius:12px; padding:8px 12px; min-height:36px; font-size:12px; font-weight:800;
   cursor:pointer; background:linear-gradient(135deg,var(--accent2),#7B8CFF); color:#fff;
   box-shadow:0 4px 10px rgba(91,108,255,.35)}
@@ -186,6 +199,8 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
 .tile .tname{font-size:14px; font-weight:800; margin-top:4px}
 .tile .tsub{font-size:11px; color:var(--sub); margin-top:2px}
 .tile.ltd{box-shadow:-5px -5px 10px var(--shl), 5px 5px 10px var(--shd), 0 0 10px rgba(222,154,14,.35)}
+.tile.claim{box-shadow:-5px -5px 10px var(--shl), 5px 5px 10px var(--shd), 0 0 12px rgba(222,154,14,.5)}
+.homeclaim{display:block; width:100%; margin-top:12px}
 .newsrow{display:flex; gap:10px; align-items:baseline; padding:8px 0; border-bottom:1px solid var(--line); line-height:1.5}
 .newsrow:last-child{border-bottom:none}
 .giftbox{background:linear-gradient(135deg,#FFF3DC,#FFE9C0); border-radius:16px; padding:14px;
