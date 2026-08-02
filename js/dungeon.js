@@ -489,7 +489,7 @@ $("autoEqBtn").onclick=()=>{
   toast(r.after>r.before? "おまかせ編成! 戦闘力 "+fmt(r.before)+" → "+fmt(r.after)
       : "これ以上は上がらなかった。属性対策は手動の出番");
 };
-$("unEqBtn").onclick=()=>{ unequipAll(); renderEqSlots(); toast("文をすべて空にした"); };
+$("unEqBtn").onclick=()=>{ unequipAll(); renderEqSlots(); toast("呪文を全て空にした"); };
 
 function renderEqChars(){
   const box=$("eqChars"); if(!box) return;
