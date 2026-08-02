@@ -43,6 +43,7 @@ G.updatedAt=G.updatedAt||0;
 function saveG(){
   G.updatedAt=Date.now();
   try{ localStorage.setItem(KEY, JSON.stringify(G)) }catch(e){}
+  if(typeof markDirty==="function") markDirty(); // 同期リマインダー用(sync.jsが後から定義)
 }
 
 function todayKey(){

@@ -545,6 +545,31 @@ function run(){
     ok(!d.cl.da && !d.cl.all, "受取状態リセット");
   });
 
+  /* ---- 同期リマインダー(v3.4.1) ---- */
+  t("同期リマインダーは「3日超+未同期変更あり」のときだけ", ()=>{
+    const LS=W.localStorage;
+    LS.removeItem("tq_lastSync"); LS.removeItem("tq_dirty");
+    ok(!W.syncReminderNeeded(), "一度も同期していない端末では出ない");
+    LS.setItem("tq_lastSync", String(Date.now()-4*864e5));
+    LS.setItem("tq_dirty", String(Date.now()-864e5));
+    ok(W.syncReminderNeeded(), "3日超+変更ありで出る");
+    LS.setItem("tq_lastSync", String(Date.now()-864e5));
+    ok(!W.syncReminderNeeded(), "3日以内は出ない");
+    LS.setItem("tq_lastSync", String(Date.now()-4*864e5));
+    LS.removeItem("tq_dirty");
+    ok(!W.syncReminderNeeded(), "未同期変更がなければ出ない");
+    W.markSynced();
+    ok(+LS.getItem("tq_lastSync")>Date.now()-5000 && !LS.getItem("tq_dirty"), "markSyncedで解消");
+    LS.removeItem("tq_lastSync"); LS.removeItem("tq_dirty");
+  });
+  t("saveGが未同期変更マーカーを付ける", ()=>{
+    const LS=W.localStorage;
+    LS.removeItem("tq_dirty");
+    W.saveG();
+    ok(LS.getItem("tq_dirty"), "dirtyマーカー");
+    LS.removeItem("tq_dirty");
+  });
+
   /* ---- 起動状態 ---- */
   t("起動時に問題が出題されている", ()=>{
     ok(W.document.getElementById("promptWord").textContent.length>0);

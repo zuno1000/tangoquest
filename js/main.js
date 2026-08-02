@@ -64,6 +64,10 @@ function renderHome(){
       '<span class="ctasub">今日 '+d.a+'問(正解'+d.c+')</span></button>'+
     // 任務報酬の一括受取(受け取れるものがあるときだけ出す)
     (mn? '<button id="homeClaim" class="claimbtn homeclaim">🎁 任務報酬をすべて受け取る</button>':'')+
+    // 同期リマインダー(最終同期3日超+未同期変更ありのときだけ)
+    (syncReminderNeeded()?
+      '<div class="panel syncnag" id="homeSync">📥 最終同期から'+
+        Math.floor((Date.now()-lastSyncAt())/864e5)+'日 ─ タップして同期</div>':'')+
     // ショートカット
     '<div class="tilegrid">'+
       '<div class="tile" data-go="adv"><div class="tic">🗺️</div><div class="tname">冒険</div>'+
@@ -85,6 +89,8 @@ function renderHome(){
   });
   $("homeStudy").onclick=()=>switchTab("quiz");
   if(mn) $("homeClaim").onclick=()=>{ claimAllCurrent(); renderHome(); };
+  const sn=$("homeSync");
+  if(sn){ ensureGis(()=>{}); sn.onclick=syncNow; } // GIS事前ロード=タップ時のポップアップブロック防止
 }
 
 /* ---- 編成タブ(そうび / カード / なかま) ---- */

@@ -12,6 +12,27 @@ function syncClientId(){
   return location.hostname==="localhost" ? GOOGLE_CLIENT_ID_DEV : GOOGLE_CLIENT_ID_PROD;
 }
 
+/* ---- 同期リマインダー(todaybgm v1.0.1方式) ----
+   最終同期時刻・未同期変更マーカーは「この端末の状態」なので G には入れない(同期対象外) */
+const SYNC_LAST_KEY="tq_lastSync", SYNC_DIRTY_KEY="tq_dirty";
+function lastSyncAt(){ return +localStorage.getItem(SYNC_LAST_KEY)||0; }
+function markSynced(){
+  try{ localStorage.setItem(SYNC_LAST_KEY, String(Date.now())); localStorage.removeItem(SYNC_DIRTY_KEY); }catch(e){}
+}
+function markDirty(){
+  try{ if(!localStorage.getItem(SYNC_DIRTY_KEY)) localStorage.setItem(SYNC_DIRTY_KEY, String(Date.now())); }catch(e){}
+}
+/* 一度でも同期した端末で、未同期の変更があり、最終同期から3日超のときだけ促す */
+function syncReminderNeeded(){
+  const last=lastSyncAt();
+  return !!syncClientId() && last>0 && !!localStorage.getItem(SYNC_DIRTY_KEY) &&
+    (Date.now()-last > 3*864e5);
+}
+function fmtSyncTime(ts){
+  const d=new Date(ts);
+  return (d.getMonth()+1)+"/"+d.getDate()+" "+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
+}
+
 let gisLoaded=false, accessToken=null;
 function ensureGis(cb){
   if(gisLoaded){ cb(); return; }
@@ -119,10 +140,12 @@ async function syncNow(){
         merged.updatedAt=Date.now();
         localStorage.setItem(KEY, JSON.stringify(merged));
         await driveUpload(token, f.id, merged);
+        markSynced();
         toast("同期完了。再読み込みします");
         setTimeout(()=>location.reload(), 800);
       }else{
         await driveUpload(token, null, G);
+        markSynced();
         toast("初回アップロード完了");
       }
     }catch(e){
@@ -154,11 +177,12 @@ function openSettings(){
     '<h3 style="margin-top:16px">端末間同期(Googleドライブ)</h3>'+
     (syncClientId()
       ? '<div class="small">あなた自身のGoogleドライブ(アプリ専用領域)に保存。進捗を失わない方向でマージされる。</div>'+
+        '<div class="small" style="margin-top:4px">最終同期: '+(lastSyncAt()? fmtSyncTime(lastSyncAt()) : 'この端末ではまだ同期していない')+'</div>'+
         '<button class="btn primary" id="syncBtn" style="margin-top:8px">今すぐ同期</button>'
       : '<div class="small">未設定。GCPでOAuthクライアントIDを発行し js/sync.js に設定すると使える(README参照)。データは端末内に保存されている。</div>')+
     '<h3 style="margin-top:16px">データ</h3>'+
     '<button class="btn danger" id="resetBtn">データをすべてリセット</button>'+
-    '<div class="small" style="margin-top:14px">LEXICA(レキシカ) v3.4.0 ─ 英単語×ローグライクRPG<br>単語データ: 英検1級レベル '+WORDS.length+'語(<a href="https://github.com/zuno1000/tango" style="color:var(--accent2)">tango</a> 由来)</div>');
+    '<div class="small" style="margin-top:14px">LEXICA(レキシカ) v3.4.1 ─ 英単語×ローグライクRPG<br>単語データ: 英検1級レベル '+WORDS.length+'語(<a href="https://github.com/zuno1000/tango" style="color:var(--accent2)">tango</a> 由来)</div>');
   $("modeToggle").onclick=()=>{
     G.mode=G.mode==="e2j"?"j2e":"e2j"; saveG();
     $("modeToggle").textContent=(G.mode==="e2j"?"EN → 日本語":"日本語 → EN")+" (タップで切替)";
