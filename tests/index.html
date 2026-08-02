@@ -513,6 +513,23 @@ function run(){
     ok(P.clauses[0] && P.clauses[0].res>1, "共鳴が発動する並び");
     G.inv=oldInv; G.party.sentence=oldSent;
   });
+  t("おまかせ編成は不発カードを残さない", ()=>{
+    const G=W.G;
+    const oldInv=G.inv, oldSent=G.party.sentence;
+    const adj=W.WORDS.find(x=>x.pos==="adj");
+    G.inv={}; W.addCard(adj.en,1);
+    G.party.sentence=[adj.en+"|1|0"];   // 形容詞だけ=不発の状態から開始
+    W.autoEquip();
+    eq(G.party.sentence.filter(Boolean).length, 0, "不発しか組めないなら外す");
+    const n=W.WORDS.find(x=>x.pos==="n");
+    W.addCard(n.en,1);
+    G.party.sentence=[n.en+"|1|0", adj.en+"|1|0"]; // 名詞→形容詞=形容詞が不発の並び
+    W.autoEquip();
+    const P=W.playerStats();
+    eq(Object.keys(P.dead).length, 0, "並べ替えで不発を解消");
+    eq(G.party.sentence.filter(Boolean).length, 2, "2枚とも活きる");
+    G.inv=oldInv; G.party.sentence=oldSent;
+  });
   t("お知らせベル: 開くと未読ドットが消える", ()=>{
     W.localStorage.removeItem("tq_newsSeen");
     W.refreshBellDot();

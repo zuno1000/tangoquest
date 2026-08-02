@@ -448,5 +448,11 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
 .bd4{box-shadow:-4px -4px 8px var(--shl), 4px 4px 10px var(--shd), 0 0 10px rgba(156,91,222,.4)}
 .bd5{box-shadow:-4px -4px 8px var(--shl), 4px 4px 10px var(--shd), 0 0 12px rgba(222,154,14,.45)}
 
+/* ---- 突破グロー(なかまカード・編成の出撃キャラ): 重ねるほど豪華に ---- */
+.charcard,.charopt{overflow:hidden; position:relative} /* shine(ホロ光沢)用 */
+.dup3.charcard,.dup3.charopt{box-shadow:-4px -4px 8px var(--shl), 4px 4px 10px var(--shd), 0 0 9px rgba(222,154,14,.4)}
+.dup6.charcard,.dup6.charopt{box-shadow:-4px -4px 8px var(--shl), 4px 4px 10px var(--shd), 0 0 13px rgba(222,154,14,.55)}
+.dup10.charcard,.dup10.charopt{box-shadow:-4px -4px 8px var(--shl), 4px 4px 10px var(--shd), 0 0 20px rgba(222,154,14,.75)}
+
 /* ---- マイクロインタラクション ---- */
 .tile:active,.ccard:active,.dnode:active:not(.locked){filter:brightness(1.04)}

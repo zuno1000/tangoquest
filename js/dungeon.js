@@ -87,7 +87,7 @@ function openDungeonModal(d){
     (d.trait? '<br>'+TRAITS[d.trait].ic+'<b>'+TRAITS[d.trait].name+'</b>: '+TRAITS[d.trait].desc:'')+'<br>'+
     '推奨戦闘力 <b style="color:'+(okp?"var(--ok)":"var(--ng)")+'">'+fmt(rp)+'</b>(いまの戦闘力 '+fmt(P.power)+')<br>'+
     (rec&&rec.clears? 'クリア'+rec.clears+'回 ・ 本日初クリアで🎫1' : '初クリア報酬: 🎫3')+'</div>'+
-    (okp? "" : '<div class="small" style="margin-top:6px; color:var(--ng)">戦闘力が足りない。クイズでカードを集め、弱点属性で編成を組もう</div>')+
+    (okp? "" : '<div class="small" style="margin-top:6px; color:var(--ng)">戦闘力が足りない<br>クイズでカードを集め、弱点属性で編成を組もう</div>')+
     '<div class="row" style="margin-top:14px; gap:8px">'+
     '<button class="btn" style="flex:1" data-close>やめる</button>'+
     '<button class="btn primary" style="flex:2" id="dgGo">⚔ 挑む</button></div>');
@@ -425,8 +425,13 @@ function autoEquip(){
   cands.slice(50).forEach(c=>{ if(rootIdsOf(c.en).some(r=>roots.has(r))) top.push(c); });
   top=top.slice(0,60);
 
+  // 評価: 戦闘力を最大化し、同点なら不発が少ない構成を優先
+  // (不発カードは戦闘力に寄与しないため、これで不発は自然に外れる)
+  const evalT=t=>{ const P=playerStats(t); return {p:P.power, d:Object.keys(P.dead).length}; };
+  const betterThan=(a,b)=> a.p>b.p+1e-9 || (Math.abs(a.p-b.p)<=1e-9 && a.d<b.d);
+
   const climb=start=>{
-    let best=start.slice(), bestP=playerStats(best).power;
+    let best=start.slice(), bestE=evalT(best);
     let improved=true, iter=0;
     while(improved && iter++<40){
       improved=false;
@@ -437,19 +442,28 @@ function autoEquip(){
           if(best[i]===key) continue;
           const trial=best.slice(); trial[i]=key;
           if(key && trial.filter(k=>k===key).length > (G.inv[key]||0)) continue; // 在庫超過
-          const p=playerStats(trial).power;
-          if(p>bestP){ best=trial; bestP=p; improved=true; }
+          const e=evalT(trial);
+          if(betterThan(e, bestE)){ best=trial; bestE=e; improved=true; }
+        }
+      }
+      // 挿入(以降を右へずらす): 「形容詞を名詞の前に割り込ませる」は置換では到達できない
+      for(const c of top){
+        for(let i=0;i<max;i++){
+          const trial=best.slice(); trial.splice(i,0,c.key); trial.length=max;
+          if(trial.filter(k=>k===c.key).length > (G.inv[c.key]||0)) continue;
+          const e=evalT(trial);
+          if(betterThan(e, bestE)){ best=trial; bestE=e; improved=true; }
         }
       }
       // 並べ替え(swap): 形容詞の係り先・×と^の適用順・共鳴の節割りが変わる
       for(let i=0;i<max;i++) for(let j=i+1;j<max;j++){
         if(best[i]===best[j]) continue;
         const trial=best.slice(); [trial[i],trial[j]]=[trial[j],trial[i]];
-        const p=playerStats(trial).power;
-        if(p>bestP){ best=trial; bestP=p; improved=true; }
+        const e=evalT(trial);
+        if(betterThan(e, bestE)){ best=trial; bestE=e; improved=true; }
       }
     }
-    return {best, bestP};
+    return {best, bestE};
   };
   // 多スタート: 「空」と「現在の編成」から登り、良い方を採る(局所解対策)
   const cur=G.party.sentence.slice(0,max);
@@ -457,7 +471,7 @@ function autoEquip(){
   let r=null;
   for(const s of [new Array(max).fill(null), cur]){
     const x=climb(s);
-    if(!r || x.bestP>r.bestP) r=x;
+    if(!r || betterThan(x.bestE, r.bestE)) r=x;
   }
   G.party.sentence=r.best;
   saveG();
@@ -482,7 +496,8 @@ function renderEqChars(){
   box.innerHTML="";
   CHARS.filter(c=>G.chars[c.id]).sort((a,b)=>b.rar-a.rar).forEach(c=>{
     const d=document.createElement("div");
-    d.className="charopt"+(G.party.char===c.id?" sel":"");
+    const dup=(G.chars[c.id]&&G.chars[c.id].dup)||0;
+    d.className="charopt"+dupClass(dup)+(G.party.char===c.id?" sel":"");
     const st=charStats(c.id);
     d.innerHTML='<div class="cf">'+c.face+'</div>'+
       '<div class="cr '+CHAR_RAR_CLASS[c.rar-1]+'">'+CHAR_RAR[c.rar-1]+'</div>'+
@@ -522,7 +537,7 @@ function renderEqSlots(){
   const es=$("eqSets");
   if(es) es.innerHTML = P.sets && P.sets.length
     ? "セット効果: "+P.sets.map(x=>ELEM_ICON[x.elem]+"×"+x.n+" <b style='color:var(--ok)'>+"+Math.round(x.b*100)+"%</b>").join(" ・ ")
-    : "同じ属性を2枚そろえるとセット効果。<br>冒険先の弱点属性で固めるのも有効";
+    : "同じ属性を2枚そろえるとセット効果<br>冒険先の弱点属性で固めるのも有効";
 }
 
 /* ---- ライブ数式プレビュー: 文がそのままダメージ式になる ---- */
@@ -530,9 +545,9 @@ function renderFormula(P){
   const box=$("formulaBox"); if(!box) return;
   if(!P.clauses.length){
     box.innerHTML='<div class="empty">カードを置くと、ここにダメージの式が出る<br>'+
-      '<span class="small">基本形: ✨形容詞 → 💎名詞 → ⚔️動詞。<br>'+
+      '<span class="small">基本形: ✨形容詞 → 💎名詞 → ⚔️動詞<br>'+
       '並び順で結果が変わる<br>'+
-      '同じ語根(🧬)を並べると「共鳴」。<br>'+
+      '同じ語根(🧬)を並べると「共鳴」<br>'+
       '語根のない野生語(🐺)は覚えているほど強い</span></div>';
     return;
   }
