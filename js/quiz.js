@@ -111,10 +111,11 @@ function answer(chosen, btn){
   }
 
   // 結果表示: 品詞と語源・野生語だけを見せる(正誤は選択肢の色で伝わる)
+  // 語源タグは1つずつinline-blockのチップにする=タグの途中で改行されない
   const rc=$("resultCard");
   const rt=rootText(w.en), meta=[];
-  if(rt) meta.push('<span class="rmeta">🧬 '+esc(rt)+'</span>');
-  if(isWild(w.en)) meta.push('<span class="rmeta wildm">🐺 野生語 ─ 記憶Lv'+memBox(w.en)+'(節×'+wildMult(w.en)+')</span>');
+  if(rt) rt.split("・").forEach((tag,i)=>meta.push('<span class="rmeta">'+(i? '':'🧬 ')+esc(tag)+'</span>'));
+  if(isWild(w.en)) meta.push('<span class="rmeta wildm">🐺 野生語 Lv'+memBox(w.en)+'</span>');
   rc.innerHTML='<span class="poschip pos'+w.pos+'">'+POS_LABEL[w.pos]+'</span>'+meta.join(' ');
   if(ok){
     const rar=dropRarity(preSt);

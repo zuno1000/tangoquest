@@ -126,7 +126,7 @@ nav button .dot{position:absolute; top:-2px; right:-8px; width:9px; height:9px; 
   box-shadow:inset 2px 2px 4px var(--shd), inset -2px -2px 4px var(--shl)}
 .poschip.posv{color:var(--pos-v)} .poschip.posn{color:var(--pos-n)}
 .poschip.posadj{color:var(--pos-adj)} .poschip.posadv{color:var(--pos-adv)}
-.rmeta{font-weight:700}
+.rmeta{display:inline-block; font-weight:700} /* タグ単位で改行(途中で折れない) */
 .rmeta.wildm{color:var(--accent)}
 #nextBtn{
   flex:0 0 44%; align-self:stretch; min-height:52px; border:none; border-radius:16px;

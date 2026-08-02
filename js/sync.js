@@ -163,6 +163,29 @@ async function syncNow(){
   });
 }
 
+/* ---- アプリの更新 ----
+   iOSでホーム画面から起動している場合など「タブを閉じて開き直す」ができない環境向け。
+   sw.jsの再取得はHTTPキャッシュを迂回するので、CACHE名が上がっていれば新SWが入り
+   (install=skipWaiting済み・activate=旧キャッシュ削除+clients.claim済み)、
+   制御が切り替わった時点でリロード=最新版になる。localStorage(学習データ・同期設定)には触れない */
+async function appUpdate(){
+  toast("更新を確認中…");
+  try{
+    const reg=("serviceWorker" in navigator)? await navigator.serviceWorker.getRegistration() : null;
+    if(!reg){ location.reload(); return; }
+    await reg.update();
+    if(reg.installing || reg.waiting){
+      toast("新しいバージョンを適用中…");
+      navigator.serviceWorker.addEventListener("controllerchange", ()=>location.reload(), {once:true});
+      setTimeout(()=>location.reload(), 5000); // 切替イベントを取り逃した場合の保険
+    }else{
+      toast("最新版を利用中 ✓");
+    }
+  }catch(e){
+    location.reload();
+  }
+}
+
 /* ================= 設定モーダル ================= */
 function openSettings(){
   const d=dayRec();
@@ -189,9 +212,12 @@ function openSettings(){
         '<div class="small" style="margin-top:4px">最終同期: '+(lastSyncAt()? fmtSyncTime(lastSyncAt()) : 'この端末ではまだ同期していない')+'</div>'+
         '<button class="btn primary" id="syncBtn" style="margin-top:8px">今すぐ同期</button>'
       : '<div class="small">未設定。GCPでOAuthクライアントIDを発行し js/sync.js に設定すると使える(README参照)。データは端末内に保存されている。</div>')+
+    '<h3 style="margin-top:16px">アプリの更新</h3>'+
+    '<button class="btn" id="updateBtn">🔄 アップデートを確認</button>'+
+    '<div class="small" style="margin-top:6px">ホーム画面から起動している場合(iOS等)もこのボタンで最新版に更新できる。学習データ・同期は消えない</div>'+
     '<h3 style="margin-top:16px">データ</h3>'+
     '<button class="btn danger" id="resetBtn">データをすべてリセット</button>'+
-    '<div class="small" style="margin-top:14px">LEXICA(レキシカ) v3.4.2 ─ 英単語×ローグライクRPG<br>単語データ: 英検1級レベル '+WORDS.length+'語(<a href="https://github.com/zuno1000/tango" style="color:var(--accent2)">tango</a> 由来)</div>');
+    '<div class="small" style="margin-top:14px">LEXICA(レキシカ) v3.4.3 ─ 英単語×ローグライクRPG<br>単語データ: 英検1級レベル '+WORDS.length+'語(<a href="https://github.com/zuno1000/tango" style="color:var(--accent2)">tango</a> 由来)</div>');
   $("modeToggle").onclick=()=>{
     G.mode=G.mode==="e2j"?"j2e":"e2j"; saveG();
     $("modeToggle").textContent=(G.mode==="e2j"?"EN → 日本語":"日本語 → EN")+" (タップで切替)";
@@ -206,6 +232,7 @@ function openSettings(){
     if(off){ try{ navigator.vibrate([80,50,80]); }catch(e){} }
   };
   const sb=$("syncBtn"); if(sb) sb.onclick=syncNow;
+  $("updateBtn").onclick=appUpdate;
   $("resetBtn").onclick=()=>{
     openModal('<h3>本当にリセットする？</h3>'+
       '<div class="small">学習記録・カード・なかま・通貨がすべて消える。'+

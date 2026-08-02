@@ -596,6 +596,13 @@ function run(){
     LS.removeItem("tq_dirty");
   });
 
+  /* ---- 設定モーダル(v3.4.3) ---- */
+  t("設定にアップデート確認ボタンがある", ()=>{
+    W.openSettings();
+    ok(W.document.getElementById("updateBtn"), "updateBtn");
+    W.closeModal();
+  });
+
   /* ---- 起動状態 ---- */
   t("起動時に問題が出題されている", ()=>{
     ok(W.document.getElementById("promptWord").textContent.length>0);
