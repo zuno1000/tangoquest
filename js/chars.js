@@ -70,7 +70,8 @@ if(!G.chars[G.party.char]) G.chars[G.party.char]={dup:0};
 
 /* 突破段階の装飾クラス: +3=淡彩+内枠 / +6=濃彩+光沢 / +10=フォイル(MAX)。
    彩色はレアリティ色(N灰/R緑/SR青/SSR金)を --dupc で渡す */
-const DUP_RGB=["138,150,173","39,165,103","59,127,232","222,154,14"]; // --r1/r2/r3/r5
+/* Nは--r1(灰)のままだと重ねるほど暗く沈むため、彩色だけ明るい白銀にする */
+const DUP_RGB=["189,200,218","39,165,103","59,127,232","222,154,14"]; // 白銀/R緑/SR青/SSR金
 function dupClass(dup){
   return dup>=10? " dup10 shine" : dup>=6? " dup6 shine" : dup>=3? " dup3" : "";
 }
