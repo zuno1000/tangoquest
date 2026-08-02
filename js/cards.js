@@ -47,6 +47,7 @@ function genCard(w, rar, lv){
              : ADV_KIND[c.sub];
   c.elem=Math.floor(h/7)%5; // 属性(セット効果・相性用)。他の判定と別ビットで決める
   c.elemIcon=ELEM_ICON[c.elem];
+  c.roots=rootIdsOf(w.en);  // 語根タグ(共鳴判定用。表示は rootText)
   return c;
 }
 function cardOf(key){
@@ -218,6 +219,7 @@ function cardDetailHTML(c){
     '<div class="bctype"><span class="pos'+c.pos+'">'+POS_LABEL[c.pos]+' ・ '+c.typeName+'</span>'+
       ' <span class="small">'+c.elemIcon+' '+ELEM_NAME[c.elem]+'</span></div>'+
     '<div class="bceffect">'+effectText(c)+'</div>'+
+    (rootText(c.en)? '<div class="small" style="margin-top:7px">🧬 '+rootText(c.en)+'</div>':'')+
   '</div>';
 }
 

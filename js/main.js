@@ -25,6 +25,7 @@ $("navGacha").onclick=()=>switchTab("gacha");
 
 /* ---- ホーム画面(各機能へのハブ) ---- */
 const NEWS=[
+  {d:"2026-08-02", t:"🧬 v3.1.0 語源システム! 同じ語根の単語を並べると「共鳴」で強化。語根から単語を覚えよう"},
   {d:"2026-08-02", t:"📜 v3.0.0 呪文文法システム! カードを「文」に並べてダメージ式を組み立てよう"},
   {d:"2026-08-02", t:"⚔ v2.3.0 属性相性・技タイプ・敵の特性を追加! 敵の弱点に合わせて編成しよう"},
   {d:"2026-08-02", t:"🌤️ v2.2.0 白×青の新デザイン! 初回🎫10プレゼント・任務の一括受取も"},
@@ -132,3 +133,4 @@ if("serviceWorker" in navigator && location.protocol==="https:"){
 
 /* セルフテスト(tests/)用: let/const宣言はwindowに載らないため明示公開 */
 window.G=G; window.WORDS=WORDS; window.DUNGEONS=DUNGEONS; window.BANNERS=BANNERS; window.CHARS=CHARS;
+window.ROOT_DEFS=ROOT_DEFS; window.PREFIX_DEFS=PREFIX_DEFS;

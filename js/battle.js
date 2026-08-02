@@ -21,11 +21,21 @@ function elemMatch(elems, eElem){
 }
 
 /* ---- 文の評価 ----
-   戻り値: {clauses:[{V,vt,w,rep,name,words}], guard, amp, dead:{idx:理由}}
-   係り先の無い形容詞・値なしの動詞・節の無い反復は「不発」(dead) として位置と理由を返す */
+   戻り値: {clauses:[{V,raw,res,resRoots,vt,w,rep,name,words}], guard, amp, dead:{idx:理由}}
+   係り先の無い形容詞・値なしの動詞・節の無い反復は「不発」(dead) として位置と理由を返す。
+   共鳴: 同じ語根のカードが同じ節に2枚以上あると、節の値×(1+0.35×超過枚数) */
 function evalSentence(keys){
   const out={clauses:[], guard:0, amp:1, dead:{}};
-  let V=0, adjs=[], words=[];
+  let V=0, adjs=[], words=[], rootCnt={};
+  const addRoots=c=>{ (c.roots||[]).forEach(r=>rootCnt[r]=(rootCnt[r]||0)+1); };
+  const closeClause=(vt,w,name)=>{
+    let extra=0; const resRoots=[];
+    for(const r in rootCnt){ if(rootCnt[r]>=2){ extra+=rootCnt[r]-1; resRoots.push({r:+r, n:rootCnt[r]}); } }
+    const res=+(1+0.35*extra).toFixed(2);
+    out.clauses.push({V:Math.round(V*res), raw:Math.round(V), res, resRoots,
+                      vt, w, name, words:words.slice()});
+    V=0; words=[]; rootCnt={};
+  };
   (keys||[]).forEach((k,idx)=>{
     const c=k? cardOf(k):null;
     if(!c) return;
@@ -38,13 +48,13 @@ function evalSentence(keys){
         const a=adjs[i].c;
         v = a.sub===0? v*a.m : Math.pow(Math.max(1,v), a.p);
       }
-      adjs.forEach(a=>words.push(a.c.en)); // 数式表示用に修飾語も残す
-      adjs=[]; V+=v; words.push(c.en);
+      adjs.forEach(a=>{ words.push(a.c.en); addRoots(a.c); }); // 使われた修飾語は表示・共鳴に参加
+      adjs=[]; V+=v; words.push(c.en); addRoots(c);
     }else if(c.pos==="v"){
       adjs.forEach(a=>out.dead[a.idx]="係る名詞がない"); adjs=[];
       if(V<=0){ out.dead[idx]="前に名詞がない"; return; }
-      out.clauses.push({V:Math.round(V), vt:c.vt||0, w:c.w||1, name:c.en, words:words.slice()});
-      V=0; words=[];
+      addRoots(c);
+      closeClause(c.vt||0, c.w||1, c.en);
     }else{ // adv
       if(c.sub===0){
         const last=out.clauses[out.clauses.length-1];
@@ -56,7 +66,7 @@ function evalSentence(keys){
     }
   });
   adjs.forEach(a=>out.dead[a.idx]="係る名詞がない");
-  if(V>0) out.clauses.push({V:Math.round(V), vt:0, w:1, name:null, words:words.slice()}); // 動詞なし=素の一撃
+  if(V>0) closeClause(0, 1, null); // 動詞なし=素の一撃
   return out;
 }
 /* 節1つの期待威力(防御0・等倍時) */

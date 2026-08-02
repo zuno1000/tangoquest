@@ -502,7 +502,8 @@ function renderFormula(P){
   const box=$("formulaBox"); if(!box) return;
   if(!P.clauses.length){
     box.innerHTML='<div class="empty">カードを置くと、ここにダメージの式が出る<br>'+
-      '<span class="small">基本形: ✨形容詞 → 💎名詞 → ⚔️動詞。並び順で結果が変わる</span></div>';
+      '<span class="small">基本形: ✨形容詞 → 💎名詞 → ⚔️動詞。並び順で結果が変わる<br>'+
+      '同じ語根(🧬)の単語を同じ節に並べると「共鳴」で強くなる</span></div>';
     return;
   }
   let h="";
@@ -512,6 +513,8 @@ function renderFormula(P){
       '<span class="small">'+esc(cl.words.join(" + ")||"-")+'</span> '+
       '<b>'+fmt(cl.V)+'</b>'+
       (cl.name? ' → ⚔<b>'+esc(cl.name)+'</b><span class="small">【'+VERB_TYPES[cl.vt||0].name+'×'+cl.w+'】</span>' : ' <span class="small">→ 素の一撃</span>')+
+      (cl.res>1? ' <span style="color:var(--ok); font-weight:800">🧬共鳴'+
+        cl.resRoots.map(x=>" "+ROOT_DEFS[x.r].t+"×"+x.n).join("")+' ⇒×'+cl.res+'</span>':'')+
       (cl.rep? ' <span style="color:var(--accent)">🌀反復×'+cl.rep+'</span>':'')+
       '</div><b style="color:var(--accent2); font-size:15px">'+fmt(dmg)+'</b></div>';
   });
@@ -577,7 +580,8 @@ function openWordPicker(i){
         '<div class="grow"><div style="font-size:14px; font-weight:800">'+esc(c.en)+lvLabel(c)+
         ' <span class="rc'+c.rar+'" style="font-size:11px">'+c.elemIcon+' '+RAR_STARS[c.rar-1]+'</span>'+
         (cur===c.key? ' <span class="small" style="color:var(--accent)">配置中</span>':"")+'</div>'+
-        '<div class="small" style="font-size:11px">'+effectText(c)+' ─ '+esc(c.ja)+'</div></div>'+
+        '<div class="small" style="font-size:11px">'+effectText(c)+' ─ '+esc(c.ja)+
+        (rootText(c.en)? '<br>🧬'+rootText(c.en):'')+'</div></div>'+
         '<b style="color:var(--accent2); white-space:nowrap">'+shortEffect(c)+'</b>';
       row.onclick=()=>{
         if(free<=0){ toast("在庫が足りない(他の語で使用中)"); return; }

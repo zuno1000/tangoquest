@@ -324,6 +324,62 @@ function run(){
     ok(full, "d1 full clear (power="+P.power+")");
   });
 
+  /* ---- 語源(語根)システム(v3.1.0) ---- */
+  t("語根タグは決定的で、既知の単語が正しく引ける", ()=>{
+    const a=W.wordRoots("inspect"), b=W.wordRoots("inspect");
+    eq(JSON.stringify(a), JSON.stringify(b), "決定的");
+    const spec=W.wordRoots("inspect").find(t=>t.kind==="R");
+    eq(W.ROOT_DEFS[spec.i].t, "spec", "inspect→spec");
+    const port=W.wordRoots("transport").find(t=>t.kind==="R");
+    eq(W.ROOT_DEFS[port.i].t, "port", "transport→port");
+  });
+  t("語根カバレッジ: 4割以上の単語に語源タグが付く", ()=>{
+    let any=0, root=0;
+    W.WORDS.forEach(w=>{
+      const tags=W.wordRoots(w.en);
+      if(tags.length) any++;
+      if(tags.some(t=>t.kind==="R")) root++;
+    });
+    ok(any/W.WORDS.length>=0.40, "any="+any);
+    ok(root/W.WORDS.length>=0.25, "root="+root);
+  });
+  t("共鳴: 同じ語根を同じ節に並べると節×1.35", ()=>{
+    // 語根を共有する名詞ペアを探す
+    const ns=W.WORDS.filter(x=>x.pos==="n");
+    let a=null, b=null;
+    outer:
+    for(const x of ns){
+      const rx=W.rootIdsOf(x.en); if(!rx.length) continue;
+      for(const y of ns){
+        if(y.en===x.en) continue;
+        if(W.rootIdsOf(y.en).some(r=>rx.includes(r))){ a=x; b=y; break outer; }
+      }
+    }
+    ok(a&&b, "同語根の名詞ペアが存在");
+    const ca=W.genCard(a,1,0), cb=W.genCard(b,1,0);
+    const ev=W.evalSentence([ca.key, cb.key]);
+    eq(ev.clauses[0].res, 1.35, "res");
+    eq(ev.clauses[0].V, Math.round((ca.val+cb.val)*1.35), "節値に反映");
+    ok(ev.clauses[0].resRoots.length>=1, "共鳴語根の報告");
+  });
+  t("共鳴: 語根が違えば発動しない", ()=>{
+    const ns=W.WORDS.filter(x=>x.pos==="n");
+    let a=null, b=null;
+    outer:
+    for(const x of ns){
+      const rx=W.rootIdsOf(x.en);
+      for(const y of ns){
+        if(y.en===x.en) continue;
+        const ry=W.rootIdsOf(y.en);
+        if(!rx.some(r=>ry.includes(r))){ a=x; b=y; break outer; }
+      }
+    }
+    const ca=W.genCard(a,1,0), cb=W.genCard(b,1,0);
+    const ev=W.evalSentence([ca.key, cb.key]);
+    eq(ev.clauses[0].res, 1, "res=1");
+    eq(ev.clauses[0].V, Math.round(ca.val+cb.val), "素の和");
+  });
+
   /* ---- 知識レベル ---- */
   t("知識レベルでステータスが伸びる", ()=>{
     const G=W.G;

@@ -114,16 +114,20 @@ function answer(chosen, btn){
     const rar=dropRarity(preSt);
     const key=addCard(w.en, rar);
     const c=cardOf(key);
+    const rt=rootText(w.en);
     rc.innerHTML='<span class="dropchip bd'+rar+'" id="dropChip">'+c.icon+
       ' <span class="rc'+rar+'">'+RAR_STARS[rar-1]+'</span> '+esc(w.en)+'</span>'+
       ' <span class="small">+'+xpGain+'XP'+
-        (lvUp? ' <b style="color:var(--accent)">Lv'+lvUp+'!</b>':'')+'</span>';
+        (lvUp? ' <b style="color:var(--accent)">Lv'+lvUp+'!</b>':'')+'</span>'+
+      (rt? '<div class="small" style="margin-top:3px">🧬 '+rt+'</div>':'');
     $("dropChip").onclick=()=>openCardModal(key);
     if(lvUp){ toast("📖 レベルアップ! Lv"+lvUp+" ─ 全ステータス強化"); vibe(40); }
     else if(rar>=3) vibe(30);
   }else{
+    const rt2=rootText(w.en);
     rc.innerHTML='<span class="small">'+esc(w.ja)+
-      ((st[5]||0)>=2? ' <span style="color:var(--accent)">🔥ミス'+st[5]+'</span>':'')+'</span>';
+      ((st[5]||0)>=2? ' <span style="color:var(--accent)">🔥ミス'+st[5]+'</span>':'')+
+      (rt2? '<br>🧬 '+rt2+' から覚えよう':'')+'</span>';
   }
   $("resultBar").classList.add("show");
   saveG();
