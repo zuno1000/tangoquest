@@ -114,20 +114,11 @@ function answer(chosen, btn){
     const rar=dropRarity(preSt);
     const key=addCard(w.en, rar);
     const c=cardOf(key);
-    const gain=equipGainFor(key);
     rc.innerHTML='<span class="dropchip bd'+rar+'" id="dropChip">'+c.icon+
       ' <span class="rc'+rar+'">'+RAR_STARS[rar-1]+'</span> '+esc(w.en)+'</span>'+
       ' <span class="small">+'+xpGain+'XP'+
-        (lvUp? ' <b style="color:var(--accent)">Lv'+lvUp+'!</b>':'')+'</span>'+
-      (gain>0? '<div style="margin-top:5px"><button class="minibtn" id="eqNowBtn">⬆ 装備 (+'+fmt(gain)+')</button></div>':'');
+        (lvUp? ' <b style="color:var(--accent)">Lv'+lvUp+'!</b>':'')+'</span>';
     $("dropChip").onclick=()=>openCardModal(key);
-    const eb=$("eqNowBtn");
-    if(eb) eb.onclick=()=>{
-      if(!quickEquip(key)) return;
-      eb.disabled=true; eb.textContent="装備した!";
-      toast("戦闘力 "+fmt(playerStats().power)+" になった");
-      refreshHeader();
-    };
     if(lvUp){ toast("📖 レベルアップ! Lv"+lvUp+" ─ 全ステータス強化"); vibe(40); }
     else if(rar>=3) vibe(30);
   }else{

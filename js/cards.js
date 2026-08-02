@@ -240,16 +240,6 @@ function quickEquip(key){
   saveG();
   return slot;
 }
-/* このカードを装備したら戦闘力がいくら上がるか(上がらないなら0以下) */
-function equipGainFor(key){
-  const c=cardOf(key); if(!c) return 0;
-  if(equippedCountOf(key,G.party.equip) >= (G.inv[key]||0)) return 0;
-  const slot=chooseSlotFor(c, G.party.equip);
-  if(G.party.equip[slot]===key) return 0;
-  const eq=Object.assign({}, G.party.equip); eq[slot]=key;
-  return playerStats(eq).power - playerStats().power;
-}
-
 function openCardModal(key){
   const c=cardOf(key); if(!c) return;
   const cnt=G.inv[key]||0;

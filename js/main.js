@@ -117,6 +117,14 @@ renderHome();           // ホームがランディング
 checkLogin();           // ログインボーナス
 saveG();
 
+/* PWAを閉じずに日をまたいだ場合: 復帰時に日付が変わっていたらログインボーナスを付与 */
+document.addEventListener("visibilitychange", ()=>{
+  if(!document.hidden && G.login.last!==todayKey()){
+    checkLogin();
+    refreshHeader();
+  }
+});
+
 if("serviceWorker" in navigator && location.protocol==="https:"){
   navigator.serviceWorker.register("sw.js").catch(()=>{});
 }

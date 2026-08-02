@@ -281,6 +281,31 @@ function run(){
     ok(m.chars.c05, "chars union");
   });
 
+  /* ---- デイリー報酬(2日目以降) ---- */
+  t("ログインボーナスは2日目も付与され7日で一周する", ()=>{
+    const G=W.G;
+    const yd=new Date(Date.now()-864e5);
+    const yk=yd.getFullYear()+"-"+String(yd.getMonth()+1).padStart(2,"0")+"-"+String(yd.getDate()).padStart(2,"0");
+    G.login={last:yk, day:1};       // 昨日1日目を受け取った状態
+    const t0=G.tickets;
+    W.checkLogin();
+    eq(G.login.day, 2, "2日目に進む");
+    eq(G.tickets, t0+1, "2日目報酬🎫1");
+    G.login={last:yk, day:7};       // 7日目の翌日は1日目に戻る
+    W.checkLogin();
+    eq(G.login.day, 1, "8日目=サイクル先頭");
+    W.closeModal();
+  });
+  t("デイリー任務の進捗・受取は前日から持ち越されない", ()=>{
+    const G=W.G;
+    const yd=new Date(Date.now()-864e5);
+    const yk=yd.getFullYear()+"-"+String(yd.getMonth()+1).padStart(2,"0")+"-"+String(yd.getDate()).padStart(2,"0");
+    G.daily={}; G.daily[yk]={a:99,c:99,card:99,merge:9,run:9,clear:9,cl:{da:1,dc:1,all:1}};
+    const d=W.dailyRec();           // 今日のレコード
+    eq(d.a, 0, "進捗リセット");
+    ok(!d.cl.da && !d.cl.all, "受取状態リセット");
+  });
+
   /* ---- 起動状態 ---- */
   t("起動時に問題が出題されている", ()=>{
     ok(W.document.getElementById("promptWord").textContent.length>0);
