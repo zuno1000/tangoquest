@@ -68,7 +68,9 @@ if(!G.chars.c01 && !Object.keys(G.chars).length){ G.chars.c01={dup:0}; }
 if(!G.party.char || !G.chars[G.party.char]) G.party.char=Object.keys(G.chars)[0]||"c01";
 if(!G.chars[G.party.char]) G.chars[G.party.char]={dup:0};
 
-/* 突破段階の装飾クラス: +3=金グロー / +6=+ホロ光沢 / +10=MAX(強グロー) */
+/* 突破段階の装飾クラス: +3=淡彩+内枠 / +6=濃彩+光沢 / +10=フォイル(MAX)。
+   彩色はレアリティ色(N灰/R緑/SR青/SSR金)を --dupc で渡す */
+const DUP_RGB=["138,150,173","39,165,103","59,127,232","222,154,14"]; // --r1/r2/r3/r5
 function dupClass(dup){
   return dup>=10? " dup10 shine" : dup>=6? " dup6 shine" : dup>=3? " dup3" : "";
 }
@@ -185,11 +187,12 @@ function renderChars(){
     const base=Math.round(st.hp/6 + st.atk*4 + st.def*3 + st.spd*5); // 素の戦闘力
     const d=document.createElement("div");
     d.className="charcard bd"+(c.rar===4?5:c.rar)+dupClass(dup);
+    d.style.setProperty("--dupc", DUP_RGB[c.rar-1]);
     d.innerHTML=
       (c.limited?'<div class="ltdmini">限定</div>':"")+
       '<div style="font-size:32px">'+c.face+'</div>'+
       '<div class="'+CHAR_RAR_CLASS[c.rar-1]+'" style="font-weight:800; font-size:11px">'+CHAR_RAR[c.rar-1]+
-        (dup>=10? ' <span style="color:var(--accent)">👑MAX</span>' : dup? " +"+dup : "")+'</div>'+
+        (dup>=10? ' 👑MAX' : dup? " +"+dup : "")+'</div>'+
       '<div style="font-size:12px; font-weight:700; margin-top:3px; line-height:1.2">'+esc(c.name)+'</div>'+
       '<div class="small" style="margin-top:4px">力 '+fmt(base)+'</div>'+
       (G.party.char===c.id? '<div style="font-size:11px; color:var(--accent); font-weight:800; margin-top:3px">出撃中</div>':"");

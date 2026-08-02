@@ -498,6 +498,7 @@ function renderEqChars(){
     const d=document.createElement("div");
     const dup=(G.chars[c.id]&&G.chars[c.id].dup)||0;
     d.className="charopt"+dupClass(dup)+(G.party.char===c.id?" sel":"");
+    d.style.setProperty("--dupc", DUP_RGB[c.rar-1]);
     const st=charStats(c.id);
     d.innerHTML='<div class="cf">'+c.face+'</div>'+
       '<div class="cr '+CHAR_RAR_CLASS[c.rar-1]+'">'+CHAR_RAR[c.rar-1]+'</div>'+

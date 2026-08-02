@@ -449,21 +449,21 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
 .bd5{box-shadow:-4px -4px 8px var(--shl), 4px 4px 10px var(--shd), 0 0 12px rgba(222,154,14,.45)}
 
 /* ---- 突破の装い(なかまカード・編成の出撃キャラ) ----
-   グローだけでは淡色背景で気づきにくいため、カード面そのものを金彩にする:
-   +3=淡い金のグラデ+金の内枠 / +6=金彩が濃くなる / +10=金箔(ゴールドフォイル) */
-.charcard,.charopt{overflow:hidden; position:relative} /* shine(ホロ光沢)用 */
+   カード面をレアリティ色(--dupc: JSがN灰/R緑/SR青/SSR金のRGBを渡す)で段階的に彩る:
+   +3=淡彩グラデ+内枠 / +6=濃彩+光沢 / +10=フォイル(全面彩色+濃枠) */
+.charcard,.charopt{--dupc:222,154,14; overflow:hidden; position:relative} /* shine(ホロ光沢)用 */
 .dup3.charcard,.dup3.charopt{
-  background:linear-gradient(165deg,#FBF0D6 0%,var(--bg) 72%);
+  background:linear-gradient(165deg, rgba(var(--dupc),.18) 0%, var(--bg) 72%);
   box-shadow:-4px -4px 8px var(--shl), 4px 4px 10px var(--shd),
-    inset 0 0 0 1.5px rgba(222,154,14,.45)}
+    inset 0 0 0 1.5px rgba(var(--dupc),.45)}
 .dup6.charcard,.dup6.charopt{
-  background:linear-gradient(165deg,#F9E5B2 0%,#F2ECDF 88%);
+  background:linear-gradient(165deg, rgba(var(--dupc),.34) 0%, rgba(var(--dupc),.08) 88%);
   box-shadow:-4px -4px 8px var(--shl), 4px 4px 10px var(--shd),
-    inset 0 0 0 2px rgba(222,154,14,.55), 0 0 10px rgba(222,154,14,.3)}
+    inset 0 0 0 2px rgba(var(--dupc),.55), 0 0 10px rgba(var(--dupc),.3)}
 .dup10.charcard,.dup10.charopt{
-  background:linear-gradient(160deg,#FFF1C4 0%,#FFDF96 55%,#F7CD68 100%);
+  background:linear-gradient(160deg, rgba(var(--dupc),.24) 0%, rgba(var(--dupc),.4) 55%, rgba(var(--dupc),.56) 100%);
   box-shadow:-4px -4px 8px var(--shl), 4px 4px 10px var(--shd),
-    inset 0 0 0 2px #DE9A0E, 0 0 14px rgba(222,154,14,.5)}
+    inset 0 0 0 2px rgb(var(--dupc)), 0 0 14px rgba(var(--dupc),.5)}
 
 /* ---- マイクロインタラクション ---- */
 .tile:active,.ccard:active,.dnode:active:not(.locked){filter:brightness(1.04)}
