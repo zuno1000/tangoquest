@@ -85,9 +85,17 @@ async function driveUpload(token, id, data){
   if(!res.ok) throw new Error("upload "+res.status);
 }
 
-/* 端末間マージ: 進捗を失わない方向(大きい方・和集合)に寄せる。冪等。 */
+/* 端末間マージ: 進捗を失わない方向(大きい方・和集合)に寄せる。冪等。
+   例外=リセット世代(resetAt)が異なるときは新しい世代が丸ごと勝つ:
+   「データをすべてリセット」が他端末・リモートから復活しない&全端末に伝播する */
 function mergeData(a, b){
-  const m=JSON.parse(JSON.stringify(a));
+  b=b||{};
+  if((a.resetAt||0)!==(b.resetAt||0)){
+    const w=(a.resetAt||0)>(b.resetAt||0)? a : b;
+    return JSON.parse(JSON.stringify(w));
+  }
+  // 未知キー(将来のバージョンが追加するフィールド)も保持する=前方互換(既知キーはローカル起点)
+  const m=JSON.parse(JSON.stringify(Object.assign({}, b, a)));
   // 単語SRS: 解答回数(正解+ミス)が多い方を採用
   for(const en in b.words||{}){
     const x=m.words[en], y=b.words[en];
@@ -125,6 +133,7 @@ function mergeData(a, b){
   const newer=(b.updatedAt||0)>(a.updatedAt||0)? b : a;
   m.daily=newer.daily||m.daily; m.weekly=newer.weekly||m.weekly;
   m.party=newer.party||m.party; m.login=newer.login||m.login; m.mode=newer.mode||m.mode;
+  m.resetAt=a.resetAt||0;
   return m;
 }
 
@@ -182,7 +191,7 @@ function openSettings(){
       : '<div class="small">未設定。GCPでOAuthクライアントIDを発行し js/sync.js に設定すると使える(README参照)。データは端末内に保存されている。</div>')+
     '<h3 style="margin-top:16px">データ</h3>'+
     '<button class="btn danger" id="resetBtn">データをすべてリセット</button>'+
-    '<div class="small" style="margin-top:14px">LEXICA(レキシカ) v3.4.1 ─ 英単語×ローグライクRPG<br>単語データ: 英検1級レベル '+WORDS.length+'語(<a href="https://github.com/zuno1000/tango" style="color:var(--accent2)">tango</a> 由来)</div>');
+    '<div class="small" style="margin-top:14px">LEXICA(レキシカ) v3.4.2 ─ 英単語×ローグライクRPG<br>単語データ: 英検1級レベル '+WORDS.length+'語(<a href="https://github.com/zuno1000/tango" style="color:var(--accent2)">tango</a> 由来)</div>');
   $("modeToggle").onclick=()=>{
     G.mode=G.mode==="e2j"?"j2e":"e2j"; saveG();
     $("modeToggle").textContent=(G.mode==="e2j"?"EN → 日本語":"日本語 → EN")+" (タップで切替)";
@@ -199,11 +208,18 @@ function openSettings(){
   const sb=$("syncBtn"); if(sb) sb.onclick=syncNow;
   $("resetBtn").onclick=()=>{
     openModal('<h3>本当にリセットする？</h3>'+
-      '<div class="small">学習記録・カード・なかま・通貨がすべて消える。この操作は取り消せない。</div>'+
+      '<div class="small">学習記録・カード・なかま・通貨がすべて消える。'+
+      (syncClientId()&&lastSyncAt()? 'Drive同期を使っているため、<b>他の端末も次回同期時にリセットされる</b>。':'')+
+      'この操作は取り消せない。</div>'+
       '<div class="row" style="margin-top:12px; gap:10px">'+
       '<button class="btn" data-close>やめる</button>'+
       '<button class="btn danger" id="resetGo">リセットする</button></div>');
-    $("resetGo").onclick=()=>{ localStorage.removeItem(KEY); location.reload(); };
+    $("resetGo").onclick=()=>{
+      // 空セーブに世代印(resetAt)を残す: 同期でリセットが復活せず、他端末にも伝播する
+      const t=Date.now();
+      localStorage.setItem(KEY, JSON.stringify({v:1, resetAt:t, updatedAt:t}));
+      location.reload();
+    };
   };
 }
 $("gearBtn").onclick=openSettings;

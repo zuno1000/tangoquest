@@ -520,6 +520,32 @@ function run(){
     ok(m.chars.c05, "chars union");
   });
 
+  /* ---- 同期マージ: 前方互換・リセット世代(v3.4.2) ---- */
+  t("マージは未知キー(将来のフィールド)を保持する", ()=>{
+    const base=()=>({words:{},days:{},inv:{},chars:{},dungeons:{},counters:{},ach:{},inf:{best:0},
+                     gold:0,tickets:0,shards:0,xp:0});
+    const a=Object.assign(base(),{futureLocal:{x:1}, updatedAt:1});
+    const b=Object.assign(base(),{futureRemote:[1,2], updatedAt:2});
+    const m=W.mergeData(a,b);
+    eq(m.futureLocal.x, 1, "ローカルの未知キー");
+    eq(JSON.stringify(m.futureRemote), "[1,2]", "リモートの未知キー");
+  });
+  t("リセット世代が異なると新しい世代が丸ごと勝つ(復活防止・全端末に伝播)", ()=>{
+    const olds={words:{x:[1,0,5,2,0,0,0]},days:{},inv:{"abate|1|0":9},chars:{},dungeons:{},
+                counters:{cor:9},ach:{},inf:{best:8},gold:999,tickets:9,shards:9,xp:999,
+                resetAt:0, updatedAt:100};
+    const fresh={words:{},days:{},inv:{},chars:{},dungeons:{},counters:{},ach:{},inf:{best:0},
+                 gold:0,tickets:0,shards:0,xp:0, resetAt:50, updatedAt:60};
+    const m1=W.mergeData(fresh, olds);   // リセットした端末 vs 古いリモート
+    eq(m1.gold, 0, "通貨が復活しない");
+    ok(!m1.inv["abate|1|0"], "在庫が復活しない");
+    eq(m1.resetAt, 50, "世代印を引き継ぐ");
+    const m2=W.mergeData(olds, fresh);   // 古いままの第3端末 vs リセット済みリモート
+    eq(m2.gold, 0, "第3端末にもリセットが伝播する");
+    const m3=W.mergeData(JSON.parse(JSON.stringify(fresh)), fresh); // 同世代は通常マージ
+    eq(m3.resetAt, 50, "同世代はresetAt維持");
+  });
+
   /* ---- デイリー報酬(2日目以降) ---- */
   t("ログインボーナスは2日目も付与され7日で一周する", ()=>{
     const G=W.G;

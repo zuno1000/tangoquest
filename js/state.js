@@ -39,6 +39,7 @@ G.counters=Object.assign({ans:0,cor:0,cards:0,merges:0,runs:0,clears:0,pulls:0},
 G.ach=G.ach||{};        // achId -> 受取済みティア数
 G.login=G.login||{last:null, day:0};
 G.updatedAt=G.updatedAt||0;
+G.resetAt=G.resetAt||0;     // リセット世代印(同期マージで新しい世代が丸ごと勝つ)
 
 function saveG(){
   G.updatedAt=Date.now();
