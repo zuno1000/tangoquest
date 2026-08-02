@@ -154,7 +154,11 @@ function openSettings(){
     '<h3 style="margin-top:16px">出題モード</h3>'+
     '<button class="btn" id="modeToggle">'+(G.mode==="e2j"?"EN → 日本語":"日本語 → EN")+' (タップで切替)</button>'+
     '<h3 style="margin-top:16px">演出</h3>'+
-    '<button class="btn" id="vibeToggle">振動: '+(localStorage.getItem("tq_vibe")==="off"?"OFF":"ON")+'</button>'+
+    (CAN_VIBRATE
+      ? '<button class="btn" id="vibeToggle">振動: '+(localStorage.getItem("tq_vibe")==="off"?"OFF":"ON")+'</button>'+
+        '<div class="small" style="margin-top:6px">ONにするとテスト振動が鳴る。鳴らない場合は端末のマナーモード/バイブ設定を確認</div>'
+      : '<button class="btn" disabled>振動: この端末は非対応</button>'+
+        '<div class="small" style="margin-top:6px">iPhone・iPad・PCのブラウザは振動APIに対応していない(Android Chrome等で使える)</div>')+
     '<h3 style="margin-top:16px">端末間同期(Googleドライブ)</h3>'+
     (syncClientId()
       ? '<div class="small">あなた自身のGoogleドライブ(アプリ専用領域)に保存。進捗を失わない方向でマージされる。</div>'+
@@ -162,17 +166,19 @@ function openSettings(){
       : '<div class="small">未設定。GCPでOAuthクライアントIDを発行し js/sync.js に設定すると使える(README参照)。データは端末内に保存されている。</div>')+
     '<h3 style="margin-top:16px">データ</h3>'+
     '<button class="btn danger" id="resetBtn">データをすべてリセット</button>'+
-    '<div class="small" style="margin-top:14px">LEXICA(レキシカ) v2.2.0 ─ 英単語×ローグライクRPG<br>単語データ: 英検1級レベル '+WORDS.length+'語(<a href="https://github.com/zuno1000/tango" style="color:var(--accent2)">tango</a> 由来)</div>');
+    '<div class="small" style="margin-top:14px">LEXICA(レキシカ) v2.3.0 ─ 英単語×ローグライクRPG<br>単語データ: 英検1級レベル '+WORDS.length+'語(<a href="https://github.com/zuno1000/tango" style="color:var(--accent2)">tango</a> 由来)</div>');
   $("modeToggle").onclick=()=>{
     G.mode=G.mode==="e2j"?"j2e":"e2j"; saveG();
     $("modeToggle").textContent=(G.mode==="e2j"?"EN → 日本語":"日本語 → EN")+" (タップで切替)";
     if(!answered && cur) renderQuestion();
   };
-  $("vibeToggle").onclick=()=>{
+  const vt=$("vibeToggle");
+  if(vt) vt.onclick=()=>{
     const off=localStorage.getItem("tq_vibe")==="off";
     localStorage.setItem("tq_vibe", off?"on":"off");
-    $("vibeToggle").textContent="振動: "+(off?"ON":"OFF");
-    if(off) vibe(30);
+    vt.textContent="振動: "+(off?"ON":"OFF");
+    // ONにした瞬間(タップ操作中)に長めのテスト振動。ここで鳴らなければ端末側の設定
+    if(off){ try{ navigator.vibrate([80,50,80]); }catch(e){} }
   };
   const sb=$("syncBtn"); if(sb) sb.onclick=syncNow;
   $("resetBtn").onclick=()=>{

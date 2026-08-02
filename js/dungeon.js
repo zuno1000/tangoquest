@@ -1,32 +1,39 @@
 "use strict";
 /* ================= ダンジョン & 編成 & 無限回廊 ================= */
 
+/* elem: 敵の属性(0火/1水/2風/3光/4闇) / trait: 敵の特性(なし・tough・fierce・swift)。
+   ダンジョンごとに有効な編成が変わる=編成を考える理由になる */
 const DUNGEONS=[
-  {id:"d1", tier:1, floors:5,  icon:"🌾", name:"はじまりの草原",
+  {id:"d1", tier:1, floors:5,  icon:"🌾", name:"はじまりの草原", elem:2,
    names:["スライム","野ウサギ","いたずら妖精"], eicons:["👾","🐇","🧚"], boss:"巨大スライム", bossIcon:"👾"},
-  {id:"d2", tier:2, floors:7,  icon:"🕳️", name:"苔むす洞窟",
+  {id:"d2", tier:2, floors:7,  icon:"🕳️", name:"苔むす洞窟", elem:4, trait:"tough",
    names:["洞窟コウモリ","ゴブリン","岩ガニ"], eicons:["🦇","👺","🦀"], boss:"ゴブリンキング", bossIcon:"👹"},
-  {id:"d3", tier:3, floors:8,  icon:"🌲", name:"忘却の森",
+  {id:"d3", tier:3, floors:8,  icon:"🌲", name:"忘却の森", elem:2,
    names:["森オオカミ","歩く木トレント","毒キノコ"], eicons:["🐺","🌳","🍄"], boss:"森の主アルラウネ", bossIcon:"🌺"},
-  {id:"d4", tier:4, floors:10, icon:"🏜️", name:"砂塵の遺跡",
+  {id:"d4", tier:4, floors:10, icon:"🏜️", name:"砂塵の遺跡", elem:0,
    names:["砂サソリ","ミイラ兵","ガーゴイル"], eicons:["🦂","🧟","🗿"], boss:"遺跡の守護者アヌビス", bossIcon:"⚱️"},
-  {id:"d5", tier:5, floors:10, icon:"🌋", name:"竜の火山",
+  {id:"d5", tier:5, floors:10, icon:"🌋", name:"竜の火山", elem:0, trait:"fierce",
    names:["火トカゲ","溶岩ゴーレム","ヘルハウンド"], eicons:["🦎","🪨","🔥"], boss:"火竜イフリート", bossIcon:"🐉"},
-  {id:"d6", tier:6, floors:12, icon:"🗼", name:"星降る魔塔",
+  {id:"d6", tier:6, floors:12, icon:"🗼", name:"星降る魔塔", elem:3,
    names:["魔導兵","死霊術師","ガーゴイル卿"], eicons:["🧙","💀","🗿"], boss:"大魔王リヴェリオン", bossIcon:"👿"},
-  {id:"d7", tier:7, floors:12, icon:"🌊", name:"海淵の神殿",
+  {id:"d7", tier:7, floors:12, icon:"🌊", name:"海淵の神殿", elem:1,
    names:["マーマン","深海クラゲ","海蛇"], eicons:["🧜","🪼","🐍"], boss:"深淵の主クラーケン", bossIcon:"🐙"},
-  {id:"d8", tier:8, floors:12, icon:"🧊", name:"永久凍土の城",
+  {id:"d8", tier:8, floors:12, icon:"🧊", name:"永久凍土の城", elem:1, trait:"tough",
    names:["アイスゴーレム","雪女","フロストウルフ"], eicons:["🧊","❄️","🐺"], boss:"氷帝グラキエス", bossIcon:"☃️"},
-  {id:"d9", tier:9, floors:14, icon:"📚", name:"幻影図書館",
+  {id:"d9", tier:9, floors:14, icon:"📚", name:"幻影図書館", elem:4, trait:"swift",
    names:["生きた辞書","インクの精","本の亡霊"], eicons:["📖","🖋️","👻"], boss:"禁書の王レキシス", bossIcon:"📕"},
-  {id:"d10", tier:10, floors:14, icon:"🏯", name:"天空回廊",
+  {id:"d10", tier:10, floors:14, icon:"🏯", name:"天空回廊", elem:2, trait:"swift",
    names:["ハーピー","雲海竜","天空騎士"], eicons:["🦅","☁️","🤺"], boss:"天翔ける王シエロ", bossIcon:"🌤️"},
-  {id:"d11", tier:11, floors:15, icon:"🌑", name:"常夜の墓所",
+  {id:"d11", tier:11, floors:15, icon:"🌑", name:"常夜の墓所", elem:4, trait:"fierce",
    names:["グール","バンシー","デュラハン"], eicons:["🧟","🕯️","🎃"], boss:"冥王ノクターン", bossIcon:"🌑"},
-  {id:"d12", tier:12, floors:16, icon:"🌌", name:"星界の果て",
+  {id:"d12", tier:12, floors:16, icon:"🌌", name:"星界の果て", elem:3, trait:"tough",
    names:["星屑の獣","コメットドラゴン","銀河の番人"], eicons:["🐆","☄️","🛸"], boss:"創星神アストラル", bossIcon:"🌌"},
 ];
+const TRAITS={
+  tough: {ic:"🛡️", name:"硬い",  desc:"防御がとても高い ─ 【貫通】技が有効"},
+  fierce:{ic:"💢", name:"狂暴",  desc:"攻撃が激しい ─ HP・防御・【吸収】技で耐えよう"},
+  swift: {ic:"💨", name:"神速",  desc:"素早く先手を取ってくる ─ 素早さで対抗"},
+};
 
 function dgRec(id){ if(!G.dungeons[id]) G.dungeons[id]={clears:0, lastClearDay:null}; return G.dungeons[id]; }
 function dgUnlocked(i){ return i===0 || (G.dungeons[DUNGEONS[i-1].id]&&G.dungeons[DUNGEONS[i-1].id].clears>0); }
@@ -52,7 +59,10 @@ function renderAdv(){
       '<div class="grow"><div class="dname">'+d.name+
         (cleared? ' <span class="dclear">✓'+rec.clears+'</span>':'')+
         (i===frontier? ' <span class="dnew">NEW</span>':'')+'</div>'+
-      '<div class="dinfo">'+(un? '全'+d.floors+'F ・ 推奨 '+fmt(recPower(d)) : '前のダンジョンをクリアで解放')+'</div></div>';
+      '<div class="dinfo">'+(un
+        ? '全'+d.floors+'F ・ '+ELEM_ICON[d.elem]+ELEM_NAME[d.elem]+'属性'+
+          (d.trait? ' ・ '+TRAITS[d.trait].ic+TRAITS[d.trait].name:'')+' ・ 推奨 '+fmt(recPower(d))
+        : '前のダンジョンをクリアで解放')+'</div></div>';
     if(un) node.onclick=()=>openDungeonModal(d);
     list.appendChild(node);
   });
@@ -63,12 +73,21 @@ function openDungeonModal(d){
   const rec=G.dungeons[d.id];
   const rp=recPower(d);
   const okp=P.power>=rp;
+  // 属性相性: 敵属性に有利な属性と、いまの編成での効果を見せる(対策を促す)
+  const adv=ELEM_BEATS.indexOf(d.elem);
+  const m=elemMatch(P.elems, d.elem);
+  const matchTxt = m.adv>0
+    ? '有利カード<b style="color:var(--ok)">'+m.adv+'枚</b> → 与ダメ<b style="color:var(--ok)">+'+Math.round((m.dealt-1)*100)+'%</b>'+
+      (m.taken<1? ' ・ 被ダメ<b style="color:var(--ok)">-'+Math.round((1-m.taken)*100)+'%</b>':'')
+    : '<span style="color:var(--sub)">'+ELEM_ICON[adv]+ELEM_NAME[adv]+'属性のカードを装備すると有利に戦える</span>';
   openModal('<h3>'+d.icon+' '+esc(d.name)+'</h3>'+
     '<div class="small" style="line-height:1.9">'+
     '全'+d.floors+'F ・ ボス『'+d.boss+'』'+d.bossIcon+'<br>'+
+    '敵は'+ELEM_ICON[d.elem]+ELEM_NAME[d.elem]+'属性(弱点: '+ELEM_ICON[adv]+ELEM_NAME[adv]+')<br>'+matchTxt+
+    (d.trait? '<br>'+TRAITS[d.trait].ic+'<b>'+TRAITS[d.trait].name+'</b>: '+TRAITS[d.trait].desc:'')+'<br>'+
     '推奨戦闘力 <b style="color:'+(okp?"var(--ok)":"var(--ng)")+'">'+fmt(rp)+'</b>(いまの戦闘力 '+fmt(P.power)+')<br>'+
     (rec&&rec.clears? 'クリア'+rec.clears+'回 ・ 本日初クリアで🎫1' : '初クリア報酬: 🎫3')+'</div>'+
-    (okp? "" : '<div class="small" style="margin-top:6px; color:var(--ng)">戦闘力が足りない。クイズでカードを集めよう</div>')+
+    (okp? "" : '<div class="small" style="margin-top:6px; color:var(--ng)">戦闘力が足りない。クイズでカードを集め、弱点属性で編成を組もう</div>')+
     '<div class="row" style="margin-top:14px; gap:8px">'+
     '<button class="btn" style="flex:1" data-close>やめる</button>'+
     '<button class="btn primary" style="flex:2" id="dgGo">⚔ 挑む</button></div>');
@@ -83,7 +102,7 @@ function startRun(d){
   let cleared=0, gold=0, hp=P.hp;
   for(let f=1; f<=d.floors; f++){
     const boss=f===d.floors;
-    const E=enemyFor(d.tier, f, d.floors, boss, d.names, d.boss);
+    const E=enemyFor(d.tier, f, d.floors, boss, d.names, d.boss, {elem:d.elem, trait:d.trait});
     const r=simBattle(Object.assign({}, P, {hp}), E);
     const fl={f, boss, E, icon:boss? d.bossIcon : d.eicons[(f-1)%d.eicons.length],
               hpStart:hp, win:r.win, events:r.log};
@@ -112,9 +131,10 @@ function startRun(d){
 }
 
 /* ---- 演出プレイヤー ---- */
+const CAN_VIBRATE = typeof navigator!=="undefined" && "vibrate" in navigator;
 function vibe(pat){
-  if(localStorage.getItem("tq_vibe")==="off") return;
-  if(navigator.vibrate) try{ navigator.vibrate(pat); }catch(e){}
+  if(!CAN_VIBRATE || localStorage.getItem("tq_vibe")==="off") return;
+  try{ navigator.vibrate(pat); }catch(e){}
 }
 
 function playRun(d, P, floors, R){
@@ -201,7 +221,7 @@ function playRun(d, P, floors, R){
         $("bEFace").textContent=st.fl.icon;
         $("bEFace").classList.toggle("boss", st.fl.boss);
         $("bEFace").style.opacity=1; $("bEFace").style.transform="";
-        $("bEName").textContent=st.fl.E.name;
+        $("bEName").textContent=(st.fl.E.elem!=null? ELEM_ICON[st.fl.E.elem]+" ":"")+st.fl.E.name;
         setHp($("bEHp"), $("bEHpN"), st.fl.E.hp, st.fl.E.hp);
         setHp($("bPHp"), $("bPHpN"), st.fl.hpStart, P.hp);
         act(st.fl.E.name+" が現れた!", st.fl.boss?"boss":"");
@@ -214,6 +234,7 @@ function playRun(d, P, floors, R){
           const eU=$("bE");
           setHp($("bEHp"), $("bEHpN"), e.ehp, maxHpE(curFl));
           $("bPFace").classList.remove("lunge"); void $("bPFace").offsetWidth; $("bPFace").classList.add("lunge");
+          if(e.heal){ setHp($("bPHp"), $("bPHpN"), e.php, P.hp); pop($("bP"), "+"+fmt(e.heal), "heal"); }
           if(e.sk){
             pop(eU, fmt(e.dmg), "crit");
             shake(eU, true); flash($("bEFace"));
@@ -309,7 +330,8 @@ function infEnemy(floor){
   const p=Math.pow(1.09, floor);
   const names=["深層スライム","彷徨う鎧","影の獣","迷宮の番人","古の魔像"];
   return {name:floor+"Fの"+names[floor%names.length], hp:Math.round(140*p),
-          atk:Math.round(20*p), def:Math.round(9*p), spd:9+Math.floor(floor/5)};
+          atk:Math.round(20*p), def:Math.round(9*p), spd:9+Math.floor(floor/5),
+          elem:floor%5}; // 階ごとに属性が巡る(偏った編成は深層で止まりやすい)
 }
 
 /* 経過時間ぶんの階層を逐次シミュレート(敗北で探索終了) */
@@ -403,7 +425,7 @@ function cardScore(c){
     return (s.atk||0)*4+(s.def||0)*3+(s.spd||0)*5+(s.hp||0)/6; } // powerと同じ重み
   if(c.pos==="adj") return c.pct;
   if(c.pos==="adv") return c.fieldType==="all"? c.pct*4 : c.fieldType==="proc"? c.pct*1.5 : c.pct*0.5;
-  return c.mult*Math.min(100,c.proc)/100; // 期待ダメージ
+  return c.mult*SKILL_TYPES[c.skType||0].powerF*Math.min(100,c.proc)/100; // 期待ダメージ(タイプ補正込み)
 }
 function autoEquip(){
   const before=playerStats().power;
@@ -440,7 +462,7 @@ $("autoEqBtn").onclick=()=>{
   const r=autoEquip();
   renderEqSlots();
   toast(r.after>r.before? "おまかせ編成! 戦闘力 "+fmt(r.before)+" → "+fmt(r.after)
-      : "すでに最強の編成");
+      : "戦闘力は最大。属性対策は手動で組もう");
 };
 $("unEqBtn").onclick=()=>{ unequipAll(); renderEqSlots(); toast("装備をすべてはずした"); };
 
@@ -488,7 +510,7 @@ function renderEqSlots(){
   const es=$("eqSets");
   if(es) es.innerHTML = P.sets && P.sets.length
     ? "セット効果: "+P.sets.map(s=>ELEM_ICON[s.elem]+"×"+s.n+" <b style='color:var(--ok)'>+"+Math.round(s.b*100)+"%</b>").join(" ・ ")
-    : "同じ属性のカードを2枚そろえるとセット効果(全ステ+5%〜)";
+    : "同じ属性を2枚そろえるとセット効果。冒険先の弱点属性で固めるのも有効";
 }
 function openSlotPicker(def){
   const cands=[];

@@ -1,6 +1,19 @@
 "use strict";
 /* ================= 戦闘計算 ================= */
 
+/* ---- 属性相性 ----
+   ELEM_BEATS[a]=b : 属性aは属性bに強い(火→風→水→火 / 光⇔闇)。
+   編成中の「敵に有利な属性」のカード1枚ごとに与ダメ+7%・被ダメ-4%、
+   「敵に弱い属性」のカード1枚ごとに被ダメ+4%。編成を敵に合わせる意味を作る */
+const ELEM_BEATS=[2,0,1,4,3];
+function elemMatch(elems, eElem){
+  if(eElem==null || eElem<0 || !elems) return {adv:0, dis:0, dealt:1, taken:1};
+  const adv=elems[ELEM_BEATS.indexOf(eElem)]||0; // 敵属性に強い属性のカード枚数
+  const dis=elems[ELEM_BEATS[eElem]]||0;         // 敵属性に弱い属性のカード枚数
+  return {adv, dis, dealt:1+0.07*adv,
+          taken:Math.min(1.6, Math.max(0.4, 1-0.04*adv+0.04*dis))};
+}
+
 /* 現在の編成からプレイヤーステータスを算出(JSON化可能なスナップショット)。
    eqOpt を渡すとその装備案で試算する(状態は変更しない) */
 function playerStats(eqOpt){
@@ -34,10 +47,10 @@ function playerStats(eqOpt){
     else if(f.fieldType==="proc") procBonus=f.pct;
     else goldBonus=f.pct;
   }
-  // 動詞=攻撃技
+  // 動詞=攻撃技(タイプ付き)
   const skills=[];
   ["skill1","skill2","skill3"].forEach(s=>{
-    const c=card(s); if(c&&c.mult) skills.push({name:c.en, mult:c.mult, proc:c.proc});
+    const c=card(s); if(c&&c.mult) skills.push({name:c.en, mult:c.mult, proc:c.proc, type:c.skType||0});
   });
   // 属性セット効果: 同属性を並べるほど強い(2枚+5% / 4枚+12% / 6枚+20%)
   const ecnt=[0,0,0,0,0];
@@ -52,45 +65,73 @@ function playerStats(eqOpt){
   let em=1;
   if(skills.length){
     let s=0;
-    skills.forEach(k=>{ s+=Math.min(100, k.proc+procBonus)/100*(k.mult/100-1); });
+    skills.forEach(k=>{
+      const f=SKILL_TYPES[k.type||0].powerF;
+      s+=Math.min(100, k.proc+procBonus)/100*(k.mult/100*f-1);
+    });
     em=1+s/skills.length;
   }
   const power=Math.round(hp/6 + atk*em*4 + def*3 + spd*5);
-  return {name:ch.name.split(" ").pop(), face:ch.face, hp, atk, def, spd, skills, procBonus, goldBonus, sets, power};
+  return {name:ch.name.split(" ").pop(), face:ch.face, hp, atk, def, spd, skills,
+          procBonus, goldBonus, sets, elems:ecnt, power};
 }
 
-/* 敵の名前(ダンジョン定義 dungeon.js から参照) */
-function enemyFor(tier, floor, floors, boss, names, bossName){
+/* 敵の生成(ダンジョン定義 dungeon.js から参照)。
+   opts={elem, trait}: 属性と特性(tough=硬い/fierce=狂暴/swift=神速)で敵に個性を付ける */
+function enemyFor(tier, floor, floors, boss, names, bossName, opts){
   const p=Math.pow(1.55, tier-1)*(1+0.13*(floor-1));
   const e={
     name: boss? bossName : names[(floor-1)%names.length],
     hp:Math.round(130*p), atk:Math.round(20*p), def:Math.round(9*p),
-    spd:8+tier+Math.floor(floor/3), boss:!!boss
+    spd:8+tier+Math.floor(floor/3), boss:!!boss,
+    elem: opts&&opts.elem!=null? opts.elem : null, trait: (opts&&opts.trait)||null
   };
+  if(e.trait==="tough"){ e.def=Math.round(e.def*2.4); e.hp=Math.round(e.hp*0.85); }
+  else if(e.trait==="fierce"){ e.atk=Math.round(e.atk*1.35); e.def=Math.round(e.def*0.7); }
+  else if(e.trait==="swift"){ e.spd=Math.round(e.spd*1.7); }
   if(boss){ e.hp=Math.round(e.hp*2.8); e.atk=Math.round(e.atk*1.5); }
   return e;
 }
 
 /* オート戦闘シミュレーション。P/E は {hp,atk,def,spd,...}。P.skills使用。
-   log 要素は演出用の構造化データも持つ: {t, s, side, dmg, sk, php, ehp} */
+   属性相性(P.elems vs E.elem)と技タイプ(強撃/貫通/吸収/連撃)を反映。
+   log 要素は演出用の構造化データも持つ: {t, s, side, dmg, sk, heal, php, ehp} */
 function simBattle(P, E){
   let php=P.hp, ehp=E.hp;
   const log=[];
+  const em=elemMatch(P.elems, E.elem);
   const pAtk=()=>{
-    let mult=1, sk=null;
+    let sk=null;
     if(P.skills && P.skills.length){
       sk=P.skills[Math.floor(Math.random()*P.skills.length)];
-      if(Math.random()*100 < sk.proc+(P.procBonus||0)) mult=sk.mult/100; else sk=null;
+      if(Math.random()*100 >= sk.proc+(P.procBonus||0)) sk=null;
     }
-    const v=Math.round((0.9+Math.random()*0.2)*Math.max(1, P.atk*mult - E.def*0.55));
+    const rnd=0.9+Math.random()*0.2;
+    let base, heal=0, txt;
+    if(!sk){
+      base=Math.max(1, P.atk - E.def*0.55);
+    }else{
+      const m=sk.mult/100, t=sk.type||0;
+      if(t===1)      base=Math.max(1, P.atk*m*0.85 - E.def*0.1);            // 貫通: 防御をほぼ無視
+      else if(t===2) base=Math.max(1, P.atk*m*0.8  - E.def*0.55);           // 吸収: 与ダメの45%回復
+      else if(t===3) base=Math.max(1, P.atk*m*0.6 - E.def*0.55)
+                         +Math.max(1, P.atk*m*0.6 - E.def*0.55);            // 連撃: 60%×2回
+      else           base=Math.max(1, P.atk*m - E.def*0.55);                // 強撃
+    }
+    const v=Math.round(rnd*base*em.dealt);
     ehp-=v;
-    log.push(sk? {t:"sk", side:"p", dmg:v, sk:sk.name, php:Math.max(0,php), ehp:Math.max(0,ehp),
-                  s:"『"+sk.name+"』発動! "+fmt(v)+"ダメージ"}
-               : {t:"pl", side:"p", dmg:v, php:Math.max(0,php), ehp:Math.max(0,ehp),
-                  s:P.name+"の攻撃 "+fmt(v)+"ダメージ"});
+    if(sk && (sk.type||0)===2){ heal=Math.round(v*0.45); php=Math.min(P.hp, php+heal); }
+    if(sk){
+      const tn=SKILL_TYPES[sk.type||0].name;
+      txt="『"+sk.name+"』("+tn+")! "+fmt(v)+"ダメージ"+(heal? " & "+fmt(heal)+"回復":"");
+      log.push({t:"sk", side:"p", dmg:v, sk:sk.name, heal, php:Math.max(0,php), ehp:Math.max(0,ehp), s:txt});
+    }else{
+      log.push({t:"pl", side:"p", dmg:v, php:Math.max(0,php), ehp:Math.max(0,ehp),
+                s:P.name+"の攻撃 "+fmt(v)+"ダメージ"});
+    }
   };
   const eAtk=()=>{
-    const v=Math.round((0.9+Math.random()*0.2)*Math.max(1, E.atk - P.def*0.55));
+    const v=Math.round((0.9+Math.random()*0.2)*Math.max(1, E.atk - P.def*0.55)*em.taken);
     php-=v;
     log.push({t:"en", side:"e", dmg:v, php:Math.max(0,php), ehp:Math.max(0,ehp),
               s:E.name+"の攻撃 "+fmt(v)+"ダメージ"});

@@ -11,6 +11,14 @@ const SLOT_NAME={weapon:"武器", armor:"防具", acc:"装飾品", buff:"強化"
 const STAT_NAME={hp:"HP", atk:"攻撃", def:"防御", spd:"素早さ"};
 const ELEM_ICON=["🔥","💧","🍃","☀️","🌙"];
 const ELEM_NAME=["火","水","風","光","闇"];
+/* 技タイプ: 動詞カードの個性。敵に合わせて選ぶ意味を作る
+   powerF は戦闘力・おまかせ編成用の期待値係数(防御無視や回復の価値を近似) */
+const SKILL_TYPES=[
+  {id:0, name:"強撃", note:"",                    powerF:1},
+  {id:1, name:"貫通", note:"敵の防御をほぼ無視",   powerF:1.06},
+  {id:2, name:"吸収", note:"与ダメージの45%を回復", powerF:0.95},
+  {id:3, name:"連撃", note:"60%×2回攻撃",          powerF:1.0},
+];
 
 function genCard(w, rar, lv){
   const h=hashStr(w.en);
@@ -35,6 +43,7 @@ function genCard(w, rar, lv){
     c.slot="skill";
     c.mult=150+10*(h%6)+25*(rar-1)+15*lv;   // 攻撃倍率%
     c.proc=Math.min(60, 20+(h%3)*4+2*(rar-1)+2*lv); // 発動率%
+    c.skType=Math.floor(h/31)%4; // 技タイプ(mult/proc/elemと別ビットから導出)
   }
   c.icon=SLOT_ICON[c.slot];
   c.typeName=SLOT_NAME[c.slot];
@@ -52,7 +61,8 @@ function effectText(c){
   if(c.pos==="adv") return c.fieldType==="all"? "全ステータス +"+c.pct+"%"
                     : c.fieldType==="proc"? "技の発動率 +"+c.pct+"%"
                     : "獲得ゴールド +"+c.pct+"%";
-  return "威力 "+c.mult+"% ／ 発動率 "+c.proc+"%";
+  const st=SKILL_TYPES[c.skType||0];
+  return "【"+st.name+"】威力 "+c.mult+"% ／ 発動率 "+c.proc+"%"+(st.note? "("+st.note+")":"");
 }
 function lvLabel(c){ return c.lv>0? " +"+c.lv : ""; }
 

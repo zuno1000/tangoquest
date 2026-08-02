@@ -64,11 +64,11 @@ main{flex:1; min-height:0; overflow-y:auto; padding:8px 16px calc(12px + env(saf
 /* ---- bottom nav ---- */
 nav{flex:0 0 auto; display:flex; background:var(--bg);
   box-shadow:0 -6px 14px rgba(136,152,184,.22);
-  padding:6px 8px calc(6px + env(safe-area-inset-bottom))}
-nav button{flex:1; border:none; background:none; color:var(--sub); font-size:11px; font-weight:700;
-  padding:7px 0 5px; min-height:52px; cursor:pointer; border-radius:14px; margin:0 2px;
-  display:flex; flex-direction:column; align-items:center; gap:2px}
-nav button .nic{font-size:22px; line-height:1}
+  padding:7px 8px calc(7px + env(safe-area-inset-bottom))}
+nav button{flex:1; border:none; background:none; color:var(--sub); font-size:13px; font-weight:700;
+  padding:8px 0 6px; min-height:66px; cursor:pointer; border-radius:16px; margin:0 2px;
+  display:flex; flex-direction:column; align-items:center; gap:3px}
+nav button .nic{font-size:28px; line-height:1}
 nav button.active{color:var(--accent2);
   box-shadow:inset 3px 3px 6px var(--shd), inset -3px -3px 6px var(--shl)}
 nav button .badge{position:relative}
@@ -90,10 +90,9 @@ nav button .dot{position:absolute; top:-2px; right:-8px; width:9px; height:9px; 
 #qBadge{position:absolute; top:10px; left:12px; font-size:12px; font-weight:700;
   border-radius:999px; padding:4px 10px; background:var(--bg2); color:var(--accent2)}
 #qCount{position:absolute; top:14px; right:14px; font-size:12px; color:var(--sub)}
-#promptWord{font-size:31px; font-weight:900; line-height:1.3; word-break:break-word}
-#promptWord.ja{font-size:20px; font-weight:700}
-#promptHint{font-size:13px; color:var(--sub); margin-top:5px}
-#qStats{font-size:13px; color:var(--sub); margin-top:4px}
+#promptWord{font-size:40px; font-weight:900; line-height:1.25; word-break:break-word}
+#promptWord.ja{font-size:24px; font-weight:700}
+#qStats{font-size:13px; color:var(--sub); margin-top:6px; min-height:19px}
 #qStats .qo{color:var(--ok); font-weight:700}
 #qStats .qx{color:var(--ng); font-weight:700}
 .choices{flex:1; min-height:0; display:flex; flex-direction:column; gap:11px; margin-top:12px; padding:2px 2px}

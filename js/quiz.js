@@ -50,9 +50,8 @@ function renderQuestion(){
   const pw=$("promptWord");
   pw.textContent = e2j? w.en : w.ja;
   pw.className = e2j? "" : "ja";
-  $("promptHint").textContent = e2j? "この単語の意味は？" : "この意味の英単語は？";
   $("qStats").innerHTML = !st
-    ? '<span>初めて出題される単語</span>'
+    ? ''
     : 'これまで <span class="qo">正解 '+st[2]+'</span> ・ <span class="qx">ミス '+st[3]+'</span>'+
       ((st[5]||0)>=3? ' <span style="color:var(--accent)">🔥連続ミス'+st[5]+'(正解で強カード!)</span>':"");
   const box=$("choices"); box.innerHTML="";

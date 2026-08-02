@@ -191,6 +191,45 @@ function run(){
     eq(P.sets[0].b, 0.05, "+5%");
   });
 
+  /* ---- 技タイプ・属性相性・敵の特性(v2.3.0) ---- */
+  t("動詞カードに技タイプ(0〜3)が決定的に付く", ()=>{
+    const v=W.WORDS.find(w=>w.pos==="v");
+    const a=W.genCard(v,1,0), b=W.genCard(v,4,3);
+    ok(a.skType>=0 && a.skType<4, "range");
+    eq(a.skType, b.skType, "レア・Lvで不変");
+  });
+  t("技タイプは4種すべて存在する", ()=>{
+    const types=new Set(W.WORDS.filter(w=>w.pos==="v").map(w=>W.genCard(w,1,0).skType));
+    eq(types.size, 4, "found="+[...types].join(","));
+  });
+  t("属性相性: 有利カードで与ダメ増・被ダメ減", ()=>{
+    const m=W.elemMatch([0,0,3,0,0], 1); // 風3枚 vs 水属性の敵(風は水に強い)
+    eq(m.adv, 3, "adv");
+    ok(Math.abs(m.dealt-1.21)<1e-9, "dealt="+m.dealt);
+    ok(Math.abs(m.taken-0.88)<1e-9, "taken="+m.taken);
+    const n=W.elemMatch([0,0,3,0,0], null);
+    eq(n.dealt, 1, "属性なしは等倍");
+  });
+  t("貫通技は高防御の敵に有効", ()=>{
+    const E=()=>({name:"e",hp:2000,atk:1,def:900,spd:1});
+    const P=t2=>({name:"p",hp:500,atk:100,def:0,spd:10,skills:[{name:"x",mult:300,proc:100,type:t2}]});
+    ok(W.simBattle(P(1),E()).win, "貫通は倒せる");
+    ok(!W.simBattle(P(0),E()).win, "強撃は防御に阻まれる");
+  });
+  t("吸収技は回復する", ()=>{
+    const r=W.simBattle({name:"p",hp:1000,atk:200,def:0,spd:10,
+      skills:[{name:"d",mult:200,proc:100,type:2}]}, {name:"e",hp:5000,atk:50,def:0,spd:1});
+    ok(r.log.some(e=>e.heal>0), "healログ");
+  });
+  t("敵の特性: toughは防御が上がりswiftは速くなる", ()=>{
+    const base=W.enemyFor(3,1,5,false,["a"],"b");
+    const tough=W.enemyFor(3,1,5,false,["a"],"b",{trait:"tough"});
+    const swift=W.enemyFor(3,1,5,false,["a"],"b",{trait:"swift"});
+    ok(tough.def>base.def*2, "tough def");
+    ok(swift.spd>base.spd, "swift spd");
+    eq(W.enemyFor(3,1,5,false,["a"],"b",{elem:2}).elem, 2, "elem引き継ぎ");
+  });
+
   /* ---- 知識レベル ---- */
   t("知識レベルでステータスが伸びる", ()=>{
     const G=W.G;
@@ -222,6 +261,7 @@ function run(){
     for(let i=0;i<12;i++){
       const d=W.DUNGEONS[i];
       ok(d.eicons && d.eicons.length>=3 && d.bossIcon && d.boss, d.id+" defs");
+      ok(d.elem>=0 && d.elem<5, d.id+" elem");
       if(i>0) ok(d.tier>W.DUNGEONS[i-1].tier, d.id+" tier order");
     }
   });
