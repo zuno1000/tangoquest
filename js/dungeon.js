@@ -403,7 +403,8 @@ $("infPill").onclick=()=>switchTab("adv");
 
 /* ================= 編成(呪文文) =================
    文のスロットUI・ライブ数式プレビュー・おまかせ編成(山登り法)。
-   おまかせは戦闘力しか見ない(属性対策・累乗の並び最適化は手動が勝つ=考える余地) */
+   v3.5.0: おまかせを強化 ─ 置換に加えて「並べ替え(swap)」「外す」も探索し、
+   共鳴相手のカードは低スコアでも候補に含める(属性対策だけは手動の領分のまま) */
 
 function cardScore(c){
   if(c.pos==="n") return c.val;
@@ -417,23 +418,48 @@ function autoEquip(){
   const cands=[];
   for(const k in G.inv){ const c=cardOf(k); if(c) cands.push(c); }
   cands.sort((a,b)=>cardScore(b)-cardScore(a));
-  const top=cands.slice(0,40);
-  let best=new Array(max).fill(null);
-  let bestP=playerStats(best).power;
-  let improved=true, iter=0;
-  while(improved && iter++<30){
-    improved=false;
-    for(const c of top){
-      for(let i=0;i<max;i++){
-        if(best[i]===c.key) continue;
-        const trial=best.slice(); trial[i]=c.key;
-        if(trial.filter(k=>k===c.key).length > (G.inv[c.key]||0)) continue; // 在庫超過
+  let top=cands.slice(0,50);
+  // 共鳴候補: 上位カードと語根を共有するカードは単体スコアが低くても候補に足す(同節で化ける)
+  const roots=new Set();
+  top.forEach(c=>rootIdsOf(c.en).forEach(r=>roots.add(r)));
+  cands.slice(50).forEach(c=>{ if(rootIdsOf(c.en).some(r=>roots.has(r))) top.push(c); });
+  top=top.slice(0,60);
+
+  const climb=start=>{
+    let best=start.slice(), bestP=playerStats(best).power;
+    let improved=true, iter=0;
+    while(improved && iter++<40){
+      improved=false;
+      // 置換・外す(null)
+      for(const c of [...top, null]){
+        const key=c? c.key : null;
+        for(let i=0;i<max;i++){
+          if(best[i]===key) continue;
+          const trial=best.slice(); trial[i]=key;
+          if(key && trial.filter(k=>k===key).length > (G.inv[key]||0)) continue; // 在庫超過
+          const p=playerStats(trial).power;
+          if(p>bestP){ best=trial; bestP=p; improved=true; }
+        }
+      }
+      // 並べ替え(swap): 形容詞の係り先・×と^の適用順・共鳴の節割りが変わる
+      for(let i=0;i<max;i++) for(let j=i+1;j<max;j++){
+        if(best[i]===best[j]) continue;
+        const trial=best.slice(); [trial[i],trial[j]]=[trial[j],trial[i]];
         const p=playerStats(trial).power;
         if(p>bestP){ best=trial; bestP=p; improved=true; }
       }
     }
+    return {best, bestP};
+  };
+  // 多スタート: 「空」と「現在の編成」から登り、良い方を採る(局所解対策)
+  const cur=G.party.sentence.slice(0,max);
+  while(cur.length<max) cur.push(null);
+  let r=null;
+  for(const s of [new Array(max).fill(null), cur]){
+    const x=climb(s);
+    if(!r || x.bestP>r.bestP) r=x;
   }
-  G.party.sentence=best;
+  G.party.sentence=r.best;
   saveG();
   return {before, after:playerStats().power};
 }
@@ -447,7 +473,7 @@ $("autoEqBtn").onclick=()=>{
   const r=autoEquip();
   renderEqSlots();
   toast(r.after>r.before? "おまかせ編成! 戦闘力 "+fmt(r.before)+" → "+fmt(r.after)
-      : "戦闘力は最大。並び替えや属性対策は手動で勝てる");
+      : "これ以上は上がらなかった。属性対策は手動の出番");
 };
 $("unEqBtn").onclick=()=>{ unequipAll(); renderEqSlots(); toast("文をすべて空にした"); };
 
@@ -490,13 +516,13 @@ function renderEqSlots(){
     d.onclick=()=>openSlotModal(i);
     row.appendChild(d);
   }
-  $("slotInfo").textContent="いま"+max+"語まで(知識Lvで最大8語)";
+  $("slotInfo").textContent="現在"+max+"語まで(知識Lvで最大8語)";
   renderFormula(P);
   const pw=$("eqPower"); if(pw) pw.textContent=fmt(P.power);
   const es=$("eqSets");
   if(es) es.innerHTML = P.sets && P.sets.length
     ? "セット効果: "+P.sets.map(x=>ELEM_ICON[x.elem]+"×"+x.n+" <b style='color:var(--ok)'>+"+Math.round(x.b*100)+"%</b>").join(" ・ ")
-    : "同じ属性を2枚そろえるとセット効果。冒険先の弱点属性で固めるのも有効";
+    : "同じ属性を2枚そろえるとセット効果。<br>冒険先の弱点属性で固めるのも有効";
 }
 
 /* ---- ライブ数式プレビュー: 文がそのままダメージ式になる ---- */
@@ -504,8 +530,10 @@ function renderFormula(P){
   const box=$("formulaBox"); if(!box) return;
   if(!P.clauses.length){
     box.innerHTML='<div class="empty">カードを置くと、ここにダメージの式が出る<br>'+
-      '<span class="small">基本形: ✨形容詞 → 💎名詞 → ⚔️動詞。並び順で結果が変わる<br>'+
-      '同じ語根(🧬)を並べると「共鳴」。語根のない野生語(🐺)は覚えているほど強い</span></div>';
+      '<span class="small">基本形: ✨形容詞 → 💎名詞 → ⚔️動詞。<br>'+
+      '並び順で結果が変わる<br>'+
+      '同じ語根(🧬)を並べると「共鳴」。<br>'+
+      '語根のない野生語(🐺)は覚えているほど強い</span></div>';
     return;
   }
   let h="";

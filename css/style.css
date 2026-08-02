@@ -53,9 +53,11 @@ header .title{font-weight:900; font-size:15px; color:var(--accent2); margin-righ
   border-radius:999px; padding:6px 10px; font-size:12px; font-weight:700; white-space:nowrap;
   box-shadow:-3px -3px 6px var(--shl), 3px 3px 6px var(--shd)}
 .res .ic{font-size:12px}
-#gearBtn{border:none; background:var(--bg); color:var(--sub); border-radius:999px;
-  width:38px; height:38px; font-size:17px; cursor:pointer;
+#gearBtn,#bellBtn{border:none; background:var(--bg); color:var(--sub); border-radius:999px;
+  width:38px; height:38px; font-size:17px; cursor:pointer; flex:0 0 auto;
   box-shadow:-3px -3px 6px var(--shl), 3px 3px 6px var(--shd)}
+#bellBtn{position:relative; font-size:15px}
+#bellBtn .dot{position:absolute; top:1px; right:1px; width:9px; height:9px; border-radius:50%; background:var(--ng)}
 
 /* ---- main views ---- */
 main{flex:1; min-height:0; overflow-y:auto; padding:8px 16px calc(12px + env(safe-area-inset-bottom))}
@@ -414,11 +416,14 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
   box-shadow:-3px -3px 6px var(--shl), 3px 3px 6px var(--shd)}
 
 /* ---- toast ---- */
-#toast{position:fixed; left:50%; bottom:92px; transform:translateX(-50%) translateY(10px);
+/* 中央寄せはleft/right+margin:autoで行う(transform中央寄せはタブ切替中に
+   transitionが中途半端に固まると横位置がずれるため、transformは縦方向のみ) */
+#toast{position:fixed; left:0; right:0; margin:0 auto; width:fit-content; bottom:92px;
+  transform:translateY(10px);
   background:rgba(61,74,99,.92); color:#fff; backdrop-filter:blur(6px); font-size:13px; font-weight:700;
   border-radius:999px; padding:11px 20px; opacity:0; pointer-events:none; transition:all .2s; z-index:99;
   white-space:nowrap; max-width:92vw; overflow:hidden; text-overflow:ellipsis}
-#toast.show{opacity:1; transform:translateX(-50%)}
+#toast.show{opacity:1; transform:none}
 
 /* stat table */
 .stt{width:100%; border-collapse:collapse; font-size:13px; margin-top:6px}

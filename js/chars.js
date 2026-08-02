@@ -25,9 +25,18 @@ const CHARS=[
   {id:"c13", face:"🌠", name:"星詠みの賢者 ソフィア", rar:4, hp:680, atk:98, def:44, spd:16},
   {id:"c14", face:"👑", name:"冥府の女王 ネレイア",  rar:4, hp:780, atk:88, def:54, spd:15},
   {id:"c21", face:"🌊", name:"大海の王 ネプト",     rar:4, hp:760, atk:90, def:52, spd:16},
+  // v3.5.0 追加(恒常)
+  {id:"c24", face:"🐚", name:"貝拾い シェリ",       rar:1, hp:330, atk:29, def:22, spd:10},
+  {id:"c25", face:"📚", name:"書記官 テオ",         rar:2, hp:410, atk:44, def:30, spd:11},
+  {id:"c26", face:"🐺", name:"狼使い ウルフィ",     rar:2, hp:420, atk:49, def:25, spd:14},
+  {id:"c27", face:"⚔️", name:"双剣士 レイヴ",       rar:3, hp:550, atk:72, def:33, spd:17},
+  {id:"c28", face:"🌙", name:"月詠の巫女 ツキミ",   rar:3, hp:600, atk:62, def:40, spd:13},
+  {id:"c29", face:"🦁", name:"獣王 レオニス",       rar:4, hp:760, atk:94, def:50, spd:14},
   // 期間限定(開催中のバナーからのみ排出)
   {id:"c22", face:"☄️", name:"彗星の魔女 ステラ",   rar:4, hp:700, atk:104, def:42, spd:19, limited:true},
   {id:"c23", face:"🌸", name:"桜花の剣姫 サクヤ",   rar:3, hp:560, atk:76, def:34, spd:19, limited:true},
+  {id:"c30", face:"🍁", name:"紅葉の狐仙 モミジ",   rar:4, hp:710, atk:102, def:44, spd:18, limited:true},
+  {id:"c31", face:"🌾", name:"収穫の精 ミノリ",     rar:3, hp:590, atk:70, def:38, spd:16, limited:true},
 ];
 const byChar={}; CHARS.forEach(c=>byChar[c.id]=c);
 
@@ -38,6 +47,9 @@ const BANNERS=[
   {id:"b2608", name:"☄️ 星降る夜の召喚", start:"2026-08-01", end:"2026-08-31",
    chars:["c22","c23"],
    desc:"限定「彗星の魔女 ステラ」(SSR)・「桜花の剣姫 サクヤ」(SR)がピックアップ!"},
+  {id:"b2609", name:"🍁 秋宵の召喚", start:"2026-09-01", end:"2026-09-30",
+   chars:["c30","c31"],
+   desc:"限定「紅葉の狐仙 モミジ」(SSR)・「収穫の精 ミノリ」(SR)がピックアップ!"},
 ];
 function activeBanner(){
   const t=todayKey();

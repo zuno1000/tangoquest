@@ -482,6 +482,54 @@ function run(){
     eq(W.claimableCount(), 0, "受取後は0件");
   });
 
+  /* ---- v3.5.0: 連続ミスの連続強化・おまかせ強化・お知らせベル・9月バナー ---- */
+  t("連続ミスはミスごとに強くなる(節目の間も確率で+1)", ()=>{
+    const seen=new Set();
+    for(let i=0;i<80;i++){
+      const r=W.dropRarity([0,0,0,2,0,2,0]); // 連続ミス2回
+      ok(r>=2&&r<=4, "range r="+r);
+      seen.add(r);
+    }
+    ok(seen.has(2)&&seen.has(3), "★2と★3が混ざる(2.5の連続値)");
+  });
+  t("おまかせ編成は共鳴ペアを見つけて採用する", ()=>{
+    const G=W.G;
+    const oldInv=G.inv, oldSent=G.party.sentence;
+    const ns=W.WORDS.filter(x=>x.pos==="n");
+    let a=null, b=null;
+    outer:
+    for(const x of ns){
+      const rx=W.rootIdsOf(x.en); if(!rx.length) continue;
+      for(const y of ns){
+        if(y.en===x.en) continue;
+        if(W.rootIdsOf(y.en).some(r=>rx.includes(r))){ a=x; b=y; break outer; }
+      }
+    }
+    G.inv={}; W.addCard(a.en,1); W.addCard(b.en,1);
+    G.party.sentence=[];
+    W.autoEquip();
+    eq(G.party.sentence.filter(Boolean).length, 2, "2枚とも採用");
+    const P=W.playerStats();
+    ok(P.clauses[0] && P.clauses[0].res>1, "共鳴が発動する並び");
+    G.inv=oldInv; G.party.sentence=oldSent;
+  });
+  t("お知らせベル: 開くと未読ドットが消える", ()=>{
+    W.localStorage.removeItem("tq_newsSeen");
+    W.refreshBellDot();
+    ok(!W.document.getElementById("bellDot").classList.contains("hidden"), "未読あり=ドット表示");
+    W.openNews();
+    ok(W.document.getElementById("bellDot").classList.contains("hidden"), "開いたら消える");
+    W.closeModal();
+    W.localStorage.removeItem("tq_newsSeen");
+  });
+  t("9月バナーと限定キャラが定義されている", ()=>{
+    ok(W.BANNERS.some(x=>x.id==="b2609"), "b2609");
+    const c30=W.CHARS.find(c=>c.id==="c30"), c31=W.CHARS.find(c=>c.id==="c31");
+    ok(c30 && c30.limited && c31 && c31.limited, "limitedフラグ");
+    const p=W.gachaPool(4, {chars:["c30"]});
+    eq(p.feat[0].id, "c30", "SSRピックアップ対象");
+  });
+
   /* ---- 限定ガチャ・ダンジョン ---- */
   t("限定キャラは恒常プールに出ない", ()=>{
     for(let r=1;r<=4;r++){

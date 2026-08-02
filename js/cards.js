@@ -170,7 +170,14 @@ function bulkDisassemble(maxRar, dry){
    間違え続けた単語ほど強いカードに。久しぶり(30日以上ぶり)の正解にもボーナス */
 function dropRarity(st){
   const ws=(st&&st[5])||0;
-  let r=1+(ws>=1?1:0)+(ws>=3?1:0)+(ws>=6?1:0)+(ws>=10?1:0);
+  // 連続ミスは1回ごとに効く: 節目(1/3/6/10回)で★2/3/4/5が確定、
+  // その間は端数分の確率で+1(例: ミス2回=★2、50%で★3)
+  const f= ws>=10? 5
+    : ws>=6? 4+(ws-6)/4
+    : ws>=3? 3+(ws-3)/3
+    : ws>=1? 2+(ws-1)/2
+    : 1;
+  let r=Math.floor(f)+(Math.random()<f%1? 1:0);
   if(st && st[6] && Date.now()-st[6]>30*864e5 && ws>=1) r++;
   if(Math.random()<0.06) r++;
   return Math.min(5,r);

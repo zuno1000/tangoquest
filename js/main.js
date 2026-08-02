@@ -25,6 +25,8 @@ $("navGacha").onclick=()=>switchTab("gacha");
 
 /* ---- ホーム画面(各機能へのハブ) ---- */
 const NEWS=[
+  {d:"2026-08-03", t:"🔔 v3.5.0 お知らせをこのベルに移動! おまかせ編成を強化・連続ミス強化がミスごとに効くように・新しい仲間6人が恒常ガチャに登場"},
+  {d:"2026-08-03", t:"🍁 9/1から限定ガチャ第2弾「秋宵の召喚」開催! 限定「紅葉の狐仙 モミジ」(SSR)・「収穫の精 ミノリ」(SR)"},
   {d:"2026-08-02", t:"🔥 v3.4.0 連続学習ボーナス! 続けた日数だけ獲得XPアップ(最大×2)。任務報酬はホームから一括受取"},
   {d:"2026-08-02", t:"🐺 v3.3.0 野生語システム! 語根のない単語は「覚えているほど強くなる」。編成中の単語は優先出題"},
   {d:"2026-08-02", t:"🧬 v3.2.0 語源辞書を大幅拡充! 語根333種・全単語の52%に正確な語源タグ"},
@@ -75,15 +77,10 @@ function renderHome(){
       '<div class="tile'+(b?" ltd":"")+'" data-go="gacha"><div class="tic">🔮</div><div class="tname">ガチャ</div>'+
         '<div class="tsub">'+(b? "☄️ 限定開催中!" : "🎫"+fmt(G.tickets))+'</div></div>'+
       '<div class="tile" data-go="party"><div class="tic">📜</div><div class="tname">編成</div>'+
-        '<div class="tsub">呪文の文・カード</div></div>'+
+        '<div class="tsub">呪文・カード</div></div>'+
       '<div class="tile'+(mn?" claim":"")+'" data-go="mission"><div class="tic">📜'+(mn?'<span class="dot" style="position:static; display:inline-block; margin-left:4px"></span>':'')+'</div><div class="tname">任務</div>'+
         '<div class="tsub">'+(mn? '<b style="color:var(--accent)">達成'+mn+'件!</b>' : "デイリー・実績")+'</div></div>'+
-    '</div>'+
-    // お知らせ
-    '<h2>お知らせ</h2>'+
-    '<div class="panel">'+NEWS.map(n=>
-      '<div class="newsrow"><span class="small" style="flex:0 0 auto">'+n.d.slice(5)+'</span>'+
-      '<span style="font-size:13px">'+n.t+'</span></div>').join("")+'</div>';
+    '</div>';
   $("homeBox").querySelectorAll("[data-go]").forEach(el=>{
     el.onclick=()=>switchTab(el.dataset.go);
   });
@@ -118,6 +115,21 @@ function refreshHeader(){
   refreshMissionDot();
 }
 
+/* ---- お知らせ(ヘッダーの🔔にまとめる・未読は赤点) ---- */
+const NEWS_SEEN_KEY="tq_newsSeen";
+function refreshBellDot(){
+  $("bellDot").classList.toggle("hidden", (+localStorage.getItem(NEWS_SEEN_KEY)||0)>=NEWS.length);
+}
+function openNews(){
+  try{ localStorage.setItem(NEWS_SEEN_KEY, String(NEWS.length)); }catch(e){}
+  refreshBellDot();
+  openModal('<h3>🔔 お知らせ</h3>'+
+    '<div class="panel">'+NEWS.map(n=>
+      '<div class="newsrow"><span class="small" style="flex:0 0 auto">'+n.d.slice(5)+'</span>'+
+      '<span style="font-size:13px">'+n.t+'</span></div>').join("")+'</div>');
+}
+$("bellBtn").onclick=openNews;
+
 /* ---- 定期処理: 無限回廊の進行・ピル更新 ---- */
 setInterval(()=>{
   infTick();
@@ -127,6 +139,7 @@ setInterval(()=>{
 
 /* ---- 起動 ---- */
 refreshHeader();
+refreshBellDot();
 newQuestion();          // 学習タブを開いた瞬間に出題できるよう先に準備
 infTick();              // 放置分の探索を反映
 refreshInfPill();
