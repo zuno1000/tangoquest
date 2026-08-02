@@ -4,8 +4,8 @@
    ユーザー自身のGoogleドライブ appDataFolder に保存するためサーバー不要。
    クライアントIDは GCP で発行して下の定数に設定する(README参照)。 */
 
-const GOOGLE_CLIENT_ID_PROD="";   // 本番(例: https://tangoquest.pages.dev)
-const GOOGLE_CLIENT_ID_DEV="";    // 開発(http://localhost:8000)
+const GOOGLE_CLIENT_ID_PROD="122697629495-mf4tvi6cv31lr8mlie32622am6s8mf5a.apps.googleusercontent.com"; // 本番(https://zuno1000.github.io)
+const GOOGLE_CLIENT_ID_DEV="122697629495-1t9og1hjpf0h0e22ngetrhq7o7tth6mh.apps.googleusercontent.com";  // 開発(http://localhost:8000)
 const SYNC_FILENAME="tangoquest.json";
 
 function syncClientId(){
