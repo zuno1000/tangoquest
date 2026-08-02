@@ -333,15 +333,26 @@ function run(){
     const port=W.wordRoots("transport").find(t=>t.kind==="R");
     eq(W.ROOT_DEFS[port.i].t, "port", "transport→port");
   });
-  t("語根カバレッジ: 4割以上の単語に語源タグが付く", ()=>{
+  t("語根カバレッジ: 5割以上の単語に語源タグが付く", ()=>{
     let any=0, root=0;
     W.WORDS.forEach(w=>{
       const tags=W.wordRoots(w.en);
       if(tags.length) any++;
       if(tags.some(t=>t.kind==="R")) root++;
     });
-    ok(any/W.WORDS.length>=0.40, "any="+any);
-    ok(root/W.WORDS.length>=0.25, "root="+root);
+    ok(any/W.WORDS.length>=0.50, "any="+any);
+    ok(root/W.WORDS.length>=0.32, "root="+root);
+  });
+  t("語源の正しさ(レビュー済み代表例)", ()=>{
+    const rootsOf=en=>W.wordRoots(en).filter(t=>t.kind==="R").map(t=>W.ROOT_DEFS[t.i].t);
+    ok(rootsOf("vengeance").includes("vindic"), "vengeance→vindicare");
+    ok(rootsOf("laud").includes("laud"), "laud→laudare(褒める)");
+    ok(!rootsOf("terrify").includes("terr"), "terrify≠terra(土地)");
+    ok(rootsOf("terrify").includes("terrere"), "terrify→terrere(怖がらせる)");
+    ok(!rootsOf("mundane").includes("und"), "mundane≠unda(波)");
+    ok(!rootsOf("cavalier").includes("val"), "cavalier≠valere");
+    ok(rootsOf("acrimony").includes("acer"), "acrimony→acer(鋭い)");
+    ok(rootsOf("stupendous").includes("stup"), "stupendous→stupere");
   });
   t("共鳴: 同じ語根を同じ節に並べると節×1.35", ()=>{
     // 語根を共有する名詞ペアを探す

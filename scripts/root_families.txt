@@ -1,0 +1,333 @@
+spec(見る)[10]: auspicious, circumspect, conspicuous, despicable, prospective, specimen, specious, spectacle, specter, spectrum
+dict(言う)[7]: dictatorial, dictum, edict, indictment, jurisdiction, verdict, vindictive
+port(運ぶ)[4]: deportation, opportune, portentous, rapport
+duct(導く)[3]: deduce, misconduct, seduce
+ject(投げる)[6]: abject, conjecture, dejected, eject, interject, trajectory
+mit(送る)[7]: dismissive, emissary, emit, intermittently, remiss, remit, unremitting
+scrib(書く)[4]: circumscribe, conscription, nondescript, prescribe
+vert(回す・向ける)[14]: adversary, adverse, adversity, aversion, avert, covert, divert, inadvertently, invert, revert, subvert, traverse, versatile, vertigo
+cess(行く・譲る)[11]: accede, cede, concede, concession, incessant, intercede, precedent, predecessor, proceeds, recede, recession
+fer(運ぶ)[8]: confer, defer, deference, fertile, infer, proliferate, referendum, vociferous
+tract(引く)[4]: detract, intractable, protract, retract
+form(形)[1]: conform
+press(押す)[4]: expressly, oppress, repress, suppress
+pos(置く)[6]: depose, disposition, expound, imposition, juxtapose, repository
+tain(保つ)[7]: abstain, countenance, impertinent, pertinent, tenacity, tenant, tenet
+voc(呼ぶ・声)[6]: evoke, invoke, irrevocably, provocation, revoke, vocation
+gen(生む・種族)[9]: congenial, congenital, degenerate, disingenuous, engender, genial, indigenous, ingenuity, progeny
+mort(死)[4]: immortalize, mortality, mortgage, mortify
+viv(生きる)[5]: convivial, enviable, revitalize, viable, vivacious
+aud(聞く)[1]: audible
+vis(見る)[7]: devise, envisage, envision, improvise, invidious, provision, vista
+cred(信じる)[4]: credential, credulous, discredit, incredulous
+cur(走る)[6]: cursory, discourse, incursion, precursor, recourse, undercurrent
+cura(世話・注意)[1]: curator
+flect(曲げる)[1]: deflect
+grad(歩む・段階)[3]: digress, regress, transgress
+junct(結ぶ)[2]: injunction, juncture
+lect(選ぶ・読む・法)[8]: allegedly, delegation, eclectic, legacy, legislate, legislature, predilection, relegate
+loqu(話す)[2]: colloquial, eloquence
+magn(大きい)[4]: magnanimous, magnate, magnify, magnitude
+man(手)[1]: manifesto
+nov(新しい)[2]: novelty, renovate
+path(感情・苦しみ)[5]: antipathy, apathy, pathetic, pathogen, pathos
+phon(音)[1]: cacophony
+rupt(破る)[3]: abrupt, bankruptcy, rupture
+sci(知る)[2]: conscientious, prescient
+sect(切る)[1]: dissect
+sens(感じる)[4]: assent, dissent, resent, sentry
+sequ(続く)[5]: consequential, obsequious, persecution, prosecution, sequester
+solv(解く)[4]: absolve, dissolute, insolvent, resolute
+spir(息・魂)[1]: conspire
+stat(立つ)[11]: bystander, constituent, desist, destitute, overstate, reinstate, standoff, stately, statute, subsistence, withstand
+tact(触れる)[5]: intact, mitigate, tact, tangible, vestige
+terr(土地)[1]: terrestrial
+tort(ねじる)[5]: contort, distort, extortion, retort, tortuous
+vac(空の)[1]: evacuate
+ven(来る)[5]: circumvent, contravene, convene, covenant, inventory
+volv(回る)[1]: convoluted
+fac(作る・なす)[15]: artifice, benefactor, defect, defection, deficit, disaffected, edifice, faction, officiate, officious, pontificate, proficient, prolific, ramification, superficial
+cap(つかむ)[12]: captivate, captivity, emancipate, imperceptibly, inception, intercept, misconception, perceptive, precipice, receptive, recipient, susceptible
+clud(閉じる)[3]: preclude, recluse, seclusion
+puls(押す・打つ)[6]: compelling, compulsive, dispel, expel, propel, repel
+pend(掛ける・払う)[12]: dispensable, dispense, impending, indispensable, penchant, pending, pensive, ponder, ponderous, propensity, recompense, stipend
+plic(折る・重ねる)[9]: accomplice, complicity, duplicity, explicit, implicate, implicitly, inexplicably, ploy, replicate
+rect(まっすぐ)[6]: insurrection, rectify, rectitude, regime, regimen, resurrect
+tend(伸ばす)[4]: distend, ostensibly, ostentation, pretense
+grat(喜び・感謝)[2]: gratuitous, ingratiate
+corp(体)[1]: corpse
+anim(心・命)[4]: animosity, equanimity, magnanimous, unanimously
+aqua(水)[1]: aquatic
+astr(星)[1]: astronomical
+chron(時)[3]: anachronistic, chronic, chronicle
+dem(民衆)[1]: epidemic
+log(言葉・学問)[1]: ideologue
+metr(測る)[1]: commensurate
+nym(名前)[3]: ignominy, nominally, pseudonym
+ped(足)[6]: expedient, expedite, impede, impediment, pedantic, pedigree
+phil(愛する)[1]: philanthropy
+pot(力)[2]: omnipotent, potent
+prim(第一の)[1]: prim
+verb(言葉)[2]: verbatim, verbose
+fid(信頼)[5]: confidant, confide, diffident, fidelity, perfidy
+her(くっつく)[4]: adherent, coherent, cohesion, inherent
+lud(遊ぶ・欺く)[8]: allude, bludgeon, collude, delude, elude, elusive, interlude, ludicrous
+mand(命じる)[2]: commandeer, mandate
+fort(強い)[4]: forte, fortify, fortitude, fortress
+dur(続く・硬い)[2]: durable, duress
+nat(生まれる)[2]: nascent, naturalize
+mem(記憶)[2]: memento, memoir
+popul(人々)[1]: populace
+equ(等しい)[7]: equanimity, equate, equilibrium, equitable, equivocal, equivocate, unequivocally
+simil(似ている)[3]: assimilate, dissemble, semblance
+clam(叫ぶ)[4]: acclaim, clamor, proclamation, reclaim
+don(与える)[2]: anecdote, antidote
+mob(動く)[3]: commotion, demote, mobilize
+fin(終わり・限界)[4]: affinity, confinement, finesse, indefinitely
+flu(流れる)[4]: affluence, fluctuate, influx, superfluous
+fus(注ぐ・溶ける)[5]: defuse, diffuse, effusive, infuse, profuse
+lev(軽い・上げる)[4]: alleviate, leverage, levity, levy
+luc(光)[4]: elucidate, lucid, luminary, luminous
+medi(中間)[2]: mediate, mediocre
+noc(害する)[2]: innocuous, noxious
+ora(口・話す)[1]: orator
+pati(苦しむ・耐える)[2]: dispassionate, impassioned
+phan(現れる・見せる)[3]: epiphany, phantom, sycophant
+plen(満ちた)[4]: deplete, plethora, replenish, replete
+prehend(つかむ)[6]: apprehend, apprehension, apprehensive, enterprising, reprehensible, reprisal
+prob(試す・証明)[5]: disprove, opprobrium, probation, probity, reprove
+quir(求める・尋ねる)[4]: conquest, exquisite, prerequisite, requisition
+radi(光線・根)[2]: eradicate, radiate
+scend(登る)[4]: ascendancy, condescend, descendant, transcend
+trud(押し出す)[3]: abstruse, intrusion, obtrusive
+val(強い・価値)[3]: ambivalence, invalidate, valor
+vor(食べる)[3]: carnivorous, devour, voracious
+bell(戦い)[2]: bellicose, belligerent
+cid(切る・殺す)[6]: decidedly, excise, genocide, homicide, incisive, pesticide
+doc(教える)[3]: docile, doctrine, indoctrinate
+empt(取る・買う)[2]: contempt, exemption
+greg(群れ)[4]: congregate, egregious, gregarious, segregate
+hab(持つ・住む)[3]: habitat, inhibit, rehabilitate
+labor(働く)[2]: elaborate, laboriously
+later(側面)[2]: collateral, unilateral
+loc(場所)[1]: dislocate
+mut(変える)[5]: commute, immutable, mutate, mutilate, mutiny
+neg(否定する)[3]: negate, negligible, renege
+oner(重い(負担))[2]: onerous, onus
+orig(生じる)[1]: disorient
+pen(罰・償い)[2]: impunity, punitive
+petit(求める)[4]: impetuous, impetus, petition, petulant
+plac(なだめる)[4]: complacent, implacable, placate, placid
+sacr(神聖な)[8]: consecrate, desecrate, sacred, sacrilege, sanctimonious, sanction, sanctity, sanctuary
+sal(跳ぶ)[2]: desultory, salient
+scrut(調べる)[2]: inscrutable, scrutinize
+sed(座る)[11]: assiduously, dissident, insidious, preside, residue, sedate, sedentary, sediment, subside, subsidize, supersede
+sert(結ぶ・差し込む)[1]: dissertation
+sign(印)[2]: consign, designate
+son(音)[1]: resonate
+spers(まく)[3]: disperse, intersperse, sparse
+string(縛る)[1]: stringent
+tenu(細い)[2]: attenuate, tenuous
+test(証言する)[4]: attest, detest, testament, testify
+tim(恐れる)[1]: intimidate
+trib(与える)[3]: retribution, tribunal, tribute
+turb(かき乱す)[3]: imperturbable, perturb, turbulent
+umbr(影)[2]: somber, umbrage
+und(波)[2]: inundate, redundant
+util(使う)[2]: usurp, utensil
+cord(心)[2]: cordial, discord
+ann(年)[1]: perennially
+cern(分ける)[4]: discern, discretion, indiscretion, secrete
+norm(規範)[1]: enormity
+term(境界)[1]: interminable
+part(部分)[3]: counterpart, impart, partisan
+ward(〜の方へ)[5]: outwardly, untoward, ward, warden, wayward
+cogn(知る)[3]: diagnosis, incognito, prognosis
+err(さまよう・誤る)[4]: aberration, errant, erratic, erroneously
+arch(支配・最初)[6]: anarchy, archaic, archipelago, monarch, oligarchy, patriarch
+phob(恐れ)[1]: phobia
+morph(形)[2]: amorphous, metamorphosis
+nomy(法・分配(ギリシャ))[2]: astronomical, autonomy
+phys(自然)[1]: physique
+dox(意見)[2]: orthodox, paradox
+tom(切る(ギリシャ))[2]: dichotomy, epitome
+vinc(勝つ)[3]: conviction, evict, vanquish
+vad(行く)[3]: evade, evasive, pervade
+vag(さまよう)[2]: extravagant, vagrant
+vol(意志)[2]: benevolent, volition
+via(道)[4]: devious, impervious, obviate, trivial
+vulg(大衆)[2]: divulge, vulgar
+rog(尋ねる・要求)[4]: abrogate, derogatory, interrogate, prerogative
+put(考える・刈る)[2]: disreputable, impute
+prec(祈る・価値)[1]: deprecate
+pung(刺す)[5]: compunction, expunge, poignant, punctual, pungent
+pug(戦う)[2]: pugnacious, repugnant
+priv(切り離す)[1]: privation
+rid(笑う)[1]: deride
+sen(老い)[1]: senile
+asper(粗い)[1]: exasperate
+spond(誓う・応える)[1]: despondent
+tail(切る)[2]: curtail, entail
+text(織る)[1]: pretext
+tut(守る・教える)[2]: intuition, tutelage
+jur(法・誓う)[5]: adjudicate, conjure, judiciary, judicious, perjury
+lat(運ぶ(latum))[2]: belated, elation
+limin(敷居)[1]: subliminal
+liter(文字)[1]: obliterate
+pater(父)[5]: expatriate, patriarch, patronage, patronize, repatriate
+merg(沈む)[2]: immerse, submerge
+min(突き出る)[4]: eminent, imminent, menace, prominent
+minu(小さい)[2]: diminutive, minutiae
+mir(驚く)[1]: marvel
+mod(尺度)[2]: commodity, modicum
+mon(警告・示す)[2]: admonish, premonition
+mun(義務・贈与)[2]: immunity, munificent
+nect(結ぶ)[1]: annex
+not(印・知る)[3]: annotate, denote, notoriety
+numer(数)[1]: enumerate
+nutr(養う)[1]: malnutrition
+ord(順序)[2]: ordinance, subordinate
+pac(平和)[2]: appease, pacify
+par(見える)[1]: apparition
+pari(等しい)[4]: disparage, disparate, disparity, parity
+plor(叫ぶ・泣く)[2]: deplore, implore
+pred(獲物)[1]: predatory
+dom(家・支配)[4]: domineering, dominion, indomitable, predominant
+dorm(眠る)[1]: dormant
+dol(悲しみ)[3]: condolence, doleful, indolent
+dub(疑う)[1]: dubious
+dyn(力)[1]: dynasty
+fug(逃げる)[3]: fugitive, refuge, subterfuge
+fund(底・注ぐ)[3]: confound, dumbfounded, profound
+fract(壊す)[4]: fractious, infraction, infringe, suffrage
+flict(打つ)[2]: affliction, inflict
+grav(重い)[5]: aggravate, grave, gravitate, grievance, grieve
+hum(土・低い)[1]: humility
+insul(島)[2]: insular, insulate
+iter(行く(ire))[2]: itinerant, itinerary
+langu(弱る)[1]: languish
+maj(より大きい)[1]: maxim
+omni(すべて)[1]: omnipotent
+pand(広げる)[1]: expanse
+plaud(拍手)[2]: plaudit, plausible
+propri(自分の)[3]: appropriate, expropriate, propriety
+pud(恥)[2]: impudent, repudiate
+rig(硬い)[2]: rigid, rigor
+rob(力強い)[2]: corroborate, robust
+rud(粗い)[2]: erudite, rudimentary
+sap(味わう・知る)[2]: insipid, savor
+semin(種)[1]: disseminate
+serv(仕える・保つ)[3]: servile, servitude, subservient
+sol(ひとり)[3]: desolate, solitude, sullen
+somn(眠り)[1]: insomnia
+stig(印・刺す)[2]: instigate, stigma
+suad(勧める)[1]: dissuade
+sum(取る)[3]: presume, presumptuous, sumptuous
+surg(立ち上がる)[5]: insurgency, insurrection, resurgence, resurrect, surge
+tac(黙る)[3]: reticent, tacit, taciturn
+temper(調節する)[2]: temper, temperate
+temn(軽蔑する)[1]: contempt
+torp(鈍い)[1]: torpedo
+trem(震える)[2]: tremor, tremulous
+trep(おののく)[2]: intrepid, trepidation
+trit(すり減る)[3]: attrition, contrition, trite
+ultim(最後)[1]: ultimatum
+veh(運ぶ)[1]: vehement
+vel(覆う)[1]: unveil
+verg(傾く)[1]: converge
+vest(衣・投資)[2]: divest, travesty
+vig(活気)[5]: invigorate, surveillance, vigilance, vigilante, vigor
+ferv(沸き立つ)[4]: effervescent, ferment, fervent, fervor
+fraud(欺く)[2]: defraud, fraudulent
+laud(褒める)[2]: laud, laudable
+audac(大胆(audere))[2]: audacious, audacity
+hered(相続)[3]: disinherit, hereditary, heritage
+dign(値する・威厳)[2]: indignation, indignity
+crim(罪)[1]: incriminate
+juven(若い)[1]: rejuvenate
+melior(より良い)[1]: ameliorate
+splend(輝く)[2]: resplendent, splendor
+linqu(残す・離れる)[2]: delinquent, relinquish
+flagr(燃える)[2]: conflagration, flagrant
+capit(頭)[3]: capitulate, precipitate, precipitous
+cresc(育つ・増える)[2]: accrue, incrementally
+alter(他の(alter))[2]: altercation, altruistic
+am(愛する(amare))[4]: amiable, amicable, enamored, enmity
+acer(鋭い(acer))[4]: acerbic, acrid, acrimony, exacerbate
+apt(適した(aptus))[3]: adept, aptitude, inept
+agon(闘い(ギリシャ))[2]: antagonize, protagonist
+alt(高い(altus))[2]: exalt, haughty
+alesc(育つ(alere))[2]: coalesce, convalesce
+ard(燃える(ardere))[3]: ardent, ardor, arduous
+auster(厳しい(ギリシャ))[1]: austere
+aug(増やす(augere))[1]: augment
+brev(短い(brevis))[2]: abridge, brevity
+cand(白く輝く(candere))[2]: candid, candor
+capr(山羊(caper))[2]: caprice, capricious
+caust(焼く(ギリシャ))[1]: caustic
+cinct(締める(cingere))[1]: succinct
+clem(温和(clemens))[2]: clemency, inclement
+clim(気候・傾き(ギリシャ))[1]: acclimate
+coerc(閉じ込める(arcere))[2]: coerce, coercion
+cup(欲する(cupere))[1]: covet
+culp(罪(culpa))[2]: culpable, culprit
+crypt(隠す(ギリシャ))[1]: cryptic
+deb(負う(debere))[1]: duly
+dogm(考え(ギリシャ))[2]: dogma, dogmatic
+ev(時代(aevum))[1]: longevity
+fab(話す(fari))[3]: affable, fable, ineffable
+fabr(職人(faber))[1]: fabricate
+fall(欺く(fallere))[4]: fallacy, fallible, falsify, infallible
+febr(熱(febris))[1]: feverishly
+flam(炎(flamma))[2]: flamboyant, inflame
+grand(大きい(grandis))[3]: aggrandize, grandeur, grandiose
+hemer(日(ギリシャ))[1]: ephemeral
+hom(人(homo))[2]: homage, homicide
+imper(命令・支配(imperare))[2]: imperative, imperious
+ira(怒り(ira))[2]: irascible, irate
+jubil(歓呼(jubilare))[1]: jubilation
+lament(嘆く(lamentari))[1]: lament
+latu(広い(latus))[2]: dilate, latitude
+leth(忘却(ギリシャ))[2]: lethargic, lethargy
+litig(訴訟(lis))[1]: litigation
+macul(染み(macula))[1]: immaculate
+mal(悪(malus))[3]: malice, malign, malignant
+mont(山・登る(mons))[3]: paramount, surmount, tantamount
+mor(習慣(mos))[2]: morale, morose
+nebul(霧(nebula))[1]: nebulous
+nihil(無(nihil/nullus))[2]: annihilate, nullify
+omin(前兆(omen))[1]: ominous
+op(富・力(ops))[2]: copious, opulence
+ops(目(ギリシャ))[1]: myopic
+palp(触れる(palpare))[1]: palpable
+pauc(少ない(paucus))[1]: paucity
+pecc(罪を犯す(peccare))[2]: impeccable, peccadillo
+peril(危険(periculum))[2]: imperil, perilous
+phren(心(ギリシャ))[1]: frenzy
+plant(植える(planta))[2]: supplant, transplant
+pragma(行う(ギリシャ))[1]: pragmatic
+prompt(取り出す(promere))[1]: impromptu
+prud(先見(providere))[1]: prudence
+queri(嘆く(queri))[1]: querulous
+quies(静けさ(quies))[2]: acquiesce, tranquility
+ranc(腐る(rancere))[2]: rancid, rancor
+rap(奪う(rapere))[2]: ravage, surreptitious
+sag(鋭い・賢い(sagire))[1]: sagacity
+scrup(良心の呵責(scrupulus))[2]: scruple, scrupulous
+seren(晴れた(serenus))[2]: serene, serenity
+solac(慰める(solari))[2]: disconsolate, solace
+solid(固い(solidus))[1]: consolidate
+stup(呆然(stupere))[2]: stupendous, stupor
+suprem(最上(supremus))[1]: supremacy
+ted(飽きる(taedium))[1]: tedium
+temer(無謀(temere))[1]: temerity
+trunc(幹・切る(truncus))[1]: truncate
+tyran(専制(ギリシャ))[1]: tyranny
+ubiqu(どこにでも(ubique))[1]: ubiquitous
+vic(交代・代理(vicis))[2]: vicarious, vicissitude
+vil(卑しい(vilis))[2]: revile, vilify
+vindic(守る・報復(vindicare))[4]: vendetta, vengeance, vindicate, vindictive
+vir(男・力(vir))[1]: virtuoso
+virul(毒(virus))[1]: virulent
+vola(飛ぶ(volare))[1]: volatile
+zeal(熱意(ギリシャzelos))[2]: zeal, zealot
