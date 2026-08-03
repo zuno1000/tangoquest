@@ -355,6 +355,8 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
   background:var(--accent); color:#fff; border-radius:6px; padding:1px 5px}
 .charcard{background:var(--bg); border:1.5px solid transparent; border-radius:16px; padding:12px 6px;
   text-align:center; cursor:pointer; position:relative}
+.cskill{font-size:10px; font-weight:800; color:var(--accent2); margin-top:3px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 #charGrid{display:grid; grid-template-columns:repeat(3,1fr); gap:11px; padding:2px}
 /* 10連でもOKボタンまでスクロール不要な高さに収めるコンパクトグリッド */
 .gresult{display:grid; grid-template-columns:repeat(auto-fill, minmax(72px,1fr));
@@ -462,21 +464,22 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
 .bd5{box-shadow:-4px -4px 8px var(--shl), 4px 4px 10px var(--shd), 0 0 12px rgba(222,154,14,.45)}
 
 /* ---- 突破の装い(なかまカード・編成の出撃キャラ) ----
-   カード面をレアリティ色(--dupc: JSがN灰/R緑/SR青/SSR金のRGBを渡す)で段階的に彩る:
-   +3=淡彩グラデ+内枠 / +6=濃彩+光沢 / +10=フォイル(全面彩色+濃枠) */
-.charcard,.charopt{--dupc:222,154,14; overflow:hidden; position:relative} /* shine(ホロ光沢)用 */
+   カード面をレアリティ色(--dupc: JSがN白銀/R緑/SR青/SSR金のRGBを渡す)で段階的に彩る:
+   +3=淡彩グラデ+内枠 / +6=濃彩+光沢 / +10=フォイル(全面彩色+濃枠)。
+   v4.0.0: 「暗く見える」FBを受けて白を混ぜた明るいフォイルに刷新 */
+.charcard,.charopt{--dupc:244,176,26; overflow:hidden; position:relative} /* shine(ホロ光沢)用 */
 .dup3.charcard,.dup3.charopt{
-  background:linear-gradient(165deg, rgba(var(--dupc),.18) 0%, var(--bg) 72%);
+  background:linear-gradient(165deg, #FFFFFF 0%, rgba(var(--dupc),.26) 100%);
   box-shadow:-4px -4px 8px var(--shl), 4px 4px 10px var(--shd),
-    inset 0 0 0 1.5px rgba(var(--dupc),.45)}
+    inset 0 0 0 1.5px rgba(var(--dupc),.55), 0 0 8px rgba(var(--dupc),.22)}
 .dup6.charcard,.dup6.charopt{
-  background:linear-gradient(165deg, rgba(var(--dupc),.34) 0%, rgba(var(--dupc),.08) 88%);
+  background:linear-gradient(160deg, #FFFFFF 0%, rgba(var(--dupc),.22) 45%, rgba(var(--dupc),.48) 100%);
   box-shadow:-4px -4px 8px var(--shl), 4px 4px 10px var(--shd),
-    inset 0 0 0 2px rgba(var(--dupc),.55), 0 0 10px rgba(var(--dupc),.3)}
+    inset 0 0 0 2px rgba(var(--dupc),.75), 0 0 12px rgba(var(--dupc),.4)}
 .dup10.charcard,.dup10.charopt{
-  background:linear-gradient(160deg, rgba(var(--dupc),.24) 0%, rgba(var(--dupc),.4) 55%, rgba(var(--dupc),.56) 100%);
+  background:linear-gradient(135deg, rgba(var(--dupc),.5) 0%, #FFFFFF 30%, rgba(var(--dupc),.36) 55%, #FFFFFF 78%, rgba(var(--dupc),.6) 100%);
   box-shadow:-4px -4px 8px var(--shl), 4px 4px 10px var(--shd),
-    inset 0 0 0 2px rgb(var(--dupc)), 0 0 14px rgba(var(--dupc),.5)}
+    inset 0 0 0 2.5px rgb(var(--dupc)), 0 0 16px rgba(var(--dupc),.55)}
 
 /* ---- マイクロインタラクション ---- */
 .tile:active,.ccard:active,.dnode:active:not(.locked){filter:brightness(1.04)}

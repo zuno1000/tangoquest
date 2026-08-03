@@ -118,7 +118,7 @@ function startRun(d){
     if(!r.win){ floors.push(fl); break; }
     cleared=f;
     gold+=Math.round(8*d.tier*d.tier*(1+(P.goldBonus||0)/100)*gmul);
-    hp=Math.min(P.hp, Math.round(r.php + P.hp*0.25)); // 各階クリア後 25%回復
+    hp=Math.min(P.hp, Math.round(r.php + P.hp*(0.25+(P.abHeal||0)))); // 各階クリア後 25%回復(+回復スキル)
     fl.hpAfter=hp;
     floors.push(fl);
   }
@@ -444,13 +444,13 @@ function autoEquip(){
     let improved=true, iter=0;
     while(improved && iter++<40){
       improved=false;
-      // 置換・外す(null)
+      // 置換・外す(null)。v4: 同一カードは1枠まで(重ねはLvに宿る)
       for(const c of [...top, null]){
         const key=c? c.key : null;
         for(let i=0;i<max;i++){
           if(best[i]===key) continue;
           const trial=best.slice(); trial[i]=key;
-          if(key && trial.filter(k=>k===key).length > (G.inv[key]||0)) continue; // 在庫超過
+          if(key && trial.filter(k=>k===key).length>1) continue; // 重複配置は不可
           const e=evalT(trial);
           if(betterThan(e, bestE)){ best=trial; bestE=e; improved=true; }
         }
@@ -459,7 +459,7 @@ function autoEquip(){
       for(const c of top){
         for(let i=0;i<max;i++){
           const trial=best.slice(); trial.splice(i,0,c.key); trial.length=max;
-          if(trial.filter(k=>k===c.key).length > (G.inv[c.key]||0)) continue;
+          if(trial.filter(k=>k===c.key).length>1) continue;
           const e=evalT(trial);
           if(betterThan(e, bestE)){ best=trial; bestE=e; improved=true; }
         }
@@ -578,7 +578,8 @@ function renderFormula(P){
      '<div class="small" style="margin-top:3px">キャラ×'+P.charM.toFixed(2)+
      (P.setM>1? ' ・ セット×'+P.setM.toFixed(2):'')+
      (P.amp>1? ' ・ 増幅×'+P.amp.toFixed(2):'')+
-     (P.guard? ' ・ 守護 被ダメ-'+P.guard+'%':'')+'</div>';
+     (P.guard? ' ・ 守護 被ダメ-'+P.guard+'%':'')+
+     (P.skill? '<br>✦'+esc(P.skill.n)+': '+skillDesc(P.skill):'')+'</div>';
   box.innerHTML=h;
 }
 
@@ -629,9 +630,10 @@ function openWordPicker(i){
     }
     const cur=G.party.sentence[i];
     cands.forEach(c=>{
-      const free=(G.inv[c.key]||0) - equippedCountOf(c.key) + (cur===c.key?1:0);
+      // v4: 同一カードは文に1枠だけ(重ねた枚数はLvとして効いている)
+      const placed=equippedCountOf(c.key)>0 && cur!==c.key;
       const row=document.createElement("div");
-      row.className="prow"+(free<=0?" dim":"");
+      row.className="prow"+(placed?" dim":"");
       row.innerHTML='<div class="sic">'+c.icon+'</div>'+
         '<div class="grow"><div style="font-size:14px; font-weight:800">'+esc(c.en)+lvLabel(c)+
         ' <span class="rc'+c.rar+'" style="font-size:11px">'+c.elemIcon+' '+RAR_STARS[c.rar-1]+'</span>'+
@@ -642,7 +644,7 @@ function openWordPicker(i){
           (wildOverdue(c.en)? ' ⏳復習どき':'')+'</span>':'')+'</div></div>'+
         '<b style="color:var(--accent2); white-space:nowrap">'+shortEffect(c)+'</b>';
       row.onclick=()=>{
-        if(free<=0){ toast("在庫が足りない(他の語で使用中)"); return; }
+        if(placed){ toast("この単語はすでに文の中にある"); return; }
         G.party.sentence[i]=c.key; saveG();
         closeModal(); renderEqSlots();
       };

@@ -101,14 +101,23 @@ function playerStats(sentOpt){
   });
   const ev=evalSentence(sent);
   const charM=base.atk/40;
+  // 固有スキル(v4.0.0): 出撃キャラのパッシブが戦闘・報酬に効く
+  const sk=ch.sk||null;
+  const abDmg  = sk&&sk.t==="dmg"?   sk.v : 0;
+  const abBoss = sk&&sk.t==="boss"?  sk.v : 0;
+  const abTaken= sk&&sk.t==="guard"? sk.v : 0;
+  const abVamp = sk&&sk.t==="vamp"?  sk.v : 0;
+  const abHeal = sk&&sk.t==="heal"?  sk.v : 0;
+  const goldBonus = sk&&sk.t==="gold"? sk.v : 0;
   let dpt=0; ev.clauses.forEach(cl=>dpt+=clauseExp(cl));
-  dpt=Math.round(dpt*charM*setM*ev.amp);
-  const power=Math.round(base.hp/6 + dpt*4 + base.def*3*(1+ev.guard/100) + base.spd*5);
+  dpt=Math.round(dpt*charM*setM*ev.amp*(1+abDmg));
+  const power=Math.round(base.hp/6 + dpt*4 + base.def*3*(1+ev.guard/100)*(1+abTaken) + base.spd*5);
   return {name:ch.name.split(" ").pop(), face:ch.face,
           hp:base.hp, def:base.def, spd:base.spd, catk:base.atk,
           charM, setM, amp:ev.amp, guard:ev.guard,
           clauses:ev.clauses, dead:ev.dead, elems:ecnt, sets,
-          dpt, goldBonus:0, power};
+          skill:sk, abDmg, abBoss, abTaken, abVamp, abHeal,
+          dpt, goldBonus, power};
 }
 
 /* 敵の生成(ダンジョン定義 dungeon.js から参照)。
@@ -140,7 +149,8 @@ function simBattle(P, E){
   const charM=P.charM||1, setM=P.setM||1, amp=P.amp||1, guard=P.guard||0;
   const rnd=()=>0.9+Math.random()*0.2;
   const castOnce=(cl, powF)=>{
-    const baseV=cl.V*cl.w*charM*setM*amp*em.dealt*(powF||1);
+    const baseV=cl.V*cl.w*charM*setM*amp*em.dealt*(powF||1)
+      *(1+(P.abDmg||0))*(E.boss? 1+(P.abBoss||0) : 1); // 固有スキル: 与ダメ+/ボス特効
     let v;
     if(cl.vt===1)      v=Math.round(rnd()*Math.max(1, baseV*0.85 - E.def*0.1));   // 貫通
     else if(cl.vt===2) v=Math.round(rnd()*Math.max(1, baseV*0.8  - E.def*0.55));  // 吸収
@@ -148,7 +158,9 @@ function simBattle(P, E){
                         +Math.round(rnd()*Math.max(1, baseV*0.6 - E.def*0.55));   // 連撃
     else               v=Math.round(rnd()*Math.max(1, baseV - E.def*0.55));       // 強撃
     let heal=0;
-    if(cl.vt===2){ heal=Math.round(v*0.45); php=Math.min(P.hp, php+heal); }
+    if(cl.vt===2){ heal+=Math.round(v*0.45); }
+    if(P.abVamp) heal+=Math.round(v*P.abVamp); // 固有スキル: 与ダメ回復
+    if(heal){ php=Math.min(P.hp, php+heal); }
     return {v, heal};
   };
   const pushP=(cl,r,repTag)=>{
@@ -165,7 +177,7 @@ function simBattle(P, E){
     }
   };
   const eAtk=()=>{
-    const v=Math.round(rnd()*Math.max(1, E.atk - P.def*0.55)*em.taken*(1-guard/100));
+    const v=Math.round(rnd()*Math.max(1, E.atk - P.def*0.55)*em.taken*(1-guard/100)*(1-(P.abTaken||0)));
     php-=v;
     log.push({t:"en", side:"e", dmg:v, php:Math.max(0,php), ehp:Math.max(0,ehp),
               s:E.name+"の攻撃 "+fmt(v)+"ダメージ"});

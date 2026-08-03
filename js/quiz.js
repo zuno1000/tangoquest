@@ -111,11 +111,11 @@ function answer(chosen, btn){
     G.combo=0;
   }
 
-  // 知識XP: 正解が直接キャラの強さになる(連続学習日数+コンボでボーナス)
+  // 知識XP: 正解が直接キャラの強さになる(連続学習日数+コンボ+キャラスキルでボーナス)
   let xpGain=0, lvUp=0;
   if(ok){
     const l0=accountLevel();
-    xpGain=Math.round((10+(justMastered?40:0))*streakXpMult()*comboXpMult());
+    xpGain=Math.round((10+(justMastered?40:0))*streakXpMult()*comboXpMult()*abilityXpMult());
     G.xp+=xpGain;
     const l1=accountLevel();
     if(l1>l0){ lvUp=l1; }
@@ -128,15 +128,17 @@ function answer(chosen, btn){
   if(rt) rt.split("・").forEach((tag,i)=>meta.push('<span class="rmeta">'+(i? '':'🧬 ')+esc(tag)+'</span>'));
   if(isWild(w.en)) meta.push('<span class="rmeta wildm">🐺 野生語 Lv'+memBox(w.en)+'</span>');
   if(tkGain) meta.unshift('<span class="rmeta" style="color:var(--accent)">🎫+'+tkGain+'</span>');
-  rc.innerHTML='<span class="poschip pos'+w.pos+'">'+POS_LABEL[w.pos]+'</span>'+meta.join(' ');
   if(ok){
     let rar=dropRarity(preSt);
     if(Math.random()<comboDropBonus()) rar=Math.min(5, rar+1); // コンボ中は★+1のチャンス
-    addCard(w.en, rar);
+    const k=addCard(w.en, rar);
+    // 重ね(v4): 既に持っているカードならLvが上がる=解くほど強くなる実感
+    if(G.inv[k]>=2) meta.unshift('<span class="rmeta" style="color:var(--ok)">🆙 重ねLv+'+(G.inv[k]-1)+'</span>');
     if(lvUp){ toast("📖 レベルアップ! Lv"+lvUp+" ─ 全ステータス強化"); vibe(40); }
     else if(tkGain){ toast("正解10問ごとのごほうび 🎫+1"); vibe(25); }
     else if(rar>=3) vibe(30);
   }
+  rc.innerHTML='<span class="poschip pos'+w.pos+'">'+POS_LABEL[w.pos]+'</span>'+meta.join(' ');
   $("resultBar").classList.add("show");
   saveG();
   refreshHeader();

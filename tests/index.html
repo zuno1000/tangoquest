@@ -74,34 +74,49 @@ function run(){
     }
   });
 
-  /* ---- 在庫・合成 ---- */
-  t("入手→合成でLvが上がり在庫が減る", ()=>{
+  /* ---- 在庫・重ね(v4.0.0: 合成廃止・重ねるだけでLvが上がる) ---- */
+  t("同じカードを重ねるとLvが上がる(2枚=+1・上限なし)", ()=>{
     const G=W.G;
-    const en=W.WORDS[0].en;
-    W.addCard(en,1); W.addCard(en,1);
-    const k=en+"|1|0";
-    eq(G.inv[k],2,"before");
-    const nk=W.mergeOne(k);
-    eq(nk, en+"|1|1");
-    ok(!G.inv[k], "old key removed");
-    eq(G.inv[nk],1,"new key");
+    const en=W.WORDS[0].en, k=en+"|1|0";
+    delete G.inv[k];
+    W.addCard(en,1);
+    eq(W.cardOf(k).lv, 0, "1枚=Lv0");
+    W.addCard(en,1);
+    eq(W.cardOf(k).lv, 1, "2枚=+1");
+    for(let i=0;i<13;i++) W.addCard(en,1);
+    eq(W.cardOf(k).lv, 14, "15枚=+14(上限なし)");
+    delete G.inv[k];
   });
-  t("編成中カードの在庫が尽きたら合成後カードへ引き継ぐ", ()=>{
-    const G=W.G;
-    const w=W.WORDS.filter(x=>x.pos==="n")[1];
-    const k=w.en+"|1|0";
-    W.addCard(w.en,1); W.addCard(w.en,1);
-    G.party.sentence=[k];
-    const nk=W.mergeOne(k);
-    eq(G.party.sentence[0], nk);
+  t("重ねるほどカードは強くなる(+10以降も伸び続ける)", ()=>{
+    const w=W.WORDS.find(x=>x.pos==="n");
+    const v0=W.genCard(w,1,0).val, v10=W.genCard(w,1,10).val, v20=W.genCard(w,1,20).val;
+    ok(v10>v0, "+10で強化");
+    ok(v20>v10, "+10以降も伸びる");
+    ok(v20-v10 < v10-v0, "伸びは緩やかになる");
   });
-  t("一括合成: 4枚→+2が1枚", ()=>{
+  t("旧「+Lv」在庫は枚数(2^lv)に換算して移行される", ()=>{
+    const g={inv:{"foo|2|2":1, "foo|2|0":3, "bar|1|1":2},
+             party:{sentence:["foo|2|2", "bar|1|1", "foo|2|0", null]}};
+    W.migrateInvToStacks(g);
+    eq(g.inv["foo|2|0"], 7, "1×4+3=7枚");
+    eq(g.inv["bar|1|0"], 4, "2×2=4枚");
+    ok(!g.inv["foo|2|2"] && !g.inv["bar|1|1"], "旧キーは消える");
+    eq(g.party.sentence[0], "foo|2|0", "文のキーも基本形へ");
+    eq(g.party.sentence[1], "bar|1|0");
+    eq(g.party.sentence[2], null, "同一カードの重複配置は解消");
+    W.migrateInvToStacks(g);
+    eq(g.inv["foo|2|0"], 7, "再実行しても変わらない(冪等)");
+  });
+  t("2枚目からは「重ね」として任務に計上される", ()=>{
     const G=W.G;
-    const w=W.WORDS[10];
-    for(let i=0;i<4;i++) W.addCard(w.en,2);
-    W.autoMergeAll();
-    eq(G.inv[w.en+"|2|2"],1,"lv2");
-    ok(!G.inv[w.en+"|2|0"] && !G.inv[w.en+"|2|1"], "consumed");
+    const en=W.WORDS[10].en, k=en+"|2|0";
+    delete G.inv[k];
+    const m0=G.counters.merges;
+    W.addCard(en,2);
+    eq(G.counters.merges, m0, "1枚目は重ねではない");
+    W.addCard(en,2);
+    eq(G.counters.merges, m0+1, "2枚目=重ね1回");
+    delete G.inv[k];
   });
 
   /* ---- 戦闘 ---- */
@@ -156,25 +171,46 @@ function run(){
     eq(G.shards, s0+8, "shards added");
     ok(!G.inv[en+"|3|0"], "consumed");
   });
-  t("かけら強化でLvが上がりかけらが減る", ()=>{
+  t("かけらで「重ねる」: 同キーの枚数が増えかけらが減る", ()=>{
     const G=W.G;
-    const en=W.WORDS[21].en;
+    const en=W.WORDS[21].en, k=en+"|1|0";
+    delete G.inv[k];
     W.addCard(en,1);
     G.shards=100;
-    const nk=W.enhanceOne(en+"|1|0");
-    eq(nk, en+"|1|1", "new key");
-    eq(G.shards, 98, "cost=★1は2");
-    eq(G.inv[nk], 1, "inventory");
+    const nk=W.enhanceOne(k);
+    eq(nk, k, "キーは変わらない");
+    eq(G.inv[k], 2, "2枚=Lv+1");
+    eq(G.shards, 98, "cost=★1のLv0は2");
+    const c=W.cardOf(k);
+    eq(c.lv, 1, "Lv+1");
+    ok(W.enhCost(c)>2, "重ねるほど次の1枚が高くつく");
+    delete G.inv[k];
   });
-  t("一括分解は編成中カードを1枚残す", ()=>{
+  t("一括分解は編成中カードに一切触れない", ()=>{
     const G=W.G;
+    const oldInv=G.inv, oldSent=G.party.sentence;
     const w=W.WORDS.filter(x=>x.pos==="n")[3];
+    const w2=W.WORDS.filter(x=>x.pos==="n")[5];
     G.inv={};
     W.addCard(w.en,1); W.addCard(w.en,1);
+    W.addCard(w2.en,1);
     G.party.sentence=[w.en+"|1|0"];
     const r=W.bulkDisassemble(1,false);
-    eq(G.inv[w.en+"|1|0"], 1, "equipped keeps 1");
-    ok(r.cnt>=1, "some disassembled");
+    eq(G.inv[w.en+"|1|0"], 2, "装備中は枚数ごと残る(=Lv維持)");
+    ok(!G.inv[w2.en+"|1|0"], "非装備は分解される");
+    eq(r.cnt, 1, "分解は1枚だけ");
+    G.inv=oldInv; G.party.sentence=oldSent;
+  });
+  t("同じカードは文に1枠しか置けない", ()=>{
+    const G=W.G;
+    const oldInv=G.inv, oldSent=G.party.sentence;
+    const w=W.WORDS.filter(x=>x.pos==="n")[6];
+    G.inv={};
+    W.addCard(w.en,1); W.addCard(w.en,1); W.addCard(w.en,1);
+    G.party.sentence=[null,null,null,null];
+    eq(W.quickEquip(w.en+"|1|0"), 1, "1回目は置ける");
+    eq(W.quickEquip(w.en+"|1|0"), null, "2枠目は置けない");
+    G.inv=oldInv; G.party.sentence=oldSent;
   });
 
   /* ---- 属性・セット効果 ---- */
@@ -277,7 +313,11 @@ function run(){
     const n=W.WORDS.find(x=>x.pos==="n");
     const e1=W.evalSentence([n.en+"|1|0", amp.key]);
     ok(Math.abs(e1.amp-amp.m)<1e-9, "amp");
+    // v4: キーはlvを含まない。高Lvは「重ね枚数」(在庫10枚=+9)で表現する
+    const G=W.G, bak={};
+    gs.forEach(c=>{ bak[c.key]=G.inv[c.key]; G.inv[c.key]=10; });
     const e2=W.evalSentence(gs.map(c=>c.key));
+    gs.forEach(c=>{ if(bak[c.key]==null) delete G.inv[c.key]; else G.inv[c.key]=bak[c.key]; });
     eq(e2.guard, 60, "guard cap");
   });
   t("文評価: 反復は直前の発動をもう一度", ()=>{
@@ -666,6 +706,52 @@ function run(){
     W.openSettings();
     ok(W.document.getElementById("updateBtn"), "updateBtn");
     W.closeModal();
+  });
+
+  /* ---- v4.0.0: 突破上限撤廃・キャラ固有スキル ---- */
+  t("突破は10回まで+6%、以降は+2%で上限なし", ()=>{
+    ok(Math.abs(W.dupMult(0)-1)<1e-9, "0=×1");
+    ok(Math.abs(W.dupMult(10)-1.6)<1e-9, "+10=×1.6");
+    ok(Math.abs(W.dupMult(15)-1.7)<1e-9, "+15=×1.7");
+    ok(W.dupMult(50)>W.dupMult(20), "上限なしで伸び続ける");
+  });
+  t("全キャラ(32体)に固有スキルがあり説明が引ける", ()=>{
+    ok(W.CHARS.length>=32, "count="+W.CHARS.length);
+    W.CHARS.forEach(c=>ok(c.sk && c.sk.n && W.skillDesc(c.sk).length>0, c.id));
+  });
+  t("スキルがplayerStatsに反映される(guard/boss/gold)", ()=>{
+    const G=W.G; const old=G.party.char;
+    G.chars.c07=G.chars.c07||{dup:0};
+    G.party.char="c07"; // 聖盾: 被ダメ-8%
+    ok(Math.abs(W.playerStats().abTaken-0.08)<1e-9, "guard→abTaken");
+    G.chars.c05=G.chars.c05||{dup:0};
+    G.party.char="c05"; // 首狩りの太刀: ボス+15%
+    ok(Math.abs(W.playerStats().abBoss-0.15)<1e-9, "boss→abBoss");
+    G.chars.c18=G.chars.c18||{dup:0};
+    G.party.char="c18"; // 金変の術: ゴールド+20%
+    eq(W.playerStats().goldBonus, 20, "gold→goldBonus");
+    G.party.char=old;
+  });
+  t("スキルが戦闘に効く(被ダメ減・与ダメ回復)", ()=>{
+    const base={name:"p",hp:10000,def:0,spd:1,charM:1,setM:1,amp:1,guard:0,
+                clauses:[{V:1,vt:0,w:1,name:null,words:[]}]};
+    const E=()=>({name:"e",hp:999999,atk:100,def:0,spd:99});
+    const hit=P=>W.simBattle(P,E()).log.find(e=>e.side==="e").dmg;
+    const a=hit(Object.assign({},base));
+    const b=hit(Object.assign({},base,{abTaken:0.5}));
+    ok(b<a*0.7, "被ダメ-50%が効く a="+a+" b="+b);
+    const r=W.simBattle(Object.assign({},base,{hp:1000, abVamp:0.5,
+      clauses:[{V:500,vt:0,w:1,name:"x",words:[]}]}),
+      {name:"e",hp:999999,atk:50,def:0,spd:1});
+    ok(r.log.some(e=>e.side==="p" && e.heal>0), "与ダメ回復のログ");
+  });
+  t("クイズXPスキル: 該当キャラで倍率が掛かる", ()=>{
+    const G=W.G; const old=G.party.char;
+    G.chars.c25=G.chars.c25||{dup:0};
+    G.party.char="c25"; // 書き写しの知: XP+10%
+    ok(Math.abs(W.abilityXpMult()-1.10)<1e-9, "×1.1");
+    G.party.char=old;
+    ok(W.abilityXpMult()>=1, "既定は1以上");
   });
 
   /* ---- v3.7.0: 学習報酬経済 ---- */

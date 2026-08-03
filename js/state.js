@@ -1,7 +1,7 @@
 "use strict";
 /* ================= 状態管理 ================= */
 const KEY="tangoquest_v1";
-const APP_VERSION="3.7.0"; // リリースごとに更新(設定表示・更新確認のリモート版比較に使う)
+const APP_VERSION="4.0.0"; // リリースごとに更新(設定表示・更新確認のリモート版比較に使う)
 
 const RAR_MULT=[1, 1.6, 2.5, 3.8, 5.5];
 const RAR_STARS=["★","★★","★★★","★★★★","★★★★★"];
@@ -28,6 +28,34 @@ function migrateEquipToSentence(g){
 }
 migrateEquipToSentence(G);
 G.party.sentence=G.party.sentence||[];
+/* v4移行: カードは「重ねるだけ」でLvが上がる(Lv=枚数-1・上限なし)。
+   旧「+Lv」キーは注ぎ込んだ枚数(2^lv)に換算して基本キーへ合流する。
+   冪等: lv>0のキーが存在する限り何度でも安全に走る(同期で旧端末の在庫が
+   混ざって戻ってきた場合もここで吸収される) */
+function migrateInvToStacks(g){
+  let touched=false;
+  for(const k of Object.keys(g.inv||{})){
+    const p=k.split("|"), lv=+p[2]||0;
+    if(lv>0){
+      const nk=p[0]+"|"+p[1]+"|0";
+      g.inv[nk]=(g.inv[nk]||0)+(g.inv[k]||0)*Math.pow(2,lv);
+      delete g.inv[k];
+      touched=true;
+    }
+  }
+  if(g.party && Array.isArray(g.party.sentence)){
+    const seen=new Set();
+    g.party.sentence=g.party.sentence.map(k=>{
+      if(!k) return k;
+      const p=k.split("|"), nk=p[0]+"|"+p[1]+"|0";
+      if(seen.has(nk)) return null; // 同一カードは1枠だけ(重ねた分はLvに宿る)
+      seen.add(nk);
+      return nk;
+    });
+  }
+  return touched;
+}
+migrateInvToStacks(G);
 G.gold=G.gold||0;
 G.tickets=G.tickets||0;
 G.shards=G.shards||0;   // カードのかけら(分解で入手・強化に使う)

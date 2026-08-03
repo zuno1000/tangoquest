@@ -1,6 +1,8 @@
 "use strict";
 /* ================= 単語カード(呪文文法) =================
-   カードは (英単語, レア度, 強化Lv) で一意。性能は単語のハッシュから決定的に生成する。
+   カードは (英単語, レア度) で一意。性能は単語のハッシュから決定的に生成する。
+   v4: 育成は「重ねるだけ」─ 同じカードを入手するたびLv+1(Lv=枚数-1・上限なし)。
+   旧「2枚合成で+1」は廃止(2^n枚問題の解消)。かけら強化=1枚重ねる、と同義。
    v3: カードは「文」に左から並べる演算子。品詞が文法上の役割を決める(Noita/Balatro参考):
      名詞=基礎値(+n。綴りが長い単語ほど大きい) / 形容詞=直後の名詞を修飾(×m or ^p)
      動詞=発動(溜めた値で行動し節を区切る) / 副詞=文末効果(反復・増幅・守護) */
@@ -22,23 +24,25 @@ const ADV_KIND=["反復","増幅","守護"];
 
 function genCard(w, rar, lv){
   const h=hashStr(w.en);
-  const rm=RAR_MULT[rar-1], lm=1+0.3*lv;
-  const c={en:w.en, ja:w.ja, pos:w.pos, rar, lv, key:keyOf(w.en,rar,lv)};
+  // Lvは上限なし。+10まではフル(+30%/Lv相当)、以降は35%効率で伸び続ける
+  const el=lv<=10? lv : 10+(lv-10)*0.35;
+  const rm=RAR_MULT[rar-1], lm=1+0.3*el;
+  const c={en:w.en, ja:w.ja, pos:w.pos, rar, lv, key:keyOf(w.en,rar,0)};
   if(w.pos==="n"){
     // 基礎値: 長い(=難しい)単語ほど強い
     c.val=Math.round((8+Math.min(12,w.en.length)*2+h%9)*rm*lm);
   }else if(w.pos==="adj"){
     c.sub=Math.floor(h/13)%2; // 0=乗算 / 1=累乗
-    if(c.sub===0) c.m=+((1+(0.2+(h%6)*0.05)*(1+0.35*(rar-1))*(1+0.15*lv)).toFixed(2));
-    else          c.p=+((1+(0.04+(h%5)*0.01)*(1+0.3*(rar-1))*(1+0.12*lv)).toFixed(3));
+    if(c.sub===0) c.m=+((1+(0.2+(h%6)*0.05)*(1+0.35*(rar-1))*(1+0.15*el)).toFixed(2));
+    else          c.p=+((1+(0.04+(h%5)*0.01)*(1+0.3*(rar-1))*(1+0.12*el)).toFixed(3));
   }else if(w.pos==="v"){
     c.vt=Math.floor(h/31)%4;  // 発動タイプ
-    c.w=+(((100+10*(h%6)+20*(rar-1)+12*lv)/100).toFixed(2)); // 発動倍率
+    c.w=+(((100+10*(h%6)+20*(rar-1)+12*el)/100).toFixed(2)); // 発動倍率
   }else{ // adv
     c.sub=Math.floor(h/17)%3; // 0=反復 / 1=増幅 / 2=守護
-    if(c.sub===0)      c.r=+(Math.min(0.9, 0.35+(h%4)*0.05+0.06*(rar-1)+0.04*lv).toFixed(2));
-    else if(c.sub===1) c.m=+((1+(0.08+(h%5)*0.02)*(1+0.3*(rar-1))*(1+0.12*lv)).toFixed(2));
-    else               c.g=Math.min(30, (5+h%5)+3*(rar-1)+2*lv);
+    if(c.sub===0)      c.r=+(Math.min(0.9, 0.35+(h%4)*0.05+0.06*(rar-1)+0.04*el).toFixed(2));
+    else if(c.sub===1) c.m=+((1+(0.08+(h%5)*0.02)*(1+0.3*(rar-1))*(1+0.12*el)).toFixed(2));
+    else               c.g=Math.min(30, Math.round((5+h%5)+3*(rar-1)+2*el));
   }
   c.icon=POS_ICON[c.pos];
   c.typeName = c.pos==="n"? "基礎値"
@@ -56,9 +60,13 @@ function isWild(en){ return rootIdsOf(en).length===0; }
 function memBox(en){ const st=G.words[en]; return st? Math.min(7, st[0]||0) : 0; }
 function wildMult(en){ return +(1+0.08*memBox(en)).toFixed(2); }
 function wildOverdue(en){ const st=G.words[en]; return !!st && st[1]<=Date.now(); }
+/* 重ねLv: 所持枚数-1(1枚=Lv0)。上限なし */
+function stackLv(key){ return Math.max(0, (G.inv[key]||0)-1); }
 function cardOf(key){
   const p=parseKey(key), w=byEn[p.en];
-  return w? genCard(w,p.rar,p.lv) : null;
+  if(!w) return null;
+  // 所持カードは重ね枚数でLvが決まる。未所持(試算・テスト用キー)はキーのlvを使う
+  return genCard(w, p.rar, Math.max(p.lv, stackLv(keyOf(p.en,p.rar,0))));
 }
 function effectText(c){
   if(c.pos==="n") return "基礎値 +"+fmt(c.val);
@@ -78,11 +86,12 @@ function shortEffect(c){
 }
 function lvLabel(c){ return c.lv>0? " +"+c.lv : ""; }
 
-/* ---- 入手・合成 ---- */
+/* ---- 入手(=重ね) ---- */
 function addCard(en, rar){
   const k=keyOf(en,rar,0);
   G.inv[k]=(G.inv[k]||0)+1;
   track("card");
+  if(G.inv[k]>=2) track("merge"); // 2枚目からは「重ね」として計上(旧・合成の後継)
   return k;
 }
 /* 文の中のkey参照を書き換える(nk=nullなら外す) */
@@ -90,33 +99,11 @@ function replaceInSentence(key, nk){
   const s=G.party.sentence||[];
   for(let i=0;i<s.length;i++){ if(s[i]===key) s[i]=nk; }
 }
-/* 同キー2枚 → Lv+1 を1枚。編成中カードの在庫が尽きたら参照を合成後カードへ引き継ぐ */
-function mergeOne(key){
-  if((G.inv[key]||0)<2) return null;
-  const p=parseKey(key);
-  G.inv[key]-=2;
-  if(G.inv[key]<=0) delete G.inv[key];
-  const nk=keyOf(p.en,p.rar,p.lv+1);
-  G.inv[nk]=(G.inv[nk]||0)+1;
-  if(!G.inv[key]) replaceInSentence(key, nk);
-  track("merge");
-  return nk;
-}
-function autoMergeAll(){
-  let n=0, moved=true;
-  while(moved){
-    moved=false;
-    for(const k of Object.keys(G.inv)){
-      while((G.inv[k]||0)>=2){ mergeOne(k); n++; moved=true; }
-    }
-  }
-  return n;
-}
 
 /* ---- かけら経済: 不要カードを分解してかけらに、かけらで任意カードを強化 ---- */
-const SHARD_VAL=[1,3,8,20,50]; // レア度ごとの分解価値(Lvで倍率: ×(lv+1))
-function shardValue(c){ return SHARD_VAL[c.rar-1]*(c.lv+1); }
-function enhCost(c){ return SHARD_VAL[c.rar-1]*2*(c.lv+1); } // 同レア2枚分解相当で+1
+const SHARD_VAL=[1,3,8,20,50]; // レア度ごとの分解価値(1枚あたり・Lvに依らず一定)
+function shardValue(c){ return SHARD_VAL[c.rar-1]; }
+function enhCost(c){ return SHARD_VAL[c.rar-1]*2*(c.lv+1); } // 重ねるほど次の1枚が高くつく
 
 function disassemble(key, n){
   const c=cardOf(key); if(!c) return 0;
@@ -131,36 +118,27 @@ function disassemble(key, n){
   G.shards+=gain;
   return gain;
 }
-/* かけらでLv+1(合成と同じ効果・2枚目不要) */
+/* かけらで1枚「重ねる」(Lv+1と同義・実カード不要) */
 function enhanceOne(key){
   const c=cardOf(key); if(!c) return null;
   const cost=enhCost(c);
   if((G.inv[key]||0)<1 || G.shards<cost) return null;
   G.shards-=cost;
-  G.inv[key]--;
-  const nk=keyOf(c.en, c.rar, c.lv+1);
-  G.inv[nk]=(G.inv[nk]||0)+1;
-  if(G.inv[key]<=0){
-    delete G.inv[key];
-    replaceInSentence(key, nk);
-  }
+  G.inv[key]++;
   track("merge");
-  return nk;
+  return key;
 }
-/* 一括分解: 指定レア度以下をまとめて分解(装備中カードは各1枚残す) */
+/* 一括分解: 指定レア度以下をまとめて分解。
+   v4: 枚数=強さなので、編成中のカードには一切触れない */
 function bulkDisassemble(maxRar, dry){
   const eq=equippedKeys();
   let cnt=0, gain=0;
   for(const k of Object.keys(G.inv)){
-    const c=cardOf(k); if(!c || c.rar>maxRar) continue;
-    const keep=eq.has(k)? 1 : 0;
-    const n=(G.inv[k]||0)-keep;
+    const c=cardOf(k); if(!c || c.rar>maxRar || eq.has(k)) continue;
+    const n=G.inv[k]||0;
     if(n<=0) continue;
     cnt+=n; gain+=shardValue(c)*n;
-    if(!dry){
-      G.inv[k]-=n;
-      if(G.inv[k]<=0) delete G.inv[k];
-    }
+    if(!dry) delete G.inv[k];
   }
   if(!dry) G.shards+=gain;
   return {cnt, gain};
@@ -213,7 +191,6 @@ function renderCards(){
     d.className="ccard bd"+c.rar+" el"+c.elem+(c.rar>=4?" shine":"")+(eq.has(c.key)?" equipped":"");
     d.innerHTML=
       (c.lv>0? '<span class="clv">+'+c.lv+'</span>':"")+
-      '<span class="ccnt">×'+G.inv[c.key]+'</span>'+
       '<div class="cic">'+c.icon+'</div>'+
       '<div class="cen">'+esc(c.en)+'</div>'+
       '<div class="cja">'+esc(c.ja)+'</div>'+
@@ -241,7 +218,7 @@ function cardDetailHTML(c){
   '</div>';
 }
 
-/* 文の中で同じキーを何枚使っているか(在庫を超える重複配置はしない) */
+/* 文の中で同じキーを使っているか(v4: 同一カードは1枠だけ・重ねはLvに宿る) */
 function equippedCountOf(key, sentence){
   return (sentence||G.party.sentence||[]).filter(k=>k===key).length;
 }
@@ -250,7 +227,7 @@ function equippedCountOf(key, sentence){
 function quickEquip(key){
   const c=cardOf(key); if(!c) return null;
   const s=G.party.sentence;
-  if(equippedCountOf(key,s) >= (G.inv[key]||0)) return null;
+  if(!(G.inv[key]>0) || equippedCountOf(key,s)>=1) return null;
   const max=sentenceSlots();
   while(s.length<max) s.push(null);
   for(let i=0;i<max;i++){
@@ -265,30 +242,23 @@ function openCardModal(key){
   const cost=enhCost(c);
   openModal(
     '<h3>カード詳細</h3>'+cardDetailHTML(c)+
-    '<div class="small" style="text-align:center">所持 ×'+cnt+(eq?" ・ 装備中":"")+' ・ ✨'+fmt(G.shards)+'</div>'+
+    '<div class="small" style="text-align:center">重ね '+cnt+'枚 = Lv+'+c.lv+
+      '(もう1枚で+'+(c.lv+1)+')'+(eq?" ・ 装備中":"")+' ・ ✨'+fmt(G.shards)+'</div>'+
     '<div class="row" style="margin-top:12px; gap:8px">'+
-      '<button class="btn primary" style="flex:1" id="enhBtn" '+(cnt<1||G.shards<cost?"disabled":"")+'>✨'+fmt(cost)+' で強化</button>'+
-      '<button class="btn" style="flex:1" id="mergeBtn" '+(cnt<2?"disabled":"")+'>⚒ 合成(2枚)</button>'+
+      '<button class="btn primary" style="flex:1" id="enhBtn" '+(cnt<1||G.shards<cost?"disabled":"")+'>✨'+fmt(cost)+' で重ねる</button>'+
+      '<button class="btn" style="flex:1" id="quickEqBtn" '+(eq?"disabled":"")+'>'+(eq?"文に配置中":"📜 文に置く")+'</button>'+
     '</div>'+
     '<div class="row" style="margin-top:8px; gap:8px">'+
-      '<button class="btn" style="flex:1" id="quickEqBtn" '+(eq?"disabled":"")+'>'+(eq?"文に配置中":"📜 文に置く")+'</button>'+
-      '<button class="btn" style="flex:1" id="disBtn">分解 → ✨'+fmt(shardValue(c))+'</button>'+
+      '<button class="btn" style="flex:1" id="disBtn">1枚分解 → ✨'+fmt(shardValue(c))+(cnt>1?"(Lvが下がる)":"")+'</button>'+
     '</div>');
   $("enhBtn").onclick=()=>{
-    const nk=enhanceOne(key);
-    if(!nk) return;
-    saveG(); toast("強化成功! +"+(c.lv+1)+" になった"); vibe(30);
-    renderCards(); openCardModal(nk); refreshHeader();
-  };
-  $("mergeBtn").onclick=()=>{
-    const nk=mergeOne(key);
-    if(!nk) return;
-    saveG(); toast("合成成功! +"+(c.lv+1)+" になった");
-    renderCards(); openCardModal(nk); refreshHeader();
+    if(!enhanceOne(key)) return;
+    saveG(); toast("重ねた! Lv+"+cardOf(key).lv+" になった"); vibe(30);
+    renderCards(); openCardModal(key); refreshHeader();
   };
   $("quickEqBtn").onclick=()=>{
     const slot=quickEquip(key);
-    if(!slot){ toast("文が満杯か、在庫が足りない"); return; }
+    if(!slot){ toast("文が満杯か、すでに配置中"); return; }
     toast("文の"+slot+"語目に置いた");
     renderCards(); openCardModal(key);
   };
@@ -307,15 +277,10 @@ $("cardFilter").querySelectorAll("button").forEach(b=>{
     b.classList.add("active"); cardFilter=b.dataset.f; renderCards();
   };
 });
-$("autoMergeBtn").onclick=()=>{
-  const n=autoMergeAll();
-  if(n){ saveG(); toast(n+"回 合成した"); renderCards(); }
-  else toast("合成できるカードがない");
-};
 $("bulkDisBtn").onclick=()=>{
   const p1=bulkDisassemble(1,true), p2=bulkDisassemble(2,true);
   openModal('<h3>✨ 一括分解</h3>'+
-    '<div class="small" style="line-height:1.7">選んだレア度以下のカードをまとめて分解し、かけらにする。装備中のカードは1枚残る。<br>かけらはカードの強化に使える。</div>'+
+    '<div class="small" style="line-height:1.7">選んだレア度以下のカードをまとめて分解し、かけらにする。装備中のカードには触れない。<br>かけらは「重ねる」に使える。</div>'+
     '<div class="row" style="margin-top:14px; gap:8px; flex-direction:column; align-items:stretch">'+
     '<button class="btn" id="bd1" '+(p1.cnt?"":"disabled")+'>★1以下を分解 ('+p1.cnt+'枚 → ✨'+fmt(p1.gain)+')</button>'+
     '<button class="btn" id="bd2" '+(p2.cnt?"":"disabled")+'>★2以下を分解 ('+p2.cnt+'枚 → ✨'+fmt(p2.gain)+')</button>'+
