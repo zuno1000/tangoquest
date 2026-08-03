@@ -211,6 +211,9 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
 .syncnag:active{opacity:.85}
 .newsrow{display:flex; gap:10px; align-items:baseline; padding:8px 0; border-bottom:1px solid var(--line); line-height:1.5}
 .newsrow:last-child{border-bottom:none}
+/* イベント告知(ガチャ等)は暖色パネルで目立たせる */
+.evpanel{background:linear-gradient(135deg,#FFF3DC,#FFEBC9)}
+.evpanel .newsrow{border-bottom-color:#F2DDB4}
 .giftbox{background:linear-gradient(135deg,#FFF3DC,#FFE9C0); border-radius:16px; padding:14px;
   text-align:center; font-size:13px; font-weight:700; color:#7A5510; margin-bottom:12px; line-height:1.7;
   box-shadow:-3px -3px 6px var(--shl), 3px 3px 6px var(--shd)}

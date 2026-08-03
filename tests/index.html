@@ -668,6 +668,60 @@ function run(){
     W.closeModal();
   });
 
+  /* ---- v3.7.0: 学習報酬経済 ---- */
+  t("正解10問ごとに🎫1(corTicketGain)", ()=>{
+    const G=W.G; const c0=G.counters.cor;
+    G.counters.cor=9;  eq(W.corTicketGain(), 0, "9問目は0");
+    G.counters.cor=10; eq(W.corTicketGain(), 1, "10問目で1");
+    G.counters.cor=25; eq(W.corTicketGain(), 0, "端数は0");
+    G.counters.cor=0;  eq(W.corTicketGain(), 0, "0は対象外");
+    G.counters.cor=c0;
+  });
+  t("連続正解コンボ: XP倍率とドロップ★率が伸びて頭打ち", ()=>{
+    const G=W.G; const b=G.combo;
+    G.combo=0;  ok(Math.abs(W.comboXpMult()-1)<1e-9, "0=×1"); eq(W.comboDropBonus(), 0, "5未満は0");
+    G.combo=6;  ok(Math.abs(W.comboXpMult()-1.20)<1e-9, "6連続=×1.2");
+    ok(Math.abs(W.comboDropBonus()-0.12)<1e-9, "6連続=12%");
+    G.combo=99; ok(Math.abs(W.comboXpMult()-1.6)<1e-9, "上限×1.6");
+    ok(Math.abs(W.comboDropBonus()-0.30)<1e-9, "上限30%");
+    G.combo=b;
+  });
+  t("ログインボーナスは毎日🎫1以上", ()=>{
+    ok(W.LOGIN_BONUS.length===7 && W.LOGIN_BONUS.every(x=>(x.t||0)>=1), JSON.stringify(W.LOGIN_BONUS));
+  });
+  t("ダンジョン周回: 本日3回目以降のクリアはゴールド25%", ()=>{
+    const today=W.todayKey();
+    eq(W.repeatGoldMult({clears:5, lastClearDay:today, dayClears:2}), 0.25, "3回目〜");
+    eq(W.repeatGoldMult({clears:5, lastClearDay:today, dayClears:1}), 1, "2回目まで");
+    eq(W.repeatGoldMult({clears:5, lastClearDay:"2000-01-01", dayClears:9}), 1, "日が変われば戻る");
+    eq(W.repeatGoldMult({clears:0, lastClearDay:null}), 1, "初回");
+  });
+  t("実績が拡張されている(なかま32段階・ガチャ1000・突破合計)", ()=>{
+    const by={}; W.ACH_DEFS.forEach(a=>by[a.id]=a);
+    ok(by.achr.tiers.length>=6 && by.achr.tiers[by.achr.tiers.length-1][0]===32, "achr最終=32");
+    ok(by.apul.tiers.length>=5 && by.apul.tiers[by.apul.tiers.length-1][0]===1000, "apul最終=1000");
+    ok(by.adup, "adupが存在");
+    const G=W.G; const old=JSON.parse(JSON.stringify(G.chars));
+    G.chars={a:{dup:3}, b:{dup:4}};
+    eq(by.adup.cur(), 7, "突破合計=7");
+    G.chars=old;
+  });
+  t("デイリー/ウィークリーにクイズ系任務が追加されている", ()=>{
+    ok(W.DAILY_DEFS.some(m=>m.id==="dc2"), "dc2");
+    ok(W.WEEKLY_DEFS.some(m=>m.id==="wc2"), "wc2");
+  });
+  t("お知らせ: イベントとアップデートが分かれ、イベントが上", ()=>{
+    const ev=W.newsEvents();
+    ok(ev.length>=1, "開催中/予告のバナーがイベント化 n="+ev.length);
+    ok(ev.every(x=>x.t.indexOf("開催中")>=0 || x.t.indexOf("予告")>=0), "状態表示");
+    W.openNews();
+    const html=W.document.getElementById("modal").innerHTML;
+    ok(html.indexOf("イベント")>=0 && html.indexOf("アップデート")>=0, "2セクション");
+    ok(html.indexOf("イベント") < html.indexOf("アップデート"), "イベントが上");
+    W.closeModal();
+    W.localStorage.removeItem("tq_newsSeen");
+  });
+
   /* ---- v3.6.0: バージョン表記・選択肢のランダム性 ---- */
   t("APP_VERSIONが定義され設定に表示される", ()=>{
     ok(/^\d+\.\d+\.\d+$/.test(W.APP_VERSION), "semver: "+W.APP_VERSION);

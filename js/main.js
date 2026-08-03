@@ -24,11 +24,16 @@ $("navAdv").onclick=()=>switchTab("adv");
 $("navGacha").onclick=()=>switchTab("gacha");
 
 /* ---- ホーム画面(各機能へのハブ) ---- */
+/* お知らせ: 「イベント」(ガチャ告知など・上部に長く掲示)と「アップデート」を分ける。
+   イベントはBANNERSから自動生成(開催前=予告/開催中=残り日数)+手動のEVENTS */
+const EVENTS=[
+  // {d:"2026-08-03", t:"..."} 形式でバナー以外のイベント告知を書く
+];
 const NEWS=[
+  {d:"2026-08-03", t:"📈 v3.7.0 学習がもっとお得に! 正解10問ごとに🎫1・連続正解コンボでXP&ドロップ★UP・ログインボーナス増額(毎日🎫1以上)・新任務と実績追加"},
   {d:"2026-08-03", t:"🔧 v3.6.0 使い心地の改善! 同期が1タップで完了・10連ガチャの結果が1画面に・アップデート確認がより確実に・新アイコン"},
   {d:"2026-08-03", t:"✨ v3.5.1 突破を重ねたなかまのカードが豪華に! おまかせ編成は「不発」を残さないように改善"},
   {d:"2026-08-03", t:"🔔 v3.5.0 お知らせをこのベルに移動! おまかせ編成を強化・連続ミス強化がミスごとに効くように・新しい仲間6人が恒常ガチャに登場"},
-  {d:"2026-08-03", t:"🍁 9/1から限定ガチャ第2弾「秋宵の召喚」開催! 限定「紅葉の狐仙 モミジ」(SSR)・「収穫の精 ミノリ」(SR)"},
   {d:"2026-08-02", t:"🔥 v3.4.0 連続学習ボーナス! 続けた日数だけ獲得XPアップ(最大×2)。任務報酬はホームから一括受取"},
   {d:"2026-08-02", t:"🐺 v3.3.0 野生語システム! 語根のない単語は「覚えているほど強くなる」。編成中の単語は優先出題"},
   {d:"2026-08-02", t:"🧬 v3.2.0 語源辞書を大幅拡充! 語根333種・全単語の52%に正確な語源タグ"},
@@ -38,8 +43,18 @@ const NEWS=[
   {d:"2026-08-02", t:"🌤️ v2.2.0 白×青の新デザイン! 初回🎫10プレゼント・任務の一括受取も"},
   {d:"2026-08-02", t:"✨ v2.1.0 UI刷新! パック開封演出・カードのホロ光沢を追加"},
   {d:"2026-08-02", t:"🎉 v2.0.0 「LEXICA」に改名! ホーム画面・人型編成・新ダンジョン6種を追加"},
-  {d:"2026-08-02", t:"☄️ 期間限定ガチャ「星降る夜の召喚」開催中(8/31まで)"},
 ];
+function newsEvents(){
+  const t=todayKey(), ev=[];
+  BANNERS.forEach(b=>{
+    if(t>b.end) return; // 終了したバナーは出さない
+    const started=t>=b.start;
+    const remain=Math.max(1, Math.ceil((new Date(b.end+"T23:59:59")-Date.now())/864e5));
+    ev.push({d:b.start.slice(5).replace("-","/")+"〜"+b.end.slice(5).replace("-","/"),
+             t:(started? "🔥開催中(残り"+remain+"日)" : "📣予告")+" "+b.name+" ─ "+b.desc});
+  });
+  return ev.concat(EVENTS);
+}
 function xpNeedFor(lv){ return lv<=1? 0 : Math.ceil(50*Math.pow(lv-1, 1/0.55)); }
 function renderHome(){
   const P=playerStats();
@@ -119,16 +134,22 @@ function refreshHeader(){
 
 /* ---- お知らせ(ヘッダーの🔔にまとめる・未読は赤点) ---- */
 const NEWS_SEEN_KEY="tq_newsSeen";
+function newsCount(){ return NEWS.length+newsEvents().length; }
 function refreshBellDot(){
-  $("bellDot").classList.toggle("hidden", (+localStorage.getItem(NEWS_SEEN_KEY)||0)>=NEWS.length);
+  $("bellDot").classList.toggle("hidden", (+localStorage.getItem(NEWS_SEEN_KEY)||0)>=newsCount());
+}
+function newsRows(list){
+  return list.map(n=>
+    '<div class="newsrow"><span class="small" style="flex:0 0 auto">'+n.d.slice(5)+'</span>'+
+    '<span style="font-size:13px">'+n.t+'</span></div>').join("");
 }
 function openNews(){
-  try{ localStorage.setItem(NEWS_SEEN_KEY, String(NEWS.length)); }catch(e){}
+  try{ localStorage.setItem(NEWS_SEEN_KEY, String(newsCount())); }catch(e){}
   refreshBellDot();
+  const ev=newsEvents();
   openModal('<h3>🔔 お知らせ</h3>'+
-    '<div class="panel">'+NEWS.map(n=>
-      '<div class="newsrow"><span class="small" style="flex:0 0 auto">'+n.d.slice(5)+'</span>'+
-      '<span style="font-size:13px">'+n.t+'</span></div>').join("")+'</div>');
+    (ev.length? '<h2 style="margin-top:4px">📅 イベント</h2><div class="panel evpanel">'+newsRows(ev)+'</div>':'')+
+    '<h2>🔧 アップデート</h2><div class="panel">'+newsRows(NEWS)+'</div>');
 }
 $("bellBtn").onclick=openNews;
 
@@ -169,3 +190,5 @@ if(syncClientId() && (lastSyncAt()>0 || localStorage.getItem("tq_gAuthed"))){
 /* セルフテスト(tests/)用: let/const宣言はwindowに載らないため明示公開 */
 window.G=G; window.WORDS=WORDS; window.DUNGEONS=DUNGEONS; window.BANNERS=BANNERS; window.CHARS=CHARS;
 window.ROOT_DEFS=ROOT_DEFS; window.PREFIX_DEFS=PREFIX_DEFS; window.APP_VERSION=APP_VERSION;
+window.LOGIN_BONUS=LOGIN_BONUS; window.ACH_DEFS=ACH_DEFS;
+window.DAILY_DEFS=DAILY_DEFS; window.WEEKLY_DEFS=WEEKLY_DEFS;

@@ -1,8 +1,9 @@
 "use strict";
 /* ================= ログインボーナス・任務・実績 ================= */
 
-/* ---- ログインボーナス(7日サイクル) ---- */
-const LOGIN_BONUS=[{g:100},{t:1},{g:200},{t:1},{g:300},{t:2},{g:500,t:3}];
+/* ---- ログインボーナス(7日サイクル) ----
+   v3.7.0: 毎日最低🎫1=来るだけで毎日1回はガチャが引ける */
+const LOGIN_BONUS=[{t:1,g:200},{t:1,g:300},{t:2},{t:1,g:500},{t:2},{t:1,g:800},{t:3,g:1000}];
 function rewardText(r){ return (r.g? "🪙"+r.g:"")+(r.g&&r.t?" ":"")+(r.t? "🎫"+r.t:""); }
 function grantReward(r){ if(r.g) G.gold+=r.g; if(r.t) G.tickets+=r.t; }
 
@@ -34,15 +35,17 @@ function checkLogin(){
 
 /* ---- 任務定義 ---- */
 const DAILY_DEFS=[
-  {id:"da", name:"クイズに20問答える",        target:20, cur:d=>d.a,     rew:{g:100}},
+  {id:"da", name:"クイズに20問答える",        target:20, cur:d=>d.a,     rew:{g:150}},
   {id:"dc", name:"クイズで10問正解する",      target:10, cur:d=>d.c,     rew:{t:1}},
-  {id:"dk", name:"カードを5枚入手する",       target:5,  cur:d=>d.card,  rew:{g:150}},
+  {id:"dc2",name:"クイズで30問正解する",      target:30, cur:d=>d.c,     rew:{t:1}},
+  {id:"dk", name:"カードを5枚入手する",       target:5,  cur:d=>d.card,  rew:{g:200}},
   {id:"dr", name:"ダンジョンに1回挑む",       target:1,  cur:d=>d.run,   rew:{g:100}},
   {id:"dl", name:"ダンジョンを1回クリアする", target:1,  cur:d=>d.clear, rew:{t:1}},
 ];
 const WEEKLY_DEFS=[
-  {id:"wa", name:"クイズに150問答える",       target:150, cur:w=>w.a,     rew:{g:500}},
+  {id:"wa", name:"クイズに150問答える",       target:150, cur:w=>w.a,     rew:{g:800}},
   {id:"wc", name:"クイズで80問正解する",      target:80,  cur:w=>w.c,     rew:{t:2}},
+  {id:"wc2",name:"クイズで300問正解する",     target:300, cur:w=>w.c,     rew:{t:5}},
   {id:"wm", name:"カードを5回合成する",       target:5,   cur:w=>w.merge, rew:{t:1}},
   {id:"wl", name:"ダンジョンを5回クリアする", target:5,   cur:w=>w.clear, rew:{t:2}},
   {id:"wp", name:"ガチャを3回引く",           target:3,   cur:w=>w.pull,  rew:{g:500}},
@@ -50,7 +53,7 @@ const WEEKLY_DEFS=[
 /* 実績(段階制) */
 const ACH_DEFS=[
   {id:"acor", name:"累計正解",       cur:()=>G.counters.cor,
-   tiers:[[25,{g:200}],[100,{t:1}],[300,{t:2}],[1000,{t:3}],[3000,{t:5}]]},
+   tiers:[[25,{g:200}],[100,{t:1}],[300,{t:2}],[1000,{t:3}],[3000,{t:5}],[10000,{t:10}]]},
   {id:"amas", name:"覚えた単語",     cur:()=>{let n=0;for(const en in G.words){if(G.words[en][0]>=MASTER_BOX)n++;}return n;},
    tiers:[[10,{g:300}],[50,{t:2}],[150,{t:3}],[400,{t:5}]]},
   {id:"akind",name:"カードの種類",   cur:()=>new Set(Object.keys(G.inv).map(k=>parseKey(k).en)).size,
@@ -62,9 +65,11 @@ const ACH_DEFS=[
   {id:"ainf", name:"無限回廊 最深記録", cur:()=>G.inf.best,
    tiers:[[10,{g:300}],[30,{t:2}],[60,{t:3}],[100,{t:5}]]},
   {id:"achr", name:"なかまの数",     cur:()=>Object.keys(G.chars).length,
-   tiers:[[3,{g:300}],[6,{t:2}],[10,{t:3}]]},
+   tiers:[[3,{g:300}],[6,{t:2}],[10,{t:3}],[16,{t:3}],[24,{t:5}],[32,{t:10}]]},
   {id:"apul", name:"累計ガチャ",     cur:()=>G.counters.pulls,
-   tiers:[[10,{g:500}],[50,{t:3}]]},
+   tiers:[[10,{g:500}],[50,{t:3}],[150,{t:5}],[400,{t:8}],[1000,{t:15}]]},
+  {id:"adup", name:"突破の合計",     cur:()=>{let n=0;for(const id in G.chars)n+=G.chars[id].dup||0;return n;},
+   tiers:[[5,{g:500}],[15,{t:2}],[40,{t:3}],[100,{t:5}],[250,{t:10}]]},
 ];
 
 /* ---- 未受取があるか(ナビの赤点用) ---- */
@@ -124,7 +129,7 @@ function claimAllCurrent(){
   if(!d.cl.all && DAILY_DEFS.every(m=>d.cl[m.id])){ d.cl.all=1; add({t:1}); }
   const w=weeklyRec();
   WEEKLY_DEFS.forEach(m=>{ if(!w.cl[m.id] && m.cur(w)>=m.target){ w.cl[m.id]=1; add(m.rew); } });
-  if(!w.cl.all && WEEKLY_DEFS.every(m=>w.cl[m.id])){ w.cl.all=1; add({t:2}); }
+  if(!w.cl.all && WEEKLY_DEFS.every(m=>w.cl[m.id])){ w.cl.all=1; add({t:3}); }
   ACH_DEFS.forEach(a=>{
     let done=G.ach[a.id]||0;
     while(done<a.tiers.length && a.cur()>=a.tiers[done][0]){ add(a.tiers[done][1]); done++; }
@@ -192,9 +197,9 @@ function renderMissions(){
       }));
     });
     box.appendChild(missionRow("ウィークリー全達成ボーナス",
-      WEEKLY_DEFS.filter(m=>w.cl[m.id]).length, WEEKLY_DEFS.length, {t:2}, !!w.cl.all, ()=>{
-        w.cl.all=1; grantReward({t:2}); saveG(); refreshHeader(); renderMissions(); refreshMissionDot();
-        toast("🎫2 を受け取った");
+      WEEKLY_DEFS.filter(m=>w.cl[m.id]).length, WEEKLY_DEFS.length, {t:3}, !!w.cl.all, ()=>{
+        w.cl.all=1; grantReward({t:3}); saveG(); refreshHeader(); renderMissions(); refreshMissionDot();
+        toast("🎫3 を受け取った");
       }));
   }else{
     ACH_DEFS.forEach(a=>{

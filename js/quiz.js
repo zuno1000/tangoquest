@@ -51,7 +51,8 @@ function renderQuestion(){
   $("qBadge").textContent = !st? "新規" : (st[0]>=MASTER_BOX? "覚えた・復習" : "復習");
   $("qBadge").style.color = !st? "var(--accent2)" : (st[0]>=MASTER_BOX? "var(--ok)" : "var(--accent)");
   const d=dayRec(), stk=studyStreak();
-  $("qCount").textContent="今日 "+d.a+"問"+(stk>=2? " ・🔥"+stk+"日":"");
+  $("qCount").textContent="今日 "+d.a+"問"+(stk>=2? " ・🔥"+stk+"日":"")+
+    ((G.combo||0)>=3? " ・⚡"+G.combo+"連続":"");
   const pw=$("promptWord");
   pw.textContent = e2j? w.en : w.ja;
   pw.className = e2j? "" : "ja";
@@ -100,11 +101,21 @@ function answer(chosen, btn){
   track("ans"); if(ok) track("cor");
   lastEn=w.en;
 
-  // 知識XP: 正解が直接キャラの強さになる(連続学習日数でボーナス)
+  // 連続正解コンボ(XPボーナス・ドロップ★率UP)と、正解10問ごとの🎫1
+  let tkGain=0;
+  if(ok){
+    G.combo=(G.combo||0)+1;
+    tkGain=corTicketGain();
+    if(tkGain) G.tickets+=tkGain;
+  }else{
+    G.combo=0;
+  }
+
+  // 知識XP: 正解が直接キャラの強さになる(連続学習日数+コンボでボーナス)
   let xpGain=0, lvUp=0;
   if(ok){
     const l0=accountLevel();
-    xpGain=Math.round((10+(justMastered?40:0))*streakXpMult());
+    xpGain=Math.round((10+(justMastered?40:0))*streakXpMult()*comboXpMult());
     G.xp+=xpGain;
     const l1=accountLevel();
     if(l1>l0){ lvUp=l1; }
@@ -116,11 +127,14 @@ function answer(chosen, btn){
   const rt=rootText(w.en), meta=[];
   if(rt) rt.split("・").forEach((tag,i)=>meta.push('<span class="rmeta">'+(i? '':'🧬 ')+esc(tag)+'</span>'));
   if(isWild(w.en)) meta.push('<span class="rmeta wildm">🐺 野生語 Lv'+memBox(w.en)+'</span>');
+  if(tkGain) meta.unshift('<span class="rmeta" style="color:var(--accent)">🎫+'+tkGain+'</span>');
   rc.innerHTML='<span class="poschip pos'+w.pos+'">'+POS_LABEL[w.pos]+'</span>'+meta.join(' ');
   if(ok){
-    const rar=dropRarity(preSt);
+    let rar=dropRarity(preSt);
+    if(Math.random()<comboDropBonus()) rar=Math.min(5, rar+1); // コンボ中は★+1のチャンス
     addCard(w.en, rar);
     if(lvUp){ toast("📖 レベルアップ! Lv"+lvUp+" ─ 全ステータス強化"); vibe(40); }
+    else if(tkGain){ toast("正解10問ごとのごほうび 🎫+1"); vibe(25); }
     else if(rar>=3) vibe(30);
   }
   $("resultBar").classList.add("show");

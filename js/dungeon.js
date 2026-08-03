@@ -94,10 +94,19 @@ function openDungeonModal(d){
   $("dgGo").onclick=()=>startRun(d);
 }
 
+/* 同じダンジョンを1日に周回し続けてもガチャ経済が壊れないように:
+   本日3回目のクリア以降はゴールド25%(学習報酬を優位にする是正・翌日リセット) */
+function repeatGoldMult(rec){
+  const n=(rec && rec.lastClearDay===todayKey() && rec.dayClears)||0;
+  return n>=2? 0.25 : 1;
+}
+
 /* ---- ダンジョン攻略(即時シミュレーション → ビジュアルバトル演出) ---- */
 function startRun(d){
   const P=playerStats();
   track("run");
+  const rec=dgRec(d.id);
+  const gmul=repeatGoldMult(rec);
   const floors=[]; // {f, boss, E, icon, hpStart, hpAfter, win, events}
   let cleared=0, gold=0, hp=P.hp;
   for(let f=1; f<=d.floors; f++){
@@ -108,26 +117,25 @@ function startRun(d){
               hpStart:hp, win:r.win, events:r.log};
     if(!r.win){ floors.push(fl); break; }
     cleared=f;
-    gold+=Math.round(8*d.tier*d.tier*(1+(P.goldBonus||0)/100));
+    gold+=Math.round(8*d.tier*d.tier*(1+(P.goldBonus||0)/100)*gmul);
     hp=Math.min(P.hp, Math.round(r.php + P.hp*0.25)); // 各階クリア後 25%回復
     fl.hpAfter=hp;
     floors.push(fl);
   }
   const full=cleared===d.floors;
-  // 報酬確定
-  const rec=dgRec(d.id);
+  // 報酬確定(周回チケットの25%抽選はv3.7.0で廃止=チケットは学習・任務・初クリアから)
   let tickets=0;
   if(full){
-    gold+=Math.round(40*d.tier*d.tier*(1+(P.goldBonus||0)/100));
+    gold+=Math.round(40*d.tier*d.tier*(1+(P.goldBonus||0)/100)*gmul);
     if(rec.clears===0) tickets+=3;
     else if(rec.lastClearDay!==todayKey()) tickets+=1;      // 本日初クリア
-    else if(Math.random()<0.25) tickets+=1;
+    rec.dayClears = rec.lastClearDay===todayKey()? (rec.dayClears||0)+1 : 1;
     rec.clears++; rec.lastClearDay=todayKey();
     track("clear");
   }
   G.gold+=gold; G.tickets+=tickets;
   saveG(); refreshHeader(); renderAdv();
-  playRun(d, P, floors, {full, cleared, gold, tickets});
+  playRun(d, P, floors, {full, cleared, gold, tickets, reduced:gmul<1});
 }
 
 /* ---- 演出プレイヤー ---- */
@@ -293,6 +301,7 @@ function playRun(d, P, floors, R){
       '<div class="brTitle">'+(R.full? "🏆 完全攻略!" : "⚔ "+(R.cleared+1)+"Fで敗退…")+'</div>'+
       (R.full? "" : '<div class="small">'+R.cleared+'Fまで突破。カードを集めて再挑戦しよう</div>')+
       '<div class="brRew">🪙 <b id="brGold">0</b>'+(R.tickets? ' &nbsp;🎫 <b>+'+R.tickets+'</b>':"")+'</div>'+
+      (R.reduced? '<div class="small" style="margin-top:8px">周回報酬は本日3回目から減少中。<br>クイズを解く方がお得(10問正解で🎫1)</div>':"")+
       '</div>';
     $("bCtrl").innerHTML='<button class="btn primary" style="flex:1" data-close>閉じる</button>';
     $("bCtrl").querySelector("[data-close]").onclick=closeModal;

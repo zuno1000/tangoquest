@@ -1,7 +1,7 @@
 "use strict";
 /* ================= 状態管理 ================= */
 const KEY="tangoquest_v1";
-const APP_VERSION="3.6.0"; // リリースごとに更新(設定表示・更新確認のリモート版比較に使う)
+const APP_VERSION="3.7.0"; // リリースごとに更新(設定表示・更新確認のリモート版比較に使う)
 
 const RAR_MULT=[1, 1.6, 2.5, 3.8, 5.5];
 const RAR_STARS=["★","★★","★★★","★★★★","★★★★★"];
@@ -39,6 +39,7 @@ G.weekly=G.weekly||{};  // weekKey -> {a,c,merge,clear,pull, cl:{}}
 G.counters=Object.assign({ans:0,cor:0,cards:0,merges:0,runs:0,clears:0,pulls:0}, G.counters||{});
 G.ach=G.ach||{};        // achId -> 受取済みティア数
 G.login=G.login||{last:null, day:0};
+G.combo=G.combo||0;     // 連続正解数(ミスで0に。XPボーナス・ドロップ★率UPの源)
 G.updatedAt=G.updatedAt||0;
 G.resetAt=G.resetAt||0;     // リセット世代印(同期マージで新しい世代が丸ごと勝つ)
 
@@ -102,6 +103,15 @@ function studyStreak(){
 }
 /* 連続日数XPボーナス: 2日目から+5%/日、21日目以降は×2.0で頭打ち */
 function streakXpMult(){ return 1+0.05*Math.min(Math.max(studyStreak()-1,0), 20); }
+/* 連続正解コンボ: 2連続から+4%/問、16連続以降は×1.6で頭打ち */
+function comboXpMult(){ return 1+0.04*Math.min(Math.max((G.combo||0)-1,0), 15); }
+/* コンボ中のドロップ★+1確率: 5連続で10%、以降+2%/問(上限30%) */
+function comboDropBonus(){
+  const c=G.combo||0;
+  return c>=5? Math.min(0.30, 0.10+0.02*(c-5)) : 0;
+}
+/* 正解10問ごとに🎫1(クイズを解くだけでガチャが回る経済の土台) */
+function corTicketGain(){ return (G.counters.cor>0 && G.counters.cor%10===0)? 1 : 0; }
 function lvMult(){ return 1+0.01*(accountLevel()-1); } // Lvごとに全ステータス+1%
 /* 文の長さ(スロット数)は知識レベルで伸びる: Lv1=4語 → Lv24で最大8語 */
 function sentenceSlots(){ return Math.min(8, 4+Math.floor(accountLevel()/6)); }
