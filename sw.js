@@ -1,5 +1,5 @@
 /* TangoQuest service worker — cache-first */
-const CACHE="tangoquest-v21"; // 表示名はLEXICAだがキャッシュ名系統は維持
+const CACHE="tangoquest-v22"; // 表示名はLEXICAだがキャッシュ名系統は維持
 const ASSETS=[
   "./", "index.html", "manifest.json",
   "css/style.css",
@@ -12,6 +12,10 @@ self.addEventListener("install", e=>{
 });
 self.addEventListener("activate", e=>{
   e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));
+});
+/* 「アップデートを確認」からの適用要求(installのskipWaitingを取り逃した場合の念押し) */
+self.addEventListener("message", e=>{
+  if(e.data==="skipWaiting") self.skipWaiting();
 });
 self.addEventListener("fetch", e=>{
   if(e.request.method!=="GET") return;

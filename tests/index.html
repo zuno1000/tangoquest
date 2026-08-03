@@ -668,6 +668,27 @@ function run(){
     W.closeModal();
   });
 
+  /* ---- v3.6.0: バージョン表記・選択肢のランダム性 ---- */
+  t("APP_VERSIONが定義され設定に表示される", ()=>{
+    ok(/^\d+\.\d+\.\d+$/.test(W.APP_VERSION), "semver: "+W.APP_VERSION);
+    W.openSettings();
+    ok(W.document.getElementById("modal").innerHTML.indexOf("v"+W.APP_VERSION)>=0, "設定に表示");
+    W.closeModal();
+  });
+  t("クイズ: 誤答の組合せと正解の位置は毎回ランダムに変わる", ()=>{
+    const w=W.WORDS[0];
+    const sets=new Set(), pos=new Set();
+    for(let i=0;i<30;i++){
+      const cs=W.buildChoices(w);
+      eq(cs.length, 4, "4択");
+      ok(cs.some(c=>c.en===w.en), "正解を含む");
+      sets.add(cs.filter(c=>c.en!==w.en).map(c=>c.en).sort().join(","));
+      pos.add(cs.findIndex(c=>c.en===w.en));
+    }
+    ok(sets.size>=5, "誤答の組合せが変わる sets="+sets.size);
+    ok(pos.size>=3, "正解の位置が変わる pos="+pos.size);
+  });
+
   /* ---- 起動状態 ---- */
   t("起動時に問題が出題されている", ()=>{
     ok(W.document.getElementById("promptWord").textContent.length>0);

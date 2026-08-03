@@ -33,27 +33,58 @@ function fmtSyncTime(ts){
   return (d.getMonth()+1)+"/"+d.getDate()+" "+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
 }
 
-let gisLoaded=false, accessToken=null;
+/* ---- 認証(1タップ同期) ----
+   3タップ問題の対処:
+   1. GISスクリプトは起動時に先読みする(タップ時に非同期ロードを挟むと
+      ポップアップがユーザー操作由来と見なされずブロックされていた)
+   2. 一度同意した端末は prompt:"" で再確認なし(ポップアップは自動で閉じる)
+   3. トークンは有効期限までsessionStorageに保持(同期後のリロードをまたいで再利用) */
+let gisLoaded=false, gisLoading=false, tokenClient=null, tokenCb=null;
+const AUTHED_KEY="tq_gAuthed", TOKEN_KEY="tq_gTok";
+function savedToken(){
+  try{
+    const t=JSON.parse(sessionStorage.getItem(TOKEN_KEY));
+    if(t && t.tok && t.exp>Date.now()) return t.tok;
+  }catch(e){}
+  return null;
+}
 function ensureGis(cb){
   if(gisLoaded){ cb(); return; }
+  if(gisLoading){ setTimeout(()=>ensureGis(cb), 300); return; }
+  gisLoading=true;
   const s=document.createElement("script");
   s.src="https://accounts.google.com/gsi/client";
-  s.onload=()=>{ gisLoaded=true; cb(); };
-  s.onerror=()=>toast("Googleサービスに接続できない");
+  s.onload=()=>{ gisLoaded=true; gisLoading=false; cb(); };
+  s.onerror=()=>{ gisLoading=false; toast("Googleサービスに接続できない"); };
   document.head.appendChild(s);
 }
+function initTokenClient(){
+  if(tokenClient) return;
+  tokenClient=google.accounts.oauth2.initTokenClient({
+    client_id: syncClientId(),
+    scope: "https://www.googleapis.com/auth/drive.appdata",
+    callback: r=>{
+      const cb=tokenCb; tokenCb=null;
+      if(r && r.access_token){
+        const exp=Date.now()+Math.max(60,(+r.expires_in||3600)-60)*1000;
+        try{
+          sessionStorage.setItem(TOKEN_KEY, JSON.stringify({tok:r.access_token, exp}));
+          localStorage.setItem(AUTHED_KEY,"1");
+        }catch(e){}
+        if(cb) cb(r.access_token);
+      }else toast("認証がキャンセルされた");
+    },
+    error_callback: e=>{ tokenCb=null; toast("認証できなかった("+((e&&e.type)||"error")+")"); }
+  });
+}
 function getToken(cb){
-  if(accessToken){ cb(accessToken); return; }
+  const t=savedToken();
+  if(t){ cb(t); return; }
   ensureGis(()=>{
-    const tc=google.accounts.oauth2.initTokenClient({
-      client_id: syncClientId(),
-      scope: "https://www.googleapis.com/auth/drive.appdata",
-      callback: r=>{
-        if(r && r.access_token){ accessToken=r.access_token; cb(accessToken); }
-        else toast("認証がキャンセルされた");
-      }
-    });
-    tc.requestAccessToken();
+    initTokenClient();
+    tokenCb=cb;
+    // 同意済みの端末は確認画面を出さない(ポップアップが開いてもすぐ閉じる)
+    tokenClient.requestAccessToken(localStorage.getItem(AUTHED_KEY)? {prompt:""} : {});
   });
 }
 
@@ -168,18 +199,53 @@ async function syncNow(){
    sw.jsの再取得はHTTPキャッシュを迂回するので、CACHE名が上がっていれば新SWが入り
    (install=skipWaiting済み・activate=旧キャッシュ削除+clients.claim済み)、
    制御が切り替わった時点でリロード=最新版になる。localStorage(学習データ・同期設定)には触れない */
+let updating=false;
 async function appUpdate(){
+  if(updating) return;
+  updating=true;
   toast("更新を確認中…");
   try{
     const reg=("serviceWorker" in navigator)? await navigator.serviceWorker.getRegistration() : null;
     if(!reg){ location.reload(); return; }
-    await reg.update();
-    if(reg.installing || reg.waiting){
+
+    let done=false;
+    const finish=()=>{ if(!done){ done=true; location.reload(); } };
+    navigator.serviceWorker.addEventListener("controllerchange", finish, {once:true});
+    /* 新SWのインストール完了(activated)を見届けてからリロードする。
+       以前は5秒で無条件リロードしていたため、回線が遅いと旧SWが生きたまま
+       リロード=「更新したのに古いまま」に見えることがあった */
+    const apply=nw=>{
       toast("新しいバージョンを適用中…");
-      navigator.serviceWorker.addEventListener("controllerchange", ()=>location.reload(), {once:true});
-      setTimeout(()=>location.reload(), 5000); // 切替イベントを取り逃した場合の保険
+      if(nw.state==="installed") nw.postMessage("skipWaiting");
+      nw.addEventListener("statechange", ()=>{
+        if(nw.state==="activated") setTimeout(finish, 150);
+        else if(nw.state==="installed") nw.postMessage("skipWaiting");
+        else if(nw.state==="redundant" && !done){
+          done=true; updating=false; toast("適用に失敗した。通信環境を確認してもう一度");
+        }
+      });
+      if(nw.state==="activated") setTimeout(finish, 150);
+      setTimeout(finish, 30000); // 保険(30秒)
+    };
+    /* 公開直後は配信網(CDN)の反映待ちで1回目に見つからないことがある → 数回再確認 */
+    for(let i=0;i<3;i++){
+      try{ await reg.update(); }catch(e){}
+      const nw=reg.installing||reg.waiting;
+      if(nw){ apply(nw); return; }
+      if(i<2) await new Promise(r=>setTimeout(r, 3500));
+    }
+    /* 新SWなし → リモートの版を直接確認して正直に伝える */
+    let remoteV=null;
+    try{
+      const txt=await fetch("js/state.js?upd="+Date.now(), {cache:"no-store"}).then(r=>r.ok? r.text():null);
+      const mv=txt && txt.match(/APP_VERSION\s*=\s*"([^"]+)"/);
+      if(mv) remoteV=mv[1];
+    }catch(e){}
+    updating=false;
+    if(remoteV && remoteV!==APP_VERSION){
+      toast("新版 v"+remoteV+" を配信中。反映まで数分かかる ─ 少し待ってもう一度");
     }else{
-      toast("最新版を利用中 ✓");
+      toast("最新版 v"+APP_VERSION+" を利用中 ✓");
     }
   }catch(e){
     location.reload();
@@ -217,7 +283,7 @@ function openSettings(){
     '<div class="small" style="margin-top:6px">ホーム画面から起動している場合(iOS等)もこのボタンで最新版に更新できる。学習データ・同期は消えない</div>'+
     '<h3 style="margin-top:16px">データ</h3>'+
     '<button class="btn danger" id="resetBtn">データをすべてリセット</button>'+
-    '<div class="small" style="margin-top:14px">LEXICA(レキシカ) v3.5.4 ─ 英単語×ローグライクRPG<br>単語データ: 英検1級レベル '+WORDS.length+'語(<a href="https://github.com/zuno1000/tango" style="color:var(--accent2)">tango</a> 由来)</div>');
+    '<div class="small" style="margin-top:14px">LEXICA(レキシカ) v'+APP_VERSION+' ─ 英単語×ローグライクRPG<br>単語データ: 英検1級レベル '+WORDS.length+'語(<a href="https://github.com/zuno1000/tango" style="color:var(--accent2)">tango</a> 由来)</div>');
   $("modeToggle").onclick=()=>{
     G.mode=G.mode==="e2j"?"j2e":"e2j"; saveG();
     $("modeToggle").textContent=(G.mode==="e2j"?"EN → 日本語":"日本語 → EN")+" (タップで切替)";
@@ -231,7 +297,8 @@ function openSettings(){
     // ONにした瞬間(タップ操作中)に長めのテスト振動。ここで鳴らなければ端末側の設定
     if(off){ try{ navigator.vibrate([80,50,80]); }catch(e){} }
   };
-  const sb=$("syncBtn"); if(sb) sb.onclick=syncNow;
+  const sb=$("syncBtn");
+  if(sb){ ensureGis(()=>{}); sb.onclick=syncNow; } // GIS先読み=タップ時にポップアップがブロックされない
   $("updateBtn").onclick=appUpdate;
   $("resetBtn").onclick=()=>{
     openModal('<h3>本当にリセットする？</h3>'+

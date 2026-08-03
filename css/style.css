@@ -18,8 +18,11 @@ body{
   font-weight:500;
   background:var(--bg); color:var(--ink);
   display:flex; flex-direction:column;
+  /* position:fixed: iOSでボタン連打時に文書ごとスクロールして
+     下部ナビが持ち上がる(下に謎の余白が出る)のを防ぐ */
+  position:fixed; inset:0; width:100%;
   max-width:520px; margin:0 auto;
-  height:100vh; height:100dvh; overflow:hidden;
+  overflow:hidden; overscroll-behavior:none;
   padding-top:env(safe-area-inset-top);
   user-select:none; -webkit-user-select:none;
 }
@@ -121,8 +124,8 @@ nav button .dot{position:absolute; top:-2px; right:-8px; width:9px; height:9px; 
 #resultBar.show{visibility:visible; animation:pop .15s ease-out}
 @keyframes pop{from{opacity:0; transform:translateY(6px)} to{opacity:1; transform:none}}
 #resultInfo{flex:1; min-width:0}
-#resultCard{font-size:13px; line-height:1.5; overflow:hidden;
-  display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2}
+/* 2行に収め、あふれた分は「…」を出さずに隠す(行高を揃えて3行目が覗かないように) */
+#resultCard{font-size:13px; line-height:24px; max-height:48px; overflow:hidden}
 .poschip{display:inline-block; border-radius:9px; padding:3px 10px; margin-right:7px;
   font-size:12px; font-weight:800; background:var(--bg);
   box-shadow:inset 2px 2px 4px var(--shd), inset -2px -2px 4px var(--shl)}
@@ -350,9 +353,16 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
 .charcard{background:var(--bg); border:1.5px solid transparent; border-radius:16px; padding:12px 6px;
   text-align:center; cursor:pointer; position:relative}
 #charGrid{display:grid; grid-template-columns:repeat(3,1fr); gap:11px; padding:2px}
-.gresult{display:flex; flex-wrap:wrap; gap:10px; justify-content:center; margin:12px 0}
-.gres{width:96px; background:var(--bg); border:2px solid transparent; border-radius:16px; padding:12px 4px;
+/* 10連でもOKボタンまでスクロール不要な高さに収めるコンパクトグリッド */
+.gresult{display:grid; grid-template-columns:repeat(auto-fill, minmax(72px,1fr));
+  gap:8px; width:100%; margin:10px 0}
+.gres{background:var(--bg); border:2px solid transparent; border-radius:14px; padding:9px 3px;
   text-align:center; animation:pop .3s ease-out both; position:relative}
+.gres .gface{font-size:26px; line-height:1.2}
+.gres .grar{font-weight:800; font-size:11px}
+.gres .gname{font-size:10px; font-weight:700; margin-top:2px; line-height:1.25;
+  overflow:hidden; max-height:25px}
+.gres .gsub{font-size:9px; color:var(--sub); margin-top:2px}
 
 /* ---- パック開封セレモニー(パックは鮮やかに・白UIで映える) ---- */
 #packStage{display:flex; flex-direction:column; align-items:center; padding:8px 0 4px; min-height:300px; justify-content:center}

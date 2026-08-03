@@ -128,10 +128,10 @@ function doPull(n, useGold, banner){
 function gresHTML(r, i){
   return '<div class="gres bd'+(r.c.rar===4?5:r.c.rar)+(r.c.rar===4?' shine':'')+'" style="animation-delay:'+(i*90)+'ms">'+
     (r.c.limited?'<div class="ltdmini">限定</div>':"")+
-    '<div style="font-size:32px">'+r.c.face+'</div>'+
-    '<div class="'+CHAR_RAR_CLASS[r.c.rar-1]+'" style="font-weight:800; font-size:12px">'+CHAR_RAR[r.c.rar-1]+'</div>'+
-    '<div style="font-size:11px; font-weight:700; margin-top:2px; line-height:1.2">'+esc(r.c.name)+'</div>'+
-    '<div class="small" style="font-size:10px; margin-top:2px">'+(r.isNew?"NEW!":"突破 +6%")+'</div>'+
+    '<div class="gface">'+r.c.face+'</div>'+
+    '<div class="grar '+CHAR_RAR_CLASS[r.c.rar-1]+'">'+CHAR_RAR[r.c.rar-1]+'</div>'+
+    '<div class="gname">'+esc(r.c.name)+'</div>'+
+    '<div class="gsub">'+(r.isNew?"NEW!":"突破 +6%")+'</div>'+
   '</div>';
 }
 function openPackCeremony(results, banner){

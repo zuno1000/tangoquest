@@ -25,6 +25,7 @@ $("navGacha").onclick=()=>switchTab("gacha");
 
 /* ---- ホーム画面(各機能へのハブ) ---- */
 const NEWS=[
+  {d:"2026-08-03", t:"🔧 v3.6.0 使い心地の改善! 同期が1タップで完了・10連ガチャの結果が1画面に・アップデート確認がより確実に・新アイコン"},
   {d:"2026-08-03", t:"✨ v3.5.1 突破を重ねたなかまのカードが豪華に! おまかせ編成は「不発」を残さないように改善"},
   {d:"2026-08-03", t:"🔔 v3.5.0 お知らせをこのベルに移動! おまかせ編成を強化・連続ミス強化がミスごとに効くように・新しい仲間6人が恒常ガチャに登場"},
   {d:"2026-08-03", t:"🍁 9/1から限定ガチャ第2弾「秋宵の召喚」開催! 限定「紅葉の狐仙 モミジ」(SSR)・「収穫の精 ミノリ」(SR)"},
@@ -160,6 +161,11 @@ if("serviceWorker" in navigator && location.protocol==="https:"){
   navigator.serviceWorker.register("sw.js").catch(()=>{});
 }
 
+/* 同期を使っている端末はGISを先読みしておく(同期ボタン1タップで完了させるため) */
+if(syncClientId() && (lastSyncAt()>0 || localStorage.getItem("tq_gAuthed"))){
+  setTimeout(()=>ensureGis(()=>{}), 2000);
+}
+
 /* セルフテスト(tests/)用: let/const宣言はwindowに載らないため明示公開 */
 window.G=G; window.WORDS=WORDS; window.DUNGEONS=DUNGEONS; window.BANNERS=BANNERS; window.CHARS=CHARS;
-window.ROOT_DEFS=ROOT_DEFS; window.PREFIX_DEFS=PREFIX_DEFS;
+window.ROOT_DEFS=ROOT_DEFS; window.PREFIX_DEFS=PREFIX_DEFS; window.APP_VERSION=APP_VERSION;
