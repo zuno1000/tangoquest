@@ -906,6 +906,31 @@ function run(){
     G.chars.c01.dup=d0;
   });
 
+  /* ---- v4.3.0: なかまソート・出撃中の再タップ詳細 ---- */
+  t("なかま一覧のソート(レア/力/突破/図鑑順)", ()=>{
+    const G=W.G;
+    const old=G.chars;
+    G.chars={c01:{dup:0}, c05:{dup:4}, c12:{dup:1}, c02:{dup:9}};
+    const rar=W.sortedOwnedChars("rar").map(c=>c.rar);
+    ok(rar.every((r,i)=>i===0||rar[i-1]>=r), "レア降順 "+rar.join(","));
+    const pow=W.sortedOwnedChars("pow").map(c=>W.charBase(c.id));
+    ok(pow.every((p,i)=>i===0||pow[i-1]>=p), "力降順 "+pow.join(","));
+    const dup=W.sortedOwnedChars("dup").map(c=>G.chars[c.id].dup||0);
+    ok(dup.every((d,i)=>i===0||dup[i-1]>=d), "突破降順 "+dup.join(","));
+    const dex=W.sortedOwnedChars("dex").map(c=>W.CHARS.indexOf(c));
+    ok(dex.every((d,i)=>i===0||dex[i-1]<d), "図鑑順は定義順");
+    G.chars=old;
+  });
+  t("編成: 出撃中キャラの再タップで詳細モーダル", ()=>{
+    W.renderEqChars();
+    const doc=W.document;
+    const sel=doc.querySelector("#eqChars .charopt.sel");
+    ok(sel, "出撃中キャラが表示されている");
+    sel.click();
+    ok(doc.getElementById("modal").innerHTML.indexOf("なかま詳細")>=0, "詳細モーダルが開く");
+    W.closeModal();
+  });
+
   /* ---- v3.6.0: バージョン表記・選択肢のランダム性 ---- */
   t("APP_VERSIONが定義され設定に表示される", ()=>{
     ok(/^\d+\.\d+\.\d+$/.test(W.APP_VERSION), "semver: "+W.APP_VERSION);

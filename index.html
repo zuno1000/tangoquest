@@ -2,7 +2,9 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<!-- viewport-fit=cover: black-translucent と併用しないと、iOSのホーム画面起動で
+     初回だけ画面がステータスバー分ずれて上端に灰色帯が出る(再読込で直る)事象が起きる -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#E8EDF5">
@@ -83,6 +85,12 @@
     <div id="cardGrid"></div>
   </div>
   <div id="pChars" class="hidden">
+    <div class="seg" id="charSortSeg">
+      <button data-s="rar" class="active">レア</button>
+      <button data-s="pow">力</button>
+      <button data-s="dup">突破</button>
+      <button data-s="dex">図鑑順</button>
+    </div>
     <div id="charGrid"></div>
   </div>
 </main>

@@ -513,7 +513,10 @@ function renderEqChars(){
       '<div class="cr '+CHAR_RAR_CLASS[c.rar-1]+'">'+CHAR_RAR[c.rar-1]+'</div>'+
       '<div class="cn">'+esc(c.name)+'</div>'+
       '<div class="small" style="font-size:10px">HP'+st.hp+' 攻'+st.atk+'</div>';
-    d.onclick=()=>{ G.party.char=c.id; saveG(); renderEqChars(); renderEqSlots(); };
+    d.onclick=()=>{
+      if(G.party.char===c.id){ openCharModal(c.id, {select:true}); return; } // 出撃中を再タップ=詳細
+      G.party.char=c.id; saveG(); renderEqChars(); renderEqSlots();
+    };
     box.appendChild(d);
   });
 }

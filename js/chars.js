@@ -274,14 +274,29 @@ function openCharModal(id, opts){
 }
 
 /* ---- なかま一覧 ---- */
+/* キャラ単体の「素の戦闘力」(カード・呪文を除いたキャラの力比べ用) */
+function charBase(id){
+  const st=charStats(id);
+  return Math.round(st.hp/6 + st.atk*4 + st.def*3 + st.spd*5);
+}
+let charSort="rar"; // レア(既定)/pow=力/dup=突破/dex=図鑑順
+function sortedOwnedChars(mode){
+  const dupOf=c=>(G.chars[c.id]&&G.chars[c.id].dup)||0;
+  const CMP={
+    rar:(a,b)=>b.rar-a.rar || charBase(b.id)-charBase(a.id),
+    pow:(a,b)=>charBase(b.id)-charBase(a.id),
+    dup:(a,b)=>dupOf(b)-dupOf(a) || b.rar-a.rar || charBase(b.id)-charBase(a.id),
+    dex:(a,b)=>CHARS.indexOf(a)-CHARS.indexOf(b),
+  };
+  return CHARS.filter(c=>G.chars[c.id]).sort(CMP[mode]||CMP.rar);
+}
 function renderChars(){
   const grid=$("charGrid"); grid.innerHTML="";
-  const owned=CHARS.filter(c=>G.chars[c.id]);
+  const owned=sortedOwnedChars(charSort);
   if(!owned.length){ grid.innerHTML='<div class="empty" style="grid-column:1/-1">ガチャで冒険者を仲間にしよう</div>'; return; }
-  owned.sort((a,b)=>b.rar-a.rar);
   owned.forEach(c=>{
-    const st=charStats(c.id), dup=G.chars[c.id].dup||0;
-    const base=Math.round(st.hp/6 + st.atk*4 + st.def*3 + st.spd*5); // 素の戦闘力
+    const dup=G.chars[c.id].dup||0;
+    const base=charBase(c.id); // 素の戦闘力
     const d=document.createElement("div");
     d.className="charcard bd"+(c.rar===4?5:c.rar)+dupClass(dup);
     d.style.setProperty("--dupc", DUP_RGB[c.rar-1]);
@@ -298,6 +313,14 @@ function renderChars(){
     grid.appendChild(d);
   });
 }
+/* ソート切替(静的DOMのため一度だけバインド) */
+$("charSortSeg").querySelectorAll("button").forEach(b=>{
+  b.onclick=()=>{
+    charSort=b.dataset.s;
+    $("charSortSeg").querySelectorAll("button").forEach(x=>x.classList.toggle("active", x===b));
+    renderChars();
+  };
+});
 
 
 /* ---- ガチャ画面(開催中の限定バナー+恒常) ---- */

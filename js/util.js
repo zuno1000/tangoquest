@@ -21,6 +21,19 @@ function toast(msg){
   toastTimer=setTimeout(()=>t.classList.remove("show"), 1800);
 }
 
+/* ---- tap ----
+   iOSはスクロールの減速中などにタップのclickが発火しないことがある(タップが
+   「スクロールを止める操作」として消費される)。pointerupでも拾い、指の移動が
+   小さいときだけタップとみなす。clickと二重に発火し得るため、呼び出し側は
+   同じ状態への切替を無視するなど冪等にしておくこと */
+function bindTap(el, fn){
+  let sx=0, sy=0;
+  el.addEventListener("pointerdown", e=>{ sx=e.clientX; sy=e.clientY; });
+  el.addEventListener("pointerup", e=>{
+    if(Math.abs(e.clientX-sx)<12 && Math.abs(e.clientY-sy)<12) fn(e);
+  });
+}
+
 /* ---- modal ---- */
 function openModal(html){
   const m=$("modal");

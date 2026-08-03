@@ -57,7 +57,8 @@ function renderDexBody(){
     h+='</div>';
     box.innerHTML=h;
     $("dexPosSeg").querySelectorAll("button").forEach(b=>{
-      b.onclick=()=>{ dexPos=b.dataset.p; renderDexBody(); };
+      const set=()=>{ if(dexPos!==b.dataset.p){ dexPos=b.dataset.p; renderDexBody(); } };
+      b.onclick=set; bindTap(b, set); // pointerup併用: スクロール直後でも1タップで切り替わる
     });
     // クリックは委譲1本(セルごとのリスナー2,500個を作らない=軽量化)
     $("dexGrid").onclick=e=>{
@@ -100,7 +101,8 @@ function openDex(mode){
     '</div>'+
     '<div id="dexBody"></div>');
   $("dexSeg").querySelectorAll("button").forEach(b=>{
-    b.onclick=()=>{ dexMode=b.dataset.m; renderDexBody(); };
+    const set=()=>{ if(dexMode!==b.dataset.m){ dexMode=b.dataset.m; renderDexBody(); } };
+    b.onclick=set; bindTap(b, set); // pointerup併用: スクロール直後でも1タップで切り替わる
   });
   renderDexBody();
 }

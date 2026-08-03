@@ -16,6 +16,7 @@
    スクロール・ピンチは生きる。#packのtouch-action:noneはIDセレクタが勝つ */
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 html,body{height:100%}
+html{background:var(--bg)} /* iOSスタンドアロン起動時にシステムが塗る領域も背景色に揃える */
 body{
   font-family:"Zen Kaku Gothic New",-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;
   font-weight:500;
@@ -366,8 +367,10 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
 /* 10連でもOKボタンまでスクロール不要な高さに収めるコンパクトグリッド */
 .gresult{display:grid; grid-template-columns:repeat(auto-fill, minmax(72px,1fr));
   gap:8px; width:100%; margin:10px 0}
-/* カードの面(枠・背景)は表=.gfr が持つ。裏=.gbk は同じ矩形を全面で覆う */
-.gres{position:relative; perspective:420px}
+/* カードの面(枠・背景)は表=.gfr が持つ。裏=.gbk は同じ矩形を全面で覆う。
+   border-radius: Soft UIの浮き影(白ハイライト)は.gresの形に沿うため、
+   角丸がないと白い四角の角がカードの丸角からはみ出て見える */
+.gres{position:relative; perspective:420px; border-radius:14px}
 .gres .gface{font-size:26px; line-height:1.2}
 .gres .grar{font-weight:800; font-size:11px}
 .gres .gname{font-size:10px; font-weight:700; margin-top:2px; line-height:1.25;
