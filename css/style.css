@@ -520,13 +520,10 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
     inset 0 0 0 2.5px rgb(var(--dupc)), 0 0 16px rgba(var(--dupc),.55)}
 /* iOS: 要素の高さが小数px(flexの均等伸縮など)のとき、グラデ背景の最下行が
    塗り残されて下端に地色の細い帯が見えることがある(呪文画面のキャラ選択で実機確認)。
-   グラデを数px下へ延長し、塗り残しは終端に近い色のbackground-colorで埋める
-   (backgroundショートハンドの後に書いて上書きする) */
-.dup3.charcard,.dup3.charopt,.dup3.bigchar,
-.dup6.charcard,.dup6.charopt,.dup6.bigchar,
-.dup10.charcard,.dup10.charopt,.dup10.bigchar{
-  background-repeat:no-repeat;
-  background-size:100% calc(100% + 3px)}
+   終端に近い色のbackground-colorで塗り残しを埋める
+   (backgroundショートハンドの後に書いて上書きする)。
+   注意: background-sizeでグラデを下へ延長する方式は、iOSで角丸クリップから
+   はみ出して描かれる(v4.4.1で実機確認)ため使わない */
 .dup3.charcard,.dup3.charopt,.dup3.bigchar{background-color:rgba(var(--dupc),.26)}
 .dup6.charcard,.dup6.charopt,.dup6.bigchar{background-color:rgba(var(--dupc),.48)}
 .dup10.charcard,.dup10.charopt,.dup10.bigchar{background-color:rgba(var(--dupc),.6)}
