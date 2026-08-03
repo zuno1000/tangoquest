@@ -2,13 +2,15 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<!-- ステータスバーは default(不透明・本文はバーの下から)にする。
-     black-translucent(全画面レイアウト)は初回起動の上端の灰色帯を生み、
-     viewport-fit=cover を足すと今度は safe-area-inset-bottom で下部ナビが
-     持ち上がる副作用が出た(v4.3.0で実機確認)。defaultが最も安定 -->
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<!-- ステータスバー: black-translucent+viewport-fit=cover で本文を画面全体に描き、
+     上端は body の safe-area パディングで避ける(v4.3.0方式)。
+     default(不透明バー)は新規インストールの初回起動でステータスバー領域が
+     灰色に塗られるiOSバグを避けられない(v4.4.2で実機確認)。
+     ただし下部の safe-area パディングはナビが持ち上がって見えるため使わない
+     (style.css側で定数パディングに固定) -->
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#E8EDF5">
 <meta name="description" content="LEXICA(レキシカ) ─ 英単語を解いてカードを集め、ダンジョンを攻略する単語学習RPG。">
 <link rel="manifest" href="manifest.json">

@@ -66,14 +66,16 @@ header .title{font-weight:900; font-size:15px; color:var(--accent2); margin-righ
 #bellBtn{position:relative; font-size:15px}
 #bellBtn .dot{position:absolute; top:1px; right:1px; width:9px; height:9px; border-radius:50%; background:var(--ng)}
 
-/* ---- main views ---- */
-main{flex:1; min-height:0; overflow-y:auto; padding:8px 16px calc(12px + env(safe-area-inset-bottom))}
+/* ---- main views ----
+   下部はsafe-areaを足さない(viewport-fit=cover環境で足すとナビや本文が
+   ホームインジケータ分持ち上がって見える=v4.3.0の実機FB) */
+main{flex:1; min-height:0; overflow-y:auto; padding:8px 16px 12px}
 .hidden{display:none !important}
 
 /* ---- bottom nav ---- */
 nav{flex:0 0 auto; display:flex; background:var(--bg);
   box-shadow:0 -6px 14px rgba(136,152,184,.22);
-  padding:7px 8px calc(7px + env(safe-area-inset-bottom))}
+  padding:7px 8px} /* 下部safe-areaは足さない(v4.3.0でタブが持ち上がったFB) */
 nav button{flex:1; border:none; background:none; color:var(--sub); font-size:13px; font-weight:700;
   padding:8px 0 6px; min-height:66px; cursor:pointer; border-radius:16px; margin:0 2px;
   display:flex; flex-direction:column; align-items:center; gap:3px}
@@ -459,7 +461,7 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
   align-items:flex-end; justify-content:center; z-index:50}
 #overlay.show{display:flex}
 #modal{background:var(--bg); border-radius:28px 28px 0 0; width:100%; max-width:520px;
-  max-height:86vh; max-height:86dvh; overflow-y:auto; padding:18px 16px calc(20px + env(safe-area-inset-bottom));
+  max-height:86vh; max-height:86dvh; overflow-y:auto; padding:18px 16px 20px;
   box-shadow:0 -10px 30px rgba(61,74,99,.3);
   animation:up .18s ease-out}
 @keyframes up{from{transform:translateY(30px); opacity:0} to{transform:none; opacity:1}}
@@ -506,27 +508,38 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
    +3=淡彩グラデ+内枠 / +6=濃彩+光沢 / +10=フォイル(全面彩色+濃枠)。
    v4.0.0: 「暗く見える」FBを受けて白を混ぜた明るいフォイルに刷新 */
 .charcard,.charopt,.bigchar{--dupc:244,176,26; overflow:hidden; position:relative} /* shine(ホロ光沢)用 */
+/* iOS対策(下端の色欠け): 要素の高さが小数px(flexの均等伸縮など)のとき、
+   グラデ背景の描画と角丸クリップが1px前後食い違い、下端に色欠けが出る。
+   background-color / background-size での補填はどちらも枠外へはみ出した
+   (v4.4.0〜4.4.2で実機確認)。そこで補填は inset box-shadow の下端帯で行う ─
+   枠線(inset ring)と同じ描画パスなので端の位置が必ず一致し、
+   はみ出しも隙間も原理的に出ない。帯色はグラデ終端(半透明×背景)を
+   color-mix で不透明化して合わせる。box-shadowを2段書きしているのは
+   color-mix非対応の古いブラウザへのフォールバック(1段目が生きる) */
 .dup3.charcard,.dup3.charopt,.dup3.bigchar{
   background:linear-gradient(165deg, #FFFFFF 0%, rgba(var(--dupc),.26) 100%);
   box-shadow:-4px -4px 8px var(--shl), 4px 4px 10px var(--shd),
-    inset 0 0 0 1.5px rgba(var(--dupc),.55), 0 0 8px rgba(var(--dupc),.22)}
+    inset 0 0 0 1.5px rgba(var(--dupc),.55), 0 0 8px rgba(var(--dupc),.22);
+  box-shadow:-4px -4px 8px var(--shl), 4px 4px 10px var(--shd),
+    inset 0 0 0 1.5px rgba(var(--dupc),.55),
+    inset 0 -3px 0 0 color-mix(in srgb, rgb(var(--dupc)) 26%, var(--bg)),
+    0 0 8px rgba(var(--dupc),.22)}
 .dup6.charcard,.dup6.charopt,.dup6.bigchar{
   background:linear-gradient(160deg, #FFFFFF 0%, rgba(var(--dupc),.22) 45%, rgba(var(--dupc),.48) 100%);
   box-shadow:-4px -4px 8px var(--shl), 4px 4px 10px var(--shd),
-    inset 0 0 0 2px rgba(var(--dupc),.75), 0 0 12px rgba(var(--dupc),.4)}
+    inset 0 0 0 2px rgba(var(--dupc),.75), 0 0 12px rgba(var(--dupc),.4);
+  box-shadow:-4px -4px 8px var(--shl), 4px 4px 10px var(--shd),
+    inset 0 0 0 2px rgba(var(--dupc),.75),
+    inset 0 -3px 0 0 color-mix(in srgb, rgb(var(--dupc)) 48%, var(--bg)),
+    0 0 12px rgba(var(--dupc),.4)}
 .dup10.charcard,.dup10.charopt,.dup10.bigchar{
   background:linear-gradient(135deg, rgba(var(--dupc),.5) 0%, #FFFFFF 30%, rgba(var(--dupc),.36) 55%, #FFFFFF 78%, rgba(var(--dupc),.6) 100%);
   box-shadow:-4px -4px 8px var(--shl), 4px 4px 10px var(--shd),
-    inset 0 0 0 2.5px rgb(var(--dupc)), 0 0 16px rgba(var(--dupc),.55)}
-/* iOS: 要素の高さが小数px(flexの均等伸縮など)のとき、グラデ背景の最下行が
-   塗り残されて下端に地色の細い帯が見えることがある(呪文画面のキャラ選択で実機確認)。
-   終端に近い色のbackground-colorで塗り残しを埋める
-   (backgroundショートハンドの後に書いて上書きする)。
-   注意: background-sizeでグラデを下へ延長する方式は、iOSで角丸クリップから
-   はみ出して描かれる(v4.4.1で実機確認)ため使わない */
-.dup3.charcard,.dup3.charopt,.dup3.bigchar{background-color:rgba(var(--dupc),.26)}
-.dup6.charcard,.dup6.charopt,.dup6.bigchar{background-color:rgba(var(--dupc),.48)}
-.dup10.charcard,.dup10.charopt,.dup10.bigchar{background-color:rgba(var(--dupc),.6)}
+    inset 0 0 0 2.5px rgb(var(--dupc)), 0 0 16px rgba(var(--dupc),.55);
+  box-shadow:-4px -4px 8px var(--shl), 4px 4px 10px var(--shd),
+    inset 0 0 0 2.5px rgb(var(--dupc)),
+    inset 0 -3px 0 0 color-mix(in srgb, rgb(var(--dupc)) 60%, var(--bg)),
+    0 0 16px rgba(var(--dupc),.55)}
 
 /* ---- なかま詳細(ビッグ表示) ---- */
 .bigchar{width:70%; max-width:230px; margin:8px auto 12px; border-radius:20px;
