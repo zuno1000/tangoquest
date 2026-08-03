@@ -280,7 +280,8 @@ function charBase(id){
   return Math.round(st.hp/6 + st.atk*4 + st.def*3 + st.spd*5);
 }
 let charSort="rar"; // レア(既定)/pow=力/dup=突破/dex=図鑑順
-function sortedOwnedChars(mode){
+/* ソート比較関数(なかま一覧と図鑑なかまで共用) */
+function charCmp(mode){
   const dupOf=c=>(G.chars[c.id]&&G.chars[c.id].dup)||0;
   const CMP={
     rar:(a,b)=>b.rar-a.rar || charBase(b.id)-charBase(a.id),
@@ -288,7 +289,10 @@ function sortedOwnedChars(mode){
     dup:(a,b)=>dupOf(b)-dupOf(a) || b.rar-a.rar || charBase(b.id)-charBase(a.id),
     dex:(a,b)=>CHARS.indexOf(a)-CHARS.indexOf(b),
   };
-  return CHARS.filter(c=>G.chars[c.id]).sort(CMP[mode]||CMP.rar);
+  return CMP[mode]||CMP.dex;
+}
+function sortedOwnedChars(mode){
+  return CHARS.filter(c=>G.chars[c.id]).sort(charCmp(mode||"rar"));
 }
 function renderChars(){
   const grid=$("charGrid"); grid.innerHTML="";

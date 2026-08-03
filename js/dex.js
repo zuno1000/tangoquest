@@ -29,7 +29,7 @@ function charDexStats(){
   return {owned, total:CHARS.length};
 }
 
-let dexMode="cards", dexPos="all";
+let dexMode="cards", dexPos="all", dexCharSort="dex"; // 図鑑なかまの並び(既定=図鑑順)
 
 function dexProgHTML(cur, total){
   return '<div class="dexprog"><i style="width:'+Math.min(100, Math.round(100*cur/Math.max(1,total)))+'%"></i></div>';
@@ -68,8 +68,11 @@ function renderDexBody(){
   }else{
     const st=charDexStats();
     let h='<div class="small" style="margin-top:8px">なかま <b style="color:var(--accent2)">'+st.owned+'</b> / '+st.total+'体</div>'+
-      dexProgHTML(st.owned, st.total)+'<div id="dexCharGrid">';
-    CHARS.forEach(c=>{
+      dexProgHTML(st.owned, st.total)+
+      '<div class="seg" id="dexCharSortSeg">'+[["dex","図鑑順"],["rar","レア"],["pow","力"],["dup","突破"]].map(([k,l])=>
+        '<button data-s="'+k+'" class="'+(k===dexCharSort?"active":"")+'">'+l+'</button>').join("")+'</div>'+
+      '<div id="dexCharGrid">';
+    CHARS.slice().sort(charCmp(dexCharSort)).forEach(c=>{
       const rec=G.chars[c.id];
       const dup=(rec&&rec.dup)||0;
       h+= rec
@@ -85,6 +88,10 @@ function renderDexBody(){
     });
     h+='</div>';
     box.innerHTML=h;
+    $("dexCharSortSeg").querySelectorAll("button").forEach(b=>{
+      const set=()=>{ if(dexCharSort!==b.dataset.s){ dexCharSort=b.dataset.s; renderDexBody(); } };
+      b.onclick=set; bindTap(b, set);
+    });
     $("dexCharGrid").onclick=e=>{
       const cell=e.target.closest(".dexchar.own");
       if(cell) openCharModal(cell.dataset.id, {back:true}); // 能力の詳細(図鑑へ戻れる)

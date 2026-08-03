@@ -921,6 +921,19 @@ function run(){
     ok(dex.every((d,i)=>i===0||dex[i-1]<d), "図鑑順は定義順");
     G.chars=old;
   });
+  t("図鑑のなかまもソートできる(レア順で先頭がSSR)", ()=>{
+    W.openDex("chars");
+    const doc=W.document;
+    ok(doc.getElementById("dexCharSortSeg"), "ソートセグメントがある");
+    doc.querySelector('#dexCharSortSeg [data-s="rar"]').click();
+    const cells=[...doc.querySelectorAll("#dexCharGrid .dexchar")];
+    eq(cells.length, W.CHARS.length, "全キャラ表示のまま");
+    ok(cells[0].textContent.indexOf("SSR")>=0, "先頭がSSR");
+    doc.querySelector('#dexCharSortSeg [data-s="dex"]').click();
+    const first=doc.querySelector("#dexCharGrid .dexchar");
+    ok(first.textContent.indexOf(W.CHARS[0].face)>=0, "図鑑順に戻る(先頭=定義順の1体目)");
+    W.closeModal();
+  });
   t("編成: 出撃中キャラの再タップで詳細モーダル", ()=>{
     W.renderEqChars();
     const doc=W.document;

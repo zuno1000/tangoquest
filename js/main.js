@@ -30,6 +30,7 @@ const EVENTS=[
   // {d:"2026-08-03", t:"..."} 形式でバナー以外のイベント告知を書く
 ];
 const NEWS=[
+  {d:"2026-08-04", t:"🔧 v4.4.0 図鑑のなかまにもソート(図鑑順/レア/力/突破)を追加・画面下部のタブが上にずれる不具合を修正・外部リンクから戻ると画面下端が持ち上がる不具合を修正"},
   {d:"2026-08-04", t:"🔧 v4.3.0 なかま一覧にソート(レア/力/突破/図鑑順)を追加・出撃中のなかまをもう一度タップで詳細表示・図鑑の切り替えが1タップで確実に・ホーム画面アプリ起動時に上部へ灰色の帯が出る不具合とガチャ結果の角の白いはみ出しを修正"},
   {d:"2026-08-03", t:"🔮 v4.2.0 なかまをタップで能力詳細が見られるように! 限定キャラは開催終了後に恒常入り・限定ガチャはSSR5%/SR15%に率UP・単発ガチャの結果を大きく表示・図鑑を軽量化"},
   {d:"2026-08-03", t:"📕 v4.1.0 図鑑が登場! カード・なかまの集まり具合をホームから確認。ガチャは1枚ずつめくれる開封に・突破の瞬間もポップに。新アイコン・細かな不具合修正も"},
@@ -185,6 +186,19 @@ document.addEventListener("visibilitychange", ()=>{
     refreshHeader();
   }
 });
+
+/* iOS(ホーム画面起動): 外部リンクのアプリ内ブラウザや通知シェードから戻った直後、
+   ビューポートが誤ったまま復帰して画面の下端が持ち上がって見えることがある。
+   復帰のたびにスクロール位置を戻し再レイアウトを促して回復させる
+   (min-heightの微変更→即戻しは描画されないため、ちらつかない) */
+function nudgeLayout(){
+  window.scrollTo(0,0);
+  const b=document.body;
+  b.style.minHeight="100.01%"; void b.offsetHeight; b.style.minHeight="";
+}
+document.addEventListener("visibilitychange", ()=>{ if(!document.hidden) nudgeLayout(); });
+window.addEventListener("pageshow", e=>{ if(e.persisted) nudgeLayout(); });
+if(window.visualViewport) visualViewport.addEventListener("resize", ()=>window.scrollTo(0,0));
 
 if("serviceWorker" in navigator && location.protocol==="https:"){
   navigator.serviceWorker.register("sw.js").catch(()=>{});

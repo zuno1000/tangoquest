@@ -283,7 +283,7 @@ function openSettings(){
     '<div class="small" style="margin-top:6px">ホーム画面から起動している場合(iOS等)もこのボタンで最新版に更新できる。学習データ・同期は消えない</div>'+
     '<h3 style="margin-top:16px">データ</h3>'+
     '<button class="btn danger" id="resetBtn">データをすべてリセット</button>'+
-    '<div class="small" style="margin-top:14px">LEXICA(レキシカ) v'+APP_VERSION+' ─ 英単語×ローグライクRPG<br>単語データ: 英検1級レベル '+WORDS.length+'語(<a href="https://github.com/zuno1000/tango" style="color:var(--accent2)">tango</a> 由来)</div>');
+    '<div class="small" style="margin-top:14px">LEXICA(レキシカ) v'+APP_VERSION+' ─ 英単語×ローグライクRPG<br>単語データ: 英検1級レベル '+WORDS.length+'語(<a href="https://github.com/zuno1000/tango" target="_blank" rel="noopener" style="color:var(--accent2)">tango</a> 由来)</div>');
   $("modeToggle").onclick=()=>{
     G.mode=G.mode==="e2j"?"j2e":"e2j"; saveG();
     $("modeToggle").textContent=(G.mode==="e2j"?"EN → 日本語":"日本語 → EN")+" (タップで切替)";
