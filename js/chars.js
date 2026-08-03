@@ -294,26 +294,45 @@ function charCmp(mode){
 function sortedOwnedChars(mode){
   return CHARS.filter(c=>G.chars[c.id]).sort(charCmp(mode||"rar"));
 }
+/* なかまカードのタイル(なかま一覧・出撃キャラ選択モーダルで共用) */
+function charCardEl(c){
+  const dup=(G.chars[c.id]&&G.chars[c.id].dup)||0;
+  const base=charBase(c.id); // 素の戦闘力
+  const d=document.createElement("div");
+  d.className="charcard bd"+(c.rar===4?5:c.rar)+dupClass(dup);
+  d.style.setProperty("--dupc", DUP_RGB[c.rar-1]);
+  d.innerHTML=
+    (c.limited?'<div class="ltdmini">限定</div>':"")+
+    '<div style="font-size:32px">'+c.face+'</div>'+
+    '<div class="'+CHAR_RAR_CLASS[c.rar-1]+'" style="font-weight:800; font-size:11px">'+CHAR_RAR[c.rar-1]+
+      (dup>=10? ' 👑+'+dup : dup? " +"+dup : "")+'</div>'+
+    '<div style="font-size:12px; font-weight:700; margin-top:3px; line-height:1.2">'+esc(c.name)+'</div>'+
+    (c.sk? '<div class="cskill">✦ '+esc(c.sk.n)+'</div>':"")+
+    '<div class="small" style="margin-top:3px">力 '+fmt(base)+'</div>'+
+    (G.party.char===c.id? '<div style="font-size:11px; color:var(--accent); font-weight:800; margin-top:3px">出撃中</div>':"");
+  return d;
+}
 function renderChars(){
   const grid=$("charGrid"); grid.innerHTML="";
   const owned=sortedOwnedChars(charSort);
   if(!owned.length){ grid.innerHTML='<div class="empty" style="grid-column:1/-1">ガチャで冒険者を仲間にしよう</div>'; return; }
   owned.forEach(c=>{
-    const dup=G.chars[c.id].dup||0;
-    const base=charBase(c.id); // 素の戦闘力
-    const d=document.createElement("div");
-    d.className="charcard bd"+(c.rar===4?5:c.rar)+dupClass(dup);
-    d.style.setProperty("--dupc", DUP_RGB[c.rar-1]);
-    d.innerHTML=
-      (c.limited?'<div class="ltdmini">限定</div>':"")+
-      '<div style="font-size:32px">'+c.face+'</div>'+
-      '<div class="'+CHAR_RAR_CLASS[c.rar-1]+'" style="font-weight:800; font-size:11px">'+CHAR_RAR[c.rar-1]+
-        (dup>=10? ' 👑+'+dup : dup? " +"+dup : "")+'</div>'+
-      '<div style="font-size:12px; font-weight:700; margin-top:3px; line-height:1.2">'+esc(c.name)+'</div>'+
-      (c.sk? '<div class="cskill">✦ '+esc(c.sk.n)+'</div>':"")+
-      '<div class="small" style="margin-top:3px">力 '+fmt(base)+'</div>'+
-      (G.party.char===c.id? '<div style="font-size:11px; color:var(--accent); font-weight:800; margin-top:3px">出撃中</div>':"");
+    const d=charCardEl(c);
     d.onclick=()=>openCharModal(c.id, {select:true}); // タップで能力の詳細(出撃もここから)
+    grid.appendChild(d);
+  });
+}
+/* 出撃キャラの選択モーダル(呪文画面の「変更」から。タップで即選択) */
+function openCharPicker(){
+  openModal('<h3>⚔ 出撃キャラを選ぶ</h3><div id="pickCharGrid"></div>');
+  const grid=$("pickCharGrid");
+  sortedOwnedChars("rar").forEach(c=>{
+    const d=charCardEl(c);
+    d.onclick=()=>{
+      G.party.char=c.id; saveG(); closeModal();
+      renderEqChars(); renderEqSlots();
+      toast(c.name+" を出撃メンバーにした");
+    };
     grid.appendChild(d);
   });
 }

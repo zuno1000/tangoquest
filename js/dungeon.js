@@ -500,25 +500,30 @@ $("autoEqBtn").onclick=()=>{
 };
 $("unEqBtn").onclick=()=>{ unequipAll(); renderEqSlots(); toast("呪文を全て空にした"); };
 
+/* 出撃キャラの1枚パネル。旧UIは横スクロールの全キャラ列だったが、iOSで
+   スクロール容器内の角丸+光沢のクリップが壊れて突破彩色がはみ出すため、
+   パネル+選択モーダル(なかまタブと同じ描画経路)に刷新(v4.5.0)。
+   パネルのタップ=詳細モーダル/「変更」=選択モーダル */
 function renderEqChars(){
   const box=$("eqChars"); if(!box) return;
-  box.innerHTML="";
-  CHARS.filter(c=>G.chars[c.id]).sort((a,b)=>b.rar-a.rar).forEach(c=>{
-    const d=document.createElement("div");
-    const dup=(G.chars[c.id]&&G.chars[c.id].dup)||0;
-    d.className="charopt"+dupClass(dup)+(G.party.char===c.id?" sel":"");
-    d.style.setProperty("--dupc", DUP_RGB[c.rar-1]);
-    const st=charStats(c.id);
-    d.innerHTML='<div class="cf">'+c.face+'</div>'+
-      '<div class="cr '+CHAR_RAR_CLASS[c.rar-1]+'">'+CHAR_RAR[c.rar-1]+'</div>'+
-      '<div class="cn">'+esc(c.name)+'</div>'+
-      '<div class="small" style="font-size:10px">HP'+st.hp+' 攻'+st.atk+'</div>';
-    d.onclick=()=>{
-      if(G.party.char===c.id){ openCharModal(c.id, {select:true}); return; } // 出撃中を再タップ=詳細
-      G.party.char=c.id; saveG(); renderEqChars(); renderEqSlots();
-    };
-    box.appendChild(d);
-  });
+  const c=byChar[G.party.char];
+  if(!c){ box.innerHTML=""; return; }
+  const dup=(G.chars[c.id]&&G.chars[c.id].dup)||0;
+  const st=charStats(c.id);
+  box.innerHTML=
+    '<div class="eqhero'+dupClass(dup)+'" id="eqCurChar" style="--dupc:'+DUP_RGB[c.rar-1]+'">'+
+      '<div class="ecf">'+c.face+'</div>'+
+      '<div class="grow">'+
+        '<div class="'+CHAR_RAR_CLASS[c.rar-1]+'" style="font-weight:800; font-size:11px">'+
+          CHAR_RAR[c.rar-1]+(dup>=10? ' 👑+'+dup : dup? " +"+dup : "")+'</div>'+
+        '<div style="font-weight:800; font-size:15px; line-height:1.25">'+esc(c.name)+'</div>'+
+        (c.sk? '<div class="cskill">✦ '+esc(c.sk.n)+' ─ '+skillDesc(c.sk)+'</div>':"")+
+        '<div class="small" style="margin-top:2px">HP'+st.hp+' 攻'+st.atk+' 防'+st.def+' 速'+st.spd+'</div>'+
+      '</div>'+
+      '<button class="btn" id="eqCharPickBtn">変更</button>'+
+    '</div>';
+  $("eqCurChar").onclick=()=>openCharModal(c.id, {select:true}); // タップで能力の詳細
+  $("eqCharPickBtn").onclick=e=>{ e.stopPropagation(); openCharPicker(); };
 }
 
 /* ---- 文スロットの描画 ---- */

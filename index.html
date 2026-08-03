@@ -2,15 +2,15 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<!-- ステータスバー: black-translucent+viewport-fit=cover で本文を画面全体に描き、
-     上端は body の safe-area パディングで避ける(v4.3.0方式)。
-     default(不透明バー)は新規インストールの初回起動でステータスバー領域が
-     灰色に塗られるiOSバグを避けられない(v4.4.2で実機確認)。
-     ただし下部の safe-area パディングはナビが持ち上がって見えるため使わない
-     (style.css側で定数パディングに固定) -->
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<!-- ステータスバーは default(不透明・本文はバーの下から)で確定(v4.5.0)。
+     実機検証の結論:
+     ・black-translucent+viewport-fit=cover → 下端がシステムの灰色で
+       レターボックス化されタブが持ち上がる・モーダル下部が隠れる(IMG_1674/1676)
+     ・default → 常時正常。ただし新規インストール初回起動のみステータスバー領域が
+       灰色に塗られるiOSバグがある(IMG_1673)→ main.js の初回自動リロードで回避 -->
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="theme-color" content="#E8EDF5">
 <meta name="description" content="LEXICA(レキシカ) ─ 英単語を解いてカードを集め、ダンジョンを攻略する単語学習RPG。">
 <link rel="manifest" href="manifest.json">
@@ -68,7 +68,7 @@
       <button class="btn primary" id="autoEqBtn">✨ おまかせ</button>
       <button class="btn" id="unEqBtn">解除</button>
     </div>
-    <div class="charsel" id="eqChars"></div>
+    <div id="eqChars"></div>
     <h2 style="margin:10px 4px 6px">📜 呪文 <span class="small" id="slotInfo"></span></h2>
     <div id="sentenceRow"></div>
     <div class="panel" id="formulaBox" style="margin-top:10px"></div>

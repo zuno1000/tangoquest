@@ -34,7 +34,7 @@ button{font-family:inherit; color:var(--ink)}
 
 /* Soft UI 影レシピ: 浮き(raised)と窪み(inset) */
 .panel,.ccard,.tile,.dnode,.charcard,.gres,.gbanner,.hero,
-.choice,.wslot.filled,.charopt{
+.choice,.wslot.filled,.eqhero{
   box-shadow:-5px -5px 10px var(--shl), 5px 5px 10px var(--shd);
 }
 
@@ -272,14 +272,16 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
 .ftotal{margin-top:8px; font-weight:800; font-size:14px}
 .ftotal b{color:var(--accent2); font-size:19px}
 .prow.dim{opacity:.45}
-.charsel{display:flex; gap:10px; overflow-x:auto; padding:8px 4px; margin-top:8px}
-.charopt{flex:0 0 auto; width:86px; background:var(--bg); border:1.5px solid transparent; border-radius:16px;
-  padding:10px 4px; text-align:center; cursor:pointer}
-.charopt.sel{border-color:var(--accent2);
-  box-shadow:-4px -4px 8px var(--shl), 4px 4px 8px var(--shd), 0 0 8px rgba(91,108,255,.35)}
-.charopt .cf{font-size:28px}
-.charopt .cn{font-size:11px; font-weight:700; margin-top:3px; line-height:1.2}
-.charopt .cr{font-size:10px; font-weight:800; margin-top:2px}
+/* ---- 出撃キャラ(呪文画面・1枚パネル) ----
+   旧UIは横スクロールの全キャラ列(.charsel/.charopt)だったが、iOSでは
+   横スクロール容器内の「角丸+光沢アニメ」のクリップが壊れて突破彩色が
+   カード下端からはみ出す(なかまタブのグリッドでは起きない=v4.4系の実機FBで特定)。
+   スクロール容器そのものを廃止し、パネル+選択モーダルに刷新(v4.5.0) */
+.eqhero{display:flex; align-items:center; gap:12px; margin-top:10px; padding:12px 14px;
+  background:var(--bg); border:1.5px solid transparent; border-radius:16px; cursor:pointer}
+.eqhero .ecf{font-size:36px; flex:0 0 auto}
+.eqhero .cskill{white-space:normal}
+.eqhero .btn{flex:0 0 auto}
 .picker .prow{display:flex; align-items:center; gap:10px; padding:12px 6px; min-height:52px;
   border-bottom:1px solid var(--line); cursor:pointer}
 .picker .prow:last-child{border-bottom:none}
@@ -365,7 +367,7 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
   text-align:center; cursor:pointer; position:relative}
 .cskill{font-size:10px; font-weight:800; color:var(--accent2); margin-top:3px;
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-#charGrid{display:grid; grid-template-columns:repeat(3,1fr); gap:11px; padding:2px}
+#charGrid,#pickCharGrid{display:grid; grid-template-columns:repeat(3,1fr); gap:11px; padding:2px}
 /* 10連でもOKボタンまでスクロール不要な高さに収めるコンパクトグリッド */
 .gresult{display:grid; grid-template-columns:repeat(auto-fill, minmax(72px,1fr));
   gap:8px; width:100%; margin:10px 0}
@@ -507,7 +509,7 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
    カード面をレアリティ色(--dupc: JSがN白銀/R緑/SR青/SSR金のRGBを渡す)で段階的に彩る:
    +3=淡彩グラデ+内枠 / +6=濃彩+光沢 / +10=フォイル(全面彩色+濃枠)。
    v4.0.0: 「暗く見える」FBを受けて白を混ぜた明るいフォイルに刷新 */
-.charcard,.charopt,.bigchar{--dupc:244,176,26; overflow:hidden; position:relative} /* shine(ホロ光沢)用 */
+.charcard,.eqhero,.bigchar{--dupc:244,176,26; overflow:hidden; position:relative} /* shine(ホロ光沢)用 */
 /* iOS対策(下端の色欠け): 要素の高さが小数px(flexの均等伸縮など)のとき、
    グラデ背景の描画と角丸クリップが1px前後食い違い、下端に色欠けが出る。
    background-color / background-size での補填はどちらも枠外へはみ出した
@@ -516,7 +518,7 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
    はみ出しも隙間も原理的に出ない。帯色はグラデ終端(半透明×背景)を
    color-mix で不透明化して合わせる。box-shadowを2段書きしているのは
    color-mix非対応の古いブラウザへのフォールバック(1段目が生きる) */
-.dup3.charcard,.dup3.charopt,.dup3.bigchar{
+.dup3.charcard,.dup3.eqhero,.dup3.bigchar{
   background:linear-gradient(165deg, #FFFFFF 0%, rgba(var(--dupc),.26) 100%);
   box-shadow:-4px -4px 8px var(--shl), 4px 4px 10px var(--shd),
     inset 0 0 0 1.5px rgba(var(--dupc),.55), 0 0 8px rgba(var(--dupc),.22);
@@ -524,7 +526,7 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
     inset 0 0 0 1.5px rgba(var(--dupc),.55),
     inset 0 -3px 0 0 color-mix(in srgb, rgb(var(--dupc)) 26%, var(--bg)),
     0 0 8px rgba(var(--dupc),.22)}
-.dup6.charcard,.dup6.charopt,.dup6.bigchar{
+.dup6.charcard,.dup6.eqhero,.dup6.bigchar{
   background:linear-gradient(160deg, #FFFFFF 0%, rgba(var(--dupc),.22) 45%, rgba(var(--dupc),.48) 100%);
   box-shadow:-4px -4px 8px var(--shl), 4px 4px 10px var(--shd),
     inset 0 0 0 2px rgba(var(--dupc),.75), 0 0 12px rgba(var(--dupc),.4);
@@ -532,7 +534,7 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
     inset 0 0 0 2px rgba(var(--dupc),.75),
     inset 0 -3px 0 0 color-mix(in srgb, rgb(var(--dupc)) 48%, var(--bg)),
     0 0 12px rgba(var(--dupc),.4)}
-.dup10.charcard,.dup10.charopt,.dup10.bigchar{
+.dup10.charcard,.dup10.eqhero,.dup10.bigchar{
   background:linear-gradient(135deg, rgba(var(--dupc),.5) 0%, #FFFFFF 30%, rgba(var(--dupc),.36) 55%, #FFFFFF 78%, rgba(var(--dupc),.6) 100%);
   box-shadow:-4px -4px 8px var(--shl), 4px 4px 10px var(--shd),
     inset 0 0 0 2.5px rgb(var(--dupc)), 0 0 16px rgba(var(--dupc),.55);

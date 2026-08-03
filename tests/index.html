@@ -934,14 +934,28 @@ function run(){
     ok(first.textContent.indexOf(W.CHARS[0].face)>=0, "図鑑順に戻る(先頭=定義順の1体目)");
     W.closeModal();
   });
-  t("編成: 出撃中キャラの再タップで詳細モーダル", ()=>{
+  t("編成: 出撃キャラパネルのタップで詳細モーダル", ()=>{
     W.renderEqChars();
     const doc=W.document;
-    const sel=doc.querySelector("#eqChars .charopt.sel");
-    ok(sel, "出撃中キャラが表示されている");
-    sel.click();
+    const cur=doc.getElementById("eqCurChar");
+    ok(cur, "出撃キャラのパネルが表示されている");
+    cur.click();
     ok(doc.getElementById("modal").innerHTML.indexOf("なかま詳細")>=0, "詳細モーダルが開く");
     W.closeModal();
+  });
+  t("編成: 「変更」から出撃キャラをタップで選べる", ()=>{
+    const G=W.G;
+    const old=G.chars, oldChar=G.party.char;
+    G.chars={c01:{dup:0}, c05:{dup:0}};
+    G.party.char="c01";
+    W.renderEqChars();
+    W.document.getElementById("eqCharPickBtn").click();
+    const cells=W.document.querySelectorAll("#pickCharGrid .charcard");
+    eq(cells.length, 2, "所持なかまが並ぶ");
+    cells[0].click(); // レア順の先頭=c05(R)
+    eq(G.party.char, "c05", "タップで出撃キャラが変わる");
+    G.chars=old; G.party.char=oldChar;
+    W.renderEqChars();
   });
 
   /* ---- v3.6.0: バージョン表記・選択肢のランダム性 ---- */
