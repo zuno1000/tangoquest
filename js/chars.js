@@ -37,11 +37,12 @@ const CHARS=[
   {id:"c29", face:"🦁", name:"獣王 レオニス",       rar:4, hp:760, atk:94, def:50, spd:14, sk:{n:"王の咆哮",     t:"boss", v:0.35}},
   // v4.0.0 追加(恒常・これで計32体)
   {id:"c32", face:"🧭", name:"星の旅人 アルク",     rar:2, hp:410, atk:47, def:27, spd:13, sk:{n:"道しるべ",     t:"heal", v:0.15}},
-  // 期間限定(開催中のバナーからのみ排出)
-  {id:"c22", face:"☄️", name:"彗星の魔女 ステラ",   rar:4, hp:700, atk:104, def:42, spd:19, limited:true, sk:{n:"彗星落とし",  t:"dmg",  v:0.25}},
-  {id:"c23", face:"🌸", name:"桜花の剣姫 サクヤ",   rar:3, hp:560, atk:76, def:34, spd:19, limited:true, sk:{n:"桜吹雪",     t:"dmg",  v:0.16}},
-  {id:"c30", face:"🍁", name:"紅葉の狐仙 モミジ",   rar:4, hp:710, atk:102, def:44, spd:18, limited:true, sk:{n:"紅葉狩り",   t:"vamp", v:0.12}},
-  {id:"c31", face:"🌾", name:"収穫の精 ミノリ",     rar:3, hp:590, atk:70, def:38, spd:16, limited:true, sk:{n:"豊穣",       t:"gold", v:35}},
+  // 期間限定(開催中は限定バナーのみ・終了後は恒常入り)。
+  // 限定は同レアの恒常より素の力を1割弱高くする(ただし限定SR < 恒常SSR)
+  {id:"c22", face:"☄️", name:"彗星の魔女 ステラ",   rar:4, hp:720, atk:108, def:44, spd:19, limited:true, sk:{n:"彗星落とし",  t:"dmg",  v:0.25}},
+  {id:"c23", face:"🌸", name:"桜花の剣姫 サクヤ",   rar:3, hp:580, atk:78, def:36, spd:19, limited:true, sk:{n:"桜吹雪",     t:"dmg",  v:0.18}},
+  {id:"c30", face:"🍁", name:"紅葉の狐仙 モミジ",   rar:4, hp:720, atk:104, def:46, spd:18, limited:true, sk:{n:"紅葉狩り",   t:"vamp", v:0.12}},
+  {id:"c31", face:"🌾", name:"収穫の精 ミノリ",     rar:3, hp:600, atk:74, def:40, spd:17, limited:true, sk:{n:"豊穣",       t:"gold", v:35}},
 ];
 const byChar={}; CHARS.forEach(c=>byChar[c.id]=c);
 
@@ -80,9 +81,15 @@ function activeBanner(){
   const t=todayKey();
   return BANNERS.find(b=>b.start<=t && t<=b.end)||null;
 }
-/* レア度ごとの排出プール。banner指定時は限定キャラも含む */
+/* 限定キャラの恒常入り判定: 登場したバナーが1つでも「終了」していれば恒常プールへ
+   (開催前・開催中は限定バナーからのみ) */
+function limitedUnlocked(c, t){
+  t=t||todayKey();
+  return BANNERS.some(b=>b.chars.indexOf(c.id)>=0 && t>b.end);
+}
+/* レア度ごとの排出プール。banner指定時はピックアップ(feat)も返す */
 function gachaPool(rar, banner){
-  const normal=CHARS.filter(c=>c.rar===rar && !c.limited);
+  const normal=CHARS.filter(c=>c.rar===rar && (!c.limited || limitedUnlocked(c)));
   if(!banner) return normal;
   const feat=banner.chars.map(id=>byChar[id]).filter(c=>c && c.rar===rar);
   return feat.length? {feat, normal} : normal;
@@ -120,15 +127,18 @@ function charStats(id){
 }
 
 /* ---- ガチャ ---- */
-const GACHA_RATES=[55,32,10,3]; // N/R/SR/SSR %
+const GACHA_RATES=[55,32,10,3];      // 恒常: N/R/SR/SSR %
+const GACHA_RATES_LTD=[48,32,15,5];  // 限定開催: SR/SSRが当たりやすい(限定の売り)
 const PULL_GOLD=1000;
+function gachaRates(banner){ return banner? GACHA_RATES_LTD : GACHA_RATES; }
 
 function rollChar(banner){
+  const R=gachaRates(banner);
   let r=Math.random()*100, rar=1;
-  // レアリティの高い方から判定: SSR3 → SR10 → R32 → N残り
-  if(r<GACHA_RATES[3]) rar=4;
-  else if(r<GACHA_RATES[3]+GACHA_RATES[2]) rar=3;
-  else if(r<GACHA_RATES[3]+GACHA_RATES[2]+GACHA_RATES[1]) rar=2;
+  // レアリティの高い方から判定: SSR → SR → R → N残り
+  if(r<R[3]) rar=4;
+  else if(r<R[3]+R[2]) rar=3;
+  else if(r<R[3]+R[2]+R[1]) rar=2;
   else rar=1;
   const pool=gachaPool(rar, banner);
   if(pool.feat){ // ピックアップ: 該当レア枠の50%が限定
@@ -161,13 +171,14 @@ function doPull(n, useGold, banner){
 }
 
 /* ---- パック開封セレモニー(ポケポケ参考: スライドで切って開ける) ---- */
-/* 1枚ずつ裏面からめくれて公開(gflip)。重複は「突破+N」ポップの凸演出つき */
+/* 1枚ずつ裏面からめくれて公開(gflip)。重複は「突破+N」ポップの凸演出つき。
+   カードの面(枠・背景)は表=.gfr/裏=.gbkが同じ矩形を占める(裏面の余白対策) */
 function gresHTML(r, i){
   const dup=(G.chars[r.c.id]&&G.chars[r.c.id].dup)||0;
-  return '<div class="gres bd'+(r.c.rar===4?5:r.c.rar)+(r.c.rar===4?' shine':'')+'">'+
+  return '<div class="gres">'+
     '<div class="gin" style="animation-delay:'+(i*140)+'ms">'+
       '<div class="gbk">⚔</div>'+
-      '<div class="gfr">'+
+      '<div class="gfr bd'+(r.c.rar===4?5:r.c.rar)+(r.c.rar===4?' shine':'')+'">'+
         (r.c.limited?'<div class="ltdmini">限定</div>':"")+
         '<div class="gface">'+r.c.face+'</div>'+
         '<div class="grar '+CHAR_RAR_CLASS[r.c.rar-1]+'">'+CHAR_RAR[r.c.rar-1]+'</div>'+
@@ -188,7 +199,7 @@ function openPackCeremony(results, banner){
         '<div class="packHint">スライドして開封!</div>'+
         '<div class="packCap"></div>'+
       '</div>'+
-      '<div id="packResults" class="gresult hidden"></div>'+
+      '<div id="packResults" class="gresult'+(results.length===1?" single":"")+' hidden"></div>'+
     '</div>'+
     '<div class="row" id="packCtrl" style="margin-top:6px">'+
       '<button class="btn" style="flex:1" id="packSkipBtn">スキップ ▶▶</button></div>');
@@ -221,6 +232,47 @@ function openPackCeremony(results, banner){
   $("packSkipBtn").onclick=reveal;
 }
 
+/* ---- なかま詳細モーダル(図鑑・編成のなかまから) ---- */
+function charDetailHTML(id){
+  const c=byChar[id]; if(!c) return "";
+  const dup=(G.chars[id]&&G.chars[id].dup)||0;
+  const st=charStats(id);
+  return '<div class="bigchar bd'+(c.rar===4?5:c.rar)+dupClass(dup)+'" style="--dupc:'+DUP_RGB[c.rar-1]+'">'+
+      (c.limited?'<div class="ltdmini">限定</div>':"")+
+      '<div style="font-size:52px">'+c.face+'</div>'+
+      '<div class="'+CHAR_RAR_CLASS[c.rar-1]+'" style="font-weight:800; margin-top:2px">'+CHAR_RAR[c.rar-1]+
+        (dup>=10? ' 👑+'+dup : dup? " +"+dup : "")+'</div>'+
+      '<div style="font-weight:800; font-size:16px; margin-top:4px; line-height:1.25">'+esc(c.name)+'</div>'+
+      (c.sk? '<div class="bcskill">✦ '+esc(c.sk.n)+'<br><span style="font-weight:700; font-size:11px">'+skillDesc(c.sk)+'</span></div>':"")+
+    '</div>'+
+    '<table class="stt">'+
+      '<tr><td>HP</td><td>'+fmt(st.hp)+'</td></tr>'+
+      '<tr><td>攻撃</td><td>'+fmt(st.atk)+'</td></tr>'+
+      '<tr><td>防御</td><td>'+fmt(st.def)+'</td></tr>'+
+      '<tr><td>素早さ</td><td>'+fmt(st.spd)+'</td></tr>'+
+      '<tr><td>突破</td><td>+'+dup+'(能力 ×'+dupMult(dup).toFixed(2)+')</td></tr>'+
+    '</table>';
+}
+/* opts: {select:出撃ボタンを出す, back:"dex"=図鑑へ戻るボタン} */
+function openCharModal(id, opts){
+  opts=opts||{};
+  const c=byChar[id]; if(!c || !G.chars[id]) return;
+  openModal('<h3>なかま詳細</h3>'+charDetailHTML(id)+
+    '<div class="row" style="margin-top:12px; gap:8px">'+
+    (opts.back? '<button class="btn" style="flex:1" id="charBackBtn">◀ 図鑑へ</button>':'')+
+    (opts.select? '<button class="btn primary" style="flex:2" id="charSelBtn" '+(G.party.char===id?"disabled":"")+'>'+
+      (G.party.char===id? "出撃中" : "⚔ 出撃メンバーにする")+'</button>':'')+
+    (!opts.back && !opts.select? '<button class="btn primary" style="flex:1" data-close>OK</button>':'')+
+    '</div>');
+  const bb=$("charBackBtn");
+  if(bb) bb.onclick=()=>openDex("chars");
+  const sb=$("charSelBtn");
+  if(sb && !sb.disabled) sb.onclick=()=>{
+    G.party.char=id; saveG(); closeModal(); renderChars();
+    toast(c.name+" を出撃メンバーにした");
+  };
+}
+
 /* ---- なかま一覧 ---- */
 function renderChars(){
   const grid=$("charGrid"); grid.innerHTML="";
@@ -242,10 +294,7 @@ function renderChars(){
       (c.sk? '<div class="cskill">✦ '+esc(c.sk.n)+'</div>':"")+
       '<div class="small" style="margin-top:3px">力 '+fmt(base)+'</div>'+
       (G.party.char===c.id? '<div style="font-size:11px; color:var(--accent); font-weight:800; margin-top:3px">出撃中</div>':"");
-    d.onclick=()=>{
-      G.party.char=c.id; saveG(); renderChars();
-      toast(c.name+" を出撃 ─ ✦"+(c.sk? c.sk.n+"("+skillDesc(c.sk)+")" : ""));
-    };
+    d.onclick=()=>openCharModal(c.id, {select:true}); // タップで能力の詳細(出撃もここから)
     grid.appendChild(d);
   });
 }
@@ -289,16 +338,17 @@ function renderGacha(){
 }
 
 function openRates(){
+  const row=(i)=>'<tr><td class="'+["rc1","rc2","rc3","rc5"][i]+'">'+CHAR_RAR[i]+'</td>'+
+    '<td>'+GACHA_RATES[i]+'%</td><td>'+GACHA_RATES_LTD[i]+'%</td></tr>';
   openModal('<h3>提供割合</h3>'+
     '<table class="stt">'+
-    '<tr><td class="rc5">SSR</td><td>3%</td></tr>'+
-    '<tr><td class="rc3">SR</td><td>10%</td></tr>'+
-    '<tr><td class="rc2">R</td><td>32%</td></tr>'+
-    '<tr><td class="rc1">N</td><td>55%</td></tr>'+
+    '<tr><td></td><td style="font-weight:800">恒常</td><td style="font-weight:800">限定開催</td></tr>'+
+    row(3)+row(2)+row(1)+row(0)+
     '</table>'+
     '<div class="small" style="margin-top:12px; line-height:1.7">'+
+    '・期間限定バナーはSSR/SRが当たりやすく、該当レア度枠の50%がピックアップ(限定)キャラになる<br>'+
+    '・限定キャラは開催終了後、恒常の召喚にも登場するようになる<br>'+
     '・同じ冒険者を引くと「突破」となり能力+6%(11回目からは+2%・上限なし)<br>'+
-    '・冒険者はそれぞれ固有スキル(✦)を持つ。出撃中の1人のスキルが効果を発揮する<br>'+
-    '・期間限定バナーでは、該当レア度枠の50%がピックアップ(限定)キャラになる。限定キャラは開催期間中のみ入手できる</div>'+
+    '・冒険者はそれぞれ固有スキル(✦)を持つ。出撃中の1人のスキルが効果を発揮する</div>'+
     '<div class="row" style="margin-top:12px"><button class="btn primary" style="flex:1" data-close>OK</button></div>');
 }

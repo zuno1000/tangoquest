@@ -246,7 +246,7 @@ function openCardModal(key){
       '(もう1枚で+'+(c.lv+1)+')'+(eq?" ・ 装備中":"")+' ・ ✨'+fmt(G.shards)+'</div>'+
     '<div class="row" style="margin-top:12px; gap:8px">'+
       '<button class="btn primary" style="flex:1" id="enhBtn" '+(cnt<1||G.shards<cost?"disabled":"")+'>✨'+fmt(cost)+' で重ねる</button>'+
-      '<button class="btn" style="flex:1" id="quickEqBtn" '+(eq?"disabled":"")+'>'+(eq?"文に配置中":"📜 文に置く")+'</button>'+
+      '<button class="btn" style="flex:1" id="quickEqBtn" '+(eq?"disabled":"")+'>'+(eq?"呪文に配置中":"📜 呪文に置く")+'</button>'+
     '</div>'+
     '<div class="row" style="margin-top:8px; gap:8px">'+
       '<button class="btn" style="flex:1" id="disBtn">1枚分解 → ✨'+fmt(shardValue(c))+(cnt>1?"(Lvが下がる)":"")+'</button>'+
@@ -258,8 +258,8 @@ function openCardModal(key){
   };
   $("quickEqBtn").onclick=()=>{
     const slot=quickEquip(key);
-    if(!slot){ toast("文が満杯か、すでに配置中"); return; }
-    toast("文の"+slot+"語目に置いた");
+    if(!slot){ toast("呪文が満杯か、すでに配置中"); return; }
+    toast("呪文の"+slot+"語目に置いた");
     renderCards(); openCardModal(key);
   };
   $("disBtn").onclick=()=>{

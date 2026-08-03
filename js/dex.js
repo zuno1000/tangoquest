@@ -59,9 +59,11 @@ function renderDexBody(){
     $("dexPosSeg").querySelectorAll("button").forEach(b=>{
       b.onclick=()=>{ dexPos=b.dataset.p; renderDexBody(); };
     });
-    box.querySelectorAll(".dexcell.own").forEach(el=>{
-      el.onclick=()=>openCardModal(el.dataset.k);
-    });
+    // クリックは委譲1本(セルごとのリスナー2,500個を作らない=軽量化)
+    $("dexGrid").onclick=e=>{
+      const cell=e.target.closest(".dexcell.own");
+      if(cell) openCardModal(cell.dataset.k);
+    };
   }else{
     const st=charDexStats();
     let h='<div class="small" style="margin-top:8px">なかま <b style="color:var(--accent2)">'+st.owned+'</b> / '+st.total+'体</div>'+
@@ -82,12 +84,10 @@ function renderDexBody(){
     });
     h+='</div>';
     box.innerHTML=h;
-    box.querySelectorAll(".dexchar.own").forEach(el=>{
-      el.onclick=()=>{
-        const c=byChar[el.dataset.id];
-        if(c && c.sk) toast(c.name+" ─ ✦"+c.sk.n+"("+skillDesc(c.sk)+")");
-      };
-    });
+    $("dexCharGrid").onclick=e=>{
+      const cell=e.target.closest(".dexchar.own");
+      if(cell) openCharModal(cell.dataset.id, {back:true}); // 能力の詳細(図鑑へ戻れる)
+    };
   }
 }
 

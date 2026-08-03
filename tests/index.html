@@ -588,12 +588,69 @@ function run(){
   });
 
   /* ---- 限定ガチャ・ダンジョン ---- */
-  t("限定キャラは恒常プールに出ない", ()=>{
+  t("限定キャラは開催終了まで恒常プールに出ず、終了後は恒常入り", ()=>{
     for(let r=1;r<=4;r++){
       const p=W.gachaPool(r,null);
       ok(p.length>0, "pool r"+r);
-      ok(p.every(c=>!c.limited), "no limited r"+r);
+      ok(p.every(c=>!c.limited || W.limitedUnlocked(c)), "locked limited excluded r"+r);
     }
+    const c22=W.CHARS.find(c=>c.id==="c22"); // 8月バナー(〜8/31)
+    ok(!W.limitedUnlocked(c22, "2026-08-15"), "開催中は恒常に出ない");
+    ok(!W.limitedUnlocked(c22, "2026-08-31"), "最終日も恒常に出ない");
+    ok(W.limitedUnlocked(c22, "2026-09-01"), "終了翌日から恒常入り");
+  });
+  t("限定ガチャは恒常よりSSR/SRが当たりやすい", ()=>{
+    const std=W.gachaRates(null), ltd=W.gachaRates({});
+    ok(ltd[3]>std[3] && ltd[2]>std[2], "SSR/SR率UP: "+ltd);
+    eq(ltd.reduce((a,b)=>a+b,0), 100, "合計100%");
+    eq(std.reduce((a,b)=>a+b,0), 100, "恒常も合計100%");
+  });
+  t("恒常キャラは同レア内で上位互換/下位互換にならない", ()=>{
+    const dom=(a,b)=>a.hp>=b.hp && a.atk>=b.atk && a.def>=b.def && a.spd>=b.spd &&
+      (a.hp>b.hp || a.atk>b.atk || a.def>b.def || a.spd>b.spd);
+    for(let r=1;r<=4;r++){
+      const cs=W.CHARS.filter(c=>c.rar===r && !c.limited);
+      for(const a of cs) for(const b of cs){
+        if(a.id===b.id) continue;
+        ok(!dom(a,b), a.id+" が "+b.id+" の上位互換になっている");
+      }
+    }
+  });
+  t("限定は同レアの恒常より強く、限定SRは恒常SSRより弱い", ()=>{
+    const pw=c=>c.hp/6 + c.atk*4 + c.def*3 + c.spd*5;
+    for(const r of [3,4]){
+      const nmax=Math.max(...W.CHARS.filter(c=>c.rar===r && !c.limited).map(pw));
+      W.CHARS.filter(c=>c.rar===r && c.limited).forEach(c=>
+        ok(pw(c)>nmax, c.id+" が同レア恒常の最強より弱い("+pw(c)+"<="+nmax+")"));
+    }
+    const ssrMin=Math.min(...W.CHARS.filter(c=>c.rar===4 && !c.limited).map(pw));
+    W.CHARS.filter(c=>c.rar===3 && c.limited).forEach(c=>
+      ok(pw(c)<ssrMin, c.id+" が恒常SSRを超えている"));
+  });
+  t("なかま詳細モーダル: ステータスとスキルと出撃ボタン", ()=>{
+    W.G.chars.c01=W.G.chars.c01||{dup:0};
+    W.openCharModal("c01", {select:true});
+    const html=W.document.getElementById("modal").innerHTML;
+    ok(html.indexOf("HP")>=0 && html.indexOf("素早さ")>=0 && html.indexOf("突破")>=0, "ステータス表");
+    ok(html.indexOf("剣の心得")>=0, "固有スキル");
+    ok(html.indexOf("出撃")>=0, "出撃ボタン");
+    W.closeModal();
+  });
+  t("カード詳細の配置ボタンは「呪文に置く」", ()=>{
+    const en=W.WORDS[30].en;
+    W.addCard(en,1);
+    W.openCardModal(en+"|1|0");
+    ok(W.document.getElementById("modal").innerHTML.indexOf("呪文に置く")>=0, "表記");
+    W.closeModal();
+    delete W.G.inv[en+"|1|0"];
+  });
+  t("単発ガチャの結果はsingleレイアウト(中央に大きく)", ()=>{
+    W.openPackCeremony([{c:W.CHARS[0], isNew:true}], null);
+    ok(W.document.getElementById("packResults").classList.contains("single"), "singleクラス");
+    W.closeModal();
+    W.openPackCeremony([{c:W.CHARS[0], isNew:true},{c:W.CHARS[1], isNew:true}], null);
+    ok(!W.document.getElementById("packResults").classList.contains("single"), "複数は通常グリッド");
+    W.closeModal();
   });
   t("バナー指定で限定がピックアップ対象になる", ()=>{
     const p=W.gachaPool(4, {chars:["c22"]});

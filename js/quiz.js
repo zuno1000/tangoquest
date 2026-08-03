@@ -131,9 +131,7 @@ function answer(chosen, btn){
   if(ok){
     let rar=dropRarity(preSt);
     if(Math.random()<comboDropBonus()) rar=Math.min(5, rar+1); // コンボ中は★+1のチャンス
-    const k=addCard(w.en, rar);
-    // 重ね(v4): 既に持っているカードならLvが上がる=解くほど強くなる実感
-    if(G.inv[k]>=2) meta.unshift('<span class="rmeta" style="color:var(--ok)">🆙 重ねLv+'+(G.inv[k]-1)+'</span>');
+    addCard(w.en, rar);
     if(lvUp){ toast("📖 レベルアップ! Lv"+lvUp+" ─ 全ステータス強化"); vibe(40); }
     else if(tkGain){ toast("正解10問ごとのごほうび 🎫+1"); vibe(25); }
     else if(rar>=3) vibe(30);

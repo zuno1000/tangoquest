@@ -366,21 +366,33 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
 /* 10連でもOKボタンまでスクロール不要な高さに収めるコンパクトグリッド */
 .gresult{display:grid; grid-template-columns:repeat(auto-fill, minmax(72px,1fr));
   gap:8px; width:100%; margin:10px 0}
-.gres{background:var(--bg); border:2px solid transparent; border-radius:14px; padding:9px 3px;
-  text-align:center; position:relative; perspective:420px}
+/* カードの面(枠・背景)は表=.gfr が持つ。裏=.gbk は同じ矩形を全面で覆う */
+.gres{position:relative; perspective:420px}
 .gres .gface{font-size:26px; line-height:1.2}
 .gres .grar{font-weight:800; font-size:11px}
 .gres .gname{font-size:10px; font-weight:700; margin-top:2px; line-height:1.25;
   overflow:hidden; max-height:25px}
 .gres .gsub{font-size:9px; color:var(--sub); margin-top:2px}
 /* 裏面からのフリップ公開(ポケポケ流: 1枚ずつめくれていく開封の余韻) */
-.gres .gin{position:relative; transform-style:preserve-3d; animation:gflip .55s ease-out both}
+.gres .gin{position:relative; height:100%; transform-style:preserve-3d; animation:gflip .55s ease-out both}
 @keyframes gflip{from{transform:rotateY(180deg)} to{transform:rotateY(0)}}
-.gres .gbk{position:absolute; inset:-2px; border-radius:12px; transform:rotateY(180deg);
+.gres .gfr{background:var(--bg); border:2px solid transparent; border-radius:14px; padding:9px 3px;
+  text-align:center; position:relative; overflow:hidden; height:100%;
+  display:flex; flex-direction:column; justify-content:center;
+  backface-visibility:hidden; -webkit-backface-visibility:hidden}
+.gres .gbk{position:absolute; inset:0; border-radius:14px; transform:rotateY(180deg);
   backface-visibility:hidden; -webkit-backface-visibility:hidden;
   background:linear-gradient(160deg,#5B6CFF,#2E3899); color:#fff;
   display:flex; align-items:center; justify-content:center; font-size:20px}
-.gres .gfr{backface-visibility:hidden; -webkit-backface-visibility:hidden}
+/* 単発(1回)の結果: 中央に大きく1枚 */
+.gresult.single{grid-template-columns:1fr; justify-items:center}
+.gresult.single .gres{width:200px}
+.gresult.single .gfr{padding:24px 10px}
+.gresult.single .gface{font-size:64px}
+.gresult.single .grar{font-size:15px; margin-top:4px}
+.gresult.single .gname{font-size:14px; max-height:none; margin-top:4px}
+.gresult.single .gsub{font-size:12px; margin-top:4px}
+.gresult.single .gdup{font-size:18px}
 /* 突破ポップ(凸演出): 弾んで浮かんで消える */
 .gres .gdup{position:absolute; top:32%; left:0; right:0; text-align:center; font-size:13px;
   font-weight:900; color:var(--accent); pointer-events:none; z-index:2;
@@ -490,24 +502,34 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
    カード面をレアリティ色(--dupc: JSがN白銀/R緑/SR青/SSR金のRGBを渡す)で段階的に彩る:
    +3=淡彩グラデ+内枠 / +6=濃彩+光沢 / +10=フォイル(全面彩色+濃枠)。
    v4.0.0: 「暗く見える」FBを受けて白を混ぜた明るいフォイルに刷新 */
-.charcard,.charopt{--dupc:244,176,26; overflow:hidden; position:relative} /* shine(ホロ光沢)用 */
-.dup3.charcard,.dup3.charopt{
+.charcard,.charopt,.bigchar{--dupc:244,176,26; overflow:hidden; position:relative} /* shine(ホロ光沢)用 */
+.dup3.charcard,.dup3.charopt,.dup3.bigchar{
   background:linear-gradient(165deg, #FFFFFF 0%, rgba(var(--dupc),.26) 100%);
   box-shadow:-4px -4px 8px var(--shl), 4px 4px 10px var(--shd),
     inset 0 0 0 1.5px rgba(var(--dupc),.55), 0 0 8px rgba(var(--dupc),.22)}
-.dup6.charcard,.dup6.charopt{
+.dup6.charcard,.dup6.charopt,.dup6.bigchar{
   background:linear-gradient(160deg, #FFFFFF 0%, rgba(var(--dupc),.22) 45%, rgba(var(--dupc),.48) 100%);
   box-shadow:-4px -4px 8px var(--shl), 4px 4px 10px var(--shd),
     inset 0 0 0 2px rgba(var(--dupc),.75), 0 0 12px rgba(var(--dupc),.4)}
-.dup10.charcard,.dup10.charopt{
+.dup10.charcard,.dup10.charopt,.dup10.bigchar{
   background:linear-gradient(135deg, rgba(var(--dupc),.5) 0%, #FFFFFF 30%, rgba(var(--dupc),.36) 55%, #FFFFFF 78%, rgba(var(--dupc),.6) 100%);
   box-shadow:-4px -4px 8px var(--shl), 4px 4px 10px var(--shd),
     inset 0 0 0 2.5px rgb(var(--dupc)), 0 0 16px rgba(var(--dupc),.55)}
 
+/* ---- なかま詳細(ビッグ表示) ---- */
+.bigchar{width:70%; max-width:230px; margin:8px auto 12px; border-radius:20px;
+  border:2.5px solid var(--line); padding:18px 10px; text-align:center;
+  box-shadow:-6px -6px 12px var(--shl), 8px 8px 18px var(--shd)}
+.bcskill{margin-top:10px; font-size:13px; font-weight:800; border-radius:12px; padding:8px 10px;
+  background:var(--bg); color:var(--accent2); line-height:1.5;
+  box-shadow:inset 2px 2px 5px var(--shd), inset -2px -2px 5px var(--shl)}
+
 /* ---- 図鑑: 空き枠は「窪み」でコンプリート欲を作る(ポケポケ観察) ---- */
 #dexGrid{display:grid; grid-template-columns:repeat(4,1fr); gap:8px; padding:6px 2px}
+/* content-visibility: 画面外セル(2,500超)のレイアウト・描画をスキップ=図鑑の軽量化 */
 .dexcell{border-radius:12px; padding:8px 2px; min-height:58px; text-align:center;
-  display:flex; flex-direction:column; justify-content:center; gap:2px}
+  display:flex; flex-direction:column; justify-content:center; gap:2px;
+  content-visibility:auto; contain-intrinsic-size:auto 58px}
 .dexcell.own{background:var(--card2); cursor:pointer;
   box-shadow:-3px -3px 6px var(--shl), 3px 3px 6px var(--shd)}
 .dexcell.miss{box-shadow:inset 2px 2px 5px var(--shd), inset -2px -2px 5px var(--shl)}
@@ -516,7 +538,8 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
 .dexcell .dst{font-size:9px; font-weight:800}
 .dexcell .dmas{font-size:9px; color:var(--ok); font-weight:800}
 #dexCharGrid{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; padding:6px 2px}
-.dexchar{border-radius:16px; padding:12px 4px; text-align:center; position:relative; overflow:hidden}
+.dexchar{border-radius:16px; padding:12px 4px; text-align:center; position:relative; overflow:hidden;
+  content-visibility:auto; contain-intrinsic-size:auto 100px}
 .dexchar.own{background:var(--bg); cursor:pointer;
   box-shadow:-4px -4px 8px var(--shl), 4px 4px 10px var(--shd)}
 .dexchar.miss{box-shadow:inset 3px 3px 7px var(--shd), inset -3px -3px 7px var(--shl)}
