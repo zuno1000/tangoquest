@@ -30,6 +30,7 @@ const EVENTS=[
   // {d:"2026-08-03", t:"..."} 形式でバナー以外のイベント告知を書く
 ];
 const NEWS=[
+  {d:"2026-08-03", t:"📕 v4.1.0 図鑑が登場! カード・なかまの集まり具合をホームから確認。ガチャは1枚ずつめくれる開封に・突破の瞬間もポップに。新アイコン・細かな不具合修正も"},
   {d:"2026-08-03", t:"🎉 v4.0.0 カードは「重ねるだけ」で強くなる新育成! 同じカードを引くたびLv+1(上限なし・旧+Lvは自動変換)。全32キャラに固有スキル追加・突破は上限なしに・突破カードの彩りも明るく・新しい仲間「星の旅人 アルク」登場"},
   {d:"2026-08-03", t:"📈 v3.7.0 学習がもっとお得に! 正解10問ごとに🎫1・連続正解コンボでXP&ドロップ★UP・ログインボーナス増額(毎日🎫1以上)・新任務と実績追加"},
   {d:"2026-08-03", t:"🔧 v3.6.0 使い心地の改善! 同期が1タップで完了・10連ガチャの結果が1画面に・アップデート確認がより確実に・新アイコン"},
@@ -68,6 +69,7 @@ function renderHome(){
   const run=G.inf.run;
   const stk=studyStreak();
   const mn=claimableCount();
+  const cdx=cardDexStats(), xdx=charDexStats();
   $("homeBox").innerHTML=
     // ヒーロー(出撃キャラ)
     '<div class="panel hero" data-go="party">'+
@@ -98,11 +100,14 @@ function renderHome(){
         '<div class="tsub">呪文・カード</div></div>'+
       '<div class="tile'+(mn?" claim":"")+'" data-go="mission"><div class="tic">📜'+(mn?'<span class="dot" style="position:static; display:inline-block; margin-left:4px"></span>':'')+'</div><div class="tname">任務</div>'+
         '<div class="tsub">'+(mn? '<b style="color:var(--accent)">達成'+mn+'件!</b>' : "デイリー・実績")+'</div></div>'+
+      '<div class="tile" id="homeDex" style="grid-column:1/-1"><div class="tic">📕</div><div class="tname">図鑑</div>'+
+        '<div class="tsub">カード '+cdx.owned+'/'+cdx.total+'種 ・ なかま '+xdx.owned+'/'+xdx.total+'体</div></div>'+
     '</div>';
   $("homeBox").querySelectorAll("[data-go]").forEach(el=>{
     el.onclick=()=>switchTab(el.dataset.go);
   });
   $("homeStudy").onclick=()=>switchTab("quiz");
+  $("homeDex").onclick=()=>openDex();
   if(mn) $("homeClaim").onclick=()=>{ claimAllCurrent(); renderHome(); };
   const sn=$("homeSync");
   if(sn){ ensureGis(()=>{}); sn.onclick=syncNow; } // GIS事前ロード=タップ時のポップアップブロック防止

@@ -161,13 +161,21 @@ function doPull(n, useGold, banner){
 }
 
 /* ---- パック開封セレモニー(ポケポケ参考: スライドで切って開ける) ---- */
+/* 1枚ずつ裏面からめくれて公開(gflip)。重複は「突破+N」ポップの凸演出つき */
 function gresHTML(r, i){
-  return '<div class="gres bd'+(r.c.rar===4?5:r.c.rar)+(r.c.rar===4?' shine':'')+'" style="animation-delay:'+(i*90)+'ms">'+
-    (r.c.limited?'<div class="ltdmini">限定</div>':"")+
-    '<div class="gface">'+r.c.face+'</div>'+
-    '<div class="grar '+CHAR_RAR_CLASS[r.c.rar-1]+'">'+CHAR_RAR[r.c.rar-1]+'</div>'+
-    '<div class="gname">'+esc(r.c.name)+'</div>'+
-    '<div class="gsub">'+(r.isNew? "NEW!" : "突破 +"+(((G.chars[r.c.id]&&G.chars[r.c.id].dup)||0)>10? 2:6)+"%")+'</div>'+
+  const dup=(G.chars[r.c.id]&&G.chars[r.c.id].dup)||0;
+  return '<div class="gres bd'+(r.c.rar===4?5:r.c.rar)+(r.c.rar===4?' shine':'')+'">'+
+    '<div class="gin" style="animation-delay:'+(i*140)+'ms">'+
+      '<div class="gbk">⚔</div>'+
+      '<div class="gfr">'+
+        (r.c.limited?'<div class="ltdmini">限定</div>':"")+
+        '<div class="gface">'+r.c.face+'</div>'+
+        '<div class="grar '+CHAR_RAR_CLASS[r.c.rar-1]+'">'+CHAR_RAR[r.c.rar-1]+'</div>'+
+        '<div class="gname">'+esc(r.c.name)+'</div>'+
+        '<div class="gsub">'+(r.isNew? "NEW!" : "突破 +"+(dup>10? 2:6)+"%")+'</div>'+
+      '</div>'+
+    '</div>'+
+    (!r.isNew? '<div class="gdup" style="animation-delay:'+(i*140+480)+'ms">突破+'+dup+'!</div>':"")+
   '</div>';
 }
 function openPackCeremony(results, banner){

@@ -1,110 +1,61 @@
 # -*- coding: utf-8 -*-
-"""LEXICA アイコン生成 v2: 藍のグラデ地に剣と単語カード、金彩のきらめき。
-   透過角丸をやめ全面塗り(iOSのapple-touch-iconで四隅が黒くならない)。"""
-import math
+"""LEXICA アイコン生成 v3: アプリと同じSoft UI(白×青ニューモーフィズム)。
+   #E8EDF5の地に、浮き出た単語カード(白影+青灰影)と藍の「L」、金のきらめき。"""
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 S = 512
+BG = (232, 237, 245)        # --bg
+CARD = (244, 247, 252)      # --card2
+SH_D = (136, 152, 184)      # --shd
+INK = (91, 108, 255)        # --accent2
+GOLD = (222, 154, 14)       # --accent
+LINE = (211, 220, 236)      # --line
 
 
-def lerp(a, b, t):
-    return tuple(int(a[i] + (b[i] - a[i]) * t) for i in range(3))
-
-
-def bg_layer():
-    """全面: 藍→深藍の斜めグラデ+左上のやわらかい光"""
-    img = Image.new("RGBA", (S, S))
-    d = ImageDraw.Draw(img)
-    top, bottom = (108, 124, 255), (36, 42, 110)
-    for y in range(S):
-        d.line([(0, y), (S, y)], fill=lerp(top, bottom, y / S) + (255,))
-    glow = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-    ImageDraw.Draw(glow).ellipse([-180, -180, 320, 320], fill=(255, 255, 255, 70))
-    glow = glow.filter(ImageFilter.GaussianBlur(80))
-    img.alpha_composite(glow)
-    return img
-
-
-def one_sword():
-    """縦向きの剣1本(あとで±45°回転して交差させる)"""
+def soft_shadow(base, box, radius, offset, blur, color):
     layer = Image.new("RGBA", (S, S), (0, 0, 0, 0))
     d = ImageDraw.Draw(layer)
-    cx = S / 2
-    tip, guard_y, pom_y = 2, 386, 494
-    bw = 27  # 刃の半幅
-    d.polygon([(cx - bw, 96), (cx, tip), (cx + bw, 96), (cx + bw, guard_y), (cx - bw, guard_y)],
-              fill=(228, 234, 248, 255))
-    d.polygon([(cx - bw, 96), (cx, tip), (cx, guard_y)], fill=(196, 206, 230, 255))  # 陰面
-    d.line([(cx, 48), (cx, guard_y - 6)], fill=(255, 255, 255, 230), width=5)
-    d.rounded_rectangle([cx - 78, guard_y, cx + 78, guard_y + 26], radius=13, fill=(245, 185, 66, 255))
-    d.rounded_rectangle([cx - 15, guard_y + 24, cx + 15, pom_y - 22], radius=12, fill=(58, 47, 96, 255))
-    d.ellipse([cx - 24, pom_y - 34, cx + 24, pom_y + 14], fill=(245, 185, 66, 255))
-    return layer
+    d.rounded_rectangle([box[0] + offset[0], box[1] + offset[1],
+                         box[2] + offset[0], box[3] + offset[1]], radius=radius, fill=color)
+    base.alpha_composite(layer.filter(ImageFilter.GaussianBlur(blur)))
 
 
-def sword_layer():
-    """カードの後ろに交差する2本の剣"""
-    sw = one_sword()
-    layer = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-    layer.alpha_composite(sw.rotate(45, resample=Image.BICUBIC, center=(S / 2, S / 2)))
-    layer.alpha_composite(sw.rotate(-45, resample=Image.BICUBIC, center=(S / 2, S / 2)))
-    # 落ち影
-    sh = layer.split()[3].point(lambda a: a * 0.45)
-    shadow = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-    shadow.paste((20, 24, 60, 160), (10, 14), sh)
-    shadow = shadow.filter(ImageFilter.GaussianBlur(10))
-    out = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-    out.alpha_composite(shadow)
-    out.alpha_composite(layer)
-    return out
+img = Image.new("RGBA", (S, S), BG + (255,))
 
+# 浮き出たカード: 左上=白ハイライト / 右下=青灰シャドウ(Soft UIの2レシピ)
+card_box = (92, 86, 420, 426)
+soft_shadow(img, card_box, 84, (-22, -22), 28, (255, 255, 255, 250))
+soft_shadow(img, card_box, 84, (22, 26), 34, SH_D + (95,))
 
-def card_layer():
-    """主役の単語カード: 白地+金縁+L"""
-    pad = 60
-    cw, ch = 252, 322
-    card = Image.new("RGBA", (cw + pad * 2, ch + pad * 2), (0, 0, 0, 0))
-    d = ImageDraw.Draw(card)
-    # 落ち影
-    d.rounded_rectangle([pad + 10, pad + 18, pad + cw + 10, pad + ch + 18], radius=34,
-                        fill=(20, 24, 60, 130))
-    card = card.filter(ImageFilter.GaussianBlur(9))
-    d = ImageDraw.Draw(card)
-    d.rounded_rectangle([pad, pad, pad + cw, pad + ch], radius=34, fill=(246, 248, 253, 255),
-                        outline=(245, 185, 66, 255), width=11)
-    d.rounded_rectangle([pad + 20, pad + 20, pad + cw - 20, pad + ch - 20], radius=20,
-                        outline=(214, 222, 240, 255), width=3)
-    try:
-        font = ImageFont.truetype("C:/Windows/Fonts/georgiab.ttf", 190)
-    except OSError:
-        font = ImageFont.truetype("C:/Windows/Fonts/arialbd.ttf", 180)
-    d.text((pad + cw / 2, pad + ch / 2 - 26), "L", font=font, fill=(76, 88, 220, 255), anchor="mm")
-    # 辞書の項目らしい2本線
-    d.rounded_rectangle([pad + 52, pad + ch - 76, pad + cw - 52, pad + ch - 64], radius=6,
-                        fill=(200, 209, 232, 255))
-    d.rounded_rectangle([pad + 72, pad + ch - 52, pad + cw - 72, pad + ch - 42], radius=5,
-                        fill=(214, 222, 240, 255))
-    card = card.rotate(-8, resample=Image.BICUBIC, expand=True)
-    layer = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-    layer.alpha_composite(card, (int(S / 2 - card.width / 2), int(S / 2 - card.height / 2) + 6))
-    return layer
-
-
-def sparkle(d, cx, cy, r, fill):
-    """4条のきらめき"""
-    w = r * 0.24
-    d.polygon([(cx, cy - r), (cx + w, cy - w), (cx + r, cy), (cx + w, cy + w),
-               (cx, cy + r), (cx - w, cy + w), (cx - r, cy), (cx - w, cy - w)], fill=fill)
-
-
-img = bg_layer()
-img.alpha_composite(sword_layer())
-img.alpha_composite(card_layer())
 d = ImageDraw.Draw(img)
-sparkle(d, 462, 244, 36, (255, 220, 120, 255))
-sparkle(d, 430, 322, 17, (255, 232, 160, 220))
-sparkle(d, 52, 210, 26, (200, 210, 255, 235))
-sparkle(d, 92, 142, 14, (210, 220, 255, 200))
+d.rounded_rectangle(card_box, radius=84, fill=CARD + (255,))
+# ごく薄い内枠(カードらしさ)
+d.rounded_rectangle([card_box[0] + 20, card_box[1] + 20, card_box[2] - 20, card_box[3] - 20],
+                    radius=64, outline=LINE + (170,), width=3)
+
+# 藍の「L」(レキシカのレターマーク)
+try:
+    font = ImageFont.truetype("C:/Windows/Fonts/georgiab.ttf", 220)
+except OSError:
+    font = ImageFont.truetype("C:/Windows/Fonts/arialbd.ttf", 210)
+cx = (card_box[0] + card_box[2]) / 2
+cy = (card_box[1] + card_box[3]) / 2
+d.text((cx, cy - 24), "L", font=font, fill=INK + (255,), anchor="mm")
+
+# 窪んだピル(辞書の項目線・アプリのinsetモチーフ)
+py = card_box[3] - 74
+d.rounded_rectangle([cx - 84, py, cx + 84, py + 16], radius=8, fill=(221, 228, 239, 255))
+d.rounded_rectangle([cx - 84, py + 10, cx + 84, py + 16], radius=8, fill=(250, 252, 255, 255))
+d.rounded_rectangle([cx - 84, py, cx + 84, py + 14], radius=8, fill=(221, 228, 239, 255))
+
+# 金のきらめき(4条)を右上に1つだけ ─ ラベリング最小限・アクセントは一点
+def sparkle(cx_, cy_, r, fill):
+    w = r * 0.26
+    d.polygon([(cx_, cy_ - r), (cx_ + w, cy_ - w), (cx_ + r, cy_), (cx_ + w, cy_ + w),
+               (cx_, cy_ + r), (cx_ - w, cy_ + w), (cx_ - r, cy_), (cx_ - w, cy_ - w)], fill=fill)
+
+sparkle(400, 122, 40, GOLD + (255,))
+sparkle(438, 178, 16, (240, 190, 80, 220))
 
 img.convert("RGB").save("icon-512.png")
 img.resize((192, 192), Image.LANCZOS).convert("RGB").save("icon-192.png")

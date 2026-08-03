@@ -11,7 +11,10 @@
   --pos-v:#D95C5C; --pos-n:#3B7FE8; --pos-adj:#27A567; --pos-adv:#9C5BDE;
   --shl:rgba(255,255,255,.90); --shd:rgba(136,152,184,.42);
 }
-*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+/* touch-action:manipulation: iOSのダブルタップズーム(=画面下部2回タップで
+   画面が持ち上がる事象の正体。user-scalable=noはiOS 10以降無視される)を無効化。
+   スクロール・ピンチは生きる。#packのtouch-action:noneはIDセレクタが勝つ */
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 html,body{height:100%}
 body{
   font-family:"Zen Kaku Gothic New",-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;
@@ -124,10 +127,12 @@ nav button .dot{position:absolute; top:-2px; right:-8px; width:9px; height:9px; 
 #resultBar.show{visibility:visible; animation:pop .15s ease-out}
 @keyframes pop{from{opacity:0; transform:translateY(6px)} to{opacity:1; transform:none}}
 #resultInfo{flex:1; min-width:0}
-/* 2行に収め、あふれた分は「…」を出さずに隠す(行高を揃えて3行目が覗かないように) */
-#resultCard{font-size:13px; line-height:24px; max-height:48px; overflow:hidden}
-.poschip{display:inline-block; border-radius:9px; padding:3px 10px; margin-right:7px;
-  font-size:12px; font-weight:800; background:var(--bg);
+/* 2行に収め、あふれた分は「…」を出さずに隠す。
+   チップ(poschip)の縦paddingを行高26pxに収め、行箱の高さを揃える
+   (揃っていないと2行目の下端が見切れる) */
+#resultCard{font-size:13px; line-height:26px; max-height:52px; overflow:hidden}
+.poschip{display:inline-block; border-radius:9px; padding:2px 10px; margin-right:7px;
+  font-size:12px; font-weight:800; line-height:18px; background:var(--bg);
   box-shadow:inset 2px 2px 4px var(--shd), inset -2px -2px 4px var(--shl)}
 .poschip.posv{color:var(--pos-v)} .poschip.posn{color:var(--pos-n)}
 .poschip.posadj{color:var(--pos-adj)} .poschip.posadv{color:var(--pos-adv)}
@@ -362,12 +367,30 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
 .gresult{display:grid; grid-template-columns:repeat(auto-fill, minmax(72px,1fr));
   gap:8px; width:100%; margin:10px 0}
 .gres{background:var(--bg); border:2px solid transparent; border-radius:14px; padding:9px 3px;
-  text-align:center; animation:pop .3s ease-out both; position:relative}
+  text-align:center; position:relative; perspective:420px}
 .gres .gface{font-size:26px; line-height:1.2}
 .gres .grar{font-weight:800; font-size:11px}
 .gres .gname{font-size:10px; font-weight:700; margin-top:2px; line-height:1.25;
   overflow:hidden; max-height:25px}
 .gres .gsub{font-size:9px; color:var(--sub); margin-top:2px}
+/* 裏面からのフリップ公開(ポケポケ流: 1枚ずつめくれていく開封の余韻) */
+.gres .gin{position:relative; transform-style:preserve-3d; animation:gflip .55s ease-out both}
+@keyframes gflip{from{transform:rotateY(180deg)} to{transform:rotateY(0)}}
+.gres .gbk{position:absolute; inset:-2px; border-radius:12px; transform:rotateY(180deg);
+  backface-visibility:hidden; -webkit-backface-visibility:hidden;
+  background:linear-gradient(160deg,#5B6CFF,#2E3899); color:#fff;
+  display:flex; align-items:center; justify-content:center; font-size:20px}
+.gres .gfr{backface-visibility:hidden; -webkit-backface-visibility:hidden}
+/* 突破ポップ(凸演出): 弾んで浮かんで消える */
+.gres .gdup{position:absolute; top:32%; left:0; right:0; text-align:center; font-size:13px;
+  font-weight:900; color:var(--accent); pointer-events:none; z-index:2;
+  text-shadow:0 1px 5px #fff, 0 0 3px #fff;
+  opacity:0; animation:gduppop 1s ease-out both}
+@keyframes gduppop{0%{opacity:0; transform:scale(1.9)} 25%{opacity:1; transform:scale(1)}
+  70%{opacity:1; transform:none} 100%{opacity:0; transform:translateY(-16px)}}
+@media (prefers-reduced-motion: reduce){
+  .gres .gin{animation:none} .gres .gbk{display:none} .gres .gdup{display:none}
+}
 
 /* ---- パック開封セレモニー(パックは鮮やかに・白UIで映える) ---- */
 #packStage{display:flex; flex-direction:column; align-items:center; padding:8px 0 4px; min-height:300px; justify-content:center}
@@ -480,6 +503,35 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
   background:linear-gradient(135deg, rgba(var(--dupc),.5) 0%, #FFFFFF 30%, rgba(var(--dupc),.36) 55%, #FFFFFF 78%, rgba(var(--dupc),.6) 100%);
   box-shadow:-4px -4px 8px var(--shl), 4px 4px 10px var(--shd),
     inset 0 0 0 2.5px rgb(var(--dupc)), 0 0 16px rgba(var(--dupc),.55)}
+
+/* ---- 図鑑: 空き枠は「窪み」でコンプリート欲を作る(ポケポケ観察) ---- */
+#dexGrid{display:grid; grid-template-columns:repeat(4,1fr); gap:8px; padding:6px 2px}
+.dexcell{border-radius:12px; padding:8px 2px; min-height:58px; text-align:center;
+  display:flex; flex-direction:column; justify-content:center; gap:2px}
+.dexcell.own{background:var(--card2); cursor:pointer;
+  box-shadow:-3px -3px 6px var(--shl), 3px 3px 6px var(--shd)}
+.dexcell.miss{box-shadow:inset 2px 2px 5px var(--shd), inset -2px -2px 5px var(--shl)}
+.dexcell .den{font-size:10px; font-weight:800; word-break:break-word; line-height:1.15}
+.dexcell.miss .den{color:var(--sub); font-weight:700; opacity:.8}
+.dexcell .dst{font-size:9px; font-weight:800}
+.dexcell .dmas{font-size:9px; color:var(--ok); font-weight:800}
+#dexCharGrid{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; padding:6px 2px}
+.dexchar{border-radius:16px; padding:12px 4px; text-align:center; position:relative; overflow:hidden}
+.dexchar.own{background:var(--bg); cursor:pointer;
+  box-shadow:-4px -4px 8px var(--shl), 4px 4px 10px var(--shd)}
+.dexchar.miss{box-shadow:inset 3px 3px 7px var(--shd), inset -3px -3px 7px var(--shl)}
+.dexchar .dface{font-size:30px}
+.dexchar.miss .dface{filter:brightness(0); opacity:.20}
+.dexchar .dname{font-size:11px; font-weight:700; margin-top:3px; line-height:1.2}
+.dexchar.miss .dname{color:var(--sub)}
+/* 進捗の虹ライン(コレクション画面のアクセント・ポケポケ観察) */
+.dexprog{height:8px; border-radius:6px; background:var(--bg2); overflow:hidden; margin-top:6px;
+  box-shadow:inset 2px 2px 4px var(--shd), inset -2px -2px 4px var(--shl)}
+.dexprog i{display:block; height:100%; border-radius:6px;
+  background:linear-gradient(90deg,#5B6CFF,#27A567,#DE9A0E,#D95C5C,#9C5BDE,#5B6CFF);
+  background-size:300% 100%; animation:rainbowshift 6s linear infinite}
+@keyframes rainbowshift{from{background-position:0 0} to{background-position:300% 0}}
+@media (prefers-reduced-motion: reduce){ .dexprog i{animation:none} }
 
 /* ---- マイクロインタラクション ---- */
 .tile:active,.ccard:active,.dnode:active:not(.locked){filter:brightness(1.04)}

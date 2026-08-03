@@ -808,6 +808,47 @@ function run(){
     W.localStorage.removeItem("tq_newsSeen");
   });
 
+  /* ---- v4.1.0: 図鑑・ガチャ演出 ---- */
+  t("図鑑: カード/なかまの取得状況を集計する", ()=>{
+    const G=W.G;
+    const oldInv=G.inv;
+    G.inv={};
+    W.addCard(W.WORDS[0].en,1); W.addCard(W.WORDS[1].en,3);
+    const st=W.cardDexStats();
+    eq(st.owned, 2, "2種取得");
+    eq(st.total, W.WORDS.length, "母数=全単語");
+    const cs=W.charDexStats();
+    ok(cs.owned>=1 && cs.total===W.CHARS.length, "なかま集計 owned="+cs.owned);
+    G.inv=oldInv;
+  });
+  t("図鑑モーダル: 空き枠は窪み・切替でなかま図鑑(未加入は???)", ()=>{
+    const G=W.G;
+    const oldInv=G.inv;
+    G.inv={};
+    W.addCard(W.WORDS[0].en,2);
+    W.openDex("cards");
+    const doc=W.document;
+    eq(doc.querySelectorAll("#dexGrid .dexcell.own").length, 1, "取得済み1枠");
+    eq(doc.querySelectorAll("#dexGrid .dexcell.miss").length, W.WORDS.length-1, "残りは窪み枠");
+    doc.querySelector('#dexSeg [data-m="chars"]').click();
+    eq(doc.querySelectorAll("#dexCharGrid .dexchar").length, W.CHARS.length, "全キャラ表示");
+    ok(doc.querySelectorAll("#dexCharGrid .dexchar.miss").length>0, "未加入は窪み+シルエット");
+    W.closeModal();
+    G.inv=oldInv;
+  });
+  t("ガチャ結果はフリップ公開+重複は突破ポップ", ()=>{
+    const G=W.G;
+    G.chars.c01=G.chars.c01||{dup:0};
+    const d0=G.chars.c01.dup;
+    G.chars.c01.dup=2;
+    const html=W.gresHTML({c:W.CHARS[0], isNew:false}, 0);
+    ok(html.indexOf("gbk")>=0 && html.indexOf("gfr")>=0, "裏面/表面の2層");
+    ok(html.indexOf("突破+2!")>=0, "凸演出ポップ");
+    const html2=W.gresHTML({c:W.CHARS[1], isNew:true}, 1);
+    ok(html2.indexOf("gdup")<0, "NEWにはポップなし");
+    G.chars.c01.dup=d0;
+  });
+
   /* ---- v3.6.0: バージョン表記・選択肢のランダム性 ---- */
   t("APP_VERSIONが定義され設定に表示される", ()=>{
     ok(/^\d+\.\d+\.\d+$/.test(W.APP_VERSION), "semver: "+W.APP_VERSION);
