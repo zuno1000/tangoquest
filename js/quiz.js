@@ -127,14 +127,13 @@ function answer(chosen, btn){
   const rt=rootText(w.en), meta=[];
   if(rt) rt.split("・").forEach((tag,i)=>meta.push('<span class="rmeta">'+(i? '':'🧬 ')+esc(tag)+'</span>'));
   if(isWild(w.en)) meta.push('<span class="rmeta wildm">🐺 野生語 Lv'+memBox(w.en)+'</span>');
-  if(tkGain) meta.unshift('<span class="rmeta" style="color:var(--accent)">🎫+'+tkGain+'</span>');
   if(ok){
     let rar=dropRarity(preSt);
     if(Math.random()<comboDropBonus()) rar=Math.min(5, rar+1); // コンボ中は★+1のチャンス
     addCard(w.en, rar);
     if(lvUp){ toast("📖 レベルアップ! Lv"+lvUp+" ─ 全ステータス強化"); vibe(40); }
     else if(rar>=3) vibe(30);
-    // 🎫は毎正解なのでトーストは出さない(結果バーの🎫+1チップで伝える)
+    // 🎫は毎正解なのでトースト・結果バー表示は出さない(残高はガチャ画面で確認)
   }
   rc.innerHTML='<span class="poschip pos'+w.pos+'">'+POS_LABEL[w.pos]+'</span>'+meta.join(' ');
   $("resultBar").classList.add("show");
