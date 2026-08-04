@@ -522,7 +522,9 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
    +3=淡彩グラデ+内枠 / +6=濃彩+光沢 / +10=フォイル(全面彩色+濃枠)。
    v4.0.0: 「暗く見える」FBを受けて白を混ぜた明るいフォイルに刷新 */
 .charcard,.eqhero,.bigchar{--dupc:244,176,26; position:relative}
-.charcard,.bigchar{overflow:hidden} /* shine(ホロ光沢)用。eqheroはshineクラス側のoverflowで足りる */
+/* shine(ホロ光沢)用。eqheroにはshineを付けない(アニメ=レイヤー合成でiOSの
+   背景・浮き影が角丸に沿わなくなるため。dungeon.js renderEqChars参照) */
+.charcard,.bigchar{overflow:hidden}
 /* iOS対策(下端の色欠け): 要素の高さが小数px(flexの均等伸縮など)のとき、
    グラデ背景の描画と角丸クリップが1px前後食い違い、下端に色欠けが出る。
    background-color / background-size での補填はどちらも枠外へはみ出した

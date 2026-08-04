@@ -607,18 +607,27 @@ function run(){
     W.closeModal();
     W.localStorage.removeItem("tq_newsSeen");
   });
-  t("限定バナー2種が2週間ごとに交互開催される(v4.6.0ローテ)", ()=>{
-    eq(W.ROT_BANNERS.length, 2, "2バナー");
-    const e=W.ROTATION_EPOCH;
-    const b0=W.bannerAt(e), b1=W.bannerAt(W.addDays(e,14)), b2=W.bannerAt(W.addDays(e,28));
-    eq(b0.id, W.ROT_BANNERS[0].id, "第1期はrotA");
-    eq(b1.id, W.ROT_BANNERS[1].id, "第2期はrotB");
-    eq(b2.id, W.ROT_BANNERS[0].id, "第3期はrotAに戻る");
-    eq(b0.start, e, "第1期の初日");
-    eq(b0.end, W.addDays(e,13), "期間は14日間");
-    eq(W.bannerAt(W.addDays(e,13)).id, b0.id, "最終日まで同じバナー");
-    ok(!W.bannerAt(W.addDays(e,-1)), "開始前はnull");
-    ok(W.activeBanner(), "今日も必ずどちらかが開催中");
+  t("限定ガチャは常時2枠・各枠14日周期で1週ずれて更新(v4.6.1)", ()=>{
+    eq(W.LTD_SLOTS.length, 2, "2枠");
+    const A=W.LTD_SLOTS[0], B=W.LTD_SLOTS[1];
+    eq(A.epoch, "2026-07-25", "A枠の起点");
+    eq(B.epoch, "2026-08-01", "B枠の起点");
+    const a0=W.slotBannerAt(A, "2026-07-25");
+    eq(a0.start, "2026-07-25", "A第1期start");
+    eq(a0.end, "2026-08-07", "A第1期は7/25〜8/7");
+    const a1=W.slotBannerAt(A, "2026-08-08");
+    eq(a1.start, "2026-08-08", "A第2期start");
+    eq(a1.end, "2026-08-21", "A第2期は8/8〜8/21");
+    eq(W.slotBannerAt(A, "2026-08-07").start, "2026-07-25", "期の最終日まで同じ期");
+    const b0=W.slotBannerAt(B, "2026-08-01");
+    eq(b0.start, "2026-08-01", "B第1期start");
+    eq(b0.end, "2026-08-14", "B第1期は8/1〜8/14");
+    const b1=W.slotBannerAt(B, "2026-08-15");
+    eq(b1.end, "2026-08-28", "B第2期は8/15〜8/28");
+    ok(!W.slotBannerAt(A, "2026-07-24"), "起点前はnull");
+    const act=W.activeBanners();
+    ok(act.length>=2, "今日は2枠とも開催中: "+act.length);
+    ok(act[0].chars.join()!==act[1].chars.join(), "2枠の内容は別");
     const c30=W.CHARS.find(c=>c.id==="c30");
     ok(c30 && c30.limited, "limitedフラグ");
     const p=W.gachaPool(4, {chars:["c30"]});
@@ -626,7 +635,7 @@ function run(){
   });
 
   /* ---- 限定ガチャ・ダンジョン ---- */
-  t("ローテ入りの限定キャラは恒常プールに入らない", ()=>{
+  t("枠入りの限定キャラは恒常プールに入らない", ()=>{
     for(let r=1;r<=4;r++){
       const p=W.gachaPool(r,null);
       ok(p.length>0, "pool r"+r);
@@ -634,7 +643,7 @@ function run(){
     }
     const c22=W.CHARS.find(c=>c.id==="c22");
     ok(!W.limitedUnlocked(c22, "2026-08-15"), "開催中も恒常に出ない");
-    ok(!W.limitedUnlocked(c22, "2030-01-01"), "何年たっても恒常入りしない(ローテで戻る)");
+    ok(!W.limitedUnlocked(c22, "2030-01-01"), "何年たっても恒常入りしない(周期更新で戻る)");
   });
   t("限定ガチャは恒常よりSSR/SRが当たりやすい", ()=>{
     const std=W.gachaRates(null), ltd=W.gachaRates({});
@@ -1046,6 +1055,7 @@ function run(){
     ok(el.className.indexOf("dup6")>=0, "dup6クラスが付く");
     ok(W.getComputedStyle(el,"::before").backgroundImage.indexOf("gradient")>=0, "::beforeに彩色グラデ");
     eq(W.getComputedStyle(el).backgroundImage, "none", "要素自身は背景グラデを持たない");
+    ok(el.className.indexOf("shine")<0, "パネルに光沢アニメを付けない(iOSの浮き影が四角くなる)");
     rec.dup=old;
     W.renderEqChars();
   });

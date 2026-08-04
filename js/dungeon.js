@@ -527,8 +527,12 @@ function renderEqChars(){
   if(!c){ box.innerHTML=""; return; }
   const dup=(G.chars[c.id]&&G.chars[c.id].dup)||0;
   const st=charStats(c.id);
+  /* shine(光沢アニメ)は付けない: iOSはアニメ付き要素をレイヤー合成する際に
+     要素自身の描画(背景・浮き影)が角丸に沿わなくなる(v4.5.1で背景を::beforeに
+     逃したが、今度は浮き影が四角い角のまま描かれた=IMG_1681)。
+     アニメを断てば通常描画に戻り根治する。フォイル彩色(dup10)は静的なので残る */
   box.innerHTML=
-    '<div class="eqhero'+dupClass(dup)+'" id="eqCurChar" style="--dupc:'+DUP_RGB[c.rar-1]+'">'+
+    '<div class="eqhero'+dupClass(dup).replace(" shine","")+'" id="eqCurChar" style="--dupc:'+DUP_RGB[c.rar-1]+'">'+
       '<div class="ecf">'+c.face+'</div>'+
       '<div class="grow">'+
         '<div class="'+CHAR_RAR_CLASS[c.rar-1]+'" style="font-weight:800; font-size:11px">'+

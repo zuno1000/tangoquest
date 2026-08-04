@@ -67,46 +67,52 @@ function abilityXpMult(){
 }
 
 /* ================= 期間限定バナー =================
-   v4.6.0: 2つの限定バナーが2週間ごとに自動で交互開催される(追記運用は不要)。
-   開催期間はROTATION_EPOCHからの14日周期で機械的に決まり、無期限に続く。
-   限定キャラは恒常入りしない(2週間おきに必ず戻ってくるのがローテの価値)。
-   特別な一回きりの開催をしたい場合は BANNERS に1行追記すればローテより優先される */
-const ROT_BANNERS=[
-  {id:"rotA", name:"☄️ 星降る夜の召喚", chars:["c22","c23"],
-   desc:"限定「彗星の魔女 ステラ」(SSR)・「桜花の剣姫 サクヤ」(SR)がピックアップ!"},
-  {id:"rotB", name:"🍁 秋宵の召喚", chars:["c30","c31"],
-   desc:"限定「紅葉の狐仙 モミジ」(SSR)・「収穫の精 ミノリ」(SR)がピックアップ!"},
+   v4.6.1: 限定ガチャは恒常とは別に「常時2枠(A/B)」を同時開催する。
+   各枠は14日周期で自動更新され、起点(epoch)を1週間ずらしてあるので
+   毎週どちらかの枠が入れ替わる(A=7/25起点: 7/25〜8/7, 8/8〜8/21…/
+   B=8/1起点: 8/1〜8/14, 8/15〜8/28…)。
+   枠の banners にバナーを追加すると、その枠は周期ごとに順番へ内容が切り替わる。
+   限定キャラは恒常入りしない(周期更新で必ず戻ってくる)。
+   一回きりの特別開催をしたい場合は BANNERS に1行追記(2枠に加えて表示される) */
+const LTD_SLOTS=[
+  {epoch:"2026-07-25", banners:[
+    {id:"ltdA1", name:"☄️ 星降る夜の召喚", chars:["c22","c23"],
+     desc:"限定「彗星の魔女 ステラ」(SSR)・「桜花の剣姫 サクヤ」(SR)がピックアップ!"},
+  ]},
+  {epoch:"2026-08-01", banners:[
+    {id:"ltdB1", name:"🍁 秋宵の召喚", chars:["c30","c31"],
+     desc:"限定「紅葉の狐仙 モミジ」(SSR)・「収穫の精 ミノリ」(SR)がピックアップ!"},
+  ]},
 ];
-const ROTATION_EPOCH="2026-08-04"; // 第1期(rotA)の初日。ここから14日ごとに交互
-const BANNERS=[]; // 一回きりの特別開催用(start/end/chars/desc)。ローテより優先
-/* 日付キー(YYYY-MM-DD)のズレない加算・差分(Date.parseはUTC基準=日数差が正確) */
+const BANNERS=[]; // 一回きりの特別開催用(start/end/chars/desc)
+/* 日付キー(YYYY-MM-DD)のズレない加算(Date.parseはUTC基準=日数差が正確) */
 function addDays(ymd, n){
   const d=new Date(Date.parse(ymd)+n*864e5);
   return d.toISOString().slice(0,10);
 }
-/* その日のローテ開催バナー(startとendを合成して返す)。テストからも使う純関数 */
-function bannerAt(t){
-  const days=Math.floor((Date.parse(t)-Date.parse(ROTATION_EPOCH))/864e5);
+/* その日にその枠で開催中のバナー(startとendを合成して返す)。テストからも使う純関数 */
+function slotBannerAt(slot, t){
+  const days=Math.floor((Date.parse(t)-Date.parse(slot.epoch))/864e5);
   if(days<0) return null;
   const idx=Math.floor(days/14);
-  const b=ROT_BANNERS[idx%ROT_BANNERS.length];
-  return Object.assign({start:addDays(ROTATION_EPOCH, idx*14),
-                        end:addDays(ROTATION_EPOCH, idx*14+13)}, b);
+  const b=slot.banners[idx%slot.banners.length];
+  return Object.assign({start:addDays(slot.epoch, idx*14),
+                        end:addDays(slot.epoch, idx*14+13)}, b);
 }
-function activeBanner(){
+/* いま開催中の限定バナー一覧(特別開催+2枠) */
+function activeBanners(){
   const t=todayKey();
-  return BANNERS.find(b=>b.start<=t && t<=b.end) || bannerAt(t);
+  const list=BANNERS.filter(b=>b.start<=t && t<=b.end).slice();
+  LTD_SLOTS.forEach(s=>{ const b=slotBannerAt(s, t); if(b) list.push(b); });
+  return list;
 }
-/* 次のローテ開催(ガチャ画面の予告用) */
-function nextBanner(){
-  const cur=bannerAt(todayKey());
-  return cur? bannerAt(addDays(cur.end,1)) : bannerAt(ROTATION_EPOCH);
-}
-/* 限定キャラの恒常入り判定(v4.6.0): ローテ入りの限定は恒常入りしない。
+/* 互換: 「限定が開催中か」を見る場面用(ホームの表示・率UP判定など) */
+function activeBanner(){ return activeBanners()[0]||null; }
+/* 限定キャラの恒常入り判定: 枠入りの限定は恒常入りしない(周期で必ず再登場)。
    一回きり開催(BANNERS)の限定だけ、終了後に恒常入りする(従来ルール) */
 function limitedUnlocked(c, t){
   t=t||todayKey();
-  if(ROT_BANNERS.some(b=>b.chars.indexOf(c.id)>=0)) return false;
+  if(LTD_SLOTS.some(s=>s.banners.some(b=>b.chars.indexOf(c.id)>=0))) return false;
   return BANNERS.some(b=>b.chars.indexOf(c.id)>=0 && t>b.end);
 }
 /* レア度ごとの排出プール。banner指定時はピックアップ(feat)も返す */
@@ -370,43 +376,37 @@ $("charSortSeg").querySelectorAll("button").forEach(b=>{
 });
 
 
-/* ---- ガチャ画面(開催中の限定バナー+恒常) ----
-   v4.6.0: 限定は🎫専用・恒常は🪙専用(通貨の分離) */
-function pullButtonsHTML(which){
-  return which==="ltd"
-    ? '<div class="row" style="justify-content:center; gap:8px; margin-top:12px">'+
-      '<button class="btn gold" data-pull="ltd|1">1回 🎫1</button>'+
-      '<button class="btn gold" data-pull="ltd|10">10回 🎫10</button></div>'
-    : '<div class="row" style="justify-content:center; gap:8px; margin-top:12px">'+
-      '<button class="btn gold" data-pull="std|1">1回 🪙1000</button>'+
-      '<button class="btn gold" data-pull="std|10">10回 🪙10000</button></div>';
-}
+/* ---- ガチャ画面(常時2枠の限定+恒常) ----
+   v4.6.0: 限定は🎫専用・恒常は🪙専用(通貨の分離)
+   v4.6.1: 限定は2枠を同時表示。data-pull="<バナー添字|std>|<回数>" */
 function renderGacha(){
   const box=$("gachaBox"); if(!box) return;
-  const b=activeBanner();
+  const bs=activeBanners();
   let h="";
-  if(b){
+  bs.forEach((b,i)=>{
     const endT=new Date(b.end+"T23:59:59");
     const remain=Math.max(1, Math.ceil((endT-Date.now())/864e5));
-    const nb=nextBanner();
-    h+='<div class="gbanner limited">'+
+    h+='<div class="gbanner limited"'+(i? ' style="margin-top:12px"':'')+'>'+
       '<div class="ltdtag">期間限定 ─ 残り'+remain+'日</div>'+
       '<div class="gt">'+b.name+'</div>'+
-      '<div class="gs">'+b.desc+'<br>🎫はクイズの正解で貯まる(1問=🎫1)</div>'+
-      pullButtonsHTML("ltd")+
-      (nb? '<div class="small" style="margin-top:8px; opacity:.75">次回: '+nb.name+'('+nb.start.slice(5).replace("-","/")+'〜)</div>':'')+
+      '<div class="gs">'+b.desc+(i===0? '<br>🎫はクイズの正解で貯まる(1問=🎫1)':'')+'</div>'+
+      '<div class="row" style="justify-content:center; gap:8px; margin-top:12px">'+
+      '<button class="btn gold" data-pull="'+i+'|1">1回 🎫1</button>'+
+      '<button class="btn gold" data-pull="'+i+'|10">10回 🎫10</button></div>'+
       '</div>';
-  }
+  });
   h+='<div class="gbanner" style="margin-top:12px">'+
     '<div class="gt">🔮 冒険者召喚</div>'+
     '<div class="gs">冒険や任務で集めた🪙で仲間を召喚しよう</div>'+
-    pullButtonsHTML("std")+
+    '<div class="row" style="justify-content:center; gap:8px; margin-top:12px">'+
+    '<button class="btn gold" data-pull="std|1">1回 🪙1000</button>'+
+    '<button class="btn gold" data-pull="std|10">10回 🪙10000</button></div>'+
     '<div class="grates" id="rateInfo">提供割合・突破について ›</div></div>';
   box.innerHTML=h;
   box.querySelectorAll("[data-pull]").forEach(btn=>{
     btn.onclick=()=>{
       const p=btn.dataset.pull.split("|");
-      doPull(+p[1], p[0]==="ltd"? activeBanner() : null);
+      doPull(+p[1], p[0]==="std"? null : bs[+p[0]]||null);
     };
   });
   $("rateInfo").onclick=openRates;
@@ -423,7 +423,8 @@ function openRates(){
     '<div class="small" style="margin-top:12px; line-height:1.7">'+
     '・限定召喚は🎫専用。🎫はクイズの正解(1問=🎫1)など学習でだけ手に入る<br>'+
     '・恒常召喚は🪙専用。🪙は冒険・任務でたくさん手に入る<br>'+
-    '・期間限定バナーは2週間ごとに交互開催。SSR/SRが当たりやすく、該当レア度枠の50%がピックアップ(限定)キャラになる<br>'+
+    '・期間限定は常時2バナーを開催。それぞれ2週間ごとに更新される<br>'+
+    '・限定バナーはSSR/SRが当たりやすく、該当レア度枠の50%がピックアップ(限定)キャラになる<br>'+
     '・限定キャラは恒常には入らない(次の開催を待てば必ずまた出会える)<br>'+
     '・同じ冒険者を引くと「突破」となり能力+6%(11回目からは+2%・上限なし)<br>'+
     '・冒険者はそれぞれ固有スキル(✦)を持つ。出撃中の1人のスキルが効果を発揮する</div>'+
