@@ -37,7 +37,10 @@ function bindTap(el, fn){
 /* ---- modal ---- */
 function openModal(html){
   const m=$("modal");
-  m.innerHTML='<button class="mclose">✕</button>'+html;
+  /* ✕は高さ0のsticky帯(.mctop)に載せてレイアウトから外す。
+     floatだと直下のgrid/flex(独立整形コンテキスト)がフロートを避けて
+     右側だけ36px縮み、中身が左に偏る(v4.5.1で修正) */
+  m.innerHTML='<div class="mctop"><button class="mclose">✕</button></div>'+html;
   m.querySelector(".mclose").onclick=closeModal;
   m.querySelectorAll("[data-close]").forEach(b=>b.onclick=closeModal);
   $("overlay").classList.add("show");

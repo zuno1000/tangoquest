@@ -958,6 +958,42 @@ function run(){
     W.renderEqChars();
   });
 
+  /* ---- v4.5.1: 実機バグ3件の修正 ---- */
+  t("モーダルの✕が中身のグリッドを狭めない(選択モーダルの左偏り修正)", ()=>{
+    frame.style.cssText="width:393px; height:800px"; // 実寸で幅を測る
+    try{
+      W.openCharPicker();
+      const doc=W.document;
+      const m=doc.getElementById("modal"), g=doc.getElementById("pickCharGrid");
+      const ms=W.getComputedStyle(m);
+      const content=m.clientWidth-parseFloat(ms.paddingLeft)-parseFloat(ms.paddingRight);
+      const gw=g.getBoundingClientRect().width;
+      ok(Math.abs(gw-content)<2, "grid="+gw+" content="+content+"(✕のfloatで狭まると-36px)");
+      W.closeModal();
+    }finally{ frame.style.cssText=""; }
+  });
+  t("出撃キャラパネルの彩色は::beforeレイヤーに描く(iOSの背景ずれ対策)", ()=>{
+    const G=W.G, doc=W.document;
+    const rec=G.chars[G.party.char], old=rec.dup;
+    rec.dup=6;
+    W.renderEqChars();
+    const el=doc.getElementById("eqCurChar");
+    ok(el.className.indexOf("dup6")>=0, "dup6クラスが付く");
+    ok(W.getComputedStyle(el,"::before").backgroundImage.indexOf("gradient")>=0, "::beforeに彩色グラデ");
+    eq(W.getComputedStyle(el).backgroundImage, "none", "要素自身は背景グラデを持たない");
+    rec.dup=old;
+    W.renderEqChars();
+  });
+  t("初回リロード判定: スタンドアロン初回のみ発火し、二度目は発火しない", ()=>{
+    const store=init=>{ const s=Object.assign({},init);
+      return {getItem:k=>(k in s? s[k]:null), setItem:(k,v)=>{s[k]=v}}; };
+    ok(!W.shouldRebootForIOSGray(false, store({})), "非スタンドアロンでは発火しない");
+    const st=store({});
+    ok(W.shouldRebootForIOSGray(true, st), "スタンドアロン初回は発火");
+    ok(!W.shouldRebootForIOSGray(true, st), "tq_bootedが残っていれば二度目は発火しない");
+    ok(!W.TQ_REBOOTING, "テスト環境(非スタンドアロン)ではリロード確定フラグが立たない");
+  });
+
   /* ---- v3.6.0: バージョン表記・選択肢のランダム性 ---- */
   t("APP_VERSIONが定義され設定に表示される", ()=>{
     ok(/^\d+\.\d+\.\d+$/.test(W.APP_VERSION), "semver: "+W.APP_VERSION);

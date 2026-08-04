@@ -1,7 +1,29 @@
 "use strict";
 /* ================= 状態管理 ================= */
 const KEY="tangoquest_v1";
-const APP_VERSION="4.5.0"; // リリースごとに更新(設定表示・更新確認のリモート版比較に使う)
+const APP_VERSION="4.5.1"; // リリースごとに更新(設定表示・更新確認のリモート版比較に使う)
+
+/* ---- iOSスタンドアロン初回起動の灰色帯対策(v4.5.0→v4.5.1で移設) ----
+   インストール直後の初回起動だけiOSがステータスバー領域を灰色に塗るため、
+   初回のみ自動リロードする。判定は全初期化の前(このファイル冒頭)で行い、
+   リロード確定はTQ_REBOOTINGで起動時UIに伝える ─ location.reload()は非同期で
+   後続スクリプトが走り切るため、ガードしないとログインボーナスのモーダルが
+   一瞬開いてリロードに巻き込まれる(v4.5.0の実機バグ)。
+   判定本体は純関数に切り出してテスト可能にしている */
+function shouldRebootForIOSGray(standalone, store){
+  if(!standalone || store.getItem("tq_booted")) return false;
+  store.setItem("tq_booted","1"); // 書けない環境は例外→呼び元のcatchへ=リロードしない
+  return true;
+}
+var TQ_REBOOTING=false; // main.jsが参照(トップレベルletはwindowに載らないためvar)
+try{
+  const sa=navigator.standalone ||
+    (window.matchMedia && matchMedia("(display-mode: standalone)").matches);
+  if(shouldRebootForIOSGray(sa, localStorage)){
+    TQ_REBOOTING=true;
+    location.reload();
+  }
+}catch(e){}
 
 const RAR_MULT=[1, 1.6, 2.5, 3.8, 5.5];
 const RAR_STARS=["★","★★","★★★","★★★★","★★★★★"];
