@@ -121,19 +121,30 @@ function playerStats(sentOpt){
 }
 
 /* 敵の生成(ダンジョン定義 dungeon.js から参照)。
-   opts={elem, trait}: 属性と特性(tough=硬い/fierce=狂暴/swift=神速)で敵に個性を付ける */
+   opts={elem, trait}: 属性と特性(tough=硬い/fierce=狂暴/swift=神速)で敵に個性を付ける
+
+   v4.6.0 一撃必殺の是正:
+   - HP・防御はプレイヤーの「火力」(カードの重ね・共鳴・累乗で急成長=1.55^tier)に併走。
+     さらに高tierほど倍率(hpB: 最大×3)を掛け、数ターンの攻防にする
+   - 攻撃はプレイヤーの「耐久」(キャラHP=突破・Lvでしか伸びない=緩やか)に併走させ、
+     1.55^tierではなく1.14^tierの緩い曲線に(旧式は高tierで即死しか生まなかった)。
+     目安: 推奨戦闘力どおりの編成で1発=HPの8〜13%(fierce/bossはさらに重い) */
 function enemyFor(tier, floor, floors, boss, names, bossName, opts){
-  const p=Math.pow(1.55, tier-1)*(1+0.13*(floor-1));
+  const p=Math.pow(1.55, tier-1)*(1+0.13*(floor-1));   // 火力併走(HP・防御)
+  const a=Math.pow(1.14, tier-1)*(1+0.04*(floor-1));   // 耐久併走(攻撃)
+  const hpB=Math.min(3, 1+0.25*(tier-1));              // 高tierほどHP増(低tierは従来の手応え)
   const e={
     name: boss? bossName : names[(floor-1)%names.length],
-    hp:Math.round(130*p), atk:Math.round(20*p), def:Math.round(9*p),
+    hp:Math.round(130*p*hpB), atk:Math.round(36*a), def:Math.round(9*p*hpB),
     spd:8+tier+Math.floor(floor/3), boss:!!boss,
     elem: opts&&opts.elem!=null? opts.elem : null, trait: (opts&&opts.trait)||null
   };
   if(e.trait==="tough"){ e.def=Math.round(e.def*2.4); e.hp=Math.round(e.hp*0.85); }
   else if(e.trait==="fierce"){ e.atk=Math.round(e.atk*1.35); e.def=Math.round(e.def*0.7); }
   else if(e.trait==="swift"){ e.spd=Math.round(e.spd*1.7); }
-  if(boss){ e.hp=Math.round(e.hp*2.8); e.atk=Math.round(e.atk*1.5); }
+  /* ボス: 推奨戦闘力ちょうどで約8ターンの長期戦・1発17%前後。
+     属性対策・守護・回復スキルの有無が勝敗を分ける火加減にする */
+  if(boss){ e.hp=Math.round(e.hp*2.0); e.atk=Math.round(e.atk*1.25); }
   return e;
 }
 
@@ -148,6 +159,10 @@ function simBattle(P, E){
   const clauses=(P.clauses&&P.clauses.length)? P.clauses : [{V:P.atk||10, vt:0, w:1, name:null, words:[]}];
   const charM=P.charM||1, setM=P.setM||1, amp=P.amp||1, guard=P.guard||0;
   const rnd=()=>0.9+Math.random()*0.2;
+  /* 戦闘中の回復(吸収・与ダメ回復)は1ターン合計で最大HPの25%まで。
+     戦闘が複数ターン化(v4.6.0)すると、ダメージ比例の回復は無制限だと
+     「削られるより速く回復する」不死になるため。上限内の維持力=個性は残る */
+  let healBudget=0;
   const castOnce=(cl, powF)=>{
     const baseV=cl.V*cl.w*charM*setM*amp*em.dealt*(powF||1)
       *(1+(P.abDmg||0))*(E.boss? 1+(P.abBoss||0) : 1); // 固有スキル: 与ダメ+/ボス特効
@@ -160,6 +175,7 @@ function simBattle(P, E){
     let heal=0;
     if(cl.vt===2){ heal+=Math.round(v*0.45); }
     if(P.abVamp) heal+=Math.round(v*P.abVamp); // 固有スキル: 与ダメ回復
+    heal=Math.min(heal, healBudget); healBudget-=heal;
     if(heal){ php=Math.min(P.hp, php+heal); }
     return {v, heal};
   };
@@ -170,6 +186,7 @@ function simBattle(P, E){
               s:(repTag?"🌀反復! ":"")+label+" "+fmt(r.v)+"ダメージ"+(r.heal? " & "+fmt(r.heal)+"回復":"")});
   };
   const pTurn=()=>{
+    healBudget=Math.round(P.hp*0.25);
     for(const cl of clauses){
       let r=castOnce(cl,1); ehp-=r.v; pushP(cl,r,false);
       if(ehp<=0) return;

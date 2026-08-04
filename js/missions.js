@@ -33,24 +33,26 @@ function checkLogin(){
     '<div class="row" style="justify-content:center"><button class="btn primary" style="flex:1" data-close>受け取る</button></div>');
 }
 
-/* ---- 任務定義 ---- */
+/* ---- 任務定義 ----
+   v4.6.0 通貨の分離: 🎫(限定召喚)は学習系の任務・実績だけが源泉。
+   冒険・ガチャ系の🎫報酬はすべて🪙(恒常召喚)へ変換し、額も増やした */
 const DAILY_DEFS=[
   {id:"da", name:"クイズに20問答える",        target:20, cur:d=>d.a,     rew:{g:150}},
   {id:"dc", name:"クイズで10問正解する",      target:10, cur:d=>d.c,     rew:{t:1}},
-  {id:"dc2",name:"クイズで30問正解する",      target:30, cur:d=>d.c,     rew:{t:1}},
+  {id:"dc2",name:"クイズで30問正解する",      target:30, cur:d=>d.c,     rew:{t:2}},
   {id:"dk", name:"カードを5枚入手する",       target:5,  cur:d=>d.card,  rew:{g:200}},
-  {id:"dr", name:"ダンジョンに1回挑む",       target:1,  cur:d=>d.run,   rew:{g:100}},
-  {id:"dl", name:"ダンジョンを1回クリアする", target:1,  cur:d=>d.clear, rew:{t:1}},
+  {id:"dr", name:"ダンジョンに1回挑む",       target:1,  cur:d=>d.run,   rew:{g:300}},
+  {id:"dl", name:"ダンジョンを1回クリアする", target:1,  cur:d=>d.clear, rew:{g:1000}},
 ];
 const WEEKLY_DEFS=[
   {id:"wa", name:"クイズに150問答える",       target:150, cur:w=>w.a,     rew:{g:800}},
-  {id:"wc", name:"クイズで80問正解する",      target:80,  cur:w=>w.c,     rew:{t:2}},
-  {id:"wc2",name:"クイズで300問正解する",     target:300, cur:w=>w.c,     rew:{t:5}},
+  {id:"wc", name:"クイズで80問正解する",      target:80,  cur:w=>w.c,     rew:{t:3}},
+  {id:"wc2",name:"クイズで300問正解する",     target:300, cur:w=>w.c,     rew:{t:8}},
   {id:"wm", name:"カードを5回重ねる",         target:5,   cur:w=>w.merge, rew:{t:1}},
-  {id:"wl", name:"ダンジョンを5回クリアする", target:5,   cur:w=>w.clear, rew:{t:2}},
-  {id:"wp", name:"ガチャを3回引く",           target:3,   cur:w=>w.pull,  rew:{g:500}},
+  {id:"wl", name:"ダンジョンを5回クリアする", target:5,   cur:w=>w.clear, rew:{g:2000}},
+  {id:"wp", name:"ガチャを3回引く",           target:3,   cur:w=>w.pull,  rew:{g:1000}},
 ];
-/* 実績(段階制) */
+/* 実績(段階制)。学習系(正解・覚えた・カード)は🎫/冒険・ガチャ系は🪙 */
 const ACH_DEFS=[
   {id:"acor", name:"累計正解",       cur:()=>G.counters.cor,
    tiers:[[25,{g:200}],[100,{t:1}],[300,{t:2}],[1000,{t:3}],[3000,{t:5}],[10000,{t:10}]]},
@@ -61,15 +63,15 @@ const ACH_DEFS=[
   {id:"amrg", name:"累計重ね",       cur:()=>G.counters.merges,
    tiers:[[10,{g:300}],[50,{t:2}],[200,{t:4}],[600,{t:6}]]},
   {id:"aclr", name:"ダンジョン累計クリア", cur:()=>G.counters.clears,
-   tiers:[[5,{g:300}],[25,{t:2}],[100,{t:5}]]},
+   tiers:[[5,{g:500}],[25,{g:2000}],[100,{g:5000}]]},
   {id:"ainf", name:"無限回廊 最深記録", cur:()=>G.inf.best,
-   tiers:[[10,{g:300}],[30,{t:2}],[60,{t:3}],[100,{t:5}]]},
+   tiers:[[10,{g:500}],[30,{g:2000}],[60,{g:3000}],[100,{g:5000}]]},
   {id:"achr", name:"なかまの数",     cur:()=>Object.keys(G.chars).length,
-   tiers:[[3,{g:300}],[6,{t:2}],[10,{t:3}],[16,{t:3}],[24,{t:5}],[32,{t:10}]]},
+   tiers:[[3,{g:300}],[6,{g:2000}],[10,{g:3000}],[16,{g:3000}],[24,{g:5000}],[32,{g:10000}]]},
   {id:"apul", name:"累計ガチャ",     cur:()=>G.counters.pulls,
-   tiers:[[10,{g:500}],[50,{t:3}],[150,{t:5}],[400,{t:8}],[1000,{t:15}]]},
+   tiers:[[10,{g:500}],[50,{g:3000}],[150,{g:5000}],[400,{g:8000}],[1000,{g:15000}]]},
   {id:"adup", name:"突破の合計",     cur:()=>{let n=0;for(const id in G.chars)n+=G.chars[id].dup||0;return n;},
-   tiers:[[5,{g:500}],[15,{t:2}],[40,{t:3}],[100,{t:5}],[250,{t:10}]]},
+   tiers:[[5,{g:500}],[15,{g:2000}],[40,{g:3000}],[100,{g:5000}],[250,{g:10000}]]},
 ];
 
 /* ---- 未受取があるか(ナビの赤点用) ---- */

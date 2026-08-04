@@ -1,7 +1,7 @@
 "use strict";
 /* ================= 状態管理 ================= */
 const KEY="tangoquest_v1";
-const APP_VERSION="4.5.1"; // リリースごとに更新(設定表示・更新確認のリモート版比較に使う)
+const APP_VERSION="4.6.0"; // リリースごとに更新(設定表示・更新確認のリモート版比較に使う)
 
 /* ---- iOSスタンドアロン初回起動の灰色帯対策(v4.5.0→v4.5.1で移設) ----
    インストール直後の初回起動だけiOSがステータスバー領域を灰色に塗るため、
@@ -160,8 +160,9 @@ function comboDropBonus(){
   const c=G.combo||0;
   return c>=5? Math.min(0.30, 0.10+0.02*(c-5)) : 0;
 }
-/* 正解10問ごとに🎫1(クイズを解くだけでガチャが回る経済の土台) */
-function corTicketGain(){ return (G.counters.cor>0 && G.counters.cor%10===0)? 1 : 0; }
+/* 正解1問ごとに🎫1(v4.6.0)。🎫は限定召喚の専用通貨で、学習だけが源泉 ─
+   「1問解けば1回引ける」の即時報酬が学習を続ける動機になる */
+function corTicketGain(){ return 1; }
 function lvMult(){ return 1+0.01*(accountLevel()-1); } // Lvごとに全ステータス+1%
 /* 文の長さ(スロット数)は知識レベルで伸びる: Lv1=4語 → Lv24で最大8語 */
 function sentenceSlots(){ return Math.min(8, 4+Math.floor(accountLevel()/6)); }

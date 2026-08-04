@@ -30,6 +30,7 @@ const EVENTS=[
   // {d:"2026-08-03", t:"..."} 形式でバナー以外のイベント告知を書く
 ];
 const NEWS=[
+  {d:"2026-08-04", t:"🌟 v4.6.0 大型アップデート! ①新ダンジョン6種追加(逆さまの魔戯場〜原初の言霊神殿) ②バトル刷新: 敵のHPが厚く・一撃は軽くなり、数ターンの攻防に(守り・回復キャラの個性が活きる。戦闘中の回復は1ターン最大HP25%まで) ③クイズ正解1問ごとに🎫1! ④通貨の分離: 限定召喚=🎫(学習でだけ入手)/恒常召喚=🪙(冒険・任務で大量入手。初クリア🪙3000など増額) ⑤限定ガチャは2週間ごとに2バナー交互開催に"},
   {d:"2026-08-04", t:"🔧 v4.5.1 呪文画面の出撃キャラパネルの彩色が枠からずれる表示を修正・「出撃キャラを選ぶ」の一覧が左に寄っていたのを修正・ログインボーナスが一瞬で閉じてしまう不具合を修正(受け取りそびれた分は今日の分から正常に出ます)"},
   {d:"2026-08-04", t:"⚔ v4.5.0 呪文画面の出撃キャラ選択を刷新! 現在の出撃キャラを1枚のパネルで表示し、「変更」からなかまを選ぶ方式に(彩色がはみ出す不具合もこれで解消)。タブが持ち上がる・設定の文字が隠れる不具合を修正。インストール直後の初回起動の灰色帯は自動で復旧するように"},
   {d:"2026-08-04", t:"🔧 v4.4.3 突破彩色がカード下端からはみ出す表示を根本修正・インストール直後の初回起動で画面上部が灰色になる不具合を修正(タブの位置はそのまま)"},
@@ -56,13 +57,23 @@ const NEWS=[
 ];
 function newsEvents(){
   const t=todayKey(), ev=[];
+  const fmtSpan=b=>b.start.slice(5).replace("-","/")+"〜"+b.end.slice(5).replace("-","/");
+  // 一回きりの特別開催(BANNERS)は開催中も予告も出す
   BANNERS.forEach(b=>{
     if(t>b.end) return; // 終了したバナーは出さない
     const started=t>=b.start;
     const remain=Math.max(1, Math.ceil((new Date(b.end+"T23:59:59")-Date.now())/864e5));
-    ev.push({d:b.start.slice(5).replace("-","/")+"〜"+b.end.slice(5).replace("-","/"),
+    ev.push({d:fmtSpan(b),
              t:(started? "🔥開催中(残り"+remain+"日)" : "📣予告")+" "+b.name+" ─ "+b.desc});
   });
+  // ローテ開催(v4.6.0): 現在開催中+次回予告
+  const cur=bannerAt(t);
+  if(cur && !BANNERS.some(b=>b.start<=t && t<=b.end)){
+    const remain=Math.max(1, Math.ceil((new Date(cur.end+"T23:59:59")-Date.now())/864e5));
+    ev.push({d:fmtSpan(cur), t:"🔥開催中(残り"+remain+"日)"+" "+cur.name+" ─ "+cur.desc});
+    const nb=nextBanner();
+    if(nb) ev.push({d:fmtSpan(nb), t:"📣予告 "+nb.name+" ─ "+nb.desc});
+  }
   return ev.concat(EVENTS);
 }
 function xpNeedFor(lv){ return lv<=1? 0 : Math.ceil(50*Math.pow(lv-1, 1/0.55)); }
@@ -219,6 +230,7 @@ if(syncClientId() && (lastSyncAt()>0 || localStorage.getItem("tq_gAuthed"))){
 
 /* セルフテスト(tests/)用: let/const宣言はwindowに載らないため明示公開 */
 window.G=G; window.WORDS=WORDS; window.DUNGEONS=DUNGEONS; window.BANNERS=BANNERS; window.CHARS=CHARS;
+window.ROT_BANNERS=ROT_BANNERS; window.ROTATION_EPOCH=ROTATION_EPOCH;
 window.ROOT_DEFS=ROOT_DEFS; window.PREFIX_DEFS=PREFIX_DEFS; window.APP_VERSION=APP_VERSION;
 window.LOGIN_BONUS=LOGIN_BONUS; window.ACH_DEFS=ACH_DEFS;
 window.DAILY_DEFS=DAILY_DEFS; window.WEEKLY_DEFS=WEEKLY_DEFS;

@@ -487,8 +487,11 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
 #toast{position:fixed; left:0; right:0; margin:0 auto; width:fit-content; bottom:92px;
   transform:translateY(10px);
   background:rgba(61,74,99,.92); color:#fff; backdrop-filter:blur(6px); font-size:13px; font-weight:700;
-  border-radius:999px; padding:11px 20px; opacity:0; pointer-events:none; transition:all .2s; z-index:99;
-  white-space:nowrap; max-width:92vw; overflow:hidden; text-overflow:ellipsis}
+  border-radius:22px; padding:11px 20px; opacity:0; pointer-events:none; transition:all .2s; z-index:99;
+  /* 長文は2行まで折り返す(nowrap+ellipsisだと更新通知などが見切れる=v4.6.0)。
+     3行相当を超えたときだけ末尾を省略 */
+  max-width:92vw; text-align:center; line-height:1.5;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
 #toast.show{opacity:1; transform:none}
 
 /* stat table */

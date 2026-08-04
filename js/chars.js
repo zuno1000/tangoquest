@@ -67,24 +67,46 @@ function abilityXpMult(){
 }
 
 /* ================= 期間限定バナー =================
-   アップデートごとにここへ追記するだけで限定ガチャが開催される。
-   期間中: 限定キャラが排出対象になり、該当レア枠の50%が限定(ピックアップ) */
-const BANNERS=[
-  {id:"b2608", name:"☄️ 星降る夜の召喚", start:"2026-08-01", end:"2026-08-31",
-   chars:["c22","c23"],
+   v4.6.0: 2つの限定バナーが2週間ごとに自動で交互開催される(追記運用は不要)。
+   開催期間はROTATION_EPOCHからの14日周期で機械的に決まり、無期限に続く。
+   限定キャラは恒常入りしない(2週間おきに必ず戻ってくるのがローテの価値)。
+   特別な一回きりの開催をしたい場合は BANNERS に1行追記すればローテより優先される */
+const ROT_BANNERS=[
+  {id:"rotA", name:"☄️ 星降る夜の召喚", chars:["c22","c23"],
    desc:"限定「彗星の魔女 ステラ」(SSR)・「桜花の剣姫 サクヤ」(SR)がピックアップ!"},
-  {id:"b2609", name:"🍁 秋宵の召喚", start:"2026-09-01", end:"2026-09-30",
-   chars:["c30","c31"],
+  {id:"rotB", name:"🍁 秋宵の召喚", chars:["c30","c31"],
    desc:"限定「紅葉の狐仙 モミジ」(SSR)・「収穫の精 ミノリ」(SR)がピックアップ!"},
 ];
+const ROTATION_EPOCH="2026-08-04"; // 第1期(rotA)の初日。ここから14日ごとに交互
+const BANNERS=[]; // 一回きりの特別開催用(start/end/chars/desc)。ローテより優先
+/* 日付キー(YYYY-MM-DD)のズレない加算・差分(Date.parseはUTC基準=日数差が正確) */
+function addDays(ymd, n){
+  const d=new Date(Date.parse(ymd)+n*864e5);
+  return d.toISOString().slice(0,10);
+}
+/* その日のローテ開催バナー(startとendを合成して返す)。テストからも使う純関数 */
+function bannerAt(t){
+  const days=Math.floor((Date.parse(t)-Date.parse(ROTATION_EPOCH))/864e5);
+  if(days<0) return null;
+  const idx=Math.floor(days/14);
+  const b=ROT_BANNERS[idx%ROT_BANNERS.length];
+  return Object.assign({start:addDays(ROTATION_EPOCH, idx*14),
+                        end:addDays(ROTATION_EPOCH, idx*14+13)}, b);
+}
 function activeBanner(){
   const t=todayKey();
-  return BANNERS.find(b=>b.start<=t && t<=b.end)||null;
+  return BANNERS.find(b=>b.start<=t && t<=b.end) || bannerAt(t);
 }
-/* 限定キャラの恒常入り判定: 登場したバナーが1つでも「終了」していれば恒常プールへ
-   (開催前・開催中は限定バナーからのみ) */
+/* 次のローテ開催(ガチャ画面の予告用) */
+function nextBanner(){
+  const cur=bannerAt(todayKey());
+  return cur? bannerAt(addDays(cur.end,1)) : bannerAt(ROTATION_EPOCH);
+}
+/* 限定キャラの恒常入り判定(v4.6.0): ローテ入りの限定は恒常入りしない。
+   一回きり開催(BANNERS)の限定だけ、終了後に恒常入りする(従来ルール) */
 function limitedUnlocked(c, t){
   t=t||todayKey();
+  if(ROT_BANNERS.some(b=>b.chars.indexOf(c.id)>=0)) return false;
   return BANNERS.some(b=>b.chars.indexOf(c.id)>=0 && t>b.end);
 }
 /* レア度ごとの排出プール。banner指定時はピックアップ(feat)も返す */
@@ -148,14 +170,16 @@ function rollChar(banner){
   return pool[Math.floor(Math.random()*pool.length)];
 }
 
-function doPull(n, useGold, banner){
-  if(useGold){
-    const cost=PULL_GOLD*n;
-    if(G.gold<cost){ toast("ゴールドが足りない"); return; }
-    G.gold-=cost;
-  }else{
-    if(G.tickets<n){ toast("チケットが足りない(ダンジョン・任務で入手)"); return; }
+/* v4.6.0 通貨の分離: 限定召喚=🎫(学習でしか手に入らない)/恒常召喚=🪙(冒険・任務)。
+   学習が限定への唯一の道・冒険は恒常をたくさん回せる、という2本柱にする */
+function doPull(n, banner){
+  if(banner){
+    if(G.tickets<n){ toast("チケットが足りない(クイズの正解1問で🎫1)"); return; }
     G.tickets-=n;
+  }else{
+    const cost=PULL_GOLD*n;
+    if(G.gold<cost){ toast("ゴールドが足りない(冒険・任務で入手)"); return; }
+    G.gold-=cost;
   }
   const results=[];
   for(let i=0;i<n;i++){
@@ -346,14 +370,16 @@ $("charSortSeg").querySelectorAll("button").forEach(b=>{
 });
 
 
-/* ---- ガチャ画面(開催中の限定バナー+恒常) ---- */
+/* ---- ガチャ画面(開催中の限定バナー+恒常) ----
+   v4.6.0: 限定は🎫専用・恒常は🪙専用(通貨の分離) */
 function pullButtonsHTML(which){
-  return '<div class="row" style="justify-content:center; gap:8px; margin-top:12px">'+
-    '<button class="btn gold" data-pull="'+which+'|1|t">1回 🎫1</button>'+
-    '<button class="btn gold" data-pull="'+which+'|10|t">10回 🎫10</button></div>'+
-    '<div class="row" style="justify-content:center; gap:8px; margin-top:8px">'+
-    '<button class="btn" data-pull="'+which+'|1|g">1回 🪙1000</button>'+
-    '<button class="btn" data-pull="'+which+'|10|g">10回 🪙10000</button></div>';
+  return which==="ltd"
+    ? '<div class="row" style="justify-content:center; gap:8px; margin-top:12px">'+
+      '<button class="btn gold" data-pull="ltd|1">1回 🎫1</button>'+
+      '<button class="btn gold" data-pull="ltd|10">10回 🎫10</button></div>'
+    : '<div class="row" style="justify-content:center; gap:8px; margin-top:12px">'+
+      '<button class="btn gold" data-pull="std|1">1回 🪙1000</button>'+
+      '<button class="btn gold" data-pull="std|10">10回 🪙10000</button></div>';
 }
 function renderGacha(){
   const box=$("gachaBox"); if(!box) return;
@@ -362,22 +388,25 @@ function renderGacha(){
   if(b){
     const endT=new Date(b.end+"T23:59:59");
     const remain=Math.max(1, Math.ceil((endT-Date.now())/864e5));
+    const nb=nextBanner();
     h+='<div class="gbanner limited">'+
       '<div class="ltdtag">期間限定 ─ 残り'+remain+'日</div>'+
       '<div class="gt">'+b.name+'</div>'+
-      '<div class="gs">'+b.desc+'</div>'+
-      pullButtonsHTML("ltd")+'</div>';
+      '<div class="gs">'+b.desc+'<br>🎫はクイズの正解で貯まる(1問=🎫1)</div>'+
+      pullButtonsHTML("ltd")+
+      (nb? '<div class="small" style="margin-top:8px; opacity:.75">次回: '+nb.name+'('+nb.start.slice(5).replace("-","/")+'〜)</div>':'')+
+      '</div>';
   }
   h+='<div class="gbanner" style="margin-top:12px">'+
     '<div class="gt">🔮 冒険者召喚</div>'+
-    '<div class="gs">🎫 や 🪙 で新しい仲間を召喚しよう</div>'+
+    '<div class="gs">冒険や任務で集めた🪙で仲間を召喚しよう</div>'+
     pullButtonsHTML("std")+
     '<div class="grates" id="rateInfo">提供割合・突破について ›</div></div>';
   box.innerHTML=h;
   box.querySelectorAll("[data-pull]").forEach(btn=>{
     btn.onclick=()=>{
       const p=btn.dataset.pull.split("|");
-      doPull(+p[1], p[2]==="g", p[0]==="ltd"? activeBanner() : null);
+      doPull(+p[1], p[0]==="ltd"? activeBanner() : null);
     };
   });
   $("rateInfo").onclick=openRates;
@@ -392,8 +421,10 @@ function openRates(){
     row(3)+row(2)+row(1)+row(0)+
     '</table>'+
     '<div class="small" style="margin-top:12px; line-height:1.7">'+
-    '・期間限定バナーはSSR/SRが当たりやすく、該当レア度枠の50%がピックアップ(限定)キャラになる<br>'+
-    '・限定キャラは開催終了後、恒常の召喚にも登場するようになる<br>'+
+    '・限定召喚は🎫専用。🎫はクイズの正解(1問=🎫1)など学習でだけ手に入る<br>'+
+    '・恒常召喚は🪙専用。🪙は冒険・任務でたくさん手に入る<br>'+
+    '・期間限定バナーは2週間ごとに交互開催。SSR/SRが当たりやすく、該当レア度枠の50%がピックアップ(限定)キャラになる<br>'+
+    '・限定キャラは恒常には入らない(次の開催を待てば必ずまた出会える)<br>'+
     '・同じ冒険者を引くと「突破」となり能力+6%(11回目からは+2%・上限なし)<br>'+
     '・冒険者はそれぞれ固有スキル(✦)を持つ。出撃中の1人のスキルが効果を発揮する</div>'+
     '<div class="row" style="margin-top:12px"><button class="btn primary" style="flex:1" data-close>OK</button></div>');

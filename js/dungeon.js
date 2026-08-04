@@ -28,6 +28,19 @@ const DUNGEONS=[
    names:["グール","バンシー","デュラハン"], eicons:["🧟","🕯️","🎃"], boss:"冥王ノクターン", bossIcon:"🌑"},
   {id:"d12", tier:12, floors:16, icon:"🌌", name:"星界の果て", elem:3, trait:"tough",
    names:["星屑の獣","コメットドラゴン","銀河の番人"], eicons:["🐆","☄️","🛸"], boss:"創星神アストラル", bossIcon:"🌌"},
+  // v4.6.0 拡張(tier13〜18): 星界の先の世界
+  {id:"d13", tier:13, floors:16, icon:"🎪", name:"逆さまの魔戯場", elem:4, trait:"fierce",
+   names:["道化人形","影絵の獣","囁く仮面"], eicons:["🤡","🐈‍⬛","🎭"], boss:"狂宴の道化王 ジェスタ", bossIcon:"🃏"},
+  {id:"d14", tier:14, floors:17, icon:"🕰️", name:"時忘れの砂時計", elem:2, trait:"swift",
+   names:["時喰い虫","砂の巨人","過去の残像"], eicons:["🪲","🗿","👤"], boss:"刻の支配者 クロノス", bossIcon:"⏳"},
+  {id:"d15", tier:15, floors:17, icon:"💠", name:"虹霓の水晶宮", elem:3, trait:"tough",
+   names:["プリズムゴーレム","光の蝶","水晶兵"], eicons:["🔷","🦋","💎"], boss:"七彩の女王 イリス", bossIcon:"🌈"},
+  {id:"d16", tier:16, floors:18, icon:"⚙️", name:"終末機関都市", elem:0, trait:"tough",
+   names:["機械兵","蒸気竜","歯車の番人"], eicons:["🤖","🚂","⚙️"], boss:"機神デウス・マキナ", bossIcon:"🦾"},
+  {id:"d17", tier:17, floors:18, icon:"🪞", name:"鏡界の狭間", elem:4, trait:"swift",
+   names:["鏡写しの己","虚像の騎士","裏側の住人"], eicons:["🪞","🤺","👥"], boss:"反転の王 ウラガエシ", bossIcon:"🌓"},
+  {id:"d18", tier:18, floors:20, icon:"📜", name:"原初の言霊神殿", elem:3, trait:"fierce",
+   names:["言霊の精","アルファの獣","オメガの蛇"], eicons:["🔤","🦁","🐍"], boss:"言葉の始祖 ロゴス", bossIcon:"📜"},
 ];
 const TRAITS={
   tough: {ic:"🛡️", name:"硬い",  desc:"防御がとても高い ─ 【貫通】技が有効"},
@@ -86,7 +99,7 @@ function openDungeonModal(d){
     '敵は'+ELEM_ICON[d.elem]+ELEM_NAME[d.elem]+'属性(弱点: '+ELEM_ICON[adv]+ELEM_NAME[adv]+')<br>'+matchTxt+
     (d.trait? '<br>'+TRAITS[d.trait].ic+'<b>'+TRAITS[d.trait].name+'</b>: '+TRAITS[d.trait].desc:'')+'<br>'+
     '推奨戦闘力 <b style="color:'+(okp?"var(--ok)":"var(--ng)")+'">'+fmt(rp)+'</b>(いまの戦闘力 '+fmt(P.power)+')<br>'+
-    (rec&&rec.clears? 'クリア'+rec.clears+'回 ・ 本日初クリアで🎫1' : '初クリア報酬: 🎫3')+'</div>'+
+    (rec&&rec.clears? 'クリア'+rec.clears+'回 ・ 本日初クリアで🪙1000' : '初クリア報酬: 🪙3000')+'</div>'+
     (okp? "" : '<div class="small" style="margin-top:6px; color:var(--ng)">戦闘力が足りない<br>クイズでカードを集め、弱点属性で編成を組もう</div>')+
     '<div class="row" style="margin-top:14px; gap:8px">'+
     '<button class="btn" style="flex:1" data-close>やめる</button>'+
@@ -123,19 +136,19 @@ function startRun(d){
     floors.push(fl);
   }
   const full=cleared===d.floors;
-  // 報酬確定(周回チケットの25%抽選はv3.7.0で廃止=チケットは学習・任務・初クリアから)
-  let tickets=0;
+  /* 報酬確定。v4.6.0: 冒険の報酬はすべて🪙(恒常召喚のコイン)に一本化 ─
+     🎫(限定召喚チケット)は学習だけが源泉。初クリア🎫3→🪙3000・本日初🎫1→🪙1000 */
   if(full){
     gold+=Math.round(40*d.tier*d.tier*(1+(P.goldBonus||0)/100)*gmul);
-    if(rec.clears===0) tickets+=3;
-    else if(rec.lastClearDay!==todayKey()) tickets+=1;      // 本日初クリア
+    if(rec.clears===0) gold+=3000;
+    else if(rec.lastClearDay!==todayKey()) gold+=1000;      // 本日初クリア
     rec.dayClears = rec.lastClearDay===todayKey()? (rec.dayClears||0)+1 : 1;
     rec.clears++; rec.lastClearDay=todayKey();
     track("clear");
   }
-  G.gold+=gold; G.tickets+=tickets;
+  G.gold+=gold;
   saveG(); refreshHeader(); renderAdv();
-  playRun(d, P, floors, {full, cleared, gold, tickets, reduced:gmul<1});
+  playRun(d, P, floors, {full, cleared, gold, reduced:gmul<1});
 }
 
 /* ---- 演出プレイヤー ---- */
@@ -300,8 +313,8 @@ function playRun(d, P, floors, R){
       '<div id="bResult" class="'+(R.full?"win":"lose")+'">'+
       '<div class="brTitle">'+(R.full? "🏆 完全攻略!" : "⚔ "+(R.cleared+1)+"Fで敗退…")+'</div>'+
       (R.full? "" : '<div class="small">'+R.cleared+'Fまで突破。カードを集めて再挑戦しよう</div>')+
-      '<div class="brRew">🪙 <b id="brGold">0</b>'+(R.tickets? ' &nbsp;🎫 <b>+'+R.tickets+'</b>':"")+'</div>'+
-      (R.reduced? '<div class="small" style="margin-top:8px">周回報酬は本日3回目から減少中。<br>クイズを解く方がお得(10問正解で🎫1)</div>':"")+
+      '<div class="brRew">🪙 <b id="brGold">0</b></div>'+
+      (R.reduced? '<div class="small" style="margin-top:8px">周回報酬は本日3回目から減少中。<br>クイズを解く方がお得(正解1問で🎫1)</div>':"")+
       '</div>';
     $("bCtrl").innerHTML='<button class="btn primary" style="flex:1" data-close>閉じる</button>';
     $("bCtrl").querySelector("[data-close]").onclick=closeModal;
@@ -337,10 +350,14 @@ function playRun(d, P, floors, R){
 const INF_FLOOR_SEC=25;
 
 function infEnemy(floor){
+  /* v4.6.0: ダンジョンと同思想でHPは深さに応じて厚く(数ターンの攻防)、
+     攻撃はプレイヤーの耐久に併走する緩い曲線に(旧1.09^fは深層で即死のみ) */
   const p=Math.pow(1.09, floor);
+  const hpB=Math.min(3, 1+0.04*floor);
   const names=["深層スライム","彷徨う鎧","影の獣","迷宮の番人","古の魔像"];
-  return {name:floor+"Fの"+names[floor%names.length], hp:Math.round(140*p),
-          atk:Math.round(20*p), def:Math.round(9*p), spd:9+Math.floor(floor/5),
+  return {name:floor+"Fの"+names[floor%names.length], hp:Math.round(140*p*hpB),
+          atk:Math.round(36*Math.pow(1.035, floor)), def:Math.round(9*p*hpB),
+          spd:9+Math.floor(floor/5),
           elem:floor%5}; // 階ごとに属性が巡る(偏った編成は深層で止まりやすい)
 }
 
@@ -359,7 +376,7 @@ function infTick(){
     if(r.win){
       run.floor++;
       run.gold+=Math.round((8+run.floor*2)*(1+(run.P.goldBonus||0)/100));
-      if(run.floor%10===0) run.tickets++;
+      if(run.floor%10===0) run.gold+=1000; // v4.6.0: 🎫1→🪙1000(冒険報酬はコインに一本化)
       if(run.floor>G.inf.best) G.inf.best=run.floor;
     }else{ run.dead=true; break; }
   }
@@ -376,7 +393,7 @@ function infStart(){
 function infCollect(){
   const run=G.inf.run; if(!run) return;
   infTick();
-  G.gold+=run.gold; G.tickets+=run.tickets;
+  G.gold+=run.gold; G.tickets+=run.tickets||0; // 旧版の探索中セーブとの互換(v4.5以前の🎫)
   toast("探索終了: "+run.floor+"F到達 ／ 🪙"+fmt(run.gold)+(run.tickets?" 🎫"+run.tickets:""));
   G.inf.run=null;
   saveG(); refreshHeader(); renderAdv(); refreshInfPill();
@@ -389,7 +406,7 @@ function renderInfPanel(){
   if(!run){
     p.innerHTML='<div class="row"><div class="grow">'+
       '<div style="font-weight:800; font-size:15px">🌀 無限回廊</div>'+
-      '<div class="small" style="margin-top:3px">クイズ中も自動で進む放置探索。10階ごとに🎫1'+(best?'<br>'+best:'')+'</div></div>'+
+      '<div class="small" style="margin-top:3px">クイズ中も自動で進む放置探索。10階ごとに🪙1000'+(best?'<br>'+best:'')+'</div></div>'+
       '<button class="btn gold" id="infStartBtn" '+(dgUnlocked(1)?"":"disabled")+'>出発</button></div>';
     const b=$("infStartBtn"); if(b&&!b.disabled) b.onclick=infStart;
   }else{

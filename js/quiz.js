@@ -101,7 +101,7 @@ function answer(chosen, btn){
   track("ans"); if(ok) track("cor");
   lastEn=w.en;
 
-  // 連続正解コンボ(XPボーナス・ドロップ★率UP)と、正解10問ごとの🎫1
+  // 連続正解コンボ(XPボーナス・ドロップ★率UP)と、正解ごとの🎫(v4.6.0: 1問=🎫1)
   let tkGain=0;
   if(ok){
     G.combo=(G.combo||0)+1;
@@ -133,8 +133,8 @@ function answer(chosen, btn){
     if(Math.random()<comboDropBonus()) rar=Math.min(5, rar+1); // コンボ中は★+1のチャンス
     addCard(w.en, rar);
     if(lvUp){ toast("📖 レベルアップ! Lv"+lvUp+" ─ 全ステータス強化"); vibe(40); }
-    else if(tkGain){ toast("正解10問ごとのごほうび 🎫+1"); vibe(25); }
     else if(rar>=3) vibe(30);
+    // 🎫は毎正解なのでトーストは出さない(結果バーの🎫+1チップで伝える)
   }
   rc.innerHTML='<span class="poschip pos'+w.pos+'">'+POS_LABEL[w.pos]+'</span>'+meta.join(' ');
   $("resultBar").classList.add("show");

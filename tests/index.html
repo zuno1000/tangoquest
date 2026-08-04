@@ -263,6 +263,34 @@ function run(){
       {name:"e",hp:5000,atk:50,def:0,spd:1});
     ok(r.log.some(e=>e.heal>0), "healログ");
   });
+  t("v4.6.0バランス: 敵HPは厚く・攻撃の伸びは緩やか(一撃必殺の是正)", ()=>{
+    const e=(t,f)=>W.enemyFor(t,f,16,false,["a"],"b");
+    // 攻撃はプレイヤー耐久に併走する緩い曲線(旧1.55^tierなら×121になっていた)
+    const aRatio=e(12,1).atk/e(1,1).atk;
+    ok(aRatio<8, "t12/t1の攻撃比が緩い: "+aRatio.toFixed(1));
+    const hRatio=e(12,1).hp/e(1,1).hp;
+    ok(hRatio>200, "HPは火力に併走して大きく伸びる: "+hRatio.toFixed(0));
+    // 低tierは従来の手応え(HP倍率は控えめ)・高tierほど厚い
+    ok(e(1,1).hp<200, "t1のHPは従来並み: "+e(1,1).hp);
+    // 推奨戦闘力どおりなら数ターンで倒せる目安: 敵HP ≦ 推奨戦闘力(≒dpt×4.3)
+    const d12=W.DUNGEONS[11];
+    const boss=W.enemyFor(12, d12.floors, d12.floors, true, ["a"], "B");
+    ok(boss.hp<W.recPower(d12)*3, "ボスHPが推奨戦闘力比で過大でない");
+  });
+  t("v4.6.0バランス: 戦闘中の回復は1ターン最大HP25%まで", ()=>{
+    const P={name:"p", hp:1000, def:0, spd:99, charM:1, setM:1, amp:1, guard:0, abVamp:1.0,
+             clauses:[{V:5000,vt:0,w:1,name:"x",words:[]},{V:5000,vt:2,w:1,name:"y",words:[]}]};
+    const r=W.simBattle(P, {name:"e", hp:999999, atk:400, def:0, spd:1});
+    const turns={};
+    let turn=0;
+    r.log.forEach(ev=>{
+      if(ev.side==="e"){ turn++; return; }
+      if(ev.heal) turns[turn]=(turns[turn]||0)+ev.heal;
+    });
+    const healsPerTurn=Object.values(turns);
+    ok(healsPerTurn.length>0, "回復が発生している");
+    healsPerTurn.forEach(h=>ok(h<=250, "1ターンの回復が上限超え: "+h));
+  });
   t("敵の特性: toughは防御が上がりswiftは速くなる", ()=>{
     const base=W.enemyFor(3,1,5,false,["a"],"b");
     const tough=W.enemyFor(3,1,5,false,["a"],"b",{trait:"tough"});
@@ -579,25 +607,34 @@ function run(){
     W.closeModal();
     W.localStorage.removeItem("tq_newsSeen");
   });
-  t("9月バナーと限定キャラが定義されている", ()=>{
-    ok(W.BANNERS.some(x=>x.id==="b2609"), "b2609");
-    const c30=W.CHARS.find(c=>c.id==="c30"), c31=W.CHARS.find(c=>c.id==="c31");
-    ok(c30 && c30.limited && c31 && c31.limited, "limitedフラグ");
+  t("限定バナー2種が2週間ごとに交互開催される(v4.6.0ローテ)", ()=>{
+    eq(W.ROT_BANNERS.length, 2, "2バナー");
+    const e=W.ROTATION_EPOCH;
+    const b0=W.bannerAt(e), b1=W.bannerAt(W.addDays(e,14)), b2=W.bannerAt(W.addDays(e,28));
+    eq(b0.id, W.ROT_BANNERS[0].id, "第1期はrotA");
+    eq(b1.id, W.ROT_BANNERS[1].id, "第2期はrotB");
+    eq(b2.id, W.ROT_BANNERS[0].id, "第3期はrotAに戻る");
+    eq(b0.start, e, "第1期の初日");
+    eq(b0.end, W.addDays(e,13), "期間は14日間");
+    eq(W.bannerAt(W.addDays(e,13)).id, b0.id, "最終日まで同じバナー");
+    ok(!W.bannerAt(W.addDays(e,-1)), "開始前はnull");
+    ok(W.activeBanner(), "今日も必ずどちらかが開催中");
+    const c30=W.CHARS.find(c=>c.id==="c30");
+    ok(c30 && c30.limited, "limitedフラグ");
     const p=W.gachaPool(4, {chars:["c30"]});
     eq(p.feat[0].id, "c30", "SSRピックアップ対象");
   });
 
   /* ---- 限定ガチャ・ダンジョン ---- */
-  t("限定キャラは開催終了まで恒常プールに出ず、終了後は恒常入り", ()=>{
+  t("ローテ入りの限定キャラは恒常プールに入らない", ()=>{
     for(let r=1;r<=4;r++){
       const p=W.gachaPool(r,null);
       ok(p.length>0, "pool r"+r);
-      ok(p.every(c=>!c.limited || W.limitedUnlocked(c)), "locked limited excluded r"+r);
+      ok(p.every(c=>!c.limited), "恒常プールに限定がいない r"+r);
     }
-    const c22=W.CHARS.find(c=>c.id==="c22"); // 8月バナー(〜8/31)
-    ok(!W.limitedUnlocked(c22, "2026-08-15"), "開催中は恒常に出ない");
-    ok(!W.limitedUnlocked(c22, "2026-08-31"), "最終日も恒常に出ない");
-    ok(W.limitedUnlocked(c22, "2026-09-01"), "終了翌日から恒常入り");
+    const c22=W.CHARS.find(c=>c.id==="c22");
+    ok(!W.limitedUnlocked(c22, "2026-08-15"), "開催中も恒常に出ない");
+    ok(!W.limitedUnlocked(c22, "2030-01-01"), "何年たっても恒常入りしない(ローテで戻る)");
   });
   t("限定ガチャは恒常よりSSR/SRが当たりやすい", ()=>{
     const std=W.gachaRates(null), ltd=W.gachaRates({});
@@ -657,9 +694,9 @@ function run(){
     ok(p.feat && p.feat.length===1 && p.feat[0].id==="c22", "featured SSR");
     ok(p.normal.every(c=>!c.limited), "normal side no limited");
   });
-  t("ダンジョンは12種でtierが単調増加・定義が揃っている", ()=>{
-    eq(W.DUNGEONS.length, 12, "count");
-    for(let i=0;i<12;i++){
+  t("ダンジョンは18種でtierが単調増加・定義が揃っている(v4.6.0拡張)", ()=>{
+    eq(W.DUNGEONS.length, 18, "count");
+    for(let i=0;i<18;i++){
       const d=W.DUNGEONS[i];
       ok(d.eicons && d.eicons.length>=3 && d.bossIcon && d.boss, d.id+" defs");
       ok(d.elem>=0 && d.elem<5, d.id+" elem");
@@ -812,13 +849,41 @@ function run(){
   });
 
   /* ---- v3.7.0: 学習報酬経済 ---- */
-  t("正解10問ごとに🎫1(corTicketGain)", ()=>{
-    const G=W.G; const c0=G.counters.cor;
-    G.counters.cor=9;  eq(W.corTicketGain(), 0, "9問目は0");
-    G.counters.cor=10; eq(W.corTicketGain(), 1, "10問目で1");
-    G.counters.cor=25; eq(W.corTicketGain(), 0, "端数は0");
-    G.counters.cor=0;  eq(W.corTicketGain(), 0, "0は対象外");
-    G.counters.cor=c0;
+  t("正解1問ごとに🎫1(v4.6.0: 学習=限定チケットの唯一の源泉)", ()=>{
+    eq(W.corTicketGain(), 1, "毎正解で1");
+  });
+  t("通貨の分離: 限定召喚は🎫・恒常召喚は🪙を消費する", ()=>{
+    const G=W.G;
+    const bak={t:G.tickets, g:G.gold};
+    try{
+      const t0=G.tickets=5, g0=G.gold=5000;
+      W.doPull(1, {name:"テスト限定", chars:["c22"]});
+      eq(G.tickets, t0-1, "限定は🎫を消費");
+      eq(G.gold, g0, "限定は🪙を消費しない");
+      W.closeModal();
+      W.doPull(1, null);
+      eq(G.gold, g0-1000, "恒常は🪙1000を消費");
+      eq(G.tickets, t0-1, "恒常は🎫を消費しない");
+      W.closeModal();
+      G.tickets=0; G.gold=0;
+      W.doPull(1, {name:"x", chars:[]});
+      ok(!W.document.getElementById("packStage"), "🎫不足で限定は引けない");
+      W.doPull(1, null);
+      ok(!W.document.getElementById("packStage"), "🪙不足で恒常は引けない");
+    }finally{ G.tickets=bak.t; G.gold=bak.g; }
+  });
+  t("冒険系の任務・実績の報酬は🪙(🎫は学習系だけ)", ()=>{
+    const dl=W.DAILY_DEFS.find(m=>m.id==="dl"), wl=W.WEEKLY_DEFS.find(m=>m.id==="wl");
+    ok(dl.rew.g>0 && !dl.rew.t, "デイリークリア任務は🪙");
+    ok(wl.rew.g>0 && !wl.rew.t, "ウィークリークリア任務は🪙");
+    ["aclr","ainf","achr","apul","adup"].forEach(id=>{
+      const a=W.ACH_DEFS.find(x=>x.id===id);
+      ok(a.tiers.every(tr=>!tr[1].t), id+" の報酬に🎫が混ざっている");
+    });
+    ["acor","amas"].forEach(id=>{
+      const a=W.ACH_DEFS.find(x=>x.id===id);
+      ok(a.tiers.some(tr=>tr[1].t), id+" は学習系なので🎫がある");
+    });
   });
   t("連続正解コンボ: XP倍率とドロップ★率が伸びて頭打ち", ()=>{
     const G=W.G; const b=G.combo;
