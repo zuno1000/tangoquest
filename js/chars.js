@@ -37,12 +37,15 @@ const CHARS=[
   {id:"c29", face:"🦁", name:"獣王 レオニス",       rar:4, hp:760, atk:94, def:50, spd:14, sk:{n:"王の咆哮",     t:"boss", v:0.35}},
   // v4.0.0 追加(恒常・これで計32体)
   {id:"c32", face:"🧭", name:"星の旅人 アルク",     rar:2, hp:410, atk:47, def:27, spd:13, sk:{n:"道しるべ",     t:"heal", v:0.15}},
-  // 期間限定(開催中は限定バナーのみ・終了後は恒常入り)。
+  // 期間限定(開催中は限定バナーのみ・初回開催の終了後は恒常入り=v4.9.0)。
   // 限定は同レアの恒常より素の力を1割弱高くする(ただし限定SR < 恒常SSR)
   {id:"c22", face:"☄️", name:"彗星の魔女 ステラ",   rar:4, hp:720, atk:108, def:44, spd:19, limited:true, sk:{n:"彗星落とし",  t:"dmg",  v:0.25}},
   {id:"c23", face:"🌸", name:"桜花の剣姫 サクヤ",   rar:3, hp:580, atk:78, def:36, spd:19, limited:true, sk:{n:"桜吹雪",     t:"dmg",  v:0.18}},
   {id:"c30", face:"🍁", name:"紅葉の狐仙 モミジ",   rar:4, hp:720, atk:104, def:46, spd:18, limited:true, sk:{n:"紅葉狩り",   t:"vamp", v:0.12}},
   {id:"c31", face:"🌾", name:"収穫の精 ミノリ",     rar:3, hp:600, atk:74, def:40, spd:17, limited:true, sk:{n:"豊穣",       t:"gold", v:35}},
+  // v4.9.0 追加(枠A第2弾「夏祭りの召喚」8/8〜)
+  {id:"c33", face:"🎆", name:"宵闇の花火師 ホムラ", rar:4, hp:740, atk:106, def:45, spd:18, limited:true, sk:{n:"大輪の花火",  t:"boss", v:0.28}},
+  {id:"c34", face:"🐠", name:"金魚の精 リンカ",     rar:3, hp:560, atk:76, def:38, spd:18, limited:true, sk:{n:"すくい上げ",  t:"heal", v:0.18}},
 ];
 const byChar={}; CHARS.forEach(c=>byChar[c.id]=c);
 
@@ -72,12 +75,15 @@ function abilityXpMult(){
    毎週どちらかの枠が入れ替わる(A=7/25起点: 7/25〜8/7, 8/8〜8/21…/
    B=8/1起点: 8/1〜8/14, 8/15〜8/28…)。
    枠の banners にバナーを追加すると、その枠は周期ごとに順番へ内容が切り替わる。
-   限定キャラは恒常入りしない(周期更新で必ず戻ってくる)。
+   限定キャラは「初回開催の終了後」に恒常(冒険者召喚)へ収録される(v4.9.0)。
+   再登場(周期の巡回)ではピックアップ+率UPの対象として戻ってくる。
    一回きりの特別開催をしたい場合は BANNERS に1行追記(2枠に加えて表示される) */
 const LTD_SLOTS=[
   {epoch:"2026-07-25", banners:[
     {id:"ltdA1", name:"☄️ 星降る夜の召喚", chars:["c22","c23"],
      desc:"限定「彗星の魔女 ステラ」(SSR)・「桜花の剣姫 サクヤ」(SR)がピックアップ!"},
+    {id:"ltdA2", name:"🎆 夏祭りの召喚", chars:["c33","c34"],
+     desc:"限定「宵闇の花火師 ホムラ」(SSR)・「金魚の精 リンカ」(SR)がピックアップ!"},
   ]},
   {epoch:"2026-08-01", banners:[
     {id:"ltdB1", name:"🍁 秋宵の召喚", chars:["c30","c31"],
@@ -108,11 +114,18 @@ function activeBanners(){
 }
 /* 互換: 「限定が開催中か」を見る場面用(ホームの表示・率UP判定など) */
 function activeBanner(){ return activeBanners()[0]||null; }
-/* 限定キャラの恒常入り判定: 枠入りの限定は恒常入りしない(周期で必ず再登場)。
-   一回きり開催(BANNERS)の限定だけ、終了後に恒常入りする(従来ルール) */
+/* 限定キャラの恒常入り判定(v4.9.0で変更): 開催(枠・特別とも)が一度終わったら
+   恒常(冒険者召喚)に収録される。枠のバナーはその後も周期で再登場し、
+   その間は率UP+ピックアップの対象になる(恒常入り済みでも「限定」表記は維持) */
 function limitedUnlocked(c, t){
   t=t||todayKey();
-  if(LTD_SLOTS.some(s=>s.banners.some(b=>b.chars.indexOf(c.id)>=0))) return false;
+  for(const s of LTD_SLOTS){
+    for(let i=0;i<s.banners.length;i++){
+      if(s.banners[i].chars.indexOf(c.id)<0) continue;
+      // バナーiの初回開催=i周目(周期14日)。その終了日を過ぎたら恒常入り
+      if(t>addDays(s.epoch, i*14+13)) return true;
+    }
+  }
   return BANNERS.some(b=>b.chars.indexOf(c.id)>=0 && t>b.end);
 }
 /* レア度ごとの排出プール。banner指定時はピックアップ(feat)も返す */

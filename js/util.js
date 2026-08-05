@@ -12,6 +12,13 @@ function hashStr(s){
 }
 
 function fmt(n){ return Math.round(n).toLocaleString("ja-JP"); }
+/* ヘッダーなど幅が限られる場所用の短縮表記: 30万・1.2万・9,999 */
+function fmtShort(n){
+  n=Math.round(n);
+  if(n>=1e8) return +( (n/1e8).toFixed(1) )+"億";
+  if(n>=1e4) return +( (n/1e4).toFixed(n<1e5?1:0) )+"万";
+  return n.toLocaleString("ja-JP");
+}
 
 /* ---- toast ---- */
 let toastTimer=null;

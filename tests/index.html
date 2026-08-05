@@ -718,15 +718,28 @@ function run(){
   });
 
   /* ---- 限定ガチャ・ダンジョン ---- */
-  t("枠入りの限定キャラは恒常プールに入らない", ()=>{
+  t("限定キャラは初回開催の終了後に恒常入りする(v4.9.0)", ()=>{
+    const c22=W.CHARS.find(c=>c.id==="c22"); // 枠A1番目: 初回7/25〜8/7
+    ok(!W.limitedUnlocked(c22, "2026-08-07"), "開催中は恒常に出ない");
+    ok(W.limitedUnlocked(c22, "2026-08-08"), "初回終了の翌日から恒常入り");
+    const a2=W.LTD_SLOTS[0].banners[1]; // 枠A2番目「夏祭り」: 初回8/8〜8/21
+    const cNew=W.CHARS.find(c=>c.id===a2.chars[0]);
+    ok(!W.limitedUnlocked(cNew, "2026-08-01"), "開催前は出ない");
+    ok(!W.limitedUnlocked(cNew, "2026-08-21"), "初回開催中は出ない");
+    ok(W.limitedUnlocked(cNew, "2026-08-22"), "初回終了後は恒常入り");
     for(let r=1;r<=4;r++){
       const p=W.gachaPool(r,null);
-      ok(p.length>0, "pool r"+r);
-      ok(p.every(c=>!c.limited), "恒常プールに限定がいない r"+r);
+      const expect=W.CHARS.filter(c=>c.rar===r && (!c.limited || W.limitedUnlocked(c))).length;
+      eq(p.length, expect, "恒常プール=恒常+解禁済み限定 r"+r);
     }
-    const c22=W.CHARS.find(c=>c.id==="c22");
-    ok(!W.limitedUnlocked(c22, "2026-08-15"), "開催中も恒常に出ない");
-    ok(!W.limitedUnlocked(c22, "2030-01-01"), "何年たっても恒常入りしない(周期更新で戻る)");
+  });
+  t("枠A: 星降る夜(〜8/7)の翌日から夏祭りの召喚(8/8〜8/21)に切り替わる", ()=>{
+    const A=W.LTD_SLOTS[0];
+    eq(W.slotBannerAt(A, "2026-08-07").id, "ltdA1", "8/7まで星降る夜");
+    const b=W.slotBannerAt(A, "2026-08-08");
+    eq(b.id, "ltdA2", "8/8から夏祭り");
+    eq(b.start, "2026-08-08"); eq(b.end, "2026-08-21");
+    eq(W.slotBannerAt(A, "2026-08-22").id, "ltdA1", "以降は交互に巡回");
   });
   t("限定ガチャは恒常よりSSR/SRが当たりやすい", ()=>{
     const std=W.gachaRates(null), ltd=W.gachaRates({});
@@ -1269,6 +1282,24 @@ function run(){
     eq(W.mergeData(d1,d2).pace.goal, "2027-03-01", "同点なら目標あり側");
     eq(m.days["2026-08-05"].n, 7, "新規着手数はmax");
     eq(m.days["2026-08-05"].a, 5, "解答数はmax(従来どおり)");
+  });
+  t("今日の目安はその日の最初の計算で固定される(ミスで途中に増えない)", ()=>{
+    const G=W.G, oldPace=JSON.parse(JSON.stringify(G.pace)), oldWords=G.words;
+    G.words={};
+    G.pace={goal:W.addDays(W.todayKey(),120), setAt:1, log:[], qd:null};
+    const q1=W.paceToday(G);
+    ok(q1.perDay>0);
+    eq(G.pace.qd.d, W.todayKey(), "今日の値として保存される");
+    for(let i=0;i<50;i++) W.paceLog(0,0); // 復習50連敗=動的計算なら目安が跳ね上がる状況
+    eq(W.paceToday(G).perDay, q1.perDay, "同日中は固定(ミスで増えない)");
+    G.pace.qd={d:"2000-01-01", per:q1.perDay}; // 昨日の値が残っている状態
+    const q3=W.paceToday(G);
+    eq(G.pace.qd.d, W.todayKey(), "翌日の最初の表示で引き直す");
+    ok(q3.perDay>q1.perDay, "昨日までの結果(悪化した正答率)を織り込む");
+    G.pace.qd=null;
+    G.pace.goal=W.addDays(W.todayKey(),120); // 目標を設定し直すとqd=nullで即引き直し
+    ok(W.paceToday(G).perDay>0 && G.pace.qd.d===W.todayKey(), "目標変更時は即時に再計算");
+    G.pace=oldPace; G.words=oldWords;
   });
   t("ホーム: 目標設定時は今日の目安メーター・未設定時は設定への導線が出る", ()=>{
     const G=W.G, old=G.pace.goal;

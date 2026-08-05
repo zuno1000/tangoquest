@@ -173,7 +173,7 @@ function mergeData(a, b){
     if(!pa || !pb) m.pace=pa||pb||m.pace;
     else{
       const w=(pb.setAt||0)>(pa.setAt||0)? pb : (pa.setAt||0)>(pb.setAt||0)? pa : (pa.goal? pa : pb);
-      m.pace={goal:w.goal||null, setAt:w.setAt||0,
+      m.pace={goal:w.goal||null, setAt:w.setAt||0, qd:w.qd||null,
               log:(((pa.log||[]).length>=(pb.log||[]).length? pa.log : pb.log)||[])};
     }
   }

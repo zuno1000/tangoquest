@@ -85,14 +85,16 @@ function buildChoices(word){
 function renderQuestion(){
   answered=false;
   $("resultBar").classList.remove("show");
+  $("promptCard").classList.remove("srch"); // 辞書リンクは正誤確認中だけ
   const w=cur.word, e2j=G.mode==="e2j";
   const st=G.words[w.en];
   $("qBadge").textContent = !st? "新規" : (st[0]>=MASTER_BOX? "覚えた・復習" : "復習");
   $("qBadge").style.color = !st? "var(--accent2)" : (st[0]>=MASTER_BOX? "var(--ok)" : "var(--accent)");
-  const d=dayRec(), stk=studyStreak();
-  const q=paceQuota(G);
-  $("qCount").textContent="今日 "+d.a+(q&&!q.done? "/"+q.perDay:"")+"問"+(stk>=2? " ・🔥"+stk+"日":"")+
-    ((G.combo||0)>=3? " ・⚡"+G.combo+"連続":"");
+  const d=dayRec();
+  const q=paceToday(G);
+  // 「今日 X/Y問」は右端に固定。連続正解は必要なときだけ左側に付く(連続日数は出さない)
+  $("qCount").textContent=((G.combo||0)>=3? "⚡"+G.combo+"連続 ・ ":"")+
+    "今日 "+d.a+(q&&!q.done? "/"+q.perDay:"")+"問";
   const pw=$("promptWord");
   pw.textContent = e2j? w.en : w.ja;
   pw.className = e2j? "" : "ja";
@@ -179,11 +181,19 @@ function answer(chosen, btn){
   }
   rc.innerHTML='<span class="poschip pos'+w.pos+'">'+POS_LABEL[w.pos]+'</span>'+meta.join(' ');
   $("resultBar").classList.add("show");
+  $("promptCard").classList.add("srch"); // 単語タップで辞書へ(意味の裏取り)
   // 今日の目安にちょうど到達した瞬間だけ祝う(毎問出る表示はノイズ=v4.6.2の知見)
-  const pq=paceQuota(G);
+  const pq=paceToday(G);
   if(pq && !pq.done && d.a===pq.perDay){ toast("🎉 今日の目安 "+pq.perDay+"問を達成!"); vibe(40); }
   saveG();
   refreshHeader();
 }
 
 $("nextBtn").onclick=()=>newQuestion();
+
+/* 正誤確認中は上部の単語カードのタップで辞書(Weblio)を開き、意味を自分で確かめられる。
+   出題中は誤タップ防止のため無効(srchクラスで見た目も切り替え) */
+$("promptCard").onclick=()=>{
+  if(!answered || !cur) return;
+  window.open("https://ejje.weblio.jp/content/"+encodeURIComponent(cur.word.en), "_blank", "noopener");
+};

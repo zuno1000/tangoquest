@@ -644,3 +644,12 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
   box-shadow:inset 2px 2px 4px var(--shd), inset -2px -2px 4px var(--shl);
   -webkit-appearance:none; appearance:none; min-height:44px}
 .ppre{flex:1}
+
+/* ---- v4.9.0 ---- */
+/* ヘッダー: 通貨の桁が増えても⚙・🔔を押し出さない(数値は短縮表記+チップ側も縮められる) */
+header .res{flex:0 1 auto; min-width:0}
+header .res span:last-child{overflow:hidden; text-overflow:ellipsis}
+/* 正誤確認中: 単語カードのタップで辞書へ(出題中は無効) */
+#promptCard.srch{cursor:pointer}
+#promptCard.srch::after{content:"🔍 タップで辞書を開く"; position:absolute; bottom:6px; left:0; right:0;
+  text-align:center; font-size:10px; font-weight:700; color:var(--sub)}

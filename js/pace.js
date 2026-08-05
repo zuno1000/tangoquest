@@ -81,6 +81,19 @@ function paceQuota(g, now){
           expired: daysLeft<0 && rem.mastered<WORDS.length};
 }
 
+/* 今日の目安は「その日はじめて計算した値」で固定する(v4.9.0)。
+   表示のたびに再計算すると、ミスで残り問題数が増えて目安が途中で膨らみ
+   やる気を削ぐため。翌日の最初の表示で昨日までの結果を織り込んで引き直す。
+   目標を設定/解除した瞬間だけは即時に引き直す(qd=nullにして呼ぶ) */
+function paceToday(g, now){
+  const q=paceQuota(g, now);
+  if(!q || q.done) return q;
+  const d=todayKey();
+  if(!g.pace.qd || g.pace.qd.d!==d) g.pace.qd={d, per:q.perDay};
+  q.perDay=g.pace.qd.per;
+  return q;
+}
+
 /* 1日に導入する新規単語数: 最後に始める単語にも覚え切る猶予(10日)を残して逆算 */
 function paceNewPerDay(q){
   if(!q || q.unseen<=0) return 0;
@@ -107,7 +120,7 @@ function paceMsg(done, target){
    学習中の進捗は promptCard の「今日 X/Y問」表記(高さ増なし)が担う */
 function fillPaceEl(el){
   if(!el) return;
-  const q=paceQuota(G);
+  const q=paceToday(G);
   if(!q){
     el.innerHTML='<div class="pacetop"><span>🎯 学習ペース管理</span>'+
       '<b style="color:var(--accent2); font-size:13px">目標日を設定 ›</b></div>'+
@@ -176,13 +189,15 @@ function openPaceModal(){
   $("goalSave").onclick=()=>{
     const v=$("goalDate").value;
     if(!v || v<=today){ toast("明日以降の日付を選んでください"); return; }
-    G.pace.goal=v; G.pace.setAt=Date.now(); saveG();
+    G.pace.goal=v; G.pace.setAt=Date.now();
+    G.pace.qd=null; // 新しい目標で今日の目安を即引き直す
+    saveG();
     closeModal(); toast("🎯 目標を設定! 今日から逆算スタート");
     paceRefreshViews();
   };
   const gc=$("goalClear");
   if(gc) gc.onclick=()=>{
-    G.pace.goal=null; G.pace.setAt=Date.now(); saveG();
+    G.pace.goal=null; G.pace.setAt=Date.now(); G.pace.qd=null; saveG();
     closeModal(); toast("目標を解除した");
     paceRefreshViews();
   };
