@@ -1165,15 +1165,25 @@ function run(){
     const c=[2, now-12*3600e3, 1,2,0,2,0]; // 同条件+連続ミス2
     ok(W.reviewUrgency(c, now)>W.reviewUrgency(a, now), "連続ミス中はさらに優先");
   });
-  t("同期: 学習ペースは新しい側・日別の新規着手数はmaxでマージ", ()=>{
+  t("同期: 目標日は「設定した時刻」が勝つ(起動しただけの未設定端末に消されない)", ()=>{
     const base=()=>({words:{},days:{},inv:{},chars:{},dungeons:{},counters:{},ach:{},inf:{best:0},
                      gold:0,tickets:0,shards:0,xp:0});
-    const a=Object.assign(base(),{updatedAt:1, pace:{goal:"2027-01-01", log:[[1,1]]},
+    // 端末A=未設定のまま起動を重ねupdatedAtだけ新しい / 端末B=目標を設定済み(setAt=1000)
+    const a=Object.assign(base(),{updatedAt:99, pace:{goal:null, setAt:0, log:[[0,1],[0,1],[0,1]]},
       days:{"2026-08-05":{a:5,c:4,m:0,n:2}}});
-    const b=Object.assign(base(),{updatedAt:2, pace:{goal:"2027-06-30", log:[]},
+    const b=Object.assign(base(),{updatedAt:1, pace:{goal:"2027-01-01", setAt:1000, log:[[1,1]]},
       days:{"2026-08-05":{a:3,c:3,m:1,n:7}}});
     const m=W.mergeData(a,b);
-    eq(m.pace.goal, "2027-06-30", "更新が新しい側の目標が勝つ");
+    eq(m.pace.goal, "2027-01-01", "updatedAtが古くても設定した側が勝つ");
+    eq(m.pace.setAt, 1000, "setAtを引き継ぐ");
+    eq(m.pace.log.length, 3, "推定ログは長い方(結合の重複計上を避ける)");
+    // 解除も伝播する(より新しいsetAtの解除が勝つ)
+    const c=Object.assign(base(),{updatedAt:5, pace:{goal:null, setAt:2000, log:[]}});
+    eq(W.mergeData(b,c).pace.goal, null, "解除が伝播");
+    // 旧版(setAtなし)同士は目標あり側を優先
+    const d1=Object.assign(base(),{updatedAt:9, pace:{goal:null, log:[]}});
+    const d2=Object.assign(base(),{updatedAt:8, pace:{goal:"2027-03-01", log:[]}});
+    eq(W.mergeData(d1,d2).pace.goal, "2027-03-01", "同点なら目標あり側");
     eq(m.days["2026-08-05"].n, 7, "新規着手数はmax");
     eq(m.days["2026-08-05"].a, 5, "解答数はmax(従来どおり)");
   });

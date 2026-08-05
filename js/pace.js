@@ -176,13 +176,13 @@ function openPaceModal(){
   $("goalSave").onclick=()=>{
     const v=$("goalDate").value;
     if(!v || v<=today){ toast("明日以降の日付を選んでください"); return; }
-    G.pace.goal=v; saveG();
+    G.pace.goal=v; G.pace.setAt=Date.now(); saveG();
     closeModal(); toast("🎯 目標を設定! 今日から逆算スタート");
     paceRefreshViews();
   };
   const gc=$("goalClear");
   if(gc) gc.onclick=()=>{
-    G.pace.goal=null; saveG();
+    G.pace.goal=null; G.pace.setAt=Date.now(); saveG();
     closeModal(); toast("目標を解除した");
     paceRefreshViews();
   };

@@ -1,7 +1,7 @@
 "use strict";
 /* ================= 状態管理 ================= */
 const KEY="tangoquest_v1";
-const APP_VERSION="4.7.1"; // リリースごとに更新(設定表示・更新確認のリモート版比較に使う)
+const APP_VERSION="4.7.2"; // リリースごとに更新(設定表示・更新確認のリモート版比較に使う)
 
 /* ---- iOSスタンドアロン初回起動の灰色帯対策(v4.5.0→v4.5.1で移設) ----
    インストール直後の初回起動だけiOSがステータスバー領域を灰色に塗るため、
@@ -90,8 +90,9 @@ G.counters=Object.assign({ans:0,cor:0,cards:0,merges:0,runs:0,clears:0,pulls:0},
 G.ach=G.ach||{};        // achId -> 受取済みティア数
 G.login=G.login||{last:null, day:0};
 G.combo=G.combo||0;     // 連続正解数(ミスで0に。XPボーナス・ドロップ★率UPの源)
-G.pace=G.pace||{goal:null, log:[]}; // 学習ペース管理(v4.7.0): 目標日+直近100問の結果
+G.pace=G.pace||{goal:null, setAt:0, log:[]}; // 学習ペース管理(v4.7.0): 目標日+直近100問の結果
 if(!Array.isArray(G.pace.log)) G.pace.log=[];
+G.pace.setAt=G.pace.setAt||0; // 目標を設定/解除した時刻(同期はこれが新しい側が勝つ=v4.7.2)
 G.updatedAt=G.updatedAt||0;
 G.resetAt=G.resetAt||0;     // リセット世代印(同期マージで新しい世代が丸ごと勝つ)
 

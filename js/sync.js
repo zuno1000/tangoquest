@@ -165,7 +165,18 @@ function mergeData(a, b){
   const newer=(b.updatedAt||0)>(a.updatedAt||0)? b : a;
   m.daily=newer.daily||m.daily; m.weekly=newer.weekly||m.weekly;
   m.party=newer.party||m.party; m.login=newer.login||m.login; m.mode=newer.mode||m.mode;
-  m.pace=newer.pace||m.pace; // 学習ペース(目標日+直近ログ)は更新が新しい側
+  /* 学習ペース: 目標日は「設定/解除した時刻(setAt)」が新しい側が勝つ。
+     updatedAt基準だと起動しただけの未設定端末が勝って目標が消える(v4.7.1までの不具合)。
+     setAt同士が同じ(旧版=0)なら目標あり側を優先。推定ログは長い方(結合すると重複計上になる) */
+  {
+    const pa=a.pace, pb=b.pace;
+    if(!pa || !pb) m.pace=pa||pb||m.pace;
+    else{
+      const w=(pb.setAt||0)>(pa.setAt||0)? pb : (pa.setAt||0)>(pb.setAt||0)? pa : (pa.goal? pa : pb);
+      m.pace={goal:w.goal||null, setAt:w.setAt||0,
+              log:(((pa.log||[]).length>=(pb.log||[]).length? pa.log : pb.log)||[])};
+    }
+  }
   m.resetAt=a.resetAt||0;
   return m;
 }
