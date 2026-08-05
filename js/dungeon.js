@@ -441,8 +441,11 @@ function cardScore(c){
 function autoEquip(){
   const before=playerStats().power;
   const max=sentenceSlots();
+  // 候補は単語ごとに1枚(正規キー=最高レア)。同単語の別レアを並べる
+  // 自己共鳴の悪用(v4.7.2までの穴)も候補の時点で塞がる
   const cands=[];
-  for(const k in G.inv){ const c=cardOf(k); if(c) cands.push(c); }
+  const ens=new Set(Object.keys(G.inv).map(k=>parseKey(k).en));
+  for(const en of ens){ const c=cardOf(canonKeyOf(en)); if(c) cands.push(c); }
   cands.sort((a,b)=>cardScore(b)-cardScore(a));
   let top=cands.slice(0,50);
   // 共鳴候補: 上位カードと語根を共有するカードは単体スコアが低くても候補に足す(同節で化ける)
@@ -646,9 +649,11 @@ function openWordPicker(i){
     '<div class="panel picker" id="pickList"></div>');
   const render=()=>{
     const list=$("pickList"); list.innerHTML="";
+    // 単語ごとに1枚(正規キー)。別レアの端数は同じカードのLvに合流している
     const cands=[];
-    for(const k in G.inv){
-      const c=cardOf(k); if(!c) continue;
+    const ens=new Set(Object.keys(G.inv).map(k=>parseKey(k).en));
+    for(const en of ens){
+      const c=cardOf(canonKeyOf(en)); if(!c) continue;
       if(pickerPos!=="all" && c.pos!==pickerPos) continue;
       cands.push(c);
     }

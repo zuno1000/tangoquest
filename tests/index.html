@@ -213,6 +213,89 @@ function run(){
     G.inv=oldInv; G.party.sentence=oldSent;
   });
 
+  /* ---- v4.8.0: 単語=1カード(レア=最高到達・Lv=全レア合計) ---- */
+  t("同単語の別レア入手は1枚のカードに合流(レア=最高・Lv=合計枚数-1)", ()=>{
+    const G=W.G;
+    const en=W.WORDS[120].en;
+    for(let r=1;r<=5;r++) delete G.inv[en+"|"+r+"|0"];
+    W.addCard(en,1); W.addCard(en,1); W.addCard(en,1);
+    const d=W.addCard(en,3);
+    ok(d.rarUp, "所持中の単語を高レアで引くと★アップ");
+    eq(d.rar, 3);
+    eq(W.canonKeyOf(en), en+"|3|0", "正規キー=最高レア");
+    const c=W.cardOf(W.canonKeyOf(en));
+    eq(c.rar, 3, "レア=最高到達");
+    eq(c.lv, 3, "Lv=合計4枚-1(別レアの枚数も合流)");
+    const d2=W.addCard(en,1);
+    ok(!d2.rarUp, "低レアでは★は動かない");
+    eq(W.cardOf(W.canonKeyOf(en)).lv, 4, "低レアの1枚もLvになる");
+    for(let r=1;r<=5;r++) delete G.inv[en+"|"+r+"|0"];
+  });
+  t("配置中の単語が★アップすると文のキーも差し替わる", ()=>{
+    const G=W.G, oldSent=G.party.sentence;
+    const en=W.WORDS[121].en;
+    for(let r=1;r<=5;r++) delete G.inv[en+"|"+r+"|0"];
+    W.addCard(en,1);
+    G.party.sentence=[en+"|1|0", null];
+    W.addCard(en,4);
+    eq(G.party.sentence[0], en+"|4|0", "★4のキーへ差し替え");
+    for(let r=1;r<=5;r++) delete G.inv[en+"|"+r+"|0"];
+    G.party.sentence=oldSent;
+  });
+  t("同じ単語は別レアのキーでも文に1枠だけ(自己共鳴の穴を塞ぐ)", ()=>{
+    const G=W.G, oldInv=G.inv, oldSent=G.party.sentence;
+    const w=W.WORDS.filter(x=>x.pos==="n")[8];
+    G.inv={};
+    W.addCard(w.en,1); W.addCard(w.en,3);
+    G.party.sentence=[null,null,null,null];
+    eq(W.quickEquip(w.en+"|3|0"), 1, "1回目は置ける");
+    eq(W.quickEquip(w.en+"|1|0"), null, "別レアのキーでも同単語は置けない");
+    eq(W.equippedCountOf(w.en+"|1|0"), 1, "配置判定は単語単位");
+    G.inv=oldInv; G.party.sentence=oldSent;
+  });
+  t("起動時整合: 文のキーは最高レアへ寄り、同単語の重複配置は解消(冪等)", ()=>{
+    const a=W.WORDS[122].en, b=W.WORDS[123].en;
+    const g={inv:{}, party:{sentence:[a+"|1|0", b+"|2|0", a+"|3|0", null]}};
+    g.inv[a+"|1|0"]=2; g.inv[a+"|3|0"]=1; g.inv[b+"|2|0"]=1;
+    W.normalizeSentenceRarity(g);
+    eq(g.party.sentence[0], a+"|3|0", "最高レアの正規キーへ");
+    eq(g.party.sentence[1], b+"|2|0", "正規ならそのまま");
+    eq(g.party.sentence[2], null, "同単語の重複配置(旧仕様の穴)は解消");
+    const snap=JSON.stringify(g.party.sentence);
+    W.normalizeSentenceRarity(g);
+    eq(JSON.stringify(g.party.sentence), snap, "冪等");
+    const g2={inv:{}, party:{sentence:[a+"|1|0"]}};
+    W.normalizeSentenceRarity(g2);
+    eq(g2.party.sentence[0], null, "未所持の単語は文から外れる");
+  });
+  t("分解は低レアの端数から溶かし★を保つ・0枚で文から外れる", ()=>{
+    const G=W.G, oldSent=G.party.sentence, s0=G.shards;
+    const en=W.WORDS[124].en;
+    for(let r=1;r<=5;r++) delete G.inv[en+"|"+r+"|0"];
+    W.addCard(en,1); W.addCard(en,1); W.addCard(en,3); // ★1×2+★3×1=Lv2の★3カード
+    G.party.sentence=[en+"|3|0"];
+    eq(W.disassemble(en+"|3|0",1), 1, "低レア(★1=✨1)の端数から溶ける");
+    eq(W.wordMaxRar(en), 3, "★3は保たれる");
+    eq(W.cardOf(W.canonKeyOf(en)).lv, 1, "Lvは1下がる");
+    eq(W.disassemble(en+"|3|0",2), 1+8, "残り全部=★1+★3の価値");
+    eq(W.wordCopies(en), 0);
+    eq(G.party.sentence[0], null, "0枚になった単語は文から外れる");
+    G.shards=s0; G.party.sentence=oldSent;
+  });
+  t("一括分解: ★の高い単語の低レア端数はLvの素材なので溶かさない", ()=>{
+    const G=W.G, oldInv=G.inv, oldSent=G.party.sentence, s0=G.shards;
+    const w1=W.WORDS.filter(x=>x.pos==="n")[9], w2=W.WORDS.filter(x=>x.pos==="n")[10];
+    G.inv={};
+    W.addCard(w1.en,1); W.addCard(w1.en,3); // ★3到達+★1の端数
+    W.addCard(w2.en,1);                     // ★1どまりの単語
+    G.party.sentence=[null];
+    const r=W.bulkDisassemble(1,false);
+    eq(G.inv[w1.en+"|1|0"], 1, "★3単語の★1端数は残る(Lv維持)");
+    ok(!G.inv[w2.en+"|1|0"], "★1どまりの単語は分解される");
+    eq(r.cnt, 1, "分解は1枚だけ");
+    G.inv=oldInv; G.party.sentence=oldSent; G.shards=s0;
+  });
+
   /* ---- 属性・セット効果 ---- */
   t("属性は決定的(レア・Lvで不変)で0〜4", ()=>{
     const a=W.genCard(W.WORDS[0],1,0), b=W.genCard(W.WORDS[0],3,2);

@@ -171,8 +171,9 @@ function answer(chosen, btn){
   if(ok){
     let rar=dropRarity(preSt);
     if(Math.random()<comboDropBonus()) rar=Math.min(5, rar+1); // コンボ中は★+1のチャンス
-    addCard(w.en, rar);
+    const drop=addCard(w.en, rar);
     if(lvUp){ toast("📖 レベルアップ! Lv"+lvUp+" ─ 全ステータス強化"); vibe(40); }
+    else if(drop.rarUp){ toast("🎉 "+w.en+" のカードが★"+drop.rar+"にランクアップ!"); vibe(30); }
     else if(rar>=3) vibe(30);
     // 🎫は毎正解なのでトースト・結果バー表示は出さない(残高はガチャ画面で確認)
   }

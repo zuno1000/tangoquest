@@ -60,8 +60,24 @@ function isWild(en){ return rootIdsOf(en).length===0; }
 function memBox(en){ const st=G.words[en]; return st? Math.min(7, st[0]||0) : 0; }
 function wildMult(en){ return +(1+0.08*memBox(en)).toFixed(2); }
 function wildOverdue(en){ const st=G.words[en]; return !!st && st[1]<=Date.now(); }
-/* 重ねLv: 所持枚数-1(1枚=Lv0)。上限なし */
-function stackLv(key){ return Math.max(0, (G.inv[key]||0)-1); }
+/* ---- 単語=1カード(v4.8.0) ----
+   同じ単語はレア度が違っても「1枚のカード」に合流する: レア=最高到達・
+   Lv=全レア合計枚数-1。リベンジドロップでレアがばらついても、どの1枚も
+   無駄にならない(★2 Lv0 が ★1 Lv6 より弱い、という逆転も起きない)。
+   保存形式(en|rar|0 → 枚数)は従来のまま=表示層で毎回導出・同期マージも不変 */
+function wordCopies(en){
+  let n=0;
+  for(let r=1;r<=5;r++) n+=G.inv[keyOf(en,r,0)]||0;
+  return n;
+}
+function wordMaxRar(en){
+  for(let r=5;r>=1;r--){ if((G.inv[keyOf(en,r,0)]||0)>0) return r; }
+  return 0;
+}
+/* その単語の正規キー(=最高レアのキー)。未所持ならnull */
+function canonKeyOf(en){ const r=wordMaxRar(en); return r? keyOf(en,r,0) : null; }
+/* 重ねLv: 全レア合計の所持枚数-1(1枚=Lv0)。上限なし */
+function stackLv(key){ return Math.max(0, wordCopies(parseKey(key).en)-1); }
 function cardOf(key){
   const p=parseKey(key), w=byEn[p.en];
   if(!w) return null;
@@ -86,59 +102,83 @@ function shortEffect(c){
 }
 function lvLabel(c){ return c.lv>0? " +"+c.lv : ""; }
 
-/* ---- 入手(=重ね) ---- */
+/* ---- 入手(=重ね) ----
+   別レアでも同単語なら重ねとして合流。所持中の単語をより高いレアで引くと
+   カードそのものが★アップする(文に配置中ならキーもその場で差し替える) */
 function addCard(en, rar){
+  const prevRar=wordMaxRar(en), prevCopies=wordCopies(en);
   const k=keyOf(en,rar,0);
   G.inv[k]=(G.inv[k]||0)+1;
   track("card");
-  if(G.inv[k]>=2) track("merge"); // 2枚目からは「重ね」として計上(旧・合成の後継)
-  return k;
+  if(prevCopies>=1) track("merge"); // 2枚目からは「重ね」(別レアでも)
+  const rarUp=prevCopies>0 && rar>prevRar;
+  if(rarUp) syncSentenceKey(en);
+  return {key:canonKeyOf(en), rarUp, rar:wordMaxRar(en)};
 }
-/* 文の中のkey参照を書き換える(nk=nullなら外す) */
-function replaceInSentence(key, nk){
+/* 文の中のこの単語のキーを所持状況に同期する(0枚=外す/最高レア変動=差し替え) */
+function syncSentenceKey(en){
+  const ck=canonKeyOf(en);
   const s=G.party.sentence||[];
-  for(let i=0;i<s.length;i++){ if(s[i]===key) s[i]=nk; }
+  for(let i=0;i<s.length;i++){
+    if(s[i] && parseKey(s[i]).en===en) s[i]=ck;
+  }
 }
 
 /* ---- かけら経済: 不要カードを分解してかけらに、かけらで任意カードを強化 ---- */
 const SHARD_VAL=[1,3,8,20,50]; // レア度ごとの分解価値(1枚あたり・Lvに依らず一定)
-function shardValue(c){ return SHARD_VAL[c.rar-1]; }
 function enhCost(c){ return SHARD_VAL[c.rar-1]*2*(c.lv+1); } // 重ねるほど次の1枚が高くつく
 
+/* 分解は低レアの端数から溶かす=カードの★(最高到達)をできるだけ保つ。
+   かけら価値は溶かした1枚1枚のレアで決まる(価値のインフレなし) */
 function disassemble(key, n){
-  const c=cardOf(key); if(!c) return 0;
-  n=Math.min(n||1, G.inv[key]||0);
-  if(n<=0) return 0;
-  const gain=shardValue(c)*n;
-  G.inv[key]-=n;
-  if(G.inv[key]<=0){
-    delete G.inv[key];
-    replaceInSentence(key, null);
+  const en=parseKey(key).en;
+  const have=wordCopies(en);
+  if(!have) return 0;
+  n=Math.min(n||1, have);
+  let gain=0, left=n;
+  for(let r=1;r<=5 && left>0;r++){
+    const k=keyOf(en,r,0), c=G.inv[k]||0;
+    if(!c) continue;
+    const take=Math.min(c, left);
+    gain+=SHARD_VAL[r-1]*take;
+    if(c-take<=0) delete G.inv[k]; else G.inv[k]=c-take;
+    left-=take;
   }
   G.shards+=gain;
+  syncSentenceKey(en); // 0枚なら文から外れ、最高レアが変われば差し替わる
   return gain;
 }
-/* かけらで1枚「重ねる」(Lv+1と同義・実カード不要) */
-function enhanceOne(key){
-  const c=cardOf(key); if(!c) return null;
-  const cost=enhCost(c);
-  if((G.inv[key]||0)<1 || G.shards<cost) return null;
-  G.shards-=cost;
-  G.inv[key]++;
-  track("merge");
-  return key;
+/* 次に分解される1枚のかけら価値(=いちばん低いレアの端数) */
+function nextDisValue(en){
+  for(let r=1;r<=5;r++){ if((G.inv[keyOf(en,r,0)]||0)>0) return SHARD_VAL[r-1]; }
+  return 0;
 }
-/* 一括分解: 指定レア度以下をまとめて分解。
-   v4: 枚数=強さなので、編成中のカードには一切触れない */
+/* かけらで1枚「重ねる」(Lv+1と同義・実カード不要)。枚数は最高レアの山に積む */
+function enhanceOne(key){
+  const en=parseKey(key).en, ck=canonKeyOf(en);
+  if(!ck) return null;
+  const cost=enhCost(cardOf(ck));
+  if(G.shards<cost) return null;
+  G.shards-=cost;
+  G.inv[ck]++;
+  track("merge");
+  return ck;
+}
+/* 一括分解: 指定レア度以下の「単語」をまとめて分解。
+   v4: 枚数=強さなので編成中の単語には触れない。
+   v4.8.0: ★の高い単語の低レア端数もLvの素材なので残す(単語単位で判定) */
 function bulkDisassemble(maxRar, dry){
-  const eq=equippedKeys();
+  const eqEn=equippedEnSet();
   let cnt=0, gain=0;
-  for(const k of Object.keys(G.inv)){
-    const c=cardOf(k); if(!c || c.rar>maxRar || eq.has(k)) continue;
-    const n=G.inv[k]||0;
-    if(n<=0) continue;
-    cnt+=n; gain+=shardValue(c)*n;
-    if(!dry) delete G.inv[k];
+  const ens=new Set(Object.keys(G.inv).map(k=>parseKey(k).en));
+  for(const en of ens){
+    if(eqEn.has(en) || wordMaxRar(en)>maxRar) continue;
+    for(let r=1;r<=maxRar;r++){
+      const k=keyOf(en,r,0), n=G.inv[k]||0;
+      if(!n) continue;
+      cnt+=n; gain+=SHARD_VAL[r-1]*n;
+      if(!dry) delete G.inv[k];
+    }
   }
   if(!dry) G.shards+=gain;
   return {cnt, gain};
@@ -174,14 +214,15 @@ function equippedEnSet(){
 function renderCards(){
   const grid=$("cardGrid"); grid.innerHTML="";
   const eq=equippedKeys();
+  // 単語ごとに1枚(正規キー=最高レア)。別レアの端数は同じカードのLvに合流している
   const items=[];
-  for(const k in G.inv){
-    const c=cardOf(k); if(!c) continue;
+  const kinds=new Set(Object.keys(G.inv).map(k=>parseKey(k).en));
+  for(const en of kinds){
+    const c=cardOf(canonKeyOf(en)); if(!c) continue;
     if(cardFilter!=="all" && c.pos!==cardFilter) continue;
     items.push(c);
   }
   items.sort((a,b)=> b.rar-a.rar || b.lv-a.lv || a.en.localeCompare(b.en));
-  const kinds=new Set(Object.keys(G.inv).map(k=>parseKey(k).en));
   let total=0; for(const k in G.inv) total+=G.inv[k];
   $("cardSummary").innerHTML="所持 "+fmt(total)+"枚 / "+kinds.size+"種 ・ <b style='color:var(--accent)'>✨"+fmt(G.shards)+"</b>";
   if(!items.length){ grid.innerHTML='<div class="empty" style="grid-column:1/-1">クイズに正解するとカードを入手できます</div>'; return; }
@@ -218,9 +259,11 @@ function cardDetailHTML(c){
   '</div>';
 }
 
-/* 文の中で同じキーを使っているか(v4: 同一カードは1枠だけ・重ねはLvに宿る) */
+/* 文の中で同じ単語を使っているか(v4.8.0: 別レアでも同単語は1枠だけ。
+   同じ単語2枚での自己共鳴×1.35・野生語の二重取りを防ぐ) */
 function equippedCountOf(key, sentence){
-  return (sentence||G.party.sentence||[]).filter(k=>k===key).length;
+  const en=parseKey(key).en;
+  return (sentence||G.party.sentence||[]).filter(k=>k && parseKey(k).en===en).length;
 }
 
 /* カード詳細からの直接配置: 文の最初の空きスロットに置く */
@@ -236,9 +279,12 @@ function quickEquip(key){
   return null; // 文が満杯
 }
 function openCardModal(key){
+  // どのレアのキーで開かれても、その単語の正規カード(最高レア・合計Lv)を見せる
+  const en=parseKey(key).en;
+  key=canonKeyOf(en)||key;
   const c=cardOf(key); if(!c) return;
-  const cnt=G.inv[key]||0;
-  const eq=equippedKeys().has(key);
+  const cnt=wordCopies(en);
+  const eq=equippedCountOf(key)>0;
   const cost=enhCost(c);
   openModal(
     '<h3>カード詳細</h3>'+cardDetailHTML(c)+
@@ -249,7 +295,7 @@ function openCardModal(key){
       '<button class="btn" style="flex:1" id="quickEqBtn" '+(eq?"disabled":"")+'>'+(eq?"呪文に配置中":"📜 呪文に置く")+'</button>'+
     '</div>'+
     '<div class="row" style="margin-top:8px; gap:8px">'+
-      '<button class="btn" style="flex:1" id="disBtn">1枚分解 → ✨'+fmt(shardValue(c))+(cnt>1?"(Lvが下がる)":"")+'</button>'+
+      '<button class="btn" style="flex:1" id="disBtn">1枚分解 → ✨'+fmt(nextDisValue(en))+(cnt>1?"(Lvが下がる)":"")+'</button>'+
     '</div>');
   $("enhBtn").onclick=()=>{
     if(!enhanceOne(key)) return;
@@ -267,7 +313,7 @@ function openCardModal(key){
     if(!gain) return;
     saveG(); toast("分解した → ✨"+fmt(gain));
     renderCards(); refreshHeader();
-    if(G.inv[key]) openCardModal(key); else closeModal();
+    if(wordCopies(en)) openCardModal(canonKeyOf(en)); else closeModal();
   };
 }
 
@@ -277,6 +323,25 @@ $("cardFilter").querySelectorAll("button").forEach(b=>{
     b.classList.add("active"); cardFilter=b.dataset.f; renderCards();
   };
 });
+/* 起動時整合(v4.8.0・冪等): 文のキーを「単語の最高レア」の正規キーに寄せ、
+   旧仕様で可能だった同単語の重複配置(別レア)は先頭だけ残す。
+   純関数(gを受ける)=テスト可能。同期で混ざった在庫にも毎起動で効く */
+function normalizeSentenceRarity(g){
+  const s=(g.party&&g.party.sentence)||[];
+  const seen=new Set();
+  for(let i=0;i<s.length;i++){
+    if(!s[i]) continue;
+    const en=s[i].split("|")[0];
+    let ck=null;
+    for(let r=5;r>=1;r--){ if((g.inv[en+"|"+r+"|0"]||0)>0){ ck=en+"|"+r+"|0"; break; } }
+    if(!ck || seen.has(en)){ s[i]=null; continue; }
+    seen.add(en);
+    s[i]=ck;
+  }
+  return s;
+}
+normalizeSentenceRarity(G);
+
 $("bulkDisBtn").onclick=()=>{
   const p1=bulkDisassemble(1,true), p2=bulkDisassemble(2,true);
   openModal('<h3>✨ 一括分解</h3>'+
