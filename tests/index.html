@@ -1090,6 +1090,108 @@ function run(){
     ok(pos.size>=3, "正解の位置が変わる pos="+pos.size);
   });
 
+  /* ---- v4.7.0: 学習ペース管理・出題アルゴリズム ---- */
+  t("expAttempts: 正答率が低い・要求連続数が多いほど必要解答数が増える", ()=>{
+    ok(Math.abs(W.expAttempts(4,0.8)-7.207)<0.01, "E(4,0.8)≈7.2 got="+W.expAttempts(4,0.8));
+    ok(W.expAttempts(4,0.9)<W.expAttempts(4,0.8), "正答率が高いほど少ない");
+    ok(W.expAttempts(2,0.8)<W.expAttempts(4,0.8), "残り階段が少ないほど少ない");
+    eq(W.expAttempts(4,1), 4, "正答率100%なら4問ちょうど");
+  });
+  t("paceEstimates: 新規の正答率から既知語率(当て推量25%控除)を推定", ()=>{
+    const log=[];
+    for(let i=0;i<20;i++) log.push([1,1]);          // 新規: 全問正解
+    for(let i=0;i<20;i++) log.push([0, i<18?1:0]);  // 復習: 90%
+    const e=W.paceEstimates(log);
+    ok(Math.abs(e.knownRate-1)<1e-9, "新規全正解=既知100%");
+    ok(Math.abs(e.recall-0.9)<1e-9, "復習正答率90%");
+    ok(e.sampled, "両カテゴリ8問以上でsampled");
+    const e2=W.paceEstimates([[1,0],[1,0],[1,0],[1,0],[1,1],[1,0],[1,0],[1,0]]);
+    eq(e2.knownRate, 0, "当て推量以下=既知0%");
+    ok(!W.paceEstimates([]).sampled, "サンプル不足は標準値で計算");
+  });
+  t("paceLogは直近100問だけ保持する", ()=>{
+    const G=W.G, old=G.pace.log;
+    G.pace.log=[];
+    for(let i=0;i<130;i++) W.paceLog(i%2, 1);
+    eq(G.pace.log.length, 100);
+    eq(G.pace.log[99][0], 1, "最新の記録が残る(129問目=奇数=新規)");
+    G.pace.log=old;
+  });
+  t("paceQuota: 目標未設定はnull・締切が近いほど/未習が多いほど1日の目安が増える", ()=>{
+    const G=W.G, oldPace=JSON.parse(JSON.stringify(G.pace)), oldWords=G.words;
+    G.pace={goal:null, log:[]};
+    eq(W.paceQuota(G), null, "未設定はnull");
+    G.words={};
+    G.pace.goal=W.addDays(W.todayKey(), 30);
+    const q30=W.paceQuota(G);
+    G.pace.goal=W.addDays(W.todayKey(), 120);
+    const q120=W.paceQuota(G);
+    ok(q30.perDay>q120.perDay, "30日 "+q30.perDay+" > 120日 "+q120.perDay);
+    ok(q120.perDay>=10, "下限は10問");
+    W.WORDS.slice(0,1500).forEach(w=>{ G.words[w.en]=[4, Date.now()+90*864e5, 5,0,1,0,0]; });
+    const q2=W.paceQuota(G);
+    eq(q2.mastered, 1500, "覚えた数を反映");
+    ok(q2.perDay<q120.perDay, "覚えた分だけ目安が減る(毎日の学習で自動更新)");
+    G.pace=oldPace; G.words=oldWords;
+  });
+  t("paceNewPerDay: 新規導入は目標から逆算(最後の単語にも覚え切る猶予)", ()=>{
+    eq(W.paceNewPerDay(null), 0, "目標なしは0");
+    eq(W.paceNewPerDay({unseen:0, days:100}), 0, "未習なしは0");
+    eq(W.paceNewPerDay({unseen:900, days:100}), 10, "900語÷(100-10)日=10語");
+    ok(W.paceNewPerDay({unseen:900, days:5})>=900, "目前なら残り全部");
+  });
+  t("SRS: 高boxのミスは半分のboxから再開(全部やり直しにしない)", ()=>{
+    const now=Date.now();
+    const st=[6, 0, 10, 0, 1, 0, 0];
+    W.srsApply(st, false, now);
+    eq(st[0], 0, "ミスでbox0(1分後に再挑戦)");
+    eq(st[7], 3, "復帰先=box3を記憶");
+    eq(st[1], now+60e3, "dueは1分後");
+    W.srsApply(st, true, now);
+    eq(st[0], 3, "正解でbox3へ復帰");
+    eq(st[7], 0, "復帰先はクリアされる");
+    const st2=[1, 0, 1, 1, 0, 0, 0];
+    W.srsApply(st2, false, now);
+    eq(st2[0], 0); ok(!st2[7], "低box(3未満)は通常どおり最初から");
+    const st3=[0, 0, 0, 0, 0, 0, 0];
+    W.srsApply(st3, true, now);
+    eq(st3[0], 1, "正解で+1(従来どおり)");
+  });
+  t("復習は「忘れかけ度」(期限超過÷記憶間隔)の高い順に優先される", ()=>{
+    const now=Date.now();
+    const a=[2, now-12*3600e3, 1,0,0,0,0]; // 間隔1日を半日超過=0.5
+    const b=[6, now-864e5,     1,0,0,0,0]; // 間隔35日を1日超過≈0.03
+    ok(W.reviewUrgency(a, now)>W.reviewUrgency(b, now), "相対超過が大きい方が優先");
+    const c=[2, now-12*3600e3, 1,2,0,2,0]; // 同条件+連続ミス2
+    ok(W.reviewUrgency(c, now)>W.reviewUrgency(a, now), "連続ミス中はさらに優先");
+  });
+  t("同期: 学習ペースは新しい側・日別の新規着手数はmaxでマージ", ()=>{
+    const base=()=>({words:{},days:{},inv:{},chars:{},dungeons:{},counters:{},ach:{},inf:{best:0},
+                     gold:0,tickets:0,shards:0,xp:0});
+    const a=Object.assign(base(),{updatedAt:1, pace:{goal:"2027-01-01", log:[[1,1]]},
+      days:{"2026-08-05":{a:5,c:4,m:0,n:2}}});
+    const b=Object.assign(base(),{updatedAt:2, pace:{goal:"2027-06-30", log:[]},
+      days:{"2026-08-05":{a:3,c:3,m:1,n:7}}});
+    const m=W.mergeData(a,b);
+    eq(m.pace.goal, "2027-06-30", "更新が新しい側の目標が勝つ");
+    eq(m.days["2026-08-05"].n, 7, "新規着手数はmax");
+    eq(m.days["2026-08-05"].a, 5, "解答数はmax(従来どおり)");
+  });
+  t("学習画面: 目標設定時は今日の目安メーター・未設定時は設定への導線が出る", ()=>{
+    const G=W.G, old=G.pace.goal;
+    G.pace.goal=null;
+    W.switchTab("quiz");
+    const el=W.document.getElementById("paceBar");
+    ok(el.innerHTML.indexOf("目標日を設定")>=0, "未設定はCTA");
+    G.pace.goal=W.addDays(W.todayKey(), 60);
+    W.renderPaceBar();
+    ok(el.innerHTML.indexOf("今日の目安")>=0, "目安表示");
+    ok(el.querySelector(".pbar"), "メーターがある");
+    ok(el.innerHTML.indexOf("残り")>=0, "目標日カウントダウン");
+    G.pace.goal=old;
+    W.switchTab("home");
+  });
+
   /* ---- 起動状態 ---- */
   t("起動時に問題が出題されている", ()=>{
     ok(W.document.getElementById("promptWord").textContent.length>0);

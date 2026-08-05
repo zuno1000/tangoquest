@@ -3,7 +3,7 @@
 
 const TABS={
   home:    {view:"homeView",    nav:"navHome",    on:()=>renderHome()},
-  quiz:    {view:"quizView",    nav:"navQuiz",    on:()=>refreshInfPill()},
+  quiz:    {view:"quizView",    nav:"navQuiz",    on:()=>{ refreshInfPill(); renderPaceBar(); }},
   party:   {view:"partyView",   nav:"navParty",   on:()=>renderParty()},
   adv:     {view:"advView",     nav:"navAdv",     on:()=>renderAdv()},
   gacha:   {view:"gachaView",   nav:"navGacha",   on:()=>renderGacha()},
@@ -30,6 +30,7 @@ const EVENTS=[
   // {d:"2026-08-03", t:"..."} 形式でバナー以外のイベント告知を書く
 ];
 const NEWS=[
+  {d:"2026-08-05", t:"🎯 v4.7.0 学習ペース管理が登場! 「いつまでに全部覚えるか」を決めると、あなたの正答率から1日の目安を毎日逆算してメーターで案内(ホーム・学習画面から設定)。出題も賢く: 忘れかけた単語を優先・よく覚えていた単語はミスしても半分から再開・新規単語は目標日から逆算したペースで登場"},
   {d:"2026-08-04", t:"🔧 v4.6.2 クイズ正解時の結果バーの🎫+1表示を削除(チケットは今までどおり正解1問ごとに貯まります)"},
   {d:"2026-08-04", t:"🎫 v4.6.1 限定ガチャが常時2バナー開催に! それぞれ2週間ごとに更新されます(☄️星降る夜=8/7まで・🍁秋宵=8/14まで)。編成画面のキャラパネルの角に白い四角が見える表示も修正"},
   {d:"2026-08-04", t:"🌟 v4.6.0 大型アップデート! ①新ダンジョン6種追加(逆さまの魔戯場〜原初の言霊神殿) ②バトル刷新: 敵のHPが厚く・一撃は軽くなり、数ターンの攻防に(守り・回復キャラの個性が活きる。戦闘中の回復は1ターン最大HP25%まで) ③クイズ正解1問ごとに🎫1! ④通貨の分離: 限定召喚=🎫(学習でだけ入手)/恒常召喚=🪙(冒険・任務で大量入手。初クリア🪙3000など増額) ⑤限定ガチャは2週間ごとに2バナー交互開催に"},
@@ -105,6 +106,8 @@ function renderHome(){
     // 学習CTA
     '<button id="homeStudy" class="studycta shine">📖 学習をはじめる'+
       '<span class="ctasub">今日 '+d.a+'問(正解'+d.c+')</span></button>'+
+    // 学習ペース管理(v4.7.0): 今日の目安メーター/未設定なら設定への導線
+    '<div class="panel pacebar" id="homePace" style="margin-top:12px"></div>'+
     // 任務報酬の一括受取(受け取れるものがあるときだけ出す)
     (mn? '<button id="homeClaim" class="claimbtn homeclaim">🎁 任務報酬をすべて受け取る</button>':'')+
     // 同期リマインダー(最終同期3日超+未同期変更ありのときだけ)
@@ -128,6 +131,7 @@ function renderHome(){
     el.onclick=()=>switchTab(el.dataset.go);
   });
   $("homeStudy").onclick=()=>switchTab("quiz");
+  fillPaceEl($("homePace"));
   $("homeDex").onclick=()=>openDex();
   if(mn) $("homeClaim").onclick=()=>{ claimAllCurrent(); renderHome(); };
   const sn=$("homeSync");

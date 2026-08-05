@@ -136,7 +136,8 @@ function mergeData(a, b){
   for(const k in b.days||{}){
     const x=m.days[k], y=b.days[k];
     if(!x) m.days[k]=y;
-    else { x.a=Math.max(x.a,y.a); x.c=Math.max(x.c,y.c); x.m=Math.max(x.m,y.m); }
+    else { x.a=Math.max(x.a,y.a); x.c=Math.max(x.c,y.c); x.m=Math.max(x.m,y.m);
+           x.n=Math.max(x.n||0, y.n||0); }
   }
   // カード在庫: キーごとに多い方
   for(const k in b.inv||{}) m.inv[k]=Math.max(m.inv[k]||0, b.inv[k]);
@@ -164,6 +165,7 @@ function mergeData(a, b){
   const newer=(b.updatedAt||0)>(a.updatedAt||0)? b : a;
   m.daily=newer.daily||m.daily; m.weekly=newer.weekly||m.weekly;
   m.party=newer.party||m.party; m.login=newer.login||m.login; m.mode=newer.mode||m.mode;
+  m.pace=newer.pace||m.pace; // 学習ペース(目標日+直近ログ)は更新が新しい側
   m.resetAt=a.resetAt||0;
   return m;
 }

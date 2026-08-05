@@ -620,3 +620,28 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
 
 /* ---- マイクロインタラクション ---- */
 .tile:active,.ccard:active,.dnode:active:not(.locked){filter:brightness(1.04)}
+
+/* ---- 学習ペース管理(v4.7.0) ----
+   今日の目安メーター: 学習タブ(#paceBar)とホーム(#homePace)で共用。
+   進行中は青、達成で金に切り替わる。中身が空(未描画)のパネルは影ごと消す */
+.pacebar{padding:12px 14px; cursor:pointer}
+.pacebar:empty{display:none}
+#paceBar{margin:6px 0 12px}
+.pacetop{display:flex; justify-content:space-between; align-items:baseline; font-size:13px; font-weight:800}
+.pacetop b{font-size:16px; color:var(--accent2)}
+.pacetop b.pgold{color:var(--accent)}
+.pacetop .ptgt{font-size:12px; color:var(--sub)}
+.pbar{height:14px; background:var(--bg2); border-radius:8px; margin-top:8px; overflow:hidden;
+  box-shadow:inset 2px 2px 4px var(--shd), inset -2px -2px 4px var(--shl)}
+.pbar i{display:block; height:100%; border-radius:8px;
+  background:linear-gradient(90deg,#7B8AFF,var(--accent2)); transition:width .4s}
+.pbar.full i{background:linear-gradient(90deg,#FFB547,#F5A020)}
+.pacemsg{font-size:12px; font-weight:700; color:var(--sub); margin-top:7px}
+.pacemsg.pdone{color:#C07C00}
+.pacefoot{font-size:11px; color:var(--sub); margin-top:5px}
+/* 目標日入力: Soft UIの窪みに合わせる(iOSのデフォルト装飾を外す) */
+.pdate{width:100%; border:none; border-radius:14px; padding:12px; margin-top:6px;
+  font-size:15px; font-weight:700; font-family:inherit; color:var(--ink); background:var(--bg2);
+  box-shadow:inset 2px 2px 4px var(--shd), inset -2px -2px 4px var(--shl);
+  -webkit-appearance:none; appearance:none; min-height:44px}
+.ppre{flex:1}

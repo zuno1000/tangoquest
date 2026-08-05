@@ -3,9 +3,22 @@
 const INTERVALS=[60e3, 10*60e3, 864e5, 3*864e5, 7*864e5, 16*864e5, 35*864e5, 90*864e5];
 const MASTER_BOX=4;
 
-let lastEn=null, cur=null, answered=false;
+let cur=null, answered=false;
+/* 直近に出した単語(3問)は再出題しない ─ 1問おきの機械的な往復を防ぐ */
+let recentEns=[];
+function noteRecent(en){ recentEns.push(en); if(recentEns.length>3) recentEns.shift(); }
 
-/* word state: [box, due, correct, wrong, mastered, wrongStreak, lastCorrectAt] */
+/* 復習の緊急度=「忘れかけ度」: 期限をどれだけ過ぎたかを、その単語の記憶間隔で割った比。
+   間隔1日を半日超過(0.5)は、間隔35日を1日超過(0.03)よりずっと危ない。
+   連続ミス中の単語はさらに優先して早めに立て直す */
+function reviewUrgency(st, now){
+  const iv=INTERVALS[Math.min(st[0], INTERVALS.length-1)];
+  let u=(now-st[1])/iv;
+  if((st[5]||0)>=2) u+=0.5;
+  return u;
+}
+
+/* word state: [box, due, correct, wrong, mastered, wrongStreak, lastCorrectAt, lapseBack] */
 function pickWord(){
   const now=Date.now(); const due=[], unseen=[];
   for(const w of WORDS){
@@ -13,22 +26,48 @@ function pickWord(){
     if(!st) unseen.push(w);
     else if(st[1]<=now) due.push(w);
   }
-  const notLast=a=>a.length>1? a.filter(w=>w.en!==lastEn) : a;
-  const d=notLast(due), u=notLast(unseen);
-  if(d.length && (u.length===0 || Math.random()<0.8)){
+  const fresh=a=>{ const f=a.filter(w=>!recentEns.includes(w.en)); return f.length? f : a; };
+  const d=fresh(due), u=fresh(unseen);
+  /* 新規を混ぜる確率: 目標があれば「1日の新規目安」を消化するまで30%、消化後は復習に専念
+     (復習が尽きたら新規は無制限)。目標なしは従来どおり20% */
+  let pNew=0.2;
+  const q=paceQuota(G);
+  if(q){
+    const nT=paceNewPerDay(q);
+    pNew=(nT>0 && (dayRec().n||0)<nT)? 0.3 : 0;
+  }
+  if(d.length && (u.length===0 || Math.random()>=pNew)){
     // 編成中の単語が復習期限なら優先出題(野生語の記憶Lv維持ループ)
     const eqEn=equippedEnSet();
     const ed=d.filter(w=>eqEn.has(w.en));
     const src=ed.length? ed : d;
-    src.sort((a,b)=>G.words[a.en][1]-G.words[b.en][1]);
+    src.sort((a,b)=>reviewUrgency(G.words[b.en],now)-reviewUrgency(G.words[a.en],now));
     const pool=src.slice(0, Math.min(8,src.length));
     return pool[Math.floor(Math.random()*pool.length)];
   }
   if(u.length) return u[Math.floor(Math.random()*u.length)];
-  const seen=WORDS.filter(w=>G.words[w.en] && w.en!==lastEn);
+  // 期限が来た単語がない: 弱い(boxが低い)順に先取り復習
+  const seen=fresh(WORDS.filter(w=>G.words[w.en]));
   seen.sort((a,b)=>(G.words[a.en][0]-G.words[b.en][0]) || (G.words[a.en][1]-G.words[b.en][1]));
   const pool=seen.slice(0, Math.min(10,seen.length));
   return pool[Math.floor(Math.random()*pool.length)] || WORDS[0];
+}
+
+/* SRS更新(純関数)。ミスはbox0(1分後に再挑戦)に落とすが、box3以上で覚えていた単語は
+   st[7]に「復帰先=半分のbox」を記録し、次の正解でそこへ戻る ─ 高い階段を全部
+   登り直させると復習が渋滞し、挫折感も大きい(Ankiのlapse運用と同じ発想) */
+function srsApply(st, ok, now){
+  if(ok){
+    st[0]=Math.min(Math.max(st[0]+1, st[7]||0), INTERVALS.length-1);
+    st[7]=0;
+    st[2]++; st[5]=0; st[6]=now;
+  }else{
+    if(st[0]>=3) st[7]=Math.max(1, Math.floor(st[0]/2));
+    st[0]=0;
+    st[3]++; st[5]=(st[5]||0)+1;
+  }
+  st[1]=now+INTERVALS[st[0]];
+  return st;
 }
 
 function jaTokens(s){ return s.split(/[、。・（）()／\/\s～~]+/).filter(t=>t.length>=2); }
@@ -51,7 +90,8 @@ function renderQuestion(){
   $("qBadge").textContent = !st? "新規" : (st[0]>=MASTER_BOX? "覚えた・復習" : "復習");
   $("qBadge").style.color = !st? "var(--accent2)" : (st[0]>=MASTER_BOX? "var(--ok)" : "var(--accent)");
   const d=dayRec(), stk=studyStreak();
-  $("qCount").textContent="今日 "+d.a+"問"+(stk>=2? " ・🔥"+stk+"日":"")+
+  const q=paceQuota(G);
+  $("qCount").textContent="今日 "+d.a+(q&&!q.done? "/"+q.perDay:"")+"問"+(stk>=2? " ・🔥"+stk+"日":"")+
     ((G.combo||0)>=3? " ・⚡"+G.combo+"連続":"");
   const pw=$("promptWord");
   pw.textContent = e2j? w.en : w.ja;
@@ -90,16 +130,17 @@ function answer(chosen, btn){
   // SRS更新
   const now=Date.now();
   let st=G.words[w.en];
+  const wasNew=!st;
   if(!st) st=G.words[w.en]=[0,0,0,0,0,0,0];
   const preSt=st.slice(); // ドロップ判定は解答前の状態で
-  if(ok) st[0]=Math.min(st[0]+1, INTERVALS.length-1); else st[0]=0;
-  st[1]=now+INTERVALS[st[0]];
-  if(ok){ st[2]++; st[5]=0; st[6]=now; } else { st[3]++; st[5]=(st[5]||0)+1; }
+  srsApply(st, ok, now);
   const d=dayRec(); d.a++; if(ok) d.c++;
+  if(wasNew) d.n=(d.n||0)+1; // 今日はじめて着手した単語数(新規導入ペースの消化判定)
   let justMastered=false;
   if(ok && st[0]>=MASTER_BOX && !st[4]){ st[4]=1; d.m++; justMastered=true; }
   track("ans"); if(ok) track("cor");
-  lastEn=w.en;
+  paceLog(wasNew, ok); // 学習ペース推定の材料(直近100問)
+  noteRecent(w.en);
 
   // 連続正解コンボ(XPボーナス・ドロップ★率UP)と、正解ごとの🎫(v4.6.0: 1問=🎫1)
   let tkGain=0;
@@ -137,8 +178,12 @@ function answer(chosen, btn){
   }
   rc.innerHTML='<span class="poschip pos'+w.pos+'">'+POS_LABEL[w.pos]+'</span>'+meta.join(' ');
   $("resultBar").classList.add("show");
+  // 今日の目安にちょうど到達した瞬間だけ祝う(毎問出る表示はノイズ=v4.6.2の知見)
+  const pq=paceQuota(G);
+  if(pq && !pq.done && d.a===pq.perDay){ toast("🎉 今日の目安 "+pq.perDay+"問を達成!"); vibe(40); }
   saveG();
   refreshHeader();
+  renderPaceBar();
 }
 
 $("nextBtn").onclick=()=>newQuestion();
