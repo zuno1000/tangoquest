@@ -406,7 +406,7 @@ function renderInfPanel(){
   if(!run){
     p.innerHTML='<div class="row"><div class="grow">'+
       '<div style="font-weight:800; font-size:15px">🌀 無限回廊</div>'+
-      '<div class="small" style="margin-top:3px">クイズ中も自動で進む放置探索。10階ごとに🪙1000'+(best?'<br>'+best:'')+'</div></div>'+
+      '<div class="small" style="margin-top:3px">クイズ中も自動で進む放置探索。<br>10階ごとに🪙1000'+(best?'<br>'+best:'')+'</div></div>'+
       '<button class="btn gold" id="infStartBtn" '+(dgUnlocked(1)?"":"disabled")+'>出発</button></div>';
     const b=$("infStartBtn"); if(b&&!b.disabled) b.onclick=infStart;
   }else{
