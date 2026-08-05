@@ -102,7 +102,9 @@ function paceMsg(done, target){
   return "ラストスパート🔥 あと"+remain+"問";
 }
 
-/* ペースパネルの中身を描く(学習タブ #paceBar とホーム #homePace で共用) */
+/* ペースパネルの中身を描く(ホーム #homePace)。
+   学習画面には置かない: 縦に要素を足すと選択肢が押し出されて構成が崩れる(v4.7.1)。
+   学習中の進捗は promptCard の「今日 X/Y問」表記(高さ増なし)が担う */
 function fillPaceEl(el){
   if(!el) return;
   const q=paceQuota(G);
@@ -127,7 +129,6 @@ function fillPaceEl(el){
   }
   el.onclick=openPaceModal;
 }
-function renderPaceBar(){ fillPaceEl($("paceBar")); }
 
 /* ---- UI: 目標設定モーダル ---- */
 function openPaceModal(){
@@ -187,6 +188,5 @@ function openPaceModal(){
   };
 }
 function paceRefreshViews(){
-  renderPaceBar();
   if(!$("homeView").classList.contains("hidden")) renderHome();
 }

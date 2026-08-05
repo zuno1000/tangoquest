@@ -626,7 +626,6 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
    進行中は青、達成で金に切り替わる。中身が空(未描画)のパネルは影ごと消す */
 .pacebar{padding:12px 14px; cursor:pointer}
 .pacebar:empty{display:none}
-#paceBar{margin:6px 0 12px}
 .pacetop{display:flex; justify-content:space-between; align-items:baseline; font-size:13px; font-weight:800}
 .pacetop b{font-size:16px; color:var(--accent2)}
 .pacetop b.pgold{color:var(--accent)}

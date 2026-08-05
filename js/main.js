@@ -3,7 +3,7 @@
 
 const TABS={
   home:    {view:"homeView",    nav:"navHome",    on:()=>renderHome()},
-  quiz:    {view:"quizView",    nav:"navQuiz",    on:()=>{ refreshInfPill(); renderPaceBar(); }},
+  quiz:    {view:"quizView",    nav:"navQuiz",    on:()=>refreshInfPill()},
   party:   {view:"partyView",   nav:"navParty",   on:()=>renderParty()},
   adv:     {view:"advView",     nav:"navAdv",     on:()=>renderAdv()},
   gacha:   {view:"gachaView",   nav:"navGacha",   on:()=>renderGacha()},
@@ -30,6 +30,7 @@ const EVENTS=[
   // {d:"2026-08-03", t:"..."} 形式でバナー以外のイベント告知を書く
 ];
 const NEWS=[
+  {d:"2026-08-05", t:"🔧 v4.7.1 学習画面の「今日の目安」パネルを撤去(クイズが下に押し出されるため)。目安メーターはホームで・学習中の進捗はクイズ上部の「今日 ◯/◯問」表記で確認できます"},
   {d:"2026-08-05", t:"🎯 v4.7.0 学習ペース管理が登場! 「いつまでに全部覚えるか」を決めると、あなたの正答率から1日の目安を毎日逆算してメーターで案内(ホーム・学習画面から設定)。出題も賢く: 忘れかけた単語を優先・よく覚えていた単語はミスしても半分から再開・新規単語は目標日から逆算したペースで登場"},
   {d:"2026-08-04", t:"🔧 v4.6.2 クイズ正解時の結果バーの🎫+1表示を削除(チケットは今までどおり正解1問ごとに貯まります)"},
   {d:"2026-08-04", t:"🎫 v4.6.1 限定ガチャが常時2バナー開催に! それぞれ2週間ごとに更新されます(☄️星降る夜=8/7まで・🍁秋宵=8/14まで)。編成画面のキャラパネルの角に白い四角が見える表示も修正"},

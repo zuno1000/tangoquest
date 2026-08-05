@@ -183,7 +183,6 @@ function answer(chosen, btn){
   if(pq && !pq.done && d.a===pq.perDay){ toast("🎉 今日の目安 "+pq.perDay+"問を達成!"); vibe(40); }
   saveG();
   refreshHeader();
-  renderPaceBar();
 }
 
 $("nextBtn").onclick=()=>newQuestion();

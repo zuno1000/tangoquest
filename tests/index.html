@@ -1177,19 +1177,22 @@ function run(){
     eq(m.days["2026-08-05"].n, 7, "新規着手数はmax");
     eq(m.days["2026-08-05"].a, 5, "解答数はmax(従来どおり)");
   });
-  t("学習画面: 目標設定時は今日の目安メーター・未設定時は設定への導線が出る", ()=>{
+  t("ホーム: 目標設定時は今日の目安メーター・未設定時は設定への導線が出る", ()=>{
     const G=W.G, old=G.pace.goal;
     G.pace.goal=null;
-    W.switchTab("quiz");
-    const el=W.document.getElementById("paceBar");
-    ok(el.innerHTML.indexOf("目標日を設定")>=0, "未設定はCTA");
+    W.switchTab("home");
+    ok(W.document.getElementById("homePace").innerHTML.indexOf("目標日を設定")>=0, "未設定はCTA");
     G.pace.goal=W.addDays(W.todayKey(), 60);
-    W.renderPaceBar();
+    W.renderHome();
+    const el=W.document.getElementById("homePace");
     ok(el.innerHTML.indexOf("今日の目安")>=0, "目安表示");
     ok(el.querySelector(".pbar"), "メーターがある");
     ok(el.innerHTML.indexOf("残り")>=0, "目標日カウントダウン");
+    // 学習画面には縦積みのパネルを置かない(クイズの選択肢が押し出されるため v4.7.1)
+    ok(!W.document.getElementById("paceBar"), "学習画面にペースパネルはない");
+    ok(W.document.getElementById("qCount"), "学習中の進捗はqCount(今日 X/Y問)が担う");
     G.pace.goal=old;
-    W.switchTab("home");
+    W.renderHome();
   });
 
   /* ---- 起動状態 ---- */
