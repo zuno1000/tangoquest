@@ -1397,6 +1397,20 @@ function run(){
     W.closeModal();
     G.days=old;
   });
+  t("学習のあゆみ: 新規と復習の正答率(直近100問)が出る", ()=>{
+    const G=W.G, old=G.pace.log;
+    G.pace.log=[[1,1],[1,1],[1,1],[1,0],[0,1],[0,0]]; // 新規4問中3正解・復習2問中1正解
+    W.openHistoryModal();
+    const html=W.document.getElementById("modal").innerHTML;
+    ok(html.indexOf("新規 75%")>=0, "新規の正答率");
+    ok(html.indexOf("復習 50%")>=0, "復習の正答率");
+    W.closeModal();
+    G.pace.log=[];
+    W.openHistoryModal();
+    ok(W.document.getElementById("modal").innerHTML.indexOf("まだ分析中")>=0, "ログが空なら分析中");
+    W.closeModal();
+    G.pace.log=old;
+  });
   t("あゆみへの導線: 学習ペース管理モーダルと設定の両方にある", ()=>{
     W.openPaceModal();
     ok(W.document.getElementById("paceHist"), "ペースモーダルにボタン");

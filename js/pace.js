@@ -252,6 +252,9 @@ function openHistoryModal(page){
   const tgtDays=h.filter(x=>x.t>0).length;
   const hitDays=h.filter(x=>x.t>0 && x.a>=x.t).length;
   const periodA=h.reduce((s,x)=>s+x.a, 0);
+  // 新規/復習別の正答率: 区別付きの記録は直近100問のログだけ(ペース推定と同じ材料)
+  let nN=0,cN=0,nR=0,cR=0;
+  ((G.pace&&G.pace.log)||[]).forEach(e=>{ if(e[0]){ nN++; cN+=e[1]; } else { nR++; cR+=e[1]; } });
   openModal('<h3>📊 学習のあゆみ</h3>'+
     '<div class="row histnav" style="gap:8px; margin-top:6px">'+
       '<button class="btn hnav" id="histPrev"'+(hasPrev?'':' disabled')+'>◀</button>'+
@@ -261,7 +264,10 @@ function openHistoryModal(page){
     '<div class="histchart">'+bars+'</div>'+
     '<div class="small" style="margin-top:6px">バー=その日の解答数。<span style="color:#C07C00; font-weight:800">金</span>=目安を達成(点線=目安の高さ)</div>'+
     '<table class="stt" style="margin-top:12px">'+
-      '<tr><td>累計解答</td><td>'+fmt(tot)+'問(正解率 '+(tot? Math.round(100*totC/tot):0)+'%)</td></tr>'+
+      '<tr><td>累計解答</td><td>'+fmt(tot)+'問(正答率 '+(tot? Math.round(100*totC/tot):0)+'%)</td></tr>'+
+      '<tr><td>正答率(直近100問)</td><td>'+((nN||nR)
+        ? '新規 '+(nN? Math.round(100*cN/nN)+'%':'−')+' ・ 復習 '+(nR? Math.round(100*cR/nR)+'%':'−')
+        : 'まだ分析中')+'</td></tr>'+
       '<tr><td>学習した日数</td><td>'+daysN+'日(連続 '+studyStreak()+'日)</td></tr>'+
       (tgtDays? '<tr><td>この期間の目安達成</td><td>'+hitDays+' / '+tgtDays+'日</td></tr>':'')+
       '<tr><td>覚えた単語</td><td>'+fmt(mastered)+' / '+fmt(WORDS.length)+'語</td></tr>'+
