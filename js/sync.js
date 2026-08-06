@@ -137,7 +137,7 @@ function mergeData(a, b){
     const x=m.days[k], y=b.days[k];
     if(!x) m.days[k]=y;
     else { x.a=Math.max(x.a,y.a); x.c=Math.max(x.c,y.c); x.m=Math.max(x.m,y.m);
-           x.n=Math.max(x.n||0, y.n||0); }
+           x.n=Math.max(x.n||0, y.n||0); x.t=Math.max(x.t||0, y.t||0); }
   }
   // カード在庫: キーごとに多い方
   for(const k in b.inv||{}) m.inv[k]=Math.max(m.inv[k]||0, b.inv[k]);
@@ -212,6 +212,28 @@ async function syncNow(){
    sw.jsの再取得はHTTPキャッシュを迂回するので、CACHE名が上がっていれば新SWが入り
    (install=skipWaiting済み・activate=旧キャッシュ削除+clients.claim済み)、
    制御が切り替わった時点でリロード=最新版になる。localStorage(学習データ・同期設定)には触れない */
+/* SWキャッシュの自己修復: キャッシュ済みの同一オリジン資産を、HTTPキャッシュ・CDNを
+   迂回して(cache:no-store+使い捨てクエリ)取り直し、その場で置き換える。
+   sw.jsは最新なのに中身の資産だけ古い=「更新したのに古いまま」状態からの復旧手段。
+   置き換えた件数を返す */
+async function repairCaches(){
+  if(!("caches" in window)) return 0;
+  let n=0;
+  for(const name of await caches.keys()){
+    const c=await caches.open(name);
+    for(const req of await c.keys()){
+      const u=new URL(req.url);
+      if(u.origin!==location.origin) continue;
+      try{
+        const res=await fetch(u.pathname+u.search+(u.search?"&":"?")+"rep="+Date.now(),
+          {cache:"no-store"});
+        if(res.ok){ await c.put(req, res); n++; }
+      }catch(e){}
+    }
+  }
+  return n;
+}
+
 let updating=false;
 async function appUpdate(){
   if(updating) return;
@@ -254,10 +276,17 @@ async function appUpdate(){
       const mv=txt && txt.match(/APP_VERSION\s*=\s*"([^"]+)"/);
       if(mv) remoteV=mv[1];
     }catch(e){}
-    updating=false;
     if(remoteV && remoteV!==APP_VERSION){
+      /* 新SWが見つからないのにリモートの版だけ新しい=SWキャッシュに古い資産が
+         入っている(旧installがHTTPキャッシュ経由で資産を取り込んでいたため、
+         公開直後の更新で混入した=v4.9.1で実際に発生)。資産を取り直して復旧する */
+      toast("新版 v"+remoteV+" を取り込んでいる…");
+      const n=await repairCaches();
+      if(n>0){ setTimeout(()=>location.reload(), 400); return; }
+      updating=false;
       toast("新版 v"+remoteV+" を配信中。反映まで数分かかる ─ 少し待ってもう一度");
     }else{
+      updating=false;
       toast("最新版 v"+APP_VERSION+" を利用中 ✓");
     }
   }catch(e){
@@ -277,6 +306,7 @@ function openSettings(){
     '<tr><td>学習した単語</td><td>'+Object.keys(G.words).length+'</td></tr>'+
     '<tr><td>連続学習日数</td><td>'+streak+'日(XPボーナス ×'+(+streakXpMult().toFixed(2))+')</td></tr>'+
     '</table>'+
+    '<button class="btn" id="histBtn" style="margin-top:8px">📊 学習のあゆみ(これまでの記録)</button>'+
     '<h3 style="margin-top:16px">出題モード</h3>'+
     '<button class="btn" id="modeToggle">'+(G.mode==="e2j"?"EN → 日本語":"日本語 → EN")+' (タップで切替)</button>'+
     '<h3 style="margin-top:16px">演出</h3>'+
@@ -292,7 +322,7 @@ function openSettings(){
         '<button class="btn primary" id="syncBtn" style="margin-top:8px">今すぐ同期</button>'
       : '<div class="small">未設定。GCPでOAuthクライアントIDを発行し js/sync.js に設定すると使える(README参照)。データは端末内に保存されている。</div>')+
     '<h3 style="margin-top:16px">アプリの更新</h3>'+
-    '<button class="btn" id="updateBtn">🔄 アップデートを確認</button>'+
+    '<button class="btn" id="updateBtn">アップデートを確認</button>'+
     '<div class="small" style="margin-top:6px">ホーム画面から起動している場合(iOS等)もこのボタンで最新版に更新できる。学習データ・同期は消えない</div>'+
     '<h3 style="margin-top:16px">データ</h3>'+
     '<button class="btn danger" id="resetBtn">データをすべてリセット</button>'+
@@ -312,6 +342,7 @@ function openSettings(){
   };
   const sb=$("syncBtn");
   if(sb){ ensureGis(()=>{}); sb.onclick=syncNow; } // GIS先読み=タップ時にポップアップがブロックされない
+  $("histBtn").onclick=openHistoryModal;
   $("updateBtn").onclick=appUpdate;
   $("resetBtn").onclick=()=>{
     openModal('<h3>本当にリセットする？</h3>'+

@@ -645,6 +645,20 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
   -webkit-appearance:none; appearance:none; min-height:44px}
 .ppre{flex:1}
 
+/* 学習のあゆみ(v4.10.0): 直近14日のバーグラフ。
+   金のバー=その日の目安を達成・点線=目安の高さ(バーと同じ縮尺) */
+.histchart{display:flex; align-items:flex-end; gap:3px; margin-top:10px;
+  padding:10px 8px 6px; background:var(--bg2); border-radius:14px;
+  box-shadow:inset 2px 2px 4px var(--shd), inset -2px -2px 4px var(--shl)}
+.hcol{flex:1; min-width:0; display:flex; flex-direction:column; align-items:center}
+.hval{font-size:9px; font-weight:800; color:var(--sub); height:13px; line-height:13px}
+.hbarw{position:relative; width:100%; height:56px; display:flex; align-items:flex-end; justify-content:center}
+.hbar{width:72%; min-width:6px; border-radius:4px 4px 2px 2px;
+  background:linear-gradient(180deg,#7B8AFF,var(--accent2))}
+.hbar.hit{background:linear-gradient(180deg,#FFB547,#F5A020)}
+.htick{position:absolute; left:0; right:0; height:0; border-top:2px dotted #A9B6D0}
+.hday{font-size:9px; color:var(--sub); margin-top:3px}
+
 /* ---- v4.9.0 ---- */
 /* ヘッダー: 通貨の桁が増えても⚙・🔔を押し出さない(数値は短縮表記+チップ側も縮められる) */
 header .res{flex:0 1 auto; min-width:0}

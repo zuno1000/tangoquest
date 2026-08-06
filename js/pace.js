@@ -91,6 +91,11 @@ function paceToday(g, now){
   const d=todayKey();
   if(!g.pace.qd || g.pace.qd.d!==d) g.pace.qd={d, per:q.perDay};
   q.perDay=g.pace.qd.per;
+  // その日の目安を日別記録にも残す(「学習のあゆみ」の達成判定に使う)
+  if(g.days){
+    const rec=g.days[d]=g.days[d]||{a:0,c:0,m:0};
+    if(rec.t!==q.perDay) rec.t=q.perDay;
+  }
   return q;
 }
 
@@ -168,9 +173,11 @@ function openPaceModal(){
         ? 'すでに知っていそうな単語 約'+Math.round(est.knownRate*100)+'%・復習の正答率 '+Math.round(est.recall*100)+'%'
         : 'まだ分析中(新規・復習をそれぞれ8問以上解くと精度が上がる。いまは標準値で計算)')+
       ' ─ 学習を進めるほど目安は自動で更新される</div>'+
-    '<div class="row" style="gap:10px; margin-top:14px">'+
+    '<button class="btn" id="paceHist" style="margin-top:12px">📊 学習のあゆみ(これまでの記録)</button>'+
+    '<div class="row" style="gap:10px; margin-top:12px">'+
       ((G.pace&&G.pace.goal)? '<button class="btn" id="goalClear">目標を解除</button>':'')+
       '<button class="btn primary grow" id="goalSave">この目標で進める</button></div>');
+  $("paceHist").onclick=openHistoryModal;
   const upd=()=>{
     const v=$("goalDate").value, box=$("paceCalc");
     if(!v || v<=today){ box.innerHTML='<div class="small">明日以降の日付を選ぶと計算結果が出る</div>'; return; }
@@ -202,6 +209,58 @@ function openPaceModal(){
     paceRefreshViews();
   };
 }
+/* ---- UI: 学習のあゆみ(これまでの学習記録の振り返り) ---- */
+
+/* 直近n日の日別記録を古い順に返す。記録のない日は0で埋める。
+   t=その日に固定された目安(paceTodayが残す。目標未設定の日は0) */
+function paceHistory(g, n){
+  const out=[], base=new Date();
+  for(let i=n-1;i>=0;i--){
+    const dt=new Date(base.getFullYear(), base.getMonth(), base.getDate()-i);
+    const k=dt.getFullYear()+"-"+String(dt.getMonth()+1).padStart(2,"0")+"-"+String(dt.getDate()).padStart(2,"0");
+    const r=(g.days||{})[k]||{};
+    out.push({k, md:(dt.getMonth()+1)+"/"+dt.getDate(), day:dt.getDate(),
+              a:r.a||0, c:r.c||0, m:r.m||0, t:r.t||0});
+  }
+  return out;
+}
+
+function openHistoryModal(){
+  const h=paceHistory(G, 14);
+  const max=Math.max(1, ...h.map(x=>Math.max(x.a, x.t)));
+  const H=56; // グラフの高さ(px)
+  const bars=h.map(x=>{
+    const hit=x.t>0 && x.a>=x.t;
+    const bh=x.a? Math.max(3, Math.round(H*x.a/max)) : 0;
+    return '<div class="hcol">'+
+      '<div class="hval">'+(x.a||"")+'</div>'+
+      '<div class="hbarw">'+
+        (x.t? '<i class="htick" style="bottom:'+Math.round(H*Math.min(x.t,max)/max)+'px"></i>':'')+
+        '<div class="hbar'+(hit?" hit":"")+'" style="height:'+bh+'px"></div></div>'+
+      '<div class="hday">'+x.day+'</div></div>';
+  }).join("");
+  // 累計(全期間・G.daysは消さずに残している)
+  let daysN=0, tot=0, totC=0, streakBest=0;
+  for(const k in G.days){ const r=G.days[k]; if(r.a>0){ daysN++; tot+=r.a; totC+=r.c; } }
+  let mastered=0; for(const en in G.words){ if(G.words[en][0]>=MASTER_BOX) mastered++; }
+  const tgtDays=h.filter(x=>x.t>0).length;
+  const hitDays=h.filter(x=>x.t>0 && x.a>=x.t).length;
+  openModal('<h3>📊 学習のあゆみ</h3>'+
+    '<div class="small">直近14日の解答数。<span style="color:#C07C00; font-weight:800">金のバー</span>=その日の目安を達成(点線=目安の高さ)</div>'+
+    '<div class="histchart">'+bars+'</div>'+
+    '<table class="stt" style="margin-top:12px">'+
+      '<tr><td>累計解答</td><td>'+fmt(tot)+'問(正解率 '+(tot? Math.round(100*totC/tot):0)+'%)</td></tr>'+
+      '<tr><td>学習した日数</td><td>'+daysN+'日(連続 '+studyStreak()+'日)</td></tr>'+
+      (tgtDays? '<tr><td>直近14日の目安達成</td><td>'+hitDays+' / '+tgtDays+'日</td></tr>':'')+
+      '<tr><td>覚えた単語</td><td>'+fmt(mastered)+' / '+fmt(WORDS.length)+'語</td></tr>'+
+    '</table>'+
+    '<div class="panel" style="margin-top:12px"><div class="small">'+
+      '💡 <b>目安のしくみ</b>: 目安は毎日「残りの問題数 ÷ 目標日までの残り日数」で引き直される。'+
+      '今日多く解けば残りが減って<b>明日からの目安は下がり</b>、届かなかった分は'+
+      '<b>残りの日数全体に薄く分け直される</b>(翌日にまとめて上乗せはされない)。'+
+      'その日の目安は朝の時点で固定され、ミスしても途中で増えない</div></div>');
+}
+
 function paceRefreshViews(){
   if(!$("homeView").classList.contains("hidden")) renderHome();
 }

@@ -35,6 +35,12 @@ localStorage.removeItem("tangoquest_v1"); // 毎回まっさらな状態で起�
 const frame=document.getElementById("app");
 frame.onload=()=>setTimeout(run, 300);
 
+/* ヘッドレス実行(--virtual-time-budget)対策: 非同期テスト(Cache API等)の完了を
+   待つ間、短い間隔のタイマーを回して仮想時間の進みを実時間に橋渡しする。
+   これがないとアプリ側のsetInterval(5秒)が仮想時間の予算を先に使い切り、
+   report()前のDOMがダンプされてしまう。report()で止める */
+const keepalive=setInterval(()=>{}, 25);
+
 function run(){
   const W=frame.contentWindow;
   try{
@@ -1319,6 +1325,66 @@ function run(){
     W.renderHome();
   });
 
+  /* ---- 学習のあゆみ(v4.10.0) ---- */
+  t("今日の目安は日別記録(days.t)にも残る=あゆみの達成判定に使う", ()=>{
+    const G=W.G, oldPace=JSON.parse(JSON.stringify(G.pace));
+    const k=W.todayKey(), oldT=G.days[k] && G.days[k].t;
+    G.pace={goal:W.addDays(k,120), setAt:1, log:[], qd:null};
+    const q=W.paceToday(G);
+    eq(G.days[k].t, q.perDay, "固定した目安が残る");
+    G.pace=oldPace; if(G.days[k]) G.days[k].t=oldT;
+  });
+  t("paceHistory: 直近n日を古い順に返し、記録のない日は0で埋める", ()=>{
+    const G=W.G, old=G.days;
+    const key=i=>{ const d=new Date(Date.now()-i*864e5);
+      return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
+    G.days={};
+    G.days[key(0)]={a:30,c:25,m:1,t:40};
+    G.days[key(2)]={a:50,c:45,m:2,t:40};
+    const h=W.paceHistory(G, 7);
+    eq(h.length, 7, "日数");
+    eq(h[6].k, key(0), "末尾=今日");
+    eq(h[6].a, 30, "今日の解答数"); eq(h[6].t, 40, "今日の目安");
+    eq(h[4].a, 50, "2日前の解答数");
+    eq(h[5].a, 0, "記録のない日は0"); eq(h[5].t, 0, "目安も0");
+    G.days=old;
+  });
+  t("mergeData: 日別記録の目安(t)も引き継ぐ", ()=>{
+    const base=()=>({words:{},days:{},inv:{},chars:{},dungeons:{},counters:{},ach:{},inf:{best:0},
+                     gold:0,tickets:0,shards:0,xp:0});
+    const a=Object.assign(base(),{days:{"2026-08-06":{a:10,c:9,m:0,t:35}}, updatedAt:2});
+    const b=Object.assign(base(),{days:{"2026-08-06":{a:20,c:15,m:0},
+                                        "2026-08-05":{a:5,c:5,m:0,t:30}}, updatedAt:1});
+    const m=W.mergeData(a,b);
+    eq(m.days["2026-08-06"].t, 35, "片側にしかない目安を保持");
+    eq(m.days["2026-08-06"].a, 20, "解答数は大きい方");
+    eq(m.days["2026-08-05"].t, 30, "リモートだけの日も保持");
+  });
+  t("学習のあゆみ: 直近14日のグラフ・累計・目安のしくみの説明が出る", ()=>{
+    const G=W.G, old=G.days;
+    G.days={};
+    G.days[W.todayKey()]={a:50,c:40,m:0,t:40}; // 目安達成の日
+    W.openHistoryModal();
+    const modal=W.document.getElementById("modal"), html=modal.innerHTML;
+    ok(html.indexOf("学習のあゆみ")>=0, "見出し");
+    eq(modal.querySelectorAll(".hcol").length, 14, "14日分のバー");
+    ok(modal.querySelector(".hbar.hit"), "目安達成の日は金のバー");
+    ok(modal.querySelector(".htick"), "目安の高さの点線");
+    ok(html.indexOf("累計解答")>=0, "累計");
+    ok(html.indexOf("目安のしくみ")>=0, "繰り越しの説明");
+    W.closeModal();
+    G.days=old;
+  });
+  t("あゆみへの導線: 学習ペース管理モーダルと設定の両方にある", ()=>{
+    W.openPaceModal();
+    ok(W.document.getElementById("paceHist"), "ペースモーダルにボタン");
+    W.closeModal();
+    W.openSettings();
+    ok(W.document.getElementById("histBtn"), "設定にボタン");
+    ok(W.document.getElementById("updateBtn").textContent.indexOf("🔄")<0, "更新ボタンにアイコンなし");
+    W.closeModal();
+  });
+
   /* ---- 起動状態 ---- */
   t("起動時に問題が出題されている", ()=>{
     ok(W.document.getElementById("promptWord").textContent.length>0);
@@ -1332,10 +1398,43 @@ function run(){
   }catch(e){
     results.push(["(test harness)", false, String(e.message||e)]);
   }
-  report();
+  runAsync(W).then(report, e=>{
+    results.push(["(async harness)", false, String((e&&e.message)||e)]);
+    report();
+  });
+}
+
+/* 非同期テスト(fetch・Cache APIを使うもの)。t()のawait版 */
+function ta(name, fn){
+  return Promise.resolve().then(fn).then(
+    ()=>results.push([name, true, ""]),
+    e=>results.push([name, false, String(e.message||e)]));
+}
+async function runAsync(W){
+  await ta("sw.js: 資産はHTTPキャッシュ・CDNを迂回して取り込む(addAll廃止=v4.10.0)", async()=>{
+    const txt=await fetch("../sw.js?t="+Date.now()).then(r=>r.text());
+    ok(txt.indexOf("addAll(")<0, "addAll(HTTPキャッシュ素通り)を使わない");
+    ok(txt.indexOf('cache:"no-store"')>=0, "no-storeで取得する");
+    ok(txt.indexOf('"?v="+CACHE')>=0, "版クエリでCDNも迂回する");
+  });
+  await ta("repairCaches: キャッシュ内の古い資産を最新の内容に置き換える", async()=>{
+    ok("caches" in W, "Cache API");
+    const url=new URL("../js/state.js", location.href).href;
+    const c=await W.caches.open("tq-selftest");
+    try{
+      await c.put(url, new W.Response("OLD"));
+      const n=await W.repairCaches();
+      ok(n>=1, "置換件数="+n);
+      const txt=await (await c.match(url)).text();
+      ok(txt.indexOf("APP_VERSION")>=0, "最新の内容に置き換わる");
+    }finally{
+      await W.caches.delete("tq-selftest");
+    }
+  });
 }
 
 function report(){
+  clearInterval(keepalive);
   const list=document.getElementById("list");
   let pass=0;
   results.forEach(([n,okv,msg])=>{
