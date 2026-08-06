@@ -1347,6 +1347,28 @@ function run(){
     eq(h[6].a, 30, "今日の解答数"); eq(h[6].t, 40, "今日の目安");
     eq(h[4].a, 50, "2日前の解答数");
     eq(h[5].a, 0, "記録のない日は0"); eq(h[5].t, 0, "目安も0");
+    const h2=W.paceHistory(G, 7, 7); // 1つ前の期間(13〜7日前)
+    eq(h2.length, 7, "過去期間も7日");
+    eq(h2[6].k, key(7), "offset=7の末尾は7日前");
+    G.days=old;
+  });
+  t("学習のあゆみ: ◀で14日より前にさかのぼれる・▶で最新に戻れる", ()=>{
+    const G=W.G, old=G.days;
+    const key=i=>{ const d=new Date(Date.now()-i*864e5);
+      return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
+    G.days={};
+    G.days[key(0)]={a:10,c:9,m:0};
+    G.days[key(20)]={a:77,c:70,m:0,t:60}; // 前の期間(27〜14日前)にある記録
+    W.openHistoryModal();
+    let modal=W.document.getElementById("modal");
+    ok(!modal.querySelector("#histPrev").disabled, "前の記録があれば◀が有効");
+    ok(modal.querySelector("#histNext").disabled, "最新の期間では▶は無効");
+    W.openHistoryModal(1); // ◀=1つ前の期間へ
+    modal=W.document.getElementById("modal");
+    ok(modal.innerHTML.indexOf(">77<")>=0, "20日前の記録が前の期間に出る");
+    ok(!modal.querySelector("#histNext").disabled, "▶で最新に戻れる");
+    ok(modal.querySelector("#histPrev").disabled, "それより前に記録がなければ◀は無効");
+    W.closeModal();
     G.days=old;
   });
   t("mergeData: 日別記録の目安(t)も引き継ぐ", ()=>{

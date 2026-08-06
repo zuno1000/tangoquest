@@ -211,11 +211,11 @@ function openPaceModal(){
 }
 /* ---- UI: 学習のあゆみ(これまでの学習記録の振り返り) ---- */
 
-/* 直近n日の日別記録を古い順に返す。記録のない日は0で埋める。
-   t=その日に固定された目安(paceTodayが残す。目標未設定の日は0) */
-function paceHistory(g, n){
-  const out=[], base=new Date();
-  for(let i=n-1;i>=0;i--){
+/* 直近n日の日別記録を古い順に返す(offset=何日前まで戻るか。0なら今日まで)。
+   記録のない日は0で埋める。t=その日に固定された目安(paceTodayが残す。目標未設定の日は0) */
+function paceHistory(g, n, offset){
+  const out=[], base=new Date(), off=offset||0;
+  for(let i=n-1+off;i>=off;i--){
     const dt=new Date(base.getFullYear(), base.getMonth(), base.getDate()-i);
     const k=dt.getFullYear()+"-"+String(dt.getMonth()+1).padStart(2,"0")+"-"+String(dt.getDate()).padStart(2,"0");
     const r=(g.days||{})[k]||{};
@@ -225,8 +225,10 @@ function paceHistory(g, n){
   return out;
 }
 
-function openHistoryModal(){
-  const h=paceHistory(G, 14);
+/* page=0が直近14日。◀▶で14日ずつさかのぼる(最古の記録がある期間まで) */
+function openHistoryModal(page){
+  page=Math.max(0, page||0);
+  const h=paceHistory(G, 14, page*14);
   const max=Math.max(1, ...h.map(x=>Math.max(x.a, x.t)));
   const H=56; // グラフの高さ(px)
   const bars=h.map(x=>{
@@ -239,26 +241,40 @@ function openHistoryModal(){
         '<div class="hbar'+(hit?" hit":"")+'" style="height:'+bh+'px"></div></div>'+
       '<div class="hday">'+x.day+'</div></div>';
   }).join("");
+  // さらに前をさかのぼれるか: 最古の学習記録がこの期間より前にあるか
+  let oldest=null;
+  for(const k in G.days){ const r=G.days[k]; if((r.a||0)>0 && (!oldest || k<oldest)) oldest=k; }
+  const hasPrev=!!(oldest && oldest<h[0].k);
   // 累計(全期間・G.daysは消さずに残している)
-  let daysN=0, tot=0, totC=0, streakBest=0;
+  let daysN=0, tot=0, totC=0;
   for(const k in G.days){ const r=G.days[k]; if(r.a>0){ daysN++; tot+=r.a; totC+=r.c; } }
   let mastered=0; for(const en in G.words){ if(G.words[en][0]>=MASTER_BOX) mastered++; }
   const tgtDays=h.filter(x=>x.t>0).length;
   const hitDays=h.filter(x=>x.t>0 && x.a>=x.t).length;
+  const periodA=h.reduce((s,x)=>s+x.a, 0);
   openModal('<h3>📊 学習のあゆみ</h3>'+
-    '<div class="small">直近14日の解答数。<span style="color:#C07C00; font-weight:800">金のバー</span>=その日の目安を達成(点線=目安の高さ)</div>'+
+    '<div class="row histnav" style="gap:8px; margin-top:6px">'+
+      '<button class="btn hnav" id="histPrev"'+(hasPrev?'':' disabled')+'>◀</button>'+
+      '<div class="grow" style="text-align:center; font-weight:800">'+h[0].md+' 〜 '+h[13].md+
+        '<span class="small" style="font-weight:700"> ・ '+fmt(periodA)+'問</span></div>'+
+      '<button class="btn hnav" id="histNext"'+(page>0?'':' disabled')+'>▶</button></div>'+
     '<div class="histchart">'+bars+'</div>'+
+    '<div class="small" style="margin-top:6px">バー=その日の解答数。<span style="color:#C07C00; font-weight:800">金</span>=目安を達成(点線=目安の高さ)</div>'+
     '<table class="stt" style="margin-top:12px">'+
       '<tr><td>累計解答</td><td>'+fmt(tot)+'問(正解率 '+(tot? Math.round(100*totC/tot):0)+'%)</td></tr>'+
       '<tr><td>学習した日数</td><td>'+daysN+'日(連続 '+studyStreak()+'日)</td></tr>'+
-      (tgtDays? '<tr><td>直近14日の目安達成</td><td>'+hitDays+' / '+tgtDays+'日</td></tr>':'')+
+      (tgtDays? '<tr><td>この期間の目安達成</td><td>'+hitDays+' / '+tgtDays+'日</td></tr>':'')+
       '<tr><td>覚えた単語</td><td>'+fmt(mastered)+' / '+fmt(WORDS.length)+'語</td></tr>'+
     '</table>'+
     '<div class="panel" style="margin-top:12px"><div class="small">'+
       '💡 <b>目安のしくみ</b>: 目安は毎日「残りの問題数 ÷ 目標日までの残り日数」で引き直される。'+
       '今日多く解けば残りが減って<b>明日からの目安は下がり</b>、届かなかった分は'+
       '<b>残りの日数全体に薄く分け直される</b>(翌日にまとめて上乗せはされない)。'+
-      'その日の目安は朝の時点で固定され、ミスしても途中で増えない</div></div>');
+      'その日の目安は朝の時点で固定され、ミスしても途中で増えない<br><br>'+
+      '📱 <b>記録の数え方</b>: 日付は端末の時計基準(0時で翌日に切り替わる)。'+
+      '複数の端末で<b>同じ日</b>に学習して同期した場合、その日の記録は多い方の端末の数になる(合算はされない)</div></div>');
+  $("histPrev").onclick=()=>{ if(hasPrev) openHistoryModal(page+1); };
+  $("histNext").onclick=()=>{ if(page>0) openHistoryModal(page-1); };
 }
 
 function paceRefreshViews(){

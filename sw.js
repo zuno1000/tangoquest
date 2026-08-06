@@ -1,5 +1,5 @@
 /* TangoQuest service worker — cache-first */
-const CACHE="tangoquest-v43"; // 表示名はLEXICAだがキャッシュ名系統は維持
+const CACHE="tangoquest-v44"; // 表示名はLEXICAだがキャッシュ名系統は維持
 const ASSETS=[
   "./", "index.html", "manifest.json",
   "css/style.css",

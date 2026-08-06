@@ -658,6 +658,10 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
 .hbar.hit{background:linear-gradient(180deg,#FFB547,#F5A020)}
 .htick{position:absolute; left:0; right:0; height:0; border-top:2px dotted #A9B6D0}
 .hday{font-size:9px; color:var(--sub); margin-top:3px}
+/* 期間ナビ(◀▶で14日ずつさかのぼる)。端の期間ではボタンを薄くして無効に */
+.hnav{flex:0 0 auto; min-width:44px; padding:8px 12px}
+.hnav:disabled{opacity:.35; pointer-events:none}
+.histnav{align-items:center}
 
 /* ---- v4.9.0 ---- */
 /* ヘッダー: 通貨の桁が増えても⚙・🔔を押し出さない(数値は短縮表記+チップ側も縮められる) */
