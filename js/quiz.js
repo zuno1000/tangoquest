@@ -70,6 +70,19 @@ function srsApply(st, ok, now){
   return st;
 }
 
+/* 日別記録への計上(純関数)。a/c=合計解答・正解、n=新規着手数(導入ペースの消化判定)、
+   na/nc・ra/rc=新規/復習別の解答・正解 ─ v4.12.0から記録開始。
+   「学習のあゆみ」の全期間の新規/復習別正答率に使う(それ以前の日は内訳なし) */
+function recordDayAnswer(d, wasNew, ok){
+  d.a++; if(ok) d.c++;
+  if(wasNew){
+    d.n=(d.n||0)+1;
+    d.na=(d.na||0)+1; if(ok) d.nc=(d.nc||0)+1;
+  }else{
+    d.ra=(d.ra||0)+1; if(ok) d.rc=(d.rc||0)+1;
+  }
+}
+
 function jaTokens(s){ return s.split(/[、。・（）()／\/\s～~]+/).filter(t=>t.length>=2); }
 function overlaps(a,b){
   const ta=jaTokens(a.ja), tb=new Set(jaTokens(b.ja));
@@ -136,8 +149,7 @@ function answer(chosen, btn){
   if(!st) st=G.words[w.en]=[0,0,0,0,0,0,0];
   const preSt=st.slice(); // ドロップ判定は解答前の状態で
   srsApply(st, ok, now);
-  const d=dayRec(); d.a++; if(ok) d.c++;
-  if(wasNew) d.n=(d.n||0)+1; // 今日はじめて着手した単語数(新規導入ペースの消化判定)
+  const d=dayRec(); recordDayAnswer(d, wasNew, ok);
   let justMastered=false;
   if(ok && st[0]>=MASTER_BOX && !st[4]){ st[4]=1; d.m++; justMastered=true; }
   track("ans"); if(ok) track("cor");

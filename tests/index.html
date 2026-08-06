@@ -1411,6 +1411,48 @@ function run(){
     W.closeModal();
     G.pace.log=old;
   });
+  t("recordDayAnswer: 新規/復習別の内訳(na/nc/ra/rc)を日別記録に計上する", ()=>{
+    const d={a:0,c:0,m:0};
+    W.recordDayAnswer(d, true, true);   // 新規・正解
+    W.recordDayAnswer(d, true, false);  // 新規・ミス
+    W.recordDayAnswer(d, false, true);  // 復習・正解
+    W.recordDayAnswer(d, false, true);  // 復習・正解
+    W.recordDayAnswer(d, false, false); // 復習・ミス
+    eq(d.a, 5, "合計解答"); eq(d.c, 3, "合計正解");
+    eq(d.n, 2, "新規着手数");
+    eq(d.na, 2, "新規解答"); eq(d.nc, 1, "新規正解");
+    eq(d.ra, 3, "復習解答"); eq(d.rc, 2, "復習正解");
+  });
+  t("mergeData: 日別内訳(na/nc/ra/rc)も引き継ぐ", ()=>{
+    const base=()=>({words:{},days:{},inv:{},chars:{},dungeons:{},counters:{},ach:{},inf:{best:0},
+                     gold:0,tickets:0,shards:0,xp:0});
+    const a=Object.assign(base(),{days:{"2026-08-06":{a:10,c:9,m:0,na:4,nc:3,ra:6,rc:6}}, updatedAt:2});
+    const b=Object.assign(base(),{days:{"2026-08-06":{a:8,c:7,m:0}}, updatedAt:1});
+    const m=W.mergeData(b,a); // 内訳を持たない側を起点にしても消えない
+    eq(m.days["2026-08-06"].na, 4, "新規解答"); eq(m.days["2026-08-06"].rc, 6, "復習正解");
+    eq(m.days["2026-08-06"].a, 10, "合計は大きい方");
+  });
+  t("学習のあゆみ: 全期間の新規/復習別正答率(内訳の記録開始日〜)が出る", ()=>{
+    const G=W.G, old=G.days;
+    const key=i=>{ const d=new Date(Date.now()-i*864e5);
+      return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
+    G.days={};
+    G.days[key(30)]={a:99,c:80,m:0};                             // 内訳のない古い日(集計対象外)
+    G.days[key(1)]={a:10,c:8,m:0,na:4,nc:2,ra:6,rc:6};           // 新規2/4・復習6/6
+    G.days[key(0)]={a:10,c:7,m:0,na:4,nc:2,ra:6,rc:3};           // 新規2/4・復習3/6
+    W.openHistoryModal();
+    const html=W.document.getElementById("modal").innerHTML;
+    const md=(key(1).slice(5,7).replace(/^0/,""))+"/"+(+key(1).slice(8)); // 内訳の初日=昨日
+    ok(html.indexOf("正答率("+md+"〜)")>=0, "記録開始日からのラベル");
+    ok(html.indexOf("新規 50%")>=0, "全期間の新規正答率(4/8)");
+    ok(html.indexOf("復習 75%")>=0, "全期間の復習正答率(9/12)");
+    W.closeModal();
+    G.days={}; G.days[key(0)]={a:5,c:4,m:0}; // 内訳が1日もなければ行を出さない
+    W.openHistoryModal();
+    ok(W.document.getElementById("modal").innerHTML.indexOf("〜)")<0, "内訳なしでは行が出ない");
+    W.closeModal();
+    G.days=old;
+  });
   t("あゆみへの導線: 学習ペース管理モーダルと設定の両方にある", ()=>{
     W.openPaceModal();
     ok(W.document.getElementById("paceHist"), "ペースモーダルにボタン");

@@ -252,9 +252,19 @@ function openHistoryModal(page){
   const tgtDays=h.filter(x=>x.t>0).length;
   const hitDays=h.filter(x=>x.t>0 && x.a>=x.t).length;
   const periodA=h.reduce((s,x)=>s+x.a, 0);
-  // 新規/復習別の正答率: 区別付きの記録は直近100問のログだけ(ペース推定と同じ材料)
+  // 新規/復習別の正答率①: 直近100問のログ(ペース推定と同じ材料=最近の実力)
   let nN=0,cN=0,nR=0,cR=0;
   ((G.pace&&G.pace.log)||[]).forEach(e=>{ if(e[0]){ nN++; cN+=e[1]; } else { nR++; cR+=e[1]; } });
+  // 新規/復習別の正答率②: 日別内訳(na/nc/ra/rc)の全期間合計。
+  // 内訳の記録はv4.12.0開始なので、最初に内訳が残った日からの集計になる
+  let sNa=0,sNc=0,sRa=0,sRc=0, bdFrom=null;
+  for(const k in G.days){
+    const r=G.days[k];
+    if((r.na||0)+(r.ra||0)>0){
+      sNa+=r.na||0; sNc+=r.nc||0; sRa+=r.ra||0; sRc+=r.rc||0;
+      if(!bdFrom || k<bdFrom) bdFrom=k;
+    }
+  }
   openModal('<h3>📊 学習のあゆみ</h3>'+
     '<div class="row histnav" style="gap:8px; margin-top:6px">'+
       '<button class="btn hnav" id="histPrev"'+(hasPrev?'':' disabled')+'>◀</button>'+
@@ -264,10 +274,15 @@ function openHistoryModal(page){
     '<div class="histchart">'+bars+'</div>'+
     '<div class="small" style="margin-top:6px">バー=その日の解答数。<span style="color:#C07C00; font-weight:800">金</span>=目安を達成(点線=目安の高さ)</div>'+
     '<table class="stt" style="margin-top:12px">'+
-      '<tr><td>累計解答</td><td>'+fmt(tot)+'問(正答率 '+(tot? Math.round(100*totC/tot):0)+'%)</td></tr>'+
+      '<tr><td>累計解答(全期間)</td><td>'+fmt(tot)+'問(正答率 '+(tot? Math.round(100*totC/tot):0)+'%)</td></tr>'+
       '<tr><td>正答率(直近100問)</td><td>'+((nN||nR)
         ? '新規 '+(nN? Math.round(100*cN/nN)+'%':'−')+' ・ 復習 '+(nR? Math.round(100*cR/nR)+'%':'−')
         : 'まだ分析中')+'</td></tr>'+
+      (bdFrom
+        ? '<tr><td>正答率('+(+bdFrom.slice(5,7))+'/'+(+bdFrom.slice(8))+'〜)</td><td>'+
+            '新規 '+(sNa? Math.round(100*sNc/sNa)+'%':'−')+' ・ 復習 '+(sRa? Math.round(100*sRc/sRa)+'%':'−')+
+          '</td></tr>'
+        : '')+
       '<tr><td>学習した日数</td><td>'+daysN+'日(連続 '+studyStreak()+'日)</td></tr>'+
       (tgtDays? '<tr><td>この期間の目安達成</td><td>'+hitDays+' / '+tgtDays+'日</td></tr>':'')+
       '<tr><td>覚えた単語</td><td>'+fmt(mastered)+' / '+fmt(WORDS.length)+'語</td></tr>'+
@@ -277,8 +292,11 @@ function openHistoryModal(page){
       '今日多く解けば残りが減って<b>明日からの目安は下がり</b>、届かなかった分は'+
       '<b>残りの日数全体に薄く分け直される</b>(翌日にまとめて上乗せはされない)。'+
       'その日の目安は朝の時点で固定され、ミスしても途中で増えない<br><br>'+
-      '📱 <b>記録の数え方</b>: 日付は端末の時計基準(0時で翌日に切り替わる)。'+
-      '複数の端末で<b>同じ日</b>に学習して同期した場合、その日の記録は多い方の端末の数になる(合算はされない)</div></div>');
+      '📱 <b>記録の数え方</b>: グラフと期間の合計は表示中の14日分・「全期間」は'+
+      'アプリを使いはじめてからのすべての記録(リセットしない限り残り続ける)。'+
+      '日付は端末の時計基準(0時で翌日に切り替わる)。'+
+      '複数の端末で<b>同じ日</b>に学習して同期した場合、その日の記録は多い方の端末の数になる(合算はされない)。'+
+      '新規/復習別の全期間集計は内訳の記録を始めた日(v4.12.0)以降が対象</div></div>');
   $("histPrev").onclick=()=>{ if(hasPrev) openHistoryModal(page+1); };
   $("histNext").onclick=()=>{ if(page>0) openHistoryModal(page-1); };
 }

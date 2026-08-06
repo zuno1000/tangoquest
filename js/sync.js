@@ -136,8 +136,9 @@ function mergeData(a, b){
   for(const k in b.days||{}){
     const x=m.days[k], y=b.days[k];
     if(!x) m.days[k]=y;
-    else { x.a=Math.max(x.a,y.a); x.c=Math.max(x.c,y.c); x.m=Math.max(x.m,y.m);
-           x.n=Math.max(x.n||0, y.n||0); x.t=Math.max(x.t||0, y.t||0); }
+    else ["a","c","m","n","t","na","nc","ra","rc"].forEach(f=>{
+      x[f]=Math.max(x[f]||0, y[f]||0);
+    });
   }
   // カード在庫: キーごとに多い方
   for(const k in b.inv||{}) m.inv[k]=Math.max(m.inv[k]||0, b.inv[k]);
