@@ -1638,11 +1638,11 @@ function run(){
   });
 
   /* ---- v4.14.0: 単語の防衛線(β) ---- */
-  t("防衛線: 3ウェーブ(5/7/9+ボス)が生成される", ()=>{
+  t("防衛線: 3ウェーブ(6/8/10+ボス)が生成される", ()=>{
     const ws=W.tdWaves(W.DUNGEONS[0]);
     eq(ws.length, 3, "3ウェーブ");
-    eq(ws[0].length, 5); eq(ws[1].length, 7); eq(ws[2].length, 10, "最終波は9体+ボス");
-    ok(ws[2][9].boss, "最後がボス");
+    eq(ws[0].length, 6); eq(ws[1].length, 8); eq(ws[2].length, 11, "最終波は10体+ボス");
+    ok(ws[2][10].boss, "最後がボス");
     ok(ws[0].every(e=>e.hp>0 && e.hpMax===e.hp && e.icon), "敵定義が揃っている");
     ok(ws[2][0].hp>ws[0][0].hp, "波が進むほど深い階の敵(HP増)");
   });
@@ -1660,7 +1660,7 @@ function run(){
     b.waves=[[],[],[]]; b.wi=0; b.si=0;
     const ev=W.tdTick(b);
     eq(ev.leaks.length, 1, "左端まで来た敵は城に到達");
-    eq(b.castle, 1000-100, "城に2×atkのダメージ");
+    eq(b.castle, 1000-125, "城に2.5×atkのダメージ(v4.14.1)");
     eq(b.enemies.length, 0, "到達した敵は消える");
   });
   t("防衛線: ボスは2問に1歩・全滅で勝利・城陥落で敗北", ()=>{
@@ -1717,11 +1717,12 @@ function run(){
     eq(W.TD.enemies.length, 1, "最初の敵が湧いている");
     const w=W.tdCur.word, e2j=G.mode==="e2j";
     const btn=[...doc.querySelectorAll("#tdChoices .choice")].find(b=>b.textContent===(e2j? w.ja : w.en));
-    const ticks0=W.TD.ticks;
-    btn.click(); // 正解を選ぶ
-    eq(W.TD.ticks, ticks0+1, "1問=1tick(射撃→進軍)");
-    ok(doc.getElementById("tdLog").innerHTML.length>0, "戦況ログが出る");
-    W.TD=null; // 後片付け(遅延の次問タイマーも止まる)
+    const hp0=W.TD.enemies[0].hp;
+    btn.click(); // 正解を選ぶ → 即座に射撃フェーズ(進軍はその後の遅延タイマー)
+    ok(W.TD.enemies.length===0 || W.TD.enemies[0].hp<hp0, "敵にダメージ(または撃破)");
+    ok(doc.getElementById("tdLog").innerHTML.indexOf("💥")>=0, "射撃のログとダメージポップが出る");
+    ok(doc.getElementById("tdLane").classList.contains("tdfire"), "レーンの発火演出");
+    W.TD=null; // 後片付け(遅延の進軍・次問タイマーも止まる)
     W.switchTab("home");
   });
 

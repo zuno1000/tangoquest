@@ -112,16 +112,13 @@
 
 <!-- ============ 単語の防衛線(β・冒険タブから入る) ============ -->
 <main id="tdView" class="hidden">
-  <div class="row" style="margin-top:6px; gap:8px">
-    <button class="btn" id="tdBack">← 冒険</button>
-    <div class="grow" style="font-weight:800; font-size:14px" id="tdTitle"></div>
-  </div>
-  <div class="panel" style="margin-top:8px; padding:10px 14px">
-    <div class="row"><div class="grow" style="font-weight:800">🏰 城</div><b id="tdCastleHp" style="font-size:13px"></b></div>
-    <div class="bHp"><i id="tdCastleBar"></i></div>
+  <!-- ヘッダーは1行に圧縮: 戻る+ステージ/WAVE+城HP(クイズUIを最大化する=v4.14.1) -->
+  <div class="row" id="tdHead" style="margin-top:4px; gap:8px; align-items:center">
+    <button class="btn" id="tdBack" style="padding:7px 12px">←</button>
+    <div class="grow" style="font-weight:800; font-size:12px; line-height:1.3" id="tdTitle"></div>
+    <div id="tdCastleWrap">🏰<div class="bHp tdchp"><i id="tdCastleBar"></i></div><b id="tdCastleHp"></b></div>
   </div>
   <div id="tdLane"></div>
-  <div class="small" id="tdInfo" style="margin:6px 2px 0"></div>
   <div class="small" id="tdLog"></div>
   <div id="tdPrompt">
     <span id="tdBadge"></span>

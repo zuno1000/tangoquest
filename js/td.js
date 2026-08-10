@@ -20,9 +20,10 @@ const TD_LANE=8;
 
 /* ---- 純関数(テスト対象) ---- */
 
-/* ダンジョン定義から3ウェーブの敵リストを作る(波が進むほど深い階の敵) */
+/* ダンジョン定義から3ウェーブの敵リストを作る(波が進むほど深い階の敵)。
+   v4.14.1: 6/8/10体に増量(実機FB「もう少し難しくてよい」) */
 function tdWaves(d){
-  const counts=[5,7,9];
+  const counts=[6,8,10];
   const waves=[];
   for(let w=0;w<3;w++){
     const floor=1+Math.round((d.floors-1)*w/2);
@@ -58,9 +59,10 @@ function tdNewBattle(d, P){
 }
 
 /* 正解の一斉射撃: 先頭の敵からダメージ。倒すと勢いの60%で次の敵へ貫通。
-   multはコンボ倍率。戻り値は演出用のヒット一覧 */
+   multはコンボ倍率。戻り値は演出用のヒット一覧(pos=ヒット時のマス)。
+   v4.14.1: 威力2.0×→1.75×dpt(実機FB「もう少し難しくてよい」) */
 function tdFire(b, mult){
-  let dmg=Math.round(2*b.P.dpt*(b.em||1)*(mult||1));
+  let dmg=Math.round(1.75*b.P.dpt*(b.em||1)*(mult||1));
   const hits=[];
   const es=b.enemies.slice().sort((a,c)=>a.pos-c.pos);
   for(const e of es){
@@ -68,7 +70,7 @@ function tdFire(b, mult){
     const eff=Math.max(1, Math.round((dmg - (e.def||0)*0.55)*(e.boss? 1+(b.P.abBoss||0):1)));
     const take=Math.min(e.hp, eff);
     e.hp-=take;
-    hits.push({name:e.name, icon:e.icon, take, dead:e.hp<=0});
+    hits.push({name:e.name, icon:e.icon, take, dead:e.hp<=0, pos:e.pos, boss:!!e.boss});
     if(e.hp>0) break;
     dmg=Math.round(dmg*0.6);
   }
@@ -87,7 +89,7 @@ function tdTick(b){
   const rest=[];
   for(const e of b.enemies){
     if(e.pos<0){
-      const v=Math.round(e.atk*2);
+      const v=Math.round(e.atk*2.5); // v4.14.1: 2.0→2.5倍(漏らすと痛い)
       b.castle-=v;
       ev.leaks.push({icon:e.icon, name:e.name, dmg:v});
     }else rest.push(e);
@@ -151,10 +153,16 @@ function tdStart(d){
   tdTick(TD); // 最初の1体を送り込む
   closeModal();
   switchTab("td");
-  $("tdTitle").textContent="⚔ 防衛線: "+d.name;
-  $("tdLog").innerHTML='<div>'+d.icon+' 敵の群れが迫っている ─ 正解で呪文が火を噴く!</div>';
+  $("tdLog").innerHTML='<div>'+d.icon+' 敵の群れが迫る! 一斉射撃 約'+
+    fmt(Math.round(1.75*TD.P.dpt*TD.em))+(TD.em!==1? '(属性×'+TD.em+')':'')+' ─ 正解で呪文が火を噴く</div>';
   tdQuestion();
   renderTDField([]);
+}
+
+/* CSSアニメを確実に再発火させる(クラスを付け直す) */
+function tdFx(el, cls){
+  if(!el) return;
+  el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls);
 }
 
 function tdQuestion(){
@@ -189,48 +197,70 @@ function tdAnswer(chosen, btn){
     else b.classList.add("dim");
   });
   tdApplyAnswer(w, ok);
-  let hits=[];
-  if(ok) hits=tdFire(TD, 1+0.04*Math.min(Math.max((G.combo||0)-1,0), 15)); // コンボで威力UP
-  const ev=tdTick(TD);
-  renderTDField(hits, ev, ok);
   saveG(); refreshHeader();
-  if(TD.over){ setTimeout(tdFinish, 700); return; }
-  if(ok) setTimeout(()=>{ if(TD && !TD.over && tdAnswered) tdQuestion(); }, 900);
-  else $("tdNextBtn").classList.remove("hidden"); // ミスは正解を見届けてから進む
+  if(ok){
+    // 2段階演出: まず射撃(敵はその場でヒット・撃破の爆発)→少し置いて進軍
+    const hits=tdFire(TD, 1+0.04*Math.min(Math.max((G.combo||0)-1,0), 15)); // コンボで威力UP
+    renderTDField(hits, null, true);
+    tdFx($("tdLane"), "tdfire");
+    vibe(hits.some(h=>h.dead)? 25 : 12);
+    setTimeout(()=>{
+      if(!TD) return;
+      const ev=tdTick(TD);
+      renderTDField([], ev, true);
+      if(TD.over){ setTimeout(tdFinish, 700); return; }
+      setTimeout(()=>{ if(TD && !TD.over && tdAnswered) tdQuestion(); }, 520);
+    }, 430);
+  }else{
+    const ev=tdTick(TD);
+    renderTDField([], ev, false);
+    if(TD.over){ setTimeout(tdFinish, 700); return; }
+    $("tdNextBtn").classList.remove("hidden"); // ミスは正解を見届けてから進む
+  }
 }
 
 function renderTDField(hits, ev, ok){
   if(!TD) return;
+  hits=hits||[];
   const pct=Math.max(0, Math.round(100*TD.castle/TD.castleMax));
-  $("tdCastleHp").textContent=fmt(TD.castle)+" / "+fmt(TD.castleMax);
+  $("tdCastleHp").textContent=fmtShort(TD.castle);
   const bar=$("tdCastleBar");
   bar.style.width=pct+"%";
   bar.style.background=pct>50? "var(--ok)" : pct>25? "var(--accent)" : "var(--ng)";
-  // レーン(左=城側)。同じマスの敵はまとめて表示
+  // ヘッダー1行: ステージ・WAVE・敵のこり(パネルを置かずクイズUIを最大化)
+  const wave=TD.waves[TD.wi];
+  const remain=TD.enemies.length+(wave? wave.length-TD.si : 0);
+  $("tdTitle").innerHTML="⚔ "+esc(TD.name)+"<br>WAVE "+Math.min(TD.wi+1,3)+"/3 ・ 敵のこり "+remain;
+  // レーン(左=城側)。同じマスの敵はまとめ、ヒットはダメージポップ・撃破は爆発で見せる
   const byPos={};
   TD.enemies.forEach(e=>{ (byPos[e.pos]=byPos[e.pos]||[]).push(e); });
+  const hitByPos={};
+  hits.forEach(h=>{ (hitByPos[h.pos]=hitByPos[h.pos]||[]).push(h); });
   let lane="";
   for(let p=0;p<TD_LANE;p++){
     const es=byPos[p]||[];
-    lane+='<div class="tdcell">'+es.slice(0,2).map(e=>
-      '<div class="te'+(e.boss?" tb":"")+'">'+e.icon+'</div>'+
-      '<div class="thp"><i style="width:'+Math.max(4, Math.round(100*e.hp/(e.hpMax||e.hp)))+'%"></i></div>'
-    ).join("")+(es.length>2? '<div class="tn">+'+(es.length-2)+'</div>':'')+'</div>';
+    const hs=hitByPos[p]||[];
+    const popSum=hs.reduce((s,h)=>s+h.take, 0);
+    lane+='<div class="tdcell">'+
+      (popSum? '<span class="tdpop">-'+fmt(popSum)+'</span>':'')+
+      es.slice(0,2).map(e=>
+        '<div class="te'+(e.boss?" tb":"")+'">'+e.icon+'</div>'+
+        '<div class="thp"><i style="width:'+Math.max(4, Math.round(100*e.hp/(e.hpMax||e.hp)))+'%"></i></div>'
+      ).join("")+
+      hs.filter(h=>h.dead).map(h=>'<div class="te tdboom'+(h.boss?" tb":"")+'">'+h.icon+'</div>').join("")+
+      (es.length>2? '<div class="tn">+'+(es.length-2)+'</div>':'')+'</div>';
   }
   $("tdLane").innerHTML=lane;
-  const wave=TD.waves[TD.wi];
-  const remain=TD.enemies.length+(wave? wave.length-TD.si : 0);
-  $("tdInfo").innerHTML="WAVE "+Math.min(TD.wi+1,3)+"/3 ・ 敵のこり "+remain+
-    " ・ ⚔ 一斉射撃 約"+fmt(Math.round(2*TD.P.dpt*TD.em))+(TD.em!==1? "(属性×"+TD.em+")":"");
   // ログ(直近の出来事)
   const lines=[];
-  (hits||[]).forEach(h=>lines.push("💥 "+h.icon+" "+esc(h.name)+"に "+fmt(h.take)+(h.dead? " ─ 撃破!":"")));
+  hits.forEach(h=>lines.push("💥 "+h.icon+" "+esc(h.name)+"に "+fmt(h.take)+(h.dead? " ─ 撃破!":"")));
   if(ev){
     if(ok===false) lines.push("💨 呪文は沈黙した…敵が迫る");
     ev.leaks.forEach(l=>lines.push("🏰 "+l.icon+" "+esc(l.name)+"が城に "+fmt(l.dmg)+" ダメージ!"));
     if(ev.wave) lines.push("🚩 WAVE "+ev.wave+" 開始!");
     if(ev.win) lines.push("🎉 すべてのウェーブを守り切った!");
     if(ev.lose) lines.push("💔 城が陥落した…");
+    if(ev.leaks.length){ tdFx($("tdHead"), "tdshake"); vibe([20,30,40]); }
   }
   if(lines.length) $("tdLog").innerHTML=lines.slice(-3).map(s=>"<div>"+s+"</div>").join("");
 }
