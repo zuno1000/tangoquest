@@ -1720,6 +1720,23 @@ function run(){
     delete G.inv[n.en+"|3|0"];
     W.TD=null;
   });
+  /* ---- v4.18.0: 射程 ---- */
+  t("防衛線: 射程持ちのなかまは離れた敵を撃ち、距離を保つ", ()=>{
+    const b=W.tdNewBattle(W.DUNGEONS[0], {hp:1000, dpt:10, catk:10, elems:[]});
+    b.waves=[[],[],[]]; b.wi=3; // 増援なし
+    b.units=[{id:"c03",name:"ロディ",rar:1,cost:100,hp:280,hpMax:280,atk:40,def:16,rng:2,pos:3}];
+    b.enemies=[{name:"a",icon:"👾",hp:200,hpMax:200,def:0,atk:30,pos:5}];
+    W.tdTick(b);
+    ok(b.enemies[0].hp<200, "2マス先の敵を攻撃できる");
+    eq(b.units[0].hp, 280, "離れているので反撃を受けない");
+    eq(b.units[0].pos, 3, "射程内に敵がいる間は前進しない(距離を保つ)");
+    eq(b.enemies[0].pos, 4, "足止めは同じマスだけ=敵は近づいてくる");
+    const G=W.G;
+    G.chars.c03=G.chars.c03||{dup:0};
+    eq(W.tdUnitFrom("c03").rng, 2, "狩人は射程2");
+    eq(W.tdUnitFrom("c01").rng, 0, "剣士は近接(射程0)");
+  });
+
   /* ---- v4.17.0: 砲撃チャージ制(なかま×呪文の統合) ---- */
   t("防衛線: 砲撃は正解3回のチャージ制で、なかまがいないと撃てない", ()=>{
     const b=W.tdNewBattle(W.DUNGEONS[0], {hp:1000, dpt:100, catk:30, elems:[]});

@@ -128,8 +128,9 @@
     <div id="tdStats"></div>
   </div>
   <div class="choices" id="tdChoices"></div>
-  <div class="row" style="margin-top:8px">
-    <button class="btn primary hidden" style="flex:1" id="tdNextBtn">次へ ▶</button>
+  <!-- 次へは常設枠(visibilityで出し入れ)=出題中と確認中で選択肢の位置が動かない -->
+  <div class="row" id="tdCtrl" style="margin-top:8px">
+    <button class="btn primary" style="flex:1; visibility:hidden" id="tdNextBtn">次へ ▶</button>
   </div>
 </main>
 

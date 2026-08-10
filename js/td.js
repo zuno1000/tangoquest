@@ -107,6 +107,15 @@ function tdNewBattle(d, P, rustN){
 
 /* ---- なかま出撃(v4.16.0) ---- */
 
+/* 射程(v4.17.1): 弓・魔法・唄など「遠くから撃つ」タイプのなかまは
+   前方rngマス先の敵まで攻撃できる(足止めは自分のマスだけ=壁にはならない)。
+   近接(表にない全員)は同じマスの敵だけ。壁は近接・後衛は射程持ち、の編成が生まれる */
+const TD_RANGE={
+  c02:1, c04:1, c11:1, c19:1, c25:1, c31:1, c32:1, c34:1,       // 支援・準後衛(射程1)
+  c03:2, c06:2, c13:2, c18:2, c20:2, c28:2, c30:2,              // 弓・魔法(射程2)
+  c10:3, c22:3, c33:3,                                          // 大魔法・打ち上げ(射程3)
+};
+
 /* なかまを出撃ユニットに変換。ステータスはcharStats(突破・Lv込み)。
    固有スキルを戦闘用に読み替える: dmg=攻撃UP/guard=防御UP/boss=対ボス/
    vamp=与ダメ回復/heal=交戦中に自己再生(その他のスキルはTDでは効果なし) */
@@ -119,6 +128,7 @@ function tdUnitFrom(id){
     hp:st.hp, hpMax:st.hp,
     atk:Math.round(st.atk*(sk.t==="dmg"? 1+sk.v : 1)),
     def:Math.round(st.def*(sk.t==="guard"? 1+2*sk.v : 1)),
+    rng:TD_RANGE[id]||0,
     skBoss:sk.t==="boss"? sk.v : 0,
     skVamp:sk.t==="vamp"? sk.v : 0,
     skHeal:sk.t==="heal"? sk.v : 0,
@@ -145,25 +155,30 @@ function tdDeck(){
   return d.slice(0,6);
 }
 
-/* 交戦(毎tick・移動の前): 同じマスに両者がいるセルで殴り合う。
-   なかま全員→先頭の敵に集中攻撃/敵全員→先頭のなかまに集中攻撃(にゃんこ式)。
-   戻り値は演出用イベント */
+/* 交戦(毎tick・移動の前)。v4.17.1で射程対応:
+   ・なかまの攻撃: 射程内(自分のマス〜前方rngマス)でいちばん近い敵を撃つ。
+     近接(rng0)は同じマスだけ=従来どおり。後衛は前衛ごしに撃てる
+   ・敵の攻撃: 同じマスのなかま(先頭)を殴る(敵はすべて近接)
+   戻り値は演出用イベント(posは撃たれた敵のマス) */
 function tdCombat(b){
   const ev=[];
+  for(const u of b.units){
+    if(u.hp<=0) continue;
+    const es=b.enemies.filter(e=>e.hp>0 && e.pos>=u.pos && e.pos<=u.pos+(u.rng||0))
+      .sort((a,c)=>a.pos-c.pos);
+    const e=es[0];
+    if(!e) continue;
+    const dmg=Math.max(1, Math.round(u.atk*(e.boss? 1+(u.skBoss||0) : 1) - (e.def||0)*0.55));
+    e.hp-=dmg;
+    if(u.skVamp && u.hp>0) u.hp=Math.min(u.hpMax, u.hp+Math.round(dmg*u.skVamp));
+    ev.push({side:"u", pos:e.pos, dmg, icon:e.icon, name:e.name, dead:e.hp<=0, boss:!!e.boss});
+  }
+  b.enemies=b.enemies.filter(e=>e.hp>0);
   for(let p=0;p<TD_LANE;p++){
     const us=b.units.filter(u=>u.pos===p && u.hp>0);
     const es=b.enemies.filter(e=>e.pos===p && e.hp>0);
     if(!us.length || !es.length) continue;
-    for(const u of us){
-      const e=es.find(x=>x.hp>0);
-      if(!e) break;
-      const dmg=Math.max(1, Math.round(u.atk*(e.boss? 1+(u.skBoss||0) : 1) - (e.def||0)*0.55));
-      e.hp-=dmg;
-      if(u.skVamp && u.hp>0) u.hp=Math.min(u.hpMax, u.hp+Math.round(dmg*u.skVamp));
-      ev.push({side:"u", pos:p, dmg, icon:e.icon, name:e.name, dead:e.hp<=0, boss:!!e.boss});
-    }
     for(const e of es){
-      if(e.hp<=0) continue;
       const u=us.find(x=>x.hp>0);
       if(!u) break;
       const dmg=Math.max(1, Math.round((e.atk||1) - u.def*0.55));
@@ -173,7 +188,6 @@ function tdCombat(b){
     us.forEach(u=>{ if(u.skHeal && u.hp>0) u.hp=Math.min(u.hpMax, u.hp+Math.round(u.hpMax*u.skHeal*0.3)); });
   }
   b.units=b.units.filter(u=>u.hp>0);
-  b.enemies=b.enemies.filter(e=>e.hp>0);
   return ev;
 }
 
@@ -240,9 +254,9 @@ function tdTick(b){
     }else rest.push(e);
   }
   b.enemies=rest;
-  // なかまの進軍(敵と同じマスなら交戦継続=動かない。右端まで)
+  // なかまの進軍(射程内に敵がいれば足を止めて撃ち続ける=後衛は距離を保つ)
   for(const u of b.units){
-    if(b.enemies.some(e=>e.pos===u.pos)) continue;
+    if(b.enemies.some(e=>e.pos>=u.pos && e.pos<=u.pos+(u.rng||0))) continue;
     if(u.pos<TD_LANE-1) u.pos++;
   }
   // 再出撃クールダウンの消化
@@ -340,7 +354,7 @@ function tdFx(el, cls){
 function tdQuestion(){
   if(!TD || TD.over) return;
   tdAnswered=false;
-  $("tdNextBtn").classList.add("hidden");
+  $("tdNextBtn").style.visibility="hidden";
   const w=pickWord();
   tdCur={word:w, choices:buildChoices(w)};
   const st=G.words[w.en], e2j=G.mode==="e2j";
@@ -407,7 +421,7 @@ function tdAnswer(chosen, btn){
     if(ev.wave) tdResnap();
     renderTDField(null, ev, false);
     if(TD.over){ setTimeout(tdFinish, 700); return; }
-    $("tdNextBtn").classList.remove("hidden"); // ミスは正解を見届けてから進む
+    $("tdNextBtn").style.visibility="visible"; // ミスは正解を見届けてから進む(枠は常設=位置が動かない)
   }
 }
 
@@ -433,6 +447,9 @@ function renderTDField(fire, ev, ok){
   hits.forEach(h=>{ (hitByPos[h.pos]=hitByPos[h.pos]||[]).push(h); });
   const fights=(ev&&ev.fights)||[];
   fights.forEach(f=>{ if(f.side==="u" && f.dead) (hitByPos[f.pos]=hitByPos[f.pos]||[]).push({take:f.dmg, dead:true, icon:f.icon, boss:f.boss, silent:true}); });
+  // なかまの攻撃はマスごとに合算した青ポップで見せる(v4.18.0: 攻撃している実感)
+  const updmg={};
+  fights.forEach(f=>{ if(f.side==="u") updmg[f.pos]=(updmg[f.pos]||0)+f.dmg; });
   let lane="";
   for(let p=0;p<TD_LANE;p++){
     const es=byPos[p]||[];
@@ -441,6 +458,7 @@ function renderTDField(fire, ev, ok){
     lane+='<div class="tdcell">'+
       // ヒットごとにポップを重ねて時間差で出す(連撃・複数節の手数が見える)
       hs.filter(h=>!h.silent).slice(0,3).map((h,i)=>'<span class="tdpop" style="animation-delay:'+(i*130)+'ms">-'+fmt(h.take)+'</span>').join("")+
+      (updmg[p]? '<span class="tdpop tdup">-'+fmt(updmg[p])+'</span>':'')+
       es.slice(0,2).map(e=>
         '<div class="te'+(e.boss?" tb":"")+'">'+e.icon+'</div>'+
         '<div class="thp"><i style="width:'+Math.max(4, Math.round(100*e.hp/(e.hpMax||e.hp)))+'%"></i></div>'

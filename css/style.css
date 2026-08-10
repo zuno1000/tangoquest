@@ -813,3 +813,18 @@ header .res span:last-child{overflow:hidden; text-overflow:ellipsis}
 #tdStats{font-size:11px; min-height:15px; margin-top:4px}
 #tdView .choices{gap:8px; margin-top:8px}
 #tdView .choice{min-height:48px; font-size:16px; border-radius:15px}
+
+/* ---- v4.18.0: 射程・レイアウト固定化(位置ずれ解消+下部余白の活用) ---- */
+/* tdViewは縦フレックス: 選択肢が余白を全部使って伸びる(学習タブと同じ思想) */
+#tdView{display:flex; flex-direction:column; overflow:hidden}
+#tdHead,#tdLane,#tdDeck,#tdPrompt,#tdCtrl{flex:0 0 auto}
+#tdView .choices{flex:1; min-height:0; gap:9px}
+#tdView .choice{flex:1; min-height:48px; max-height:110px; font-size:17px}
+/* 単語枠は固定高: 出題中/確認中/単語の長短でレイアウトが動かない
+   (バッジ行のぶん上に余白を取り、2行の長い単語も収まる) */
+#tdPrompt{height:138px; padding:26px 12px 8px; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; overflow:hidden}
+#tdWord{margin-top:0}
+#tdStats{height:15px; overflow:hidden; white-space:nowrap}
+/* なかまの攻撃ポップ(青・下から) */
+.tdpop.tdup{color:var(--accent2); font-size:11px; top:auto; bottom:-3px; text-shadow:none}
