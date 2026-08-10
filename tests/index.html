@@ -1620,6 +1620,22 @@ function run(){
     const ss4=store({});
     ok(!W.shouldRebootForIOSGray(false, store({}), ss4, "2026-08-10"), "非スタンドアロンでは発火しない");
   });
+  t("カスタムアイコンはカード面いっぱいのアートになる(v4.13.1)", ()=>{
+    const G=W.G;
+    const c=W.CHARS[0], old=G.faces[c.id];
+    G.faces[c.id]="data:image/png;base64,AAAA";
+    const el=W.charCardEl(c);
+    W.document.body.appendChild(el);
+    try{
+      const img=el.querySelector(".cface");
+      ok(img, "カード面にimgがある");
+      eq(W.getComputedStyle(img).display, "block", "ブロック表示=面いっぱいに広がる");
+      ok(String(W.getComputedStyle(img).aspectRatio).indexOf("1")>=0, "正方形アート");
+    }finally{
+      el.remove();
+      if(old===undefined) delete G.faces[c.id]; else G.faces[c.id]=old;
+    }
+  });
 
   /* ---- 起動状態 ---- */
   t("起動時に問題が出題されている", ()=>{

@@ -275,28 +275,32 @@ function openPackCeremony(results, banner){
   $("packSkipBtn").onclick=reveal;
 }
 
-/* ---- カスタムアイコン(v4.13.0) ----
+/* ---- カスタムアイコン(v4.13.0→v4.13.1でカードアート化) ----
    なかまの顔はプレイヤーが任意の画像に変更できる(G.faces[charId]=dataURL)。
-   画像はcanvasで96px四方に縮小して保存(1枚あたり数KB・同期にも載る)。
+   v4.13.1: TCGのカードイラストのように、カード面(一覧タイル・詳細・図鑑・
+   ガチャ結果)では画像が面いっぱいに広がる。保存解像度も96→256pxに引き上げ
+   (表示サイズの違いはCSSが .cface のコンテキスト別スタイルで吸収する)。
    dataURL以外の値は無視する(不正値の混入対策) */
 function charFace(c){
   const f=G.faces && G.faces[c.id];
   return (f && f.slice(0,11)==="data:image/")? '<img class="cface" src="'+f+'" alt="">' : c.face;
 }
-/* 画像ファイル→96px正方形のdataURL(中央を正方形に切り出し)。cbに渡す */
+/* 画像ファイル→256px正方形のdataURL(中央を正方形に切り出し)。cbに渡す */
 function faceDataURL(file, cb, onerr){
   const img=new Image();
   const done=url=>{ URL.revokeObjectURL(img.src); cb(url); };
   img.onload=()=>{
     try{
-      const S=96, cv=document.createElement("canvas");
+      const S=256, cv=document.createElement("canvas");
       cv.width=cv.height=S;
       const ctx=cv.getContext("2d");
       const m=Math.min(img.width, img.height);
       ctx.drawImage(img, (img.width-m)/2, (img.height-m)/2, m, m, 0, 0, S, S);
-      // 透過が要るPNGはPNGのまま、それ以外はJPEGで軽く。大きすぎたら画質を落とす
+      // 透過が要るPNGはPNGのまま、それ以外はJPEG。大きすぎたら画質を落として
+      // 1枚あたり最大約100KBに抑える(localStorage・同期ファイルの肥大防止)
       let url=file.type==="image/png"? cv.toDataURL("image/png") : cv.toDataURL("image/jpeg", 0.85);
-      if(url.length>80000) url=cv.toDataURL("image/jpeg", 0.6);
+      if(url.length>100000) url=cv.toDataURL("image/jpeg", 0.75);
+      if(url.length>100000) url=cv.toDataURL("image/jpeg", 0.5);
       done(url);
     }catch(e){ URL.revokeObjectURL(img.src); onerr(); }
   };
