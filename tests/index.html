@@ -1637,6 +1637,94 @@ function run(){
     }
   });
 
+  /* ---- v4.14.0: 単語の防衛線(β) ---- */
+  t("防衛線: 3ウェーブ(5/7/9+ボス)が生成される", ()=>{
+    const ws=W.tdWaves(W.DUNGEONS[0]);
+    eq(ws.length, 3, "3ウェーブ");
+    eq(ws[0].length, 5); eq(ws[1].length, 7); eq(ws[2].length, 10, "最終波は9体+ボス");
+    ok(ws[2][9].boss, "最後がボス");
+    ok(ws[0].every(e=>e.hp>0 && e.hpMax===e.hp && e.icon), "敵定義が揃っている");
+    ok(ws[2][0].hp>ws[0][0].hp, "波が進むほど深い階の敵(HP増)");
+  });
+  t("防衛線: 正解の射撃は先頭から貫通し、進軍・城ダメージが動く", ()=>{
+    const d=W.DUNGEONS[0];
+    const b=W.tdNewBattle(d, {hp:1000, dpt:500, catk:30, elems:[]});
+    eq(b.castle, 1000, "城HP=プレイヤーHP");
+    b.enemies=[{name:"a",icon:"👾",hp:10,hpMax:10,def:0,atk:50,pos:2},
+               {name:"b",icon:"🐇",hp:99999,hpMax:99999,def:0,atk:50,pos:5}];
+    const hits=W.tdFire(b, 1);
+    ok(hits.length>=2 && hits[0].dead, "先頭を倒して貫通");
+    eq(b.enemies.length, 1, "撃破された敵は消える");
+    ok(b.enemies[0].hp<99999, "2体目にもダメージが通る");
+    b.enemies=[{name:"a",icon:"👾",hp:10,hpMax:10,def:0,atk:50,pos:0}];
+    b.waves=[[],[],[]]; b.wi=0; b.si=0;
+    const ev=W.tdTick(b);
+    eq(ev.leaks.length, 1, "左端まで来た敵は城に到達");
+    eq(b.castle, 1000-100, "城に2×atkのダメージ");
+    eq(b.enemies.length, 0, "到達した敵は消える");
+  });
+  t("防衛線: ボスは2問に1歩・全滅で勝利・城陥落で敗北", ()=>{
+    const P={hp:100, dpt:10, catk:10, elems:[]};
+    const b=W.tdNewBattle(W.DUNGEONS[0], P);
+    b.waves=[[],[],[]]; b.wi=3; // 増援なし
+    b.enemies=[{name:"B",icon:"👾",hp:99,hpMax:99,def:0,atk:10,pos:5,boss:true}];
+    b.ticks=0;
+    W.tdTick(b);
+    eq(b.enemies[0].pos, 5, "奇数tickは動かない(2問で1歩)");
+    W.tdTick(b);
+    eq(b.enemies[0].pos, 4, "偶数tickで1歩");
+    const b2=W.tdNewBattle(W.DUNGEONS[0], P);
+    b2.waves=[[]]; b2.wi=0; b2.si=0; b2.enemies=[];
+    const ev2=W.tdTick(b2);
+    ok(ev2.win && b2.over && b2.win, "増援も敵もいなくなったら勝利");
+    const b3=W.tdNewBattle(W.DUNGEONS[0], P);
+    b3.waves=[[],[],[]]; b3.castle=50;
+    b3.enemies=[{name:"a",icon:"👾",hp:10,hpMax:10,def:0,atk:100,pos:0}];
+    const ev3=W.tdTick(b3);
+    ok(ev3.lose && b3.over && !b3.win, "城HPが尽きたら敗北");
+  });
+  t("防衛線: 呪文が空でもキャラ攻撃で最低限撃てる(新規プレイヤー保護)", ()=>{
+    const b=W.tdNewBattle(W.DUNGEONS[0], {hp:300, dpt:0, catk:34, elems:[]});
+    eq(b.P.dpt, 34, "dpt=0ならキャラ攻撃を使う");
+    b.enemies=[{name:"a",icon:"👾",hp:9999,hpMax:9999,def:0,atk:10,pos:3}];
+    const hits=W.tdFire(b, 1);
+    ok(hits.length===1 && hits[0].take>0, "ダメージが出る");
+  });
+  t("防衛線: 解答は学習タブと同一に計上される(SRS・日別・🎫・コンボ)", ()=>{
+    const G=W.G;
+    const w=W.WORDS.find(x=>!G.words[x.en]);
+    const d0=W.dayRec().a, t0=G.tickets, c0=G.counters.ans;
+    const r=W.tdApplyAnswer(w, true);
+    ok(r.ok && r.wasNew, "新規判定");
+    eq(G.words[w.en][0], 1, "SRS: 正解でbox1");
+    eq(W.dayRec().a, d0+1, "日別記録に+1");
+    eq(G.tickets, t0+1, "正解1問=🎫1");
+    eq(G.counters.ans, c0+1, "累計解答+1");
+    ok(G.combo>=1, "コンボ加算");
+    W.tdApplyAnswer(w, false);
+    eq(G.combo, 0, "ミスでコンボ0");
+  });
+  t("防衛線: 冒険タブの入口から開始でき、学習タブに触れずに問題が出る", ()=>{
+    const G=W.G;
+    W.switchTab("adv");
+    ok(W.document.getElementById("tdEntry"), "冒険タブに入口パネル");
+    W.tdStart(W.DUNGEONS[0]);
+    const doc=W.document;
+    ok(!doc.getElementById("tdView").classList.contains("hidden"), "防衛線ビューが開く");
+    ok(doc.getElementById("quizView").classList.contains("hidden"), "学習タブは独立のまま");
+    ok(doc.getElementById("tdWord").textContent.length>0, "問題が出ている");
+    eq(doc.querySelectorAll("#tdChoices .choice").length, 4, "4択");
+    eq(W.TD.enemies.length, 1, "最初の敵が湧いている");
+    const w=W.tdCur.word, e2j=G.mode==="e2j";
+    const btn=[...doc.querySelectorAll("#tdChoices .choice")].find(b=>b.textContent===(e2j? w.ja : w.en));
+    const ticks0=W.TD.ticks;
+    btn.click(); // 正解を選ぶ
+    eq(W.TD.ticks, ticks0+1, "1問=1tick(射撃→進軍)");
+    ok(doc.getElementById("tdLog").innerHTML.length>0, "戦況ログが出る");
+    W.TD=null; // 後片付け(遅延の次問タイマーも止まる)
+    W.switchTab("home");
+  });
+
   /* ---- 起動状態 ---- */
   t("起動時に問題が出題されている", ()=>{
     ok(W.document.getElementById("promptWord").textContent.length>0);

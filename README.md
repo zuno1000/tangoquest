@@ -77,6 +77,7 @@ todaybgm と同方式(GIS + `drive.appdata` = 非機密スコープで審査不�
 | js/battle.js | ステータス合成・オート戦闘シミュレーション |
 | js/dungeon.js | ダンジョン・編成・無限回廊(放置) |
 | js/missions.js | ログインボーナス・任務・実績 |
+| js/td.js | 単語の防衛線(タワーディフェンスβ・冒険タブから) |
 | js/sync.js | 設定・Googleドライブ同期 |
 | js/state.js / util.js / main.js | 状態管理・共通処理・起動 |
 | tests/index.html | セルフテスト(iframe で本体を起動して検証) |

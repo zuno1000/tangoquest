@@ -100,9 +100,37 @@
 
 <!-- ============ 冒険 ============ -->
 <main id="advView" class="hidden">
-  <div class="panel" id="infPanel" style="margin-top:6px"></div>
+  <!-- 単語の防衛線(β・v4.14.0): 撤去するときはこのパネルとtdView・js/td.jsを消すだけ -->
+  <div class="panel tdentry" id="tdEntry" style="margin-top:6px">
+    <div class="row"><div class="grow" style="font-weight:800">⚔ 単語の防衛線 <span class="tdbeta">β</span></div><b>›</b></div>
+    <div class="small" style="margin-top:3px">クイズの正解が砲撃になる新モード ─ 解いた分は学習として記録</div>
+  </div>
+  <div class="panel" id="infPanel" style="margin-top:12px"></div>
   <h2>ダンジョン</h2>
   <div id="dungeonList"></div>
+</main>
+
+<!-- ============ 単語の防衛線(β・冒険タブから入る) ============ -->
+<main id="tdView" class="hidden">
+  <div class="row" style="margin-top:6px; gap:8px">
+    <button class="btn" id="tdBack">← 冒険</button>
+    <div class="grow" style="font-weight:800; font-size:14px" id="tdTitle"></div>
+  </div>
+  <div class="panel" style="margin-top:8px; padding:10px 14px">
+    <div class="row"><div class="grow" style="font-weight:800">🏰 城</div><b id="tdCastleHp" style="font-size:13px"></b></div>
+    <div class="bHp"><i id="tdCastleBar"></i></div>
+  </div>
+  <div id="tdLane"></div>
+  <div class="small" id="tdInfo" style="margin:6px 2px 0"></div>
+  <div class="small" id="tdLog"></div>
+  <div id="tdPrompt">
+    <span id="tdBadge"></span>
+    <div id="tdWord"></div>
+  </div>
+  <div class="choices" id="tdChoices"></div>
+  <div class="row" style="margin-top:8px">
+    <button class="btn primary hidden" style="flex:1" id="tdNextBtn">次へ ▶</button>
+  </div>
 </main>
 
 <!-- ============ ガチャ ============ -->
@@ -143,6 +171,7 @@
 <script src="js/dungeon.js"></script>
 <script src="js/missions.js"></script>
 <script src="js/dex.js"></script>
+<script src="js/td.js"></script>
 <script src="js/sync.js"></script>
 <script src="js/main.js"></script>
 </body>

@@ -696,3 +696,23 @@ header .res span:last-child{overflow:hidden; text-overflow:ellipsis}
   border-radius:10px; margin:0 auto}
 .bigchar .cface{display:block; width:min(100%, 200px); height:auto; aspect-ratio:1;
   object-fit:cover; border-radius:14px; margin:0 auto}
+
+/* ---- v4.14.0: 単語の防衛線(β) ---- */
+.tdentry{cursor:pointer}
+.tdentry:active{transform:scale(.99)}
+.tdbeta{font-size:9px; font-weight:800; color:#fff; background:var(--accent2); border-radius:6px; padding:1px 6px; vertical-align:2px}
+#tdLane{display:grid; grid-template-columns:repeat(8,1fr); gap:4px; margin-top:8px}
+.tdcell{background:var(--bg); border-radius:10px; min-height:52px; padding:4px 2px 3px; text-align:center;
+  box-shadow:inset 2px 2px 5px var(--shd), inset -2px -2px 5px var(--shl)}
+.tdcell .te{font-size:19px; line-height:1.15}
+.tdcell .te.tb{font-size:26px}
+.tdcell .thp{height:4px; background:var(--bg2); border-radius:2px; margin:2px 2px 0; overflow:hidden}
+.tdcell .thp i{display:block; height:100%; background:var(--ng); border-radius:2px}
+.tdcell .tn{font-size:9px; color:var(--sub); font-weight:800}
+#tdLog{margin:4px 2px 0; min-height:34px; line-height:1.5}
+#tdPrompt{background:var(--bg); border-radius:18px; padding:12px 14px; margin-top:8px; text-align:center;
+  box-shadow:-5px -5px 10px var(--shl), 5px 5px 10px var(--shd)}
+#tdBadge{font-size:11px; font-weight:800; color:var(--accent2)}
+#tdWord{font-size:30px; font-weight:900; line-height:1.25; word-break:break-word}
+#tdView .choices{margin-top:10px}
+#tdView .choice{min-height:48px}
