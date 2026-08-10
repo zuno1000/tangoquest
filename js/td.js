@@ -45,37 +45,80 @@ function tdWaves(d){
   return waves;
 }
 
-/* 戦闘状態の生成。PはplayerStats()のスナップショット(無限回廊と同じ思想:
-   出発時の編成で確定=途中の装備替えは効かない) */
-function tdNewBattle(d, P){
+/* 呪文スナップショットの整形(v4.15.0): playerStats()の節(clauses)を
+   TD用の砲撃リストに落とす。キャラ倍率・セット効果・増幅・スキルは各節のVに
+   織り込み済みにする。節がない(呪文が空)ならキャラ攻撃の素の一撃(v2互換と同じ思想) */
+function tdSnapshot(P){
+  const k=(P.charM||1)*(P.setM||1)*(P.amp||1)*(1+(P.abDmg||0));
+  let cls=(P.clauses||[]).filter(c=>c.V>0).map(c=>(
+    {V:c.V*k, vt:c.vt||0, w:c.w||1, rep:c.rep||0, name:c.name||null}));
+  if(!cls.length) cls=[{V:Math.max(P.dpt||0, P.catk||10), vt:0, w:1, rep:0, name:null}];
+  return {cls, hp:P.hp, abBoss:P.abBoss||0, dpt:Math.max(P.dpt||0, P.catk||10)};
+}
+
+/* 編成中の野生語のうち復習期限切れの数(=錆び)。TD限定ルール:
+   錆びた砲台1つにつき威力-6%(最大-30%)。復習して研ぎ直すと戻る */
+function tdRustCount(){
+  let n=0;
+  equippedEnSet().forEach(en=>{ if(isWild(en) && wildOverdue(en)) n++; });
+  return n;
+}
+function tdRustMult(n){ return Math.max(0.7, 1-0.06*(n||0)); }
+
+/* 戦闘状態の生成。編成の反映は「開始時・ウェーブの合間・戦闘に戻ったとき」
+   (tdResnapで再スナップショット) */
+function tdNewBattle(d, P, rustN){
   return {id:d.id, name:d.name, icon:d.icon, tier:d.tier, elem:d.elem,
     waves:tdWaves(d), wi:0, si:0,
     enemies:[],
     castle:P.hp, castleMax:P.hp,
     em:elemMatch(P.elems||[], d.elem).dealt, // 属性相性は与ダメに乗る(対策編成が効く)
-    // 呪文が空でもキャラの攻撃力で最低限撃てる(simBattleのv2互換と同じ思想)
-    P:{dpt:Math.max(P.dpt||0, P.catk||10), hp:P.hp, abBoss:P.abBoss||0},
+    rust:rustN||0, rustM:tdRustMult(rustN),
+    P:tdSnapshot(P),
     ticks:0, over:false, win:false};
 }
 
-/* 正解の一斉射撃: 先頭の敵からダメージ。倒すと勢いの60%で次の敵へ貫通。
-   multはコンボ倍率。戻り値は演出用のヒット一覧(pos=ヒット時のマス)。
-   v4.14.1: 威力2.0×→1.75×dpt(実機FB「もう少し難しくてよい」) */
+/* 正解の一斉射撃(v4.15.0: 節=砲撃。動詞タイプごとに撃ち方が変わる):
+   ・強撃(vt0)= 先頭の敵に一撃
+   ・貫通(vt1)= レーンの全敵に50%・防御ほぼ無視(群れ対策)
+   ・吸収(vt2)= 先頭に80%+与ダメの45%だけ城を回復(1問あたり最大8%)
+   ・連撃(vt3)= 前から2体に60%ずつ
+   ・反復(rep)= その節をもう一度(威力×rep)
+   multはコンボ倍率。戻り値={hits, heal, beam, multiPop}(演出用) */
 function tdFire(b, mult){
-  let dmg=Math.round(1.75*b.P.dpt*(b.em||1)*(mult||1));
-  const hits=[];
-  const es=b.enemies.slice().sort((a,c)=>a.pos-c.pos);
-  for(const e of es){
-    if(dmg<1) break;
-    const eff=Math.max(1, Math.round((dmg - (e.def||0)*0.55)*(e.boss? 1+(b.P.abBoss||0):1)));
+  const em=b.em||1, rm=b.rustM||1;
+  const hits=[]; let heal=0, beam=false, multiPop=false;
+  const alive=()=>b.enemies.filter(e=>e.hp>0).sort((a,c)=>a.pos-c.pos);
+  const hit=(e, raw, ignoreDef)=>{
+    const eff=Math.max(1, Math.round((raw - (e.def||0)*(ignoreDef? 0.1:0.55))*(e.boss? 1+(b.P.abBoss||0):1)));
     const take=Math.min(e.hp, eff);
     e.hp-=take;
     hits.push({name:e.name, icon:e.icon, take, dead:e.hp<=0, pos:e.pos, boss:!!e.boss});
-    if(e.hp>0) break;
-    dmg=Math.round(dmg*0.6);
+    return take;
+  };
+  for(const cl of b.P.cls){
+    const casts=cl.rep? 2:1;
+    for(let c=0;c<casts;c++){
+      const base=cl.V*cl.w*1.75*em*rm*(mult||1)*(c? cl.rep:1);
+      const es=alive();
+      if(!es.length) break;
+      if(cl.vt===1){ beam=true; es.forEach(e=>hit(e, base*0.5, true)); }
+      else if(cl.vt===2){ heal+=Math.round(hit(es[0], base*0.8)*0.45); }
+      else if(cl.vt===3){
+        multiPop=true;
+        hit(es[0], base*0.6);
+        const es2=alive();
+        if(es2.length) hit(es2[0], base*0.6);
+      }
+      else hit(es[0], base);
+    }
   }
   b.enemies=b.enemies.filter(e=>e.hp>0);
-  return hits;
+  if(heal>0){
+    heal=Math.min(heal, Math.round(b.castleMax*0.08));
+    b.castle=Math.min(b.castleMax, b.castle+heal);
+  }
+  return {hits, heal, beam, multiPop};
 }
 
 /* 1問ごとの進行: 進軍 → 城への到達処理 → 増援 → ウェーブ/勝敗判定 */
@@ -149,14 +192,26 @@ function tdApplyAnswer(w, ok){
 var TD=null, tdCur=null, tdAnswered=false;
 
 function tdStart(d){
-  TD=tdNewBattle(d, playerStats());
+  TD=tdNewBattle(d, playerStats(), tdRustCount());
   tdTick(TD); // 最初の1体を送り込む
   closeModal();
   switchTab("td");
   $("tdLog").innerHTML='<div>'+d.icon+' 敵の群れが迫る! 一斉射撃 約'+
-    fmt(Math.round(1.75*TD.P.dpt*TD.em))+(TD.em!==1? '(属性×'+TD.em+')':'')+' ─ 正解で呪文が火を噴く</div>';
+    fmt(Math.round(1.75*TD.P.dpt*TD.em*TD.rustM))+(TD.em!==1? '(属性×'+TD.em+')':'')+
+    (TD.rust? ' <span style="color:var(--ng)">⏳錆びた野生語×'+TD.rust+'(威力'+Math.round((1-TD.rustM)*100)+'%減) ─ 復習で研ぎ直せる</span>':'')+
+    ' ─ 正解で呪文が火を噴く</div>';
   tdQuestion();
-  renderTDField([]);
+  renderTDField(null);
+}
+
+/* 現在の編成を戦闘に反映し直す(ウェーブの合間・戦闘に戻ったとき) */
+function tdResnap(){
+  if(!TD || TD.over) return;
+  const P=playerStats();
+  TD.P=tdSnapshot(P);
+  TD.em=elemMatch(P.elems||[], TD.elem).dealt;
+  TD.rust=tdRustCount();
+  TD.rustM=tdRustMult(TD.rust);
 }
 
 /* CSSアニメを確実に再発火させる(クラスを付け直す) */
@@ -200,28 +255,33 @@ function tdAnswer(chosen, btn){
   saveG(); refreshHeader();
   if(ok){
     // 2段階演出: まず射撃(敵はその場でヒット・撃破の爆発)→少し置いて進軍
-    const hits=tdFire(TD, 1+0.04*Math.min(Math.max((G.combo||0)-1,0), 15)); // コンボで威力UP
-    renderTDField(hits, null, true);
-    tdFx($("tdLane"), "tdfire");
-    vibe(hits.some(h=>h.dead)? 25 : 12);
+    const fire=tdFire(TD, 1+0.04*Math.min(Math.max((G.combo||0)-1,0), 15)); // コンボで威力UP
+    renderTDField(fire, null, true);
+    // 閃光はコンボ数で強くなる(3段階)
+    const lane=$("tdLane");
+    ["tdfire","tdfire2","tdfire3"].forEach(c=>lane.classList.remove(c));
+    tdFx(lane, (G.combo||0)>=10? "tdfire3" : (G.combo||0)>=5? "tdfire2" : "tdfire");
+    vibe(fire.hits.some(h=>h.dead)? 25 : 12);
     setTimeout(()=>{
       if(!TD) return;
       const ev=tdTick(TD);
-      renderTDField([], ev, true);
+      if(ev.wave) tdResnap(); // ウェーブの合間に現在の編成を反映
+      renderTDField(null, ev, true);
       if(TD.over){ setTimeout(tdFinish, 700); return; }
       setTimeout(()=>{ if(TD && !TD.over && tdAnswered) tdQuestion(); }, 520);
     }, 430);
   }else{
     const ev=tdTick(TD);
-    renderTDField([], ev, false);
+    if(ev.wave) tdResnap();
+    renderTDField(null, ev, false);
     if(TD.over){ setTimeout(tdFinish, 700); return; }
     $("tdNextBtn").classList.remove("hidden"); // ミスは正解を見届けてから進む
   }
 }
 
-function renderTDField(hits, ev, ok){
+function renderTDField(fire, ev, ok){
   if(!TD) return;
-  hits=hits||[];
+  const hits=(fire&&fire.hits)||[];
   const pct=Math.max(0, Math.round(100*TD.castle/TD.castleMax));
   $("tdCastleHp").textContent=fmtShort(TD.castle);
   const bar=$("tdCastleBar");
@@ -240,9 +300,9 @@ function renderTDField(hits, ev, ok){
   for(let p=0;p<TD_LANE;p++){
     const es=byPos[p]||[];
     const hs=hitByPos[p]||[];
-    const popSum=hs.reduce((s,h)=>s+h.take, 0);
     lane+='<div class="tdcell">'+
-      (popSum? '<span class="tdpop">-'+fmt(popSum)+'</span>':'')+
+      // ヒットごとにポップを重ねて時間差で出す(連撃・複数節の手数が見える)
+      hs.slice(0,3).map((h,i)=>'<span class="tdpop" style="animation-delay:'+(i*130)+'ms">-'+fmt(h.take)+'</span>').join("")+
       es.slice(0,2).map(e=>
         '<div class="te'+(e.boss?" tb":"")+'">'+e.icon+'</div>'+
         '<div class="thp"><i style="width:'+Math.max(4, Math.round(100*e.hp/(e.hpMax||e.hp)))+'%"></i></div>'
@@ -251,13 +311,35 @@ function renderTDField(hits, ev, ok){
       (es.length>2? '<div class="tn">+'+(es.length-2)+'</div>':'')+'</div>';
   }
   $("tdLane").innerHTML=lane;
+  // 貫通ビーム(レーンを貫く一閃)
+  if(fire && fire.beam){
+    const beam=document.createElement("div");
+    beam.className="tdbeam";
+    $("tdLane").appendChild(beam);
+  }
+  // 吸収の城回復(バーが緑に瞬く)
+  if(fire && fire.heal>0) tdFx($("tdCastleWrap"), "tdheal");
   // ログ(直近の出来事)
   const lines=[];
   hits.forEach(h=>lines.push("💥 "+h.icon+" "+esc(h.name)+"に "+fmt(h.take)+(h.dead? " ─ 撃破!":"")));
+  if(fire && fire.heal>0) lines.push("💚 【吸収】城が "+fmt(fire.heal)+" 回復!");
   if(ev){
     if(ok===false) lines.push("💨 呪文は沈黙した…敵が迫る");
     ev.leaks.forEach(l=>lines.push("🏰 "+l.icon+" "+esc(l.name)+"が城に "+fmt(l.dmg)+" ダメージ!"));
-    if(ev.wave) lines.push("🚩 WAVE "+ev.wave+" 開始!");
+    if(ev.spawned && ev.spawned.boss){
+      lines.push("⚠️ ボス『"+esc(ev.spawned.name)+"』が現れた!");
+      const ci=$("tdCutin");
+      ci.innerHTML='<div class="ci1">─ BOSS ─</div><div class="ci2">'+ev.spawned.icon+'</div>'+
+        '<div class="ci3">'+esc(ev.spawned.name)+'</div>';
+      ci.classList.remove("hidden");
+      tdFx(ci, "go");
+      vibe([40,60,120]);
+      setTimeout(()=>{ if($("tdCutin")) $("tdCutin").classList.add("hidden"); }, 1500);
+    }
+    if(ev.wave){
+      lines.push("🚩 WAVE "+ev.wave+" 開始! 編成の変更はここで反映"+
+        (TD.rust? "(⏳錆び×"+TD.rust+")":""));
+    }
     if(ev.win) lines.push("🎉 すべてのウェーブを守り切った!");
     if(ev.lose) lines.push("💔 城が陥落した…");
     if(ev.leaks.length){ tdFx($("tdHead"), "tdshake"); vibe([20,30,40]); }
@@ -299,10 +381,14 @@ function openTDSelect(){
     '<div class="small" style="line-height:1.7">4択クイズの<b>正解が呪文の一斉射撃</b>になるタワーディフェンス。'+
     '1問ごとに敵は1マス進む(ボスは2問で1マス)。ミスすると呪文は沈黙。'+
     '城を守って3ウェーブしのげば勝利!<br>'+
-    '解いた分は<b>ふつうの学習として記録される</b>(今日の目安・🎫・カードすべて)。'+
-    '砲撃の威力はいまの呪文(編成)で決まる。</div>';
+    '解いた分は<b>ふつうの学習として記録される</b>(今日の目安・🎫・カードすべて)。<br>'+
+    '砲撃はいまの呪文(編成)で決まり、<b>動詞で撃ち方が変わる</b>: '+
+    '強撃=一点 ／ 貫通=レーン全体 ／ 吸収=城を回復 ／ 連撃=前2体。'+
+    '編成の変更はウェーブの合間(と戦闘に戻ったとき)に反映。'+
+    '⏳復習期限切れの野生語は錆びて威力が下がる(-6%/枚)。</div>';
   if(TD && !TD.over){
-    h+='<button class="btn primary" id="tdResumeBtn" style="margin-top:10px; width:100%">▶ 戦闘に戻る('+esc(TD.name)+')</button>';
+    h+='<button class="btn primary" id="tdResumeBtn" style="margin-top:10px; width:100%">▶ 戦闘に戻る('+esc(TD.name)+')</button>'+
+      '<div class="small" style="margin-top:4px">いまの編成を反映して再開する(呪文を整えてから戻るのもアリ)</div>';
   }
   h+='<div style="margin-top:10px" id="tdStageList">';
   DUNGEONS.forEach((d,i)=>{
@@ -315,7 +401,7 @@ function openTDSelect(){
   h+='</div>';
   openModal(h);
   const rb=$("tdResumeBtn");
-  if(rb) rb.onclick=()=>{ closeModal(); switchTab("td"); };
+  if(rb) rb.onclick=()=>{ tdResnap(); closeModal(); switchTab("td"); renderTDField(null); };
   $("tdStageList").querySelectorAll(".tdstage").forEach(b=>{
     b.onclick=()=>tdStart(DUNGEONS[+b.dataset.i]);
   });

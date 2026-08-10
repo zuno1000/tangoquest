@@ -956,7 +956,7 @@ function run(){
     const dl=W.DAILY_DEFS.find(m=>m.id==="dl"), wl=W.WEEKLY_DEFS.find(m=>m.id==="wl");
     ok(dl.rew.g>0 && !dl.rew.t, "デイリークリア任務は🪙");
     ok(wl.rew.g>0 && !wl.rew.t, "ウィークリークリア任務は🪙");
-    ["aclr","ainf","achr","apul","adup"].forEach(id=>{
+    ["aclr","ainf","achr","apul","adup","atd"].forEach(id=>{
       const a=W.ACH_DEFS.find(x=>x.id===id);
       ok(a.tiers.every(tr=>!tr[1].t), id+" の報酬に🎫が混ざっている");
     });
@@ -1646,22 +1646,87 @@ function run(){
     ok(ws[0].every(e=>e.hp>0 && e.hpMax===e.hp && e.icon), "敵定義が揃っている");
     ok(ws[2][0].hp>ws[0][0].hp, "波が進むほど深い階の敵(HP増)");
   });
-  t("防衛線: 正解の射撃は先頭から貫通し、進軍・城ダメージが動く", ()=>{
+  t("防衛線: 動詞タイプで撃ち方が変わる(強撃/貫通/吸収/連撃/反復)", ()=>{
     const d=W.DUNGEONS[0];
-    const b=W.tdNewBattle(d, {hp:1000, dpt:500, catk:30, elems:[]});
+    const mk=cls=>{ const b=W.tdNewBattle(d, {hp:1000, dpt:100, catk:30, elems:[]});
+      b.P.cls=cls; b.waves=[[],[],[]]; return b; };
+    const foes=()=>[{name:"a",icon:"👾",hp:50,hpMax:50,def:0,atk:50,pos:2},
+                    {name:"b",icon:"🐇",hp:99999,hpMax:99999,def:0,atk:50,pos:5},
+                    {name:"c",icon:"🦀",hp:99999,hpMax:99999,def:0,atk:50,pos:7}];
+    let b=mk([{V:100,vt:0,w:1,rep:0}]); b.enemies=foes();
+    let f=W.tdFire(b,1);
+    eq(f.hits.length, 1, "強撃は一点"); ok(f.hits[0].dead, "先頭を撃破");
+    eq(b.enemies.length, 2, "他は無傷");
+    b=mk([{V:100,vt:1,w:1,rep:0}]); b.enemies=foes();
+    f=W.tdFire(b,1);
+    eq(f.hits.length, 3, "貫通はレーン全体に当たる");
+    ok(f.beam, "ビーム演出フラグ");
+    b=mk([{V:100,vt:2,w:1,rep:0}]); b.enemies=foes(); b.castle=500;
+    f=W.tdFire(b,1);
+    ok(f.heal>0 && b.castle>500, "吸収は城を回復する");
+    b=mk([{V:100,vt:3,w:1,rep:0}]); b.enemies=foes();
+    f=W.tdFire(b,1);
+    ok(f.multiPop, "連撃フラグ");
+    ok(new Set(f.hits.map(h=>h.pos)).size>=2, "前から2体に命中");
+    b=mk([{V:100,vt:0,w:1,rep:0.5}]); b.enemies=foes();
+    f=W.tdFire(b,1);
+    ok(f.hits.length>=2, "反復はもう一度撃つ");
+  });
+  t("防衛線: 左端まで来た敵は城に2.5×atkを与えて消える", ()=>{
+    const b=W.tdNewBattle(W.DUNGEONS[0], {hp:1000, dpt:500, catk:30, elems:[]});
     eq(b.castle, 1000, "城HP=プレイヤーHP");
-    b.enemies=[{name:"a",icon:"👾",hp:10,hpMax:10,def:0,atk:50,pos:2},
-               {name:"b",icon:"🐇",hp:99999,hpMax:99999,def:0,atk:50,pos:5}];
-    const hits=W.tdFire(b, 1);
-    ok(hits.length>=2 && hits[0].dead, "先頭を倒して貫通");
-    eq(b.enemies.length, 1, "撃破された敵は消える");
-    ok(b.enemies[0].hp<99999, "2体目にもダメージが通る");
     b.enemies=[{name:"a",icon:"👾",hp:10,hpMax:10,def:0,atk:50,pos:0}];
     b.waves=[[],[],[]]; b.wi=0; b.si=0;
     const ev=W.tdTick(b);
     eq(ev.leaks.length, 1, "左端まで来た敵は城に到達");
-    eq(b.castle, 1000-125, "城に2.5×atkのダメージ(v4.14.1)");
+    eq(b.castle, 1000-125, "城に2.5×atkのダメージ");
     eq(b.enemies.length, 0, "到達した敵は消える");
+  });
+  t("防衛線: 呪文の節が砲撃になる(キャラ倍率込み・空なら素の一撃)", ()=>{
+    const s=W.tdSnapshot({clauses:[{V:100,vt:1,w:1.2,rep:0.4,name:"x"}],
+      charM:1.1, setM:1.05, amp:1.2, abDmg:0.1, dpt:150, catk:40, hp:500});
+    eq(s.cls.length, 1);
+    ok(Math.abs(s.cls[0].V-100*1.1*1.05*1.2*1.1)<1e-6, "キャラ・セット・増幅・スキルをVに織り込む");
+    eq(s.cls[0].vt, 1); ok(Math.abs(s.cls[0].rep-0.4)<1e-9, "反復を引き継ぐ");
+    const s2=W.tdSnapshot({clauses:[], dpt:0, catk:34, hp:300});
+    eq(s2.cls.length, 1); eq(s2.cls[0].V, 34, "呪文が空ならキャラ攻撃の一撃");
+  });
+  t("防衛線: 復習期限切れの野生語は錆びて威力が下がる(TD限定ルール)", ()=>{
+    const G=W.G, s0=G.party.sentence;
+    const wild=W.WORDS.find(x=>W.rootIdsOf(x.en).length===0);
+    const oldInv=G.inv[wild.en+"|1|0"], oldSt=G.words[wild.en];
+    W.addCard(wild.en,1);
+    G.words[wild.en]=[3, Date.now()-1000, 3,0,0,0,0]; // 期限切れ
+    G.party.sentence=[wild.en+"|1|0"];
+    eq(W.tdRustCount(), 1, "錆び1枚");
+    ok(Math.abs(W.tdRustMult(1)-0.94)<1e-9, "-6%/枚");
+    ok(Math.abs(W.tdRustMult(10)-0.7)<1e-9, "下限は-30%");
+    G.words[wild.en]=[3, Date.now()+864e5, 3,0,0,0,0]; // 復習済み
+    eq(W.tdRustCount(), 0, "復習すれば研ぎ直る");
+    G.party.sentence=s0;
+    if(oldSt) G.words[wild.en]=oldSt; else delete G.words[wild.en];
+    if(oldInv) G.inv[wild.en+"|1|0"]=oldInv; else delete G.inv[wild.en+"|1|0"];
+  });
+  t("防衛線: ウェーブの合間に現在の編成が反映される(tdResnap)", ()=>{
+    const G=W.G, s0=G.party.sentence;
+    W.TD=W.tdNewBattle(W.DUNGEONS[0], {hp:100, dpt:10, catk:10, elems:[]});
+    eq(W.TD.P.cls[0].V, 10, "開始時は素の一撃");
+    const n=W.WORDS.filter(x=>x.pos==="n")[12];
+    W.addCard(n.en,3);
+    G.party.sentence=[n.en+"|3|0"];
+    W.tdResnap();
+    ok(W.TD.P.cls[0].V>10, "編成した名詞が反映されて威力が上がる");
+    G.party.sentence=s0;
+    delete G.inv[n.en+"|3|0"];
+    W.TD=null;
+  });
+  t("防衛線: ボス出現でカットインが出る", ()=>{
+    W.TD=W.tdNewBattle(W.DUNGEONS[0], {hp:100, dpt:10, catk:10, elems:[]});
+    W.renderTDField(null, {leaks:[], spawned:{boss:true, icon:"👾", name:"巨大スライム"}, wave:0}, true);
+    const ci=W.document.getElementById("tdCutin");
+    ok(!ci.classList.contains("hidden") && ci.innerHTML.indexOf("BOSS")>=0, "カットイン表示");
+    ok(W.document.getElementById("tdLog").innerHTML.indexOf("ボス")>=0, "ログにも出る");
+    W.TD=null;
   });
   t("防衛線: ボスは2問に1歩・全滅で勝利・城陥落で敗北", ()=>{
     const P={hp:100, dpt:10, catk:10, elems:[]};
@@ -1687,8 +1752,8 @@ function run(){
     const b=W.tdNewBattle(W.DUNGEONS[0], {hp:300, dpt:0, catk:34, elems:[]});
     eq(b.P.dpt, 34, "dpt=0ならキャラ攻撃を使う");
     b.enemies=[{name:"a",icon:"👾",hp:9999,hpMax:9999,def:0,atk:10,pos:3}];
-    const hits=W.tdFire(b, 1);
-    ok(hits.length===1 && hits[0].take>0, "ダメージが出る");
+    const f=W.tdFire(b, 1);
+    ok(f.hits.length===1 && f.hits[0].take>0, "ダメージが出る");
   });
   t("防衛線: 解答は学習タブと同一に計上される(SRS・日別・🎫・コンボ)", ()=>{
     const G=W.G;
