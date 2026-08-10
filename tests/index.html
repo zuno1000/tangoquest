@@ -1720,6 +1720,68 @@ function run(){
     delete G.inv[n.en+"|3|0"];
     W.TD=null;
   });
+  /* ---- v4.16.0: なかま出撃方式 ---- */
+  t("防衛線: 💠言霊は正解で+100(コンボで増加)・ミスで+30", ()=>{
+    eq(W.tdManaGain(true, 0), 100);
+    eq(W.tdManaGain(true, 1), 100, "コンボ1はボーナスなし");
+    eq(W.tdManaGain(true, 3), 120, "コンボ3で+20");
+    eq(W.tdManaGain(true, 99), 150, "コンボボーナスは+50が上限");
+    eq(W.tdManaGain(false, 5), 30, "ミスでも少し貯まる");
+  });
+  t("防衛線: なかまはレア度コストで出撃し、スキルが折り込まれる", ()=>{
+    const G=W.G;
+    G.chars.c01=G.chars.c01||{dup:0}; // 剣の心得(dmg+5%)
+    G.chars.c07=G.chars.c07||{dup:0}; // 聖盾(guard 8%)
+    const u=W.tdUnitFrom("c01");
+    eq(u.cost, 100, "Nは💠100");
+    eq(u.atk, Math.round(W.charStats("c01").atk*1.05), "dmgスキルは攻撃に反映");
+    eq(u.pos, 0, "城前に出る");
+    const u7=W.tdUnitFrom("c07");
+    eq(u7.cost, 150, "Rは💠150");
+    eq(u7.def, Math.round(W.charStats("c07").def*1.16), "guardスキルは防御に反映");
+    eq(W.tdUnitFrom("c99"), null, "未所持は出せない");
+  });
+  t("防衛線: 出撃は💠を消費しクールダウンが付く・不足時は出せない", ()=>{
+    const G=W.G;
+    G.chars.c01=G.chars.c01||{dup:0};
+    const b=W.tdNewBattle(W.DUNGEONS[0], {hp:1000, dpt:10, catk:10, elems:[]});
+    eq(b.mana, 150, "初期💠150");
+    const u=W.tdDeploy(b, "c01");
+    ok(u && b.units.length===1, "出撃できる");
+    eq(b.mana, 50, "コスト分減る");
+    eq(b.cd.c01, 2, "再出撃まで2問");
+    ok(!W.tdDeploy(b, "c01"), "クールダウン中は出せない");
+    b.cd.c01=0;
+    ok(!W.tdDeploy(b, "c01"), "💠不足でも出せない");
+  });
+  t("防衛線: なかまは敵を足止めして殴り合う(にゃんこ/アークナイツ式)", ()=>{
+    const b=W.tdNewBattle(W.DUNGEONS[0], {hp:1000, dpt:10, catk:10, elems:[]});
+    b.waves=[[],[],[]]; b.wi=3; // 増援なし
+    b.units=[{id:"c01",name:"ノア",rar:1,cost:100,hp:300,hpMax:300,atk:50,def:20,pos:3}];
+    b.enemies=[{name:"a",icon:"👾",hp:120,hpMax:120,def:0,atk:30,pos:3}];
+    const ev=W.tdTick(b);
+    eq(b.enemies[0].pos, 3, "なかまがいるマスから進めない(足止め)");
+    ok(b.enemies[0].hp<120, "なかまの攻撃が通る");
+    ok(b.units[0].hp<300, "なかまも殴られる");
+    ok(ev.fights.length>=2, "交戦イベントが記録される");
+    W.tdTick(b); W.tdTick(b);
+    eq(b.enemies.length, 0, "殴り合いの末に撃破");
+    ok(b.units.length===1 && b.units[0].hp>0, "なかまは生き残る");
+    const p0=b.units[0].pos;
+    W.tdTick(b);
+    eq(b.units[0].pos, p0+1, "交戦が終われば前進する");
+  });
+  t("防衛線: 出撃デッキは保存され、未所持は除外・未設定は自動編成", ()=>{
+    const G=W.G, old=(G.td&&G.td.deck)||null;
+    G.td=G.td||{clears:{}};
+    G.td.deck=null;
+    const d=W.tdDeck();
+    ok(d.length>=1 && d.length<=6, "自動編成(最大6)");
+    ok(d.every(id=>G.chars[id]), "所持しているなかまだけ");
+    G.td.deck=["c01","c99"];
+    eq(W.tdDeck().join(","), "c01", "未所持(c99)は除外される");
+    G.td.deck=old;
+  });
   t("防衛線: ボス出現でカットインが出る", ()=>{
     W.TD=W.tdNewBattle(W.DUNGEONS[0], {hp:100, dpt:10, catk:10, elems:[]});
     W.renderTDField(null, {leaks:[], spawned:{boss:true, icon:"👾", name:"巨大スライム"}, wave:0}, true);
@@ -1779,12 +1841,17 @@ function run(){
     ok(doc.getElementById("quizView").classList.contains("hidden"), "学習タブは独立のまま");
     ok(doc.getElementById("tdWord").textContent.length>0, "問題が出ている");
     eq(doc.querySelectorAll("#tdChoices .choice").length, 4, "4択");
+    ok(doc.getElementById("tdCount").textContent.indexOf("今日")>=0, "学習タブと同じ「今日 X/Y問」表記");
+    ok(doc.getElementById("tdStats"), "「これまで・定着」の行がある");
+    ok(doc.querySelectorAll("#tdDeck .tdu").length>=1, "出撃バーになかまのボタン");
+    ok(doc.querySelector("#tdDeck .tdmana"), "💠残高の表示");
     eq(W.TD.enemies.length, 1, "最初の敵が湧いている");
     const w=W.tdCur.word, e2j=G.mode==="e2j";
     const btn=[...doc.querySelectorAll("#tdChoices .choice")].find(b=>b.textContent===(e2j? w.ja : w.en));
-    const hp0=W.TD.enemies[0].hp;
+    const hp0=W.TD.enemies[0].hp, mana0=W.TD.mana;
     btn.click(); // 正解を選ぶ → 即座に射撃フェーズ(進軍はその後の遅延タイマー)
     ok(W.TD.enemies.length===0 || W.TD.enemies[0].hp<hp0, "敵にダメージ(または撃破)");
+    ok(W.TD.mana>mana0, "正解で💠が増える");
     ok(doc.getElementById("tdLog").innerHTML.indexOf("💥")>=0, "射撃のログとダメージポップが出る");
     ok(doc.getElementById("tdLane").classList.contains("tdfire"), "レーンの発火演出");
     W.TD=null; // 後片付け(遅延の進軍・次問タイマーも止まる)

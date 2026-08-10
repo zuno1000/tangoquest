@@ -769,3 +769,35 @@ header .res span:last-child{overflow:hidden; text-overflow:ellipsis}
   .tdbeam,#tdCastleWrap.tdheal,#tdLane.tdfire2,#tdLane.tdfire3,#tdCutin.go{animation:none}
   #tdCutin.go{opacity:1}
 }
+
+/* ---- v4.16.0: 防衛線「なかま出撃」方式 ---- */
+/* 出撃バー: 💠残高+デッキ6枠 */
+#tdDeck{display:flex; gap:5px; align-items:stretch; margin-top:6px}
+.tdmana{flex:0 0 auto; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  min-width:48px; border-radius:12px; background:var(--bg); font-size:13px; font-weight:800; color:var(--accent2);
+  box-shadow:inset 2px 2px 5px var(--shd), inset -2px -2px 5px var(--shl)}
+.tdu{flex:1; position:relative; border:1.5px solid transparent; border-radius:12px; background:var(--bg);
+  padding:4px 0 3px; cursor:pointer; min-height:46px;
+  box-shadow:-3px -3px 7px var(--shl), 3px 3px 7px var(--shd)}
+.tdu:disabled{opacity:.45; box-shadow:none; cursor:default}
+.tdu .tduf{display:block; font-size:20px; line-height:1.15}
+.tdu .tduc{display:block; font-size:9px; font-weight:800; color:var(--accent2)}
+.tdu .tducd{display:block; font-size:10px; font-weight:900; color:var(--ng)}
+.tdu:active:not(:disabled){transform:scale(.94)}
+/* レーン上のなかま(下段・青バー) */
+.tdcell .tu{font-size:15px; line-height:1.1; margin-top:1px}
+.tdcell .thp.tup i{background:var(--accent2)}
+/* クイズヘッダの学習タブ互換表記 */
+#tdPrompt{position:relative}
+#tdBadge{position:absolute; top:8px; left:10px; border-radius:999px; padding:3px 9px; background:var(--bg2)}
+#tdCount{position:absolute; top:10px; right:12px; font-size:11px; color:var(--sub)}
+#tdWord{margin-top:14px}
+#tdStats{font-size:12px; color:var(--sub); margin-top:5px; min-height:17px}
+#tdStats .qo{color:var(--ok); font-weight:700}
+#tdStats .qx{color:var(--ng); font-weight:700}
+#tdStats .qstep{color:var(--accent2); font-weight:800}
+#tdStats .qmas{color:var(--ok); font-weight:800}
+/* デッキ編成モーダル */
+#tdDeckGrid{display:grid; grid-template-columns:repeat(3,1fr); gap:11px; padding:2px}
+#tdDeckGrid .charcard.tdsel{border-color:var(--accent2);
+  box-shadow:0 0 0 2px var(--accent2), -3px -3px 7px var(--shl), 3px 3px 7px var(--shd)}
