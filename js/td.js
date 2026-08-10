@@ -24,9 +24,19 @@
    ・時間制限はない: 焦らせるのは時計ではなく進軍。じっくり思い出す方が得 */
 
 const TD_LANE=8;
-const TD_VOLLEY=1.0;              // 砲撃の威力係数(v4.15.0の1.75→なかま火力が加わるため控えめに)
+/* v4.17.0 砲撃のチャージ制: 「砲撃だけでクリアできてしまう」の是正。
+   ・正解3回で⚡チャージ満タン→自動発射(威力はまとめて2.5×dpt=平均では従来より弱い)
+   ・なかまが1体も場にいないと発射できない(呪文はなかまが詠唱する)
+   → なかま=戦線の維持と詠唱者/呪文=ここぞのバースト、の分業が強制される */
+const TD_VOLLEY=2.5;              // 満チャージ砲撃の威力係数
+const TD_CHARGE=3;                // 発射に必要な正解数
 const TD_COST=[100,150,250,400];  // 出撃コスト💠(レア度N/R/SR/SSR)
 const TD_MANA0=150, TD_MANA_MAX=999;
+
+/* 発射条件(純関数): チャージ満タン かつ 詠唱者(なかま)が場にいる */
+function tdVolleyReady(b){
+  return b.charge>=TD_CHARGE && b.units.length>0;
+}
 
 /* 正解/ミスで得る💠言霊。コンボが乗る(にゃんこ大戦争の「お財布」を解答に置き換えた形) */
 function tdManaGain(ok, combo){
@@ -87,6 +97,7 @@ function tdNewBattle(d, P, rustN){
     waves:tdWaves(d), wi:0, si:0,
     enemies:[],
     units:[], mana:TD_MANA0, cd:{}, // なかま出撃(v4.16.0): 場のユニット・💠言霊・再出撃クールダウン
+    charge:0, // 砲撃チャージ(v4.17.0): 正解で+1・満タン+なかまありで発射
     castle:P.hp, castleMax:P.hp,
     em:elemMatch(P.elems||[], d.elem).dealt, // 属性相性は与ダメに乗る(対策編成が効く)
     rust:rustN||0, rustM:tdRustMult(rustN),
@@ -294,13 +305,20 @@ function tdStart(d){
   tdTick(TD); // 最初の1体を送り込む
   closeModal();
   switchTab("td");
-  $("tdLog").innerHTML='<div>'+d.icon+' 敵の群れが迫る! 正解で💠+100と砲撃(約'+
-    fmt(Math.round(TD_VOLLEY*TD.P.dpt*TD.em*TD.rustM))+')・💠でなかまを出撃!'+
-    (TD.rust? ' <span style="color:var(--ng)">⏳錆びた野生語×'+TD.rust+'(砲撃'+Math.round((1-TD.rustM)*100)+'%減)</span>':'')+
-    '</div>';
   tdQuestion();
   renderTDField(null);
   renderTDDeck();
+  tdCutinShow('<div class="ci3">'+d.icon+' '+esc(d.name)+' ─ 防衛開始!</div>', 1100);
+}
+
+/* カットイン(ボス・ウェーブ等の大きな一瞬の告知。ログ廃止後の伝達手段) */
+function tdCutinShow(html, ms){
+  const ci=$("tdCutin");
+  if(!ci) return;
+  ci.innerHTML=html;
+  ci.classList.remove("hidden");
+  tdFx(ci, "go");
+  setTimeout(()=>{ if($("tdCutin")) $("tdCutin").classList.add("hidden"); }, ms||1500);
 }
 
 /* 現在の編成を戦闘に反映し直す(ウェーブの合間・戦闘に戻ったとき) */
@@ -356,10 +374,12 @@ function tdAnswer(chosen, btn){
   });
   tdApplyAnswer(w, ok);
   TD.mana=Math.min(TD_MANA_MAX, TD.mana+tdManaGain(ok, G.combo)); // 💠言霊(出撃コスト)
+  if(ok) TD.charge=Math.min(TD_CHARGE, TD.charge+1);              // ⚡砲撃チャージ
   $("tdStats").innerHTML=qStatsHTML(G.words[w.en]); // 定着ステップの変化を見せる(学習タブと同じ)
   saveG(); refreshHeader();
-  if(ok){
-    // 2段階演出: まず射撃(敵はその場でヒット・撃破の爆発)→少し置いて進軍
+  if(ok && tdVolleyReady(TD)){
+    // 満チャージ+詠唱者あり=砲撃発射。2段階演出: 射撃(ヒット・撃破)→少し置いて進軍
+    TD.charge=0;
     const fire=tdFire(TD, 1+0.04*Math.min(Math.max((G.combo||0)-1,0), 15)); // コンボで威力UP
     renderTDField(fire, null, true);
     // 閃光はコンボ数で強くなる(3段階)
@@ -375,6 +395,13 @@ function tdAnswer(chosen, btn){
       if(TD.over){ setTimeout(tdFinish, 700); return; }
       setTimeout(()=>{ if(TD && !TD.over && tdAnswered) tdQuestion(); }, 520);
     }, 430);
+  }else if(ok){
+    // チャージ中(またはなかま不在): 交戦・進軍だけ進む
+    const ev=tdTick(TD);
+    if(ev.wave) tdResnap();
+    renderTDField(null, ev, true);
+    if(TD.over){ setTimeout(tdFinish, 700); return; }
+    setTimeout(()=>{ if(TD && !TD.over && tdAnswered) tdQuestion(); }, 620);
   }else{
     const ev=tdTick(TD);
     if(ev.wave) tdResnap();
@@ -395,7 +422,8 @@ function renderTDField(fire, ev, ok){
   // ヘッダー1行: ステージ・WAVE・敵のこり(パネルを置かずクイズUIを最大化)
   const wave=TD.waves[TD.wi];
   const remain=TD.enemies.length+(wave? wave.length-TD.si : 0);
-  $("tdTitle").innerHTML="⚔ "+esc(TD.name)+"<br>WAVE "+Math.min(TD.wi+1,3)+"/3 ・ 敵のこり "+remain;
+  $("tdTitle").innerHTML="⚔ "+esc(TD.name)+"<br>WAVE "+Math.min(TD.wi+1,3)+"/3 ・ 敵のこり "+remain+
+    (TD.rust? ' ・ <span style="color:var(--ng)">⏳-'+Math.round((1-TD.rustM)*100)+'%</span>':'');
   // レーン(左=城側)。上段=敵(赤バー)・下段=なかま(青バー)。
   // 砲撃ヒットはダメージポップ・撃破(交戦含む)は爆発で見せる
   const byPos={}, uByPos={};
@@ -435,35 +463,18 @@ function renderTDField(fire, ev, ok){
   }
   // 吸収の城回復(バーが緑に瞬く)
   if(fire && fire.heal>0) tdFx($("tdCastleWrap"), "tdheal");
-  // ログ(直近の出来事)
-  const lines=[];
-  hits.forEach(h=>lines.push("💥 "+h.icon+" "+esc(h.name)+"に "+fmt(h.take)+(h.dead? " ─ 撃破!":"")));
-  if(fire && fire.heal>0) lines.push("💚 【吸収】城が "+fmt(fire.heal)+" 回復!");
-  // 交戦の要点だけログに(毎打撃は出さない=ノイズ)
-  fights.filter(f=>f.side==="u" && f.dead).forEach(f=>lines.push("⚔ なかまが "+f.icon+" "+esc(f.name)+" を撃破!"));
-  fights.filter(f=>f.side==="e" && f.udead).forEach(f=>lines.push("💀 "+esc(f.uname)+" が倒れた…"));
+  // 文字ログは廃止(v4.17.0・実機FB): 出来事はすべて視覚演出で伝える。
+  // ダメージ=ポップ/撃破=爆発/被弾=シェイク+振動/ボス・ウェーブ=カットイン
   if(ev){
-    if(ok===false) lines.push("💨 呪文は沈黙した…敵が迫る");
-    ev.leaks.forEach(l=>lines.push("🏰 "+l.icon+" "+esc(l.name)+"が城に "+fmt(l.dmg)+" ダメージ!"));
     if(ev.spawned && ev.spawned.boss){
-      lines.push("⚠️ ボス『"+esc(ev.spawned.name)+"』が現れた!");
-      const ci=$("tdCutin");
-      ci.innerHTML='<div class="ci1">─ BOSS ─</div><div class="ci2">'+ev.spawned.icon+'</div>'+
-        '<div class="ci3">'+esc(ev.spawned.name)+'</div>';
-      ci.classList.remove("hidden");
-      tdFx(ci, "go");
+      tdCutinShow('<div class="ci1">─ BOSS ─</div><div class="ci2">'+ev.spawned.icon+'</div>'+
+        '<div class="ci3">'+esc(ev.spawned.name)+'</div>', 1500);
       vibe([40,60,120]);
-      setTimeout(()=>{ if($("tdCutin")) $("tdCutin").classList.add("hidden"); }, 1500);
+    }else if(ev.wave){
+      tdCutinShow('<div class="ci3">🚩 WAVE '+ev.wave+' ─ 編成の変更はここで反映</div>', 1100);
     }
-    if(ev.wave){
-      lines.push("🚩 WAVE "+ev.wave+" 開始! 編成の変更はここで反映"+
-        (TD.rust? "(⏳錆び×"+TD.rust+")":""));
-    }
-    if(ev.win) lines.push("🎉 すべてのウェーブを守り切った!");
-    if(ev.lose) lines.push("💔 城が陥落した…");
     if(ev.leaks.length){ tdFx($("tdHead"), "tdshake"); vibe([20,30,40]); }
   }
-  if(lines.length) $("tdLog").innerHTML=lines.slice(-3).map(s=>"<div>"+s+"</div>").join("");
 }
 
 /* 出撃バー: 💠残高+デッキ6枠(コスト・クールダウン表示)。タップで即出撃 */
@@ -471,7 +482,11 @@ function renderTDDeck(){
   const box=$("tdDeck");
   if(!box || !TD) return;
   const deck=tdDeck();
-  let h='<div class="tdmana">💠<b>'+TD.mana+'</b></div>';
+  // ⚡=砲撃チャージ(正解3回で発射)。なかまが場にいないと満タンでも撃てない
+  const chg=TD.charge>=TD_CHARGE
+    ? (TD.units.length? '⚡発射!' : '<span style="color:var(--ng)">⚡詠唱者が必要</span>')
+    : '⚡'+TD.charge+'/'+TD_CHARGE;
+  let h='<div class="tdmana">💠<b>'+TD.mana+'</b><span class="tdchg">'+chg+'</span></div>';
   deck.forEach(id=>{
     const c=byChar[id]; if(!c) return;
     const cost=TD_COST[c.rar-1];
@@ -564,8 +579,9 @@ function openTDSelect(){
   G.td=G.td||{clears:{}};
   let h='<h3>⚔ 単語の防衛線(β)</h3>'+
     '<div class="small" style="line-height:1.7">クイズの<b>正解で💠言霊を稼ぎ、なかまを出撃</b>させて敵と戦わせるタワーディフェンス。'+
-    '1問ごとに敵は1マス進む(ボスは2問で1マス)。なかまは同じマスの敵を<b>足止め</b>して殴り合う。'+
-    '正解はさらに呪文の砲撃にもなる(動詞で撃ち方が変わる: 強撃=一点/貫通=レーン全体/吸収=城回復/連撃=前2体)。'+
+    '1問ごとに敵は1マス進む(ボスは2問で1マス)。なかまは同じマスの敵を<b>足止め</b>して殴り合う。<br>'+
+    '呪文の砲撃は<b>⚡チャージ制</b>: 正解3回で満タンになり自動発射。ただし<b>なかまが1体もいないと撃てない</b>'+
+    '(呪文はなかまが詠唱する)。動詞で撃ち方が変わる: 強撃=一点/貫通=レーン全体/吸収=城回復/連撃=前2体。'+
     '城を守って3ウェーブしのげば勝利!<br>'+
     '解いた分は<b>ふつうの学習として記録される</b>(今日の目安・🎫・カードすべて)。'+
     '呪文・デッキの変更はウェーブの合間(と戦闘に戻ったとき)に反映。'+

@@ -1720,6 +1720,18 @@ function run(){
     delete G.inv[n.en+"|3|0"];
     W.TD=null;
   });
+  /* ---- v4.17.0: 砲撃チャージ制(なかま×呪文の統合) ---- */
+  t("防衛線: 砲撃は正解3回のチャージ制で、なかまがいないと撃てない", ()=>{
+    const b=W.tdNewBattle(W.DUNGEONS[0], {hp:1000, dpt:100, catk:30, elems:[]});
+    eq(b.charge, 0, "チャージ0から");
+    ok(!W.tdVolleyReady(b), "チャージ0では撃てない");
+    b.charge=W.TD_CHARGE;
+    ok(!W.tdVolleyReady(b), "なかま0体では満タンでも撃てない(呪文はなかまが詠唱する)");
+    b.units=[{id:"c01",name:"ノア",rar:1,cost:100,hp:300,hpMax:300,atk:34,def:20,pos:0}];
+    ok(W.tdVolleyReady(b), "満チャージ+詠唱者ありで発射できる");
+    eq(W.TD_CHARGE, 3, "必要正解数は3");
+  });
+
   /* ---- v4.16.0: なかま出撃方式 ---- */
   t("防衛線: 💠言霊は正解で+100(コンボで増加)・ミスで+30", ()=>{
     eq(W.tdManaGain(true, 0), 100);
@@ -1787,7 +1799,7 @@ function run(){
     W.renderTDField(null, {leaks:[], spawned:{boss:true, icon:"👾", name:"巨大スライム"}, wave:0}, true);
     const ci=W.document.getElementById("tdCutin");
     ok(!ci.classList.contains("hidden") && ci.innerHTML.indexOf("BOSS")>=0, "カットイン表示");
-    ok(W.document.getElementById("tdLog").innerHTML.indexOf("ボス")>=0, "ログにも出る");
+    ok(ci.innerHTML.indexOf("巨大スライム")>=0, "ボス名もカットインに出る(文字ログは廃止)");
     W.TD=null;
   });
   t("防衛線: ボスは2問に1歩・全滅で勝利・城陥落で敗北", ()=>{
@@ -1846,13 +1858,19 @@ function run(){
     ok(doc.querySelectorAll("#tdDeck .tdu").length>=1, "出撃バーになかまのボタン");
     ok(doc.querySelector("#tdDeck .tdmana"), "💠残高の表示");
     eq(W.TD.enemies.length, 1, "最初の敵が湧いている");
+    ok(!doc.getElementById("tdLog"), "文字ログは廃止されている(v4.17.0)");
+    // 満チャージ+なかまを場に置いてから正解 → 砲撃が発射される
+    W.TD.mana=999;
+    ok(W.tdDeploy(W.TD, "c01"), "なかまを出撃");
+    W.TD.charge=2; // 次の正解で満タン
     const w=W.tdCur.word, e2j=G.mode==="e2j";
     const btn=[...doc.querySelectorAll("#tdChoices .choice")].find(b=>b.textContent===(e2j? w.ja : w.en));
-    const hp0=W.TD.enemies[0].hp, mana0=W.TD.mana;
-    btn.click(); // 正解を選ぶ → 即座に射撃フェーズ(進軍はその後の遅延タイマー)
+    const hp0=W.TD.enemies[0].hp, mana0=W.TD.mana-100; // 出撃後の残高
+    btn.click(); // 正解を選ぶ → 満チャージなので即座に射撃フェーズ
     ok(W.TD.enemies.length===0 || W.TD.enemies[0].hp<hp0, "敵にダメージ(または撃破)");
+    eq(W.TD.charge, 0, "発射でチャージが空になる");
     ok(W.TD.mana>mana0, "正解で💠が増える");
-    ok(doc.getElementById("tdLog").innerHTML.indexOf("💥")>=0, "射撃のログとダメージポップが出る");
+    ok(doc.querySelector("#tdLane .tdpop"), "ダメージポップが出る");
     ok(doc.getElementById("tdLane").classList.contains("tdfire"), "レーンの発火演出");
     W.TD=null; // 後片付け(遅延の進軍・次問タイマーも止まる)
     W.switchTab("home");

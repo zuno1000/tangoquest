@@ -801,3 +801,15 @@ header .res span:last-child{overflow:hidden; text-overflow:ellipsis}
 #tdDeckGrid{display:grid; grid-template-columns:repeat(3,1fr); gap:11px; padding:2px}
 #tdDeckGrid .charcard.tdsel{border-color:var(--accent2);
   box-shadow:0 0 0 2px var(--accent2), -3px -3px 7px var(--shl), 3px 3px 7px var(--shd)}
+
+/* ---- v4.17.0: ログ廃止によるクイズ領域の拡大+チャージ表示 ---- */
+.tdmana .tdchg{display:block; font-size:9px; font-weight:800; color:var(--sub); margin-top:1px; line-height:1.2}
+#tdDeck{margin-top:5px}
+.tdmana{min-width:52px; padding:2px 4px}
+.tdu{min-height:42px; padding:3px 0 2px}
+.tdcell{min-height:40px}
+#tdPrompt{padding:12px 12px 10px; margin-top:6px}
+#tdWord{font-size:34px; margin-top:12px}
+#tdStats{font-size:11px; min-height:15px; margin-top:4px}
+#tdView .choices{gap:8px; margin-top:8px}
+#tdView .choice{min-height:48px; font-size:16px; border-radius:15px}
