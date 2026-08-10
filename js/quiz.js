@@ -1,7 +1,10 @@
 "use strict";
 /* ================= 4択クイズ(tango準拠の忘却曲線SRS + カードドロップ) ================= */
 const INTERVALS=[60e3, 10*60e3, 864e5, 3*864e5, 7*864e5, 16*864e5, 35*864e5, 90*864e5];
-const MASTER_BOX=4;
+/* 「覚えた」の基準(v4.13.0で4→5に引き上げ): box5=7日間あけた復習にも正解した単語。
+   従来のbox4は「3日後に思い出せた」時点で覚えた扱いになっており、
+   忘却曲線的に「週をまたいで思い出せる」ことを確認できていなかった */
+const MASTER_BOX=5;
 
 let cur=null, answered=false;
 /* 直近に出した単語(3問)は再出題しない ─ 1問おきの機械的な往復を防ぐ */
@@ -58,6 +61,11 @@ function pickWord(){
    登り直させると復習が渋滞し、挫折感も大きい(Ankiのlapse運用と同じ発想) */
 function srsApply(st, ok, now){
   if(ok){
+    /* 期限前の正解では階段を上がらない(v4.13.0): 出題対象が尽きたときの
+       先取り復習(pickWordのフォールバック)で同じ日に何度も正解しても、
+       実時間の間隔をあけて思い出せたことにはならない。忘却曲線の検証は
+       期限が来た出題での正解だけが担う(正解・ミスの回数は通常どおり数える) */
+    if(st[1]>now && (st[2]+st[3])>0){ st[2]++; st[5]=0; st[6]=now; return st; }
     st[0]=Math.min(Math.max(st[0]+1, st[7]||0), INTERVALS.length-1);
     st[7]=0;
     st[2]++; st[5]=0; st[6]=now;
@@ -81,6 +89,21 @@ function recordDayAnswer(d, wasNew, ok){
   }else{
     d.ra=(d.ra||0)+1; if(ok) d.rc=(d.rc||0)+1;
   }
+}
+
+/* 定着ステップの表示(v4.13.0): 「あとどのくらいで覚えたことになるのか」を見せる。
+   box=覚えるまでの階段(0〜MASTER_BOX)。覚えた後は✓だけ出す */
+function masteryHTML(st){
+  if(!st) return "";
+  if(st[0]>=MASTER_BOX) return ' ・ <span class="qmas">✓覚えた</span>';
+  return ' ・ <span class="qstep">定着 '+st[0]+'/'+MASTER_BOX+'</span>';
+}
+/* 出題ヘッダの統計行。解答直後にも呼び直して定着ステップの変化を見せる */
+function qStatsHTML(st){
+  if(!st) return "";
+  return 'これまで <span class="qo">正解 '+st[2]+'</span> ・ <span class="qx">ミス '+st[3]+'</span>'+
+    masteryHTML(st)+
+    ((st[5]||0)>=3? ' <span class="qfire">🔥連続ミス'+st[5]+'(正解で強カード!)</span>':"");
 }
 
 function jaTokens(s){ return s.split(/[、。・（）()／\/\s～~]+/).filter(t=>t.length>=2); }
@@ -111,10 +134,7 @@ function renderQuestion(){
   const pw=$("promptWord");
   pw.textContent = e2j? w.en : w.ja;
   pw.className = e2j? "" : "ja";
-  $("qStats").innerHTML = !st
-    ? ''
-    : 'これまで <span class="qo">正解 '+st[2]+'</span> ・ <span class="qx">ミス '+st[3]+'</span>'+
-      ((st[5]||0)>=3? ' <span class="qfire">🔥連続ミス'+st[5]+'(正解で強カード!)</span>':"");
+  $("qStats").innerHTML = qStatsHTML(st);
   const box=$("choices"); box.innerHTML="";
   cur.choices.forEach(c=>{
     const b=document.createElement("button");
@@ -186,11 +206,14 @@ function answer(chosen, btn){
     let rar=dropRarity(preSt);
     if(Math.random()<comboDropBonus()) rar=Math.min(5, rar+1); // コンボ中は★+1のチャンス
     const drop=addCard(w.en, rar);
-    if(lvUp){ toast("📖 レベルアップ! Lv"+lvUp+" ─ 全ステータス強化"); vibe(40); }
+    // 「覚えた」の瞬間がいちばん大事なお祝い(v4.13.0)。次点でレベルアップ・★アップ
+    if(justMastered){ toast("🏅 "+w.en+" を覚えた! 7日あけても思い出せた"); vibe([30,40,60]); }
+    else if(lvUp){ toast("📖 レベルアップ! Lv"+lvUp+" ─ 全ステータス強化"); vibe(40); }
     else if(drop.rarUp){ toast("🎉 "+w.en+" のカードが★"+drop.rar+"にランクアップ!"); vibe(30); }
     else if(rar>=3) vibe(30);
     // 🎫は毎正解なのでトースト・結果バー表示は出さない(残高はガチャ画面で確認)
   }
+  $("qStats").innerHTML=qStatsHTML(st); // 定着ステップの変化(上がった/戻った)を見せる
   rc.innerHTML='<span class="poschip pos'+w.pos+'">'+POS_LABEL[w.pos]+'</span>'+meta.join(' ');
   $("resultBar").classList.add("show");
   $("promptCard").classList.add("srch"); // 単語タップで辞書へ(意味の裏取り)

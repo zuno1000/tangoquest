@@ -223,7 +223,7 @@ function gresHTML(r, i){
       '<div class="gbk">⚔</div>'+
       '<div class="gfr bd'+(r.c.rar===4?5:r.c.rar)+(r.c.rar===4?' shine':'')+'">'+
         (r.c.limited?'<div class="ltdmini">限定</div>':"")+
-        '<div class="gface">'+r.c.face+'</div>'+
+        '<div class="gface">'+charFace(r.c)+'</div>'+
         '<div class="grar '+CHAR_RAR_CLASS[r.c.rar-1]+'">'+CHAR_RAR[r.c.rar-1]+'</div>'+
         '<div class="gname">'+esc(r.c.name)+'</div>'+
         '<div class="gsub">'+(r.isNew? "NEW!" : "突破 +"+(dup>10? 2:6)+"%")+'</div>'+
@@ -275,6 +275,35 @@ function openPackCeremony(results, banner){
   $("packSkipBtn").onclick=reveal;
 }
 
+/* ---- カスタムアイコン(v4.13.0) ----
+   なかまの顔はプレイヤーが任意の画像に変更できる(G.faces[charId]=dataURL)。
+   画像はcanvasで96px四方に縮小して保存(1枚あたり数KB・同期にも載る)。
+   dataURL以外の値は無視する(不正値の混入対策) */
+function charFace(c){
+  const f=G.faces && G.faces[c.id];
+  return (f && f.slice(0,11)==="data:image/")? '<img class="cface" src="'+f+'" alt="">' : c.face;
+}
+/* 画像ファイル→96px正方形のdataURL(中央を正方形に切り出し)。cbに渡す */
+function faceDataURL(file, cb, onerr){
+  const img=new Image();
+  const done=url=>{ URL.revokeObjectURL(img.src); cb(url); };
+  img.onload=()=>{
+    try{
+      const S=96, cv=document.createElement("canvas");
+      cv.width=cv.height=S;
+      const ctx=cv.getContext("2d");
+      const m=Math.min(img.width, img.height);
+      ctx.drawImage(img, (img.width-m)/2, (img.height-m)/2, m, m, 0, 0, S, S);
+      // 透過が要るPNGはPNGのまま、それ以外はJPEGで軽く。大きすぎたら画質を落とす
+      let url=file.type==="image/png"? cv.toDataURL("image/png") : cv.toDataURL("image/jpeg", 0.85);
+      if(url.length>80000) url=cv.toDataURL("image/jpeg", 0.6);
+      done(url);
+    }catch(e){ URL.revokeObjectURL(img.src); onerr(); }
+  };
+  img.onerror=()=>{ URL.revokeObjectURL(img.src); onerr(); };
+  img.src=URL.createObjectURL(file);
+}
+
 /* ---- なかま詳細モーダル(図鑑・編成のなかまから) ---- */
 function charDetailHTML(id){
   const c=byChar[id]; if(!c) return "";
@@ -282,7 +311,7 @@ function charDetailHTML(id){
   const st=charStats(id);
   return '<div class="bigchar bd'+(c.rar===4?5:c.rar)+dupClass(dup)+'" style="--dupc:'+DUP_RGB[c.rar-1]+'">'+
       (c.limited?'<div class="ltdmini">限定</div>':"")+
-      '<div style="font-size:52px">'+c.face+'</div>'+
+      '<div style="font-size:52px">'+charFace(c)+'</div>'+
       '<div class="'+CHAR_RAR_CLASS[c.rar-1]+'" style="font-weight:800; margin-top:2px">'+CHAR_RAR[c.rar-1]+
         (dup>=10? ' 👑+'+dup : dup? " +"+dup : "")+'</div>'+
       '<div style="font-weight:800; font-size:16px; margin-top:4px; line-height:1.25">'+esc(c.name)+'</div>'+
@@ -306,13 +335,36 @@ function openCharModal(id, opts){
     (opts.select? '<button class="btn primary" style="flex:2" id="charSelBtn" '+(G.party.char===id?"disabled":"")+'>'+
       (G.party.char===id? "出撃中" : "⚔ 出撃メンバーにする")+'</button>':'')+
     (!opts.back && !opts.select? '<button class="btn primary" style="flex:1" data-close>OK</button>':'')+
-    '</div>');
+    '</div>'+
+    // カスタムアイコン(v4.13.0): 好きな画像をこのなかまの顔にできる
+    '<div class="row" style="margin-top:8px; gap:8px">'+
+    '<button class="btn" style="flex:1" id="faceBtn">🖼 アイコンを変更</button>'+
+    (G.faces[id]? '<button class="btn" style="flex:1" id="faceResetBtn">絵文字に戻す</button>':'')+
+    '</div>'+
+    '<input type="file" id="faceFile" accept="image/*" style="display:none">');
   const bb=$("charBackBtn");
   if(bb) bb.onclick=()=>openDex("chars");
   const sb=$("charSelBtn");
   if(sb && !sb.disabled) sb.onclick=()=>{
     G.party.char=id; saveG(); closeModal(); renderChars();
     toast(c.name+" を出撃メンバーにした");
+  };
+  const refreshFaces=()=>{ renderChars(); renderEqChars(); if(!$("homeView").classList.contains("hidden")) renderHome(); };
+  $("faceBtn").onclick=()=>$("faceFile").click();
+  $("faceFile").onchange=e=>{
+    const f=e.target.files && e.target.files[0];
+    if(!f) return;
+    faceDataURL(f, url=>{
+      G.faces[id]=url; saveG();
+      toast("アイコンを変更した");
+      refreshFaces(); openCharModal(id, opts);
+    }, ()=>toast("画像を読み込めなかった"));
+  };
+  const fr=$("faceResetBtn");
+  if(fr) fr.onclick=()=>{
+    delete G.faces[id]; saveG();
+    toast("絵文字アイコンに戻した");
+    refreshFaces(); openCharModal(id, opts);
   };
 }
 
@@ -346,7 +398,7 @@ function charCardEl(c){
   d.style.setProperty("--dupc", DUP_RGB[c.rar-1]);
   d.innerHTML=
     (c.limited?'<div class="ltdmini">限定</div>':"")+
-    '<div style="font-size:32px">'+c.face+'</div>'+
+    '<div style="font-size:32px">'+charFace(c)+'</div>'+
     '<div class="'+CHAR_RAR_CLASS[c.rar-1]+'" style="font-weight:800; font-size:11px">'+CHAR_RAR[c.rar-1]+
       (dup>=10? ' 👑+'+dup : dup? " +"+dup : "")+'</div>'+
     '<div style="font-size:12px; font-weight:700; margin-top:3px; line-height:1.2">'+esc(c.name)+'</div>'+

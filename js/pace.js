@@ -14,13 +14,17 @@ function paceLog(isNew, ok){
   if(l.length>100) l.splice(0, l.length-100);
 }
 
-/* ログから既知語率と復習正答率を推定。各8問未満のうちは標準値(sampled=false) */
+/* ログから既知語率と復習正答率を推定。8問未満のカテゴリは標準値で補う。
+   v4.13.0: サンプル判定を新規/復習で独立に(sampledN/sampledR)。直近100問が
+   復習ばかりでも(=1日にたくさん解くとよくある)、復習の実測は使い
+   「まだ分析中」に落ちない ─ 「復習68%なのに分析中」の不整合の修正 */
 function paceEstimates(log){
   let nN=0,cN=0,nR=0,cR=0;
   (log||[]).forEach(e=>{ if(e[0]){ nN++; cN+=e[1]; } else { nR++; cR+=e[1]; } });
-  const knownRate = nN>=8? Math.max(0, Math.min(1, (cN/nN-0.25)/0.75)) : 0.15;
-  const recall    = nR>=8? Math.max(0.55, Math.min(0.97, cR/nR)) : 0.80;
-  return {knownRate, recall, nNew:nN, nRev:nR, sampled:(nN>=8 && nR>=8)};
+  const sampledN=nN>=8, sampledR=nR>=8;
+  const knownRate = sampledN? Math.max(0, Math.min(1, (cN/nN-0.25)/0.75)) : 0.15;
+  const recall    = sampledR? Math.max(0.55, Math.min(0.97, cR/nR)) : 0.80;
+  return {knownRate, recall, nNew:nN, nRev:nR, sampledN, sampledR, sampled:(sampledN && sampledR)};
 }
 
 /* k回「連続」正解するまでの期待解答数(ミスでbox0に戻るSRSのコストモデル)。
@@ -105,6 +109,15 @@ function paceNewPerDay(q){
   return Math.ceil(q.unseen/Math.max(1, q.days-10));
 }
 
+/* いまの時刻までに解いておきたい問数(v4.13.0)。
+   朝8時〜夜20時を学習時間帯とみなし、1日の目安を時間で按分する。
+   8時前は0(まだ焦らなくていい)・20時以降は目安の全量 */
+function paceByNow(target, now){
+  const d=now!=null? new Date(now) : new Date();
+  const t=(d.getHours()+d.getMinutes()/60-8)/12;
+  return Math.min(target, Math.ceil(target*Math.min(1, Math.max(0, t))));
+}
+
 /* ---- UI: 今日のメーター ---- */
 function paceMsg(done, target){
   if(done>=target){
@@ -136,11 +149,19 @@ function fillPaceEl(el){
   }else{
     const done=dayRec().a, target=q.perDay;
     const pct=Math.min(100, Math.round(100*done/target));
+    // 時間帯の小目標(v4.13.0): 8時〜20時を学習時間帯として、いまの時刻ぶんを按分
+    const byNow=paceByNow(target);
+    const nowH=new Date().getHours();
+    const nowLine = done>=target? ''
+      : byNow<=0? '<div class="pacenow">⏰ 今日のぶんは8時からカウント ─ あわてなくてOK</div>'
+      : done>=byNow? '<div class="pacenow pgood">⏰ '+nowH+'時時点の目安 '+byNow+'問 ─ いいペース!</div>'
+      : '<div class="pacenow">⏰ '+nowH+'時時点の目安 '+byNow+'問 ─ あと'+(byNow-done)+'問で追いつく</div>';
     el.innerHTML=
       '<div class="pacetop"><span>🎯 今日の目安</span>'+
         '<b class="'+(done>=target?"pgold":"")+'">'+done+' <span class="ptgt">/ '+target+'問</span></b></div>'+
       '<div class="pbar'+(done>=target?" full":"")+'"><i style="width:'+pct+'%"></i></div>'+
       '<div class="pacemsg'+(done>=target?" pdone":"")+'">'+paceMsg(done, target)+'</div>'+
+      nowLine+
       '<div class="pacefoot">'+(q.expired
         ? '⚠️ 目標日を過ぎている ─ タップして立て直そう'
         : '目標 '+q.goal.replace(/-/g,"/")+' まで残り'+q.daysLeft+'日 ・ 覚えた '+fmt(q.mastered)+'/'+fmt(q.total)+'語')+'</div>';
@@ -169,8 +190,11 @@ function openPaceModal(){
       '<button class="btn ppre" data-d="365">1年後</button></div>'+
     '<div class="panel" id="paceCalc" style="margin-top:12px"></div>'+
     '<div class="small" style="margin-top:10px">📊 直近'+logN+'問の分析: '+
-      (est.sampled
-        ? 'すでに知っていそうな単語 約'+Math.round(est.knownRate*100)+'%・復習の正答率 '+Math.round(est.recall*100)+'%'
+      ((est.sampledN||est.sampledR)
+        ? 'すでに知っていそうな単語 約'+Math.round(est.knownRate*100)+'%'+
+            (est.sampledN? '':'(標準値: 直近に新規の出題が少ない)')+
+          ' ・ 復習の正答率 '+Math.round(est.recall*100)+'%'+
+            (est.sampledR? '':'(標準値: 直近に復習の出題が少ない)')
         : 'まだ分析中(新規・復習をそれぞれ8問以上解くと精度が上がる。いまは標準値で計算)')+
       ' ─ 学習を進めるほど目安は自動で更新される</div>'+
     '<button class="btn" id="paceHist" style="margin-top:12px">📊 学習のあゆみ(これまでの記録)</button>'+
@@ -276,14 +300,14 @@ function openHistoryModal(page){
     '<table class="stt" style="margin-top:12px">'+
       '<tr><td>累計解答(全期間)</td><td>'+fmt(tot)+'問(正答率 '+(tot? Math.round(100*totC/tot):0)+'%)</td></tr>'+
       '<tr><td>正答率(直近100問)</td><td>'+((nN||nR)
-        ? '新規 '+(nN? Math.round(100*cN/nN)+'%':'−')+' ・ 復習 '+(nR? Math.round(100*cR/nR)+'%':'−')
+        ? '新規 '+(nN? Math.round(100*cN/nN)+'%':'−(出題なし)')+' ・ 復習 '+(nR? Math.round(100*cR/nR)+'%':'−(出題なし)')
         : 'まだ分析中')+'</td></tr>'+
       (bdFrom
         ? '<tr><td>正答率('+(+bdFrom.slice(5,7))+'/'+(+bdFrom.slice(8))+'〜)</td><td>'+
             '新規 '+(sNa? Math.round(100*sNc/sNa)+'%':'−')+' ・ 復習 '+(sRa? Math.round(100*sRc/sRa)+'%':'−')+
           '</td></tr>'
         : '')+
-      '<tr><td>学習した日数</td><td>'+daysN+'日(連続 '+studyStreak()+'日)</td></tr>'+
+      '<tr><td>学習した日数</td><td>'+daysN+'日(連続 '+studyStreak()+'日 ・ 🧊'+(G.frz||0)+'/'+FRZ_MAX+')</td></tr>'+
       (tgtDays? '<tr><td>この期間の目安達成</td><td>'+hitDays+' / '+tgtDays+'日</td></tr>':'')+
       '<tr><td>覚えた単語</td><td>'+fmt(mastered)+' / '+fmt(WORDS.length)+'語</td></tr>'+
     '</table>'+
@@ -291,7 +315,12 @@ function openHistoryModal(page){
       '💡 <b>目安のしくみ</b>: 目安は毎日「残りの問題数 ÷ 目標日までの残り日数」で引き直される。'+
       '今日多く解けば残りが減って<b>明日からの目安は下がり</b>、届かなかった分は'+
       '<b>残りの日数全体に薄く分け直される</b>(翌日にまとめて上乗せはされない)。'+
-      'その日の目安は朝の時点で固定され、ミスしても途中で増えない<br><br>'+
+      'その日の目安は朝の時点で固定され、ミスしても途中で増えない。'+
+      'また「残りの問題数」は<b>実測の正答率</b>から見積もるため、たくさん解いて'+
+      '復習の正答率が下がっている間は<b>翌日の目安が増える</b>ことがある'+
+      '(1語を覚え切るのに必要な問題数の見積もりが増えるため。正答率が持ち直せば目安も下がる)<br><br>'+
+      '🧊 <b>フリーズ</b>: 学習できなかった日を1個につき1日自動で埋めて連続学習を守る'+
+      '(ログインボーナス7日目で入手・最大'+FRZ_MAX+'個。埋めた日は連続日数には数えない)<br><br>'+
       '📱 <b>記録の数え方</b>: グラフと期間の合計は表示中の14日分・「全期間」は'+
       'アプリを使いはじめてからのすべての記録(リセットしない限り残り続ける)。'+
       '日付は端末の時計基準(0時で翌日に切り替わる)。'+

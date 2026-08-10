@@ -29,10 +29,23 @@ function charDexStats(){
   return {owned, total:CHARS.length};
 }
 
-let dexMode="cards", dexPos="all", dexCharSort="dex"; // 図鑑なかまの並び(既定=図鑑順)
+let dexMode="cards", dexPos="all", dexLearn="all", dexQ="", dexCharSort="dex"; // 図鑑の絞り込み状態
 
 function dexProgHTML(cur, total){
   return '<div class="dexprog"><i style="width:'+Math.min(100, Math.round(100*cur/Math.max(1,total)))+'%"></i></div>';
+}
+
+/* カード図鑑の絞り込み(v4.13.0): 品詞×習得状態×英字検索。純関数=テスト可能 */
+function dexWordMatch(w, pos, learn, q){
+  if(pos!=="all" && w.pos!==pos) return false;
+  if(q && w.en.toLowerCase().indexOf(q)<0) return false;
+  if(learn!=="all"){
+    const st=G.words[w.en];
+    if(learn==="mas")   return !!st && st[0]>=MASTER_BOX;
+    if(learn==="learn") return !!st && st[0]<MASTER_BOX;  // 取り組んでいる(着手済み・未習得)
+    if(learn==="new")   return !st;                        // まだ出題されていない
+  }
+  return true;
 }
 
 function renderDexBody(){
@@ -40,25 +53,47 @@ function renderDexBody(){
   $("dexSeg").querySelectorAll("button").forEach(b=>b.classList.toggle("active", b.dataset.m===dexMode));
   if(dexMode==="cards"){
     const st=cardDexStats(), m=cardDexMap();
+    /* グリッドだけを作る(検索入力のたびに呼ぶ=入力欄を作り直さずフォーカスを保つ) */
+    const buildGrid=()=>{
+      let g="", n=0;
+      WORDS.forEach(w=>{
+        if(!dexWordMatch(w, dexPos, dexLearn, dexQ)) return;
+        n++;
+        const rar=m[w.en]||0;
+        const stw=G.words[w.en], mas=stw && stw[0]>=MASTER_BOX;
+        g+= rar
+          ? '<div class="dexcell own" data-k="'+esc(keyOf(w.en,rar,0))+'"><div class="den">'+esc(w.en)+'</div>'+
+            '<div class="dst rc'+rar+'">'+RAR_STARS[rar-1]+'</div>'+(mas? '<div class="dmas">✓覚えた</div>':'')+'</div>'
+          : '<div class="dexcell miss"><div class="den">'+esc(w.en)+'</div>'+(mas? '<div class="dmas">✓覚えた</div>':'')+'</div>';
+      });
+      return {g: g||'<div class="empty" style="grid-column:1/-1">該当する単語がない</div>', n};
+    };
     let h='<div class="small" style="margin-top:8px">カード <b style="color:var(--accent2)">'+st.owned+'</b> / '+st.total+
       '種 ・ 覚えた <b style="color:var(--ok)">'+st.mastered+'</b>語</div>'+dexProgHTML(st.owned, st.total)+
+      '<input id="dexSearch" class="dexsearch" type="search" autocomplete="off" '+
+        'placeholder="🔍 単語を検索(英字)" value="'+esc(dexQ)+'">'+
       '<div class="seg" id="dexPosSeg">'+["all","n","adj","v","adv"].map(p=>
         '<button data-p="'+p+'" class="'+(p===dexPos?"active":"")+'">'+(p==="all"?"全て":POS_LABEL[p])+'</button>').join("")+'</div>'+
-      '<div id="dexGrid">';
-    WORDS.forEach(w=>{
-      if(dexPos!=="all" && w.pos!==dexPos) return;
-      const rar=m[w.en]||0;
-      const stw=G.words[w.en], mas=stw && stw[0]>=MASTER_BOX;
-      h+= rar
-        ? '<div class="dexcell own" data-k="'+esc(keyOf(w.en,rar,0))+'"><div class="den">'+esc(w.en)+'</div>'+
-          '<div class="dst rc'+rar+'">'+RAR_STARS[rar-1]+'</div>'+(mas? '<div class="dmas">✓覚えた</div>':'')+'</div>'
-        : '<div class="dexcell miss"><div class="den">'+esc(w.en)+'</div>'+(mas? '<div class="dmas">✓覚えた</div>':'')+'</div>';
-    });
-    h+='</div>';
+      '<div class="seg" id="dexLearnSeg">'+[["all","全て"],["mas","✓覚えた"],["learn","学習中"],["new","未学習"]].map(([k,l])=>
+        '<button data-l="'+k+'" class="'+(k===dexLearn?"active":"")+'">'+l+'</button>').join("")+'</div>'+
+      '<div class="small" id="dexCount" style="margin:2px 4px"></div>'+
+      '<div id="dexGrid"></div>';
     box.innerHTML=h;
+    const upd=()=>{
+      const r=buildGrid();
+      $("dexGrid").innerHTML=r.g;
+      // 絞り込み中だけ件数を出す(全件表示では冗長)
+      $("dexCount").textContent=(dexQ || dexLearn!=="all" || dexPos!=="all")? '該当 '+r.n+'語' : '';
+    };
+    upd();
+    $("dexSearch").oninput=e=>{ dexQ=e.target.value.trim().toLowerCase(); upd(); };
     $("dexPosSeg").querySelectorAll("button").forEach(b=>{
       const set=()=>{ if(dexPos!==b.dataset.p){ dexPos=b.dataset.p; renderDexBody(); } };
       b.onclick=set; bindTap(b, set); // pointerup併用: スクロール直後でも1タップで切り替わる
+    });
+    $("dexLearnSeg").querySelectorAll("button").forEach(b=>{
+      const set=()=>{ if(dexLearn!==b.dataset.l){ dexLearn=b.dataset.l; renderDexBody(); } };
+      b.onclick=set; bindTap(b, set);
     });
     // クリックは委譲1本(セルごとのリスナー2,500個を作らない=軽量化)
     $("dexGrid").onclick=e=>{
@@ -77,7 +112,7 @@ function renderDexBody(){
       const dup=(rec&&rec.dup)||0;
       h+= rec
         ? '<div class="dexchar own" data-id="'+c.id+'">'+(c.limited?'<div class="ltdmini">限定</div>':"")+
-          '<div class="dface">'+c.face+'</div>'+
+          '<div class="dface">'+charFace(c)+'</div>'+
           '<div class="'+CHAR_RAR_CLASS[c.rar-1]+'" style="font-weight:800; font-size:10px">'+CHAR_RAR[c.rar-1]+(dup? " +"+dup:"")+'</div>'+
           '<div class="dname">'+esc(c.name)+'</div>'+
           (c.sk? '<div class="cskill">✦ '+esc(c.sk.n)+'</div>':'')+'</div>'

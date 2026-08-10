@@ -166,16 +166,26 @@ function run(){
     ok(W.hasClaimable(), "claimable");
   });
 
-  /* ---- かけら経済 ---- */
-  t("分解でかけらが増え在庫が減る", ()=>{
+  /* ---- かけら(レガシー)・分解廃止(v4.13.0) ---- */
+  t("分解機能は廃止: 分解UI・関数がなく、レガシーかけらだけ使える", ()=>{
     const G=W.G;
+    ok(!W.document.getElementById("bulkDisBtn"), "一括分解ボタンは撤去");
+    eq(typeof W.disassemble, "undefined", "disassemble関数は撤去");
+    eq(typeof W.bulkDisassemble, "undefined", "bulkDisassemble関数は撤去");
     const en=W.WORDS[20].en;
     W.addCard(en,3);
     const s0=G.shards;
-    const gain=W.disassemble(en+"|3|0",1);
-    eq(gain, 8, "★3=8かけら");
-    eq(G.shards, s0+8, "shards added");
-    ok(!G.inv[en+"|3|0"], "consumed");
+    G.shards=0;
+    W.openCardModal(en+"|3|0");
+    ok(!W.document.getElementById("disBtn"), "カード詳細に分解ボタンがない");
+    ok(!W.document.getElementById("enhBtn"), "かけら0なら重ねるボタンも出ない");
+    W.closeModal();
+    G.shards=100;
+    W.openCardModal(en+"|3|0");
+    ok(W.document.getElementById("enhBtn"), "かけらが残っていれば重ねるボタンが出る");
+    W.closeModal();
+    G.shards=s0;
+    delete G.inv[en+"|3|0"];
   });
   t("かけらで「重ねる」: 同キーの枚数が増えかけらが減る", ()=>{
     const G=W.G;
@@ -191,21 +201,6 @@ function run(){
     eq(c.lv, 1, "Lv+1");
     ok(W.enhCost(c)>2, "重ねるほど次の1枚が高くつく");
     delete G.inv[k];
-  });
-  t("一括分解は編成中カードに一切触れない", ()=>{
-    const G=W.G;
-    const oldInv=G.inv, oldSent=G.party.sentence;
-    const w=W.WORDS.filter(x=>x.pos==="n")[3];
-    const w2=W.WORDS.filter(x=>x.pos==="n")[5];
-    G.inv={};
-    W.addCard(w.en,1); W.addCard(w.en,1);
-    W.addCard(w2.en,1);
-    G.party.sentence=[w.en+"|1|0"];
-    const r=W.bulkDisassemble(1,false);
-    eq(G.inv[w.en+"|1|0"], 2, "装備中は枚数ごと残る(=Lv維持)");
-    ok(!G.inv[w2.en+"|1|0"], "非装備は分解される");
-    eq(r.cnt, 1, "分解は1枚だけ");
-    G.inv=oldInv; G.party.sentence=oldSent;
   });
   t("同じカードは文に1枠しか置けない", ()=>{
     const G=W.G;
@@ -274,34 +269,6 @@ function run(){
     W.normalizeSentenceRarity(g2);
     eq(g2.party.sentence[0], null, "未所持の単語は文から外れる");
   });
-  t("分解は低レアの端数から溶かし★を保つ・0枚で文から外れる", ()=>{
-    const G=W.G, oldSent=G.party.sentence, s0=G.shards;
-    const en=W.WORDS[124].en;
-    for(let r=1;r<=5;r++) delete G.inv[en+"|"+r+"|0"];
-    W.addCard(en,1); W.addCard(en,1); W.addCard(en,3); // ★1×2+★3×1=Lv2の★3カード
-    G.party.sentence=[en+"|3|0"];
-    eq(W.disassemble(en+"|3|0",1), 1, "低レア(★1=✨1)の端数から溶ける");
-    eq(W.wordMaxRar(en), 3, "★3は保たれる");
-    eq(W.cardOf(W.canonKeyOf(en)).lv, 1, "Lvは1下がる");
-    eq(W.disassemble(en+"|3|0",2), 1+8, "残り全部=★1+★3の価値");
-    eq(W.wordCopies(en), 0);
-    eq(G.party.sentence[0], null, "0枚になった単語は文から外れる");
-    G.shards=s0; G.party.sentence=oldSent;
-  });
-  t("一括分解: ★の高い単語の低レア端数はLvの素材なので溶かさない", ()=>{
-    const G=W.G, oldInv=G.inv, oldSent=G.party.sentence, s0=G.shards;
-    const w1=W.WORDS.filter(x=>x.pos==="n")[9], w2=W.WORDS.filter(x=>x.pos==="n")[10];
-    G.inv={};
-    W.addCard(w1.en,1); W.addCard(w1.en,3); // ★3到達+★1の端数
-    W.addCard(w2.en,1);                     // ★1どまりの単語
-    G.party.sentence=[null];
-    const r=W.bulkDisassemble(1,false);
-    eq(G.inv[w1.en+"|1|0"], 1, "★3単語の★1端数は残る(Lv維持)");
-    ok(!G.inv[w2.en+"|1|0"], "★1どまりの単語は分解される");
-    eq(r.cnt, 1, "分解は1枚だけ");
-    G.inv=oldInv; G.party.sentence=oldSent; G.shards=s0;
-  });
-
   /* ---- 属性・セット効果 ---- */
   t("属性は決定的(レア・Lvで不変)で0〜4", ()=>{
     const a=W.genCard(W.WORDS[0],1,0), b=W.genCard(W.WORDS[0],3,2);
@@ -803,7 +770,9 @@ function run(){
   t("バナー指定で限定がピックアップ対象になる", ()=>{
     const p=W.gachaPool(4, {chars:["c22"]});
     ok(p.feat && p.feat.length===1 && p.feat[0].id==="c22", "featured SSR");
-    ok(p.normal.every(c=>!c.limited), "normal side no limited");
+    // v4.9.0以降、初回開催を終えた限定は恒常入りするため(8/8にc22が恒常入り)、
+    // 「恒常側に限定が一切いない」は成り立たない。恒常入り前の限定だけを弾く
+    ok(p.normal.every(c=>!c.limited || W.limitedUnlocked(c)), "恒常入り前の限定は混ざらない");
   });
   t("ダンジョンは18種でtierが単調増加・定義が揃っている(v4.6.0拡張)", ()=>{
     eq(W.DUNGEONS.length, 18, "count");
@@ -1230,7 +1199,7 @@ function run(){
     const q120=W.paceQuota(G);
     ok(q30.perDay>q120.perDay, "30日 "+q30.perDay+" > 120日 "+q120.perDay);
     ok(q120.perDay>=10, "下限は10問");
-    W.WORDS.slice(0,1500).forEach(w=>{ G.words[w.en]=[4, Date.now()+90*864e5, 5,0,1,0,0]; });
+    W.WORDS.slice(0,1500).forEach(w=>{ G.words[w.en]=[5, Date.now()+90*864e5, 5,0,1,0,0]; }); // box5=覚えた(v4.13.0基準)
     const q2=W.paceQuota(G);
     eq(q2.mastered, 1500, "覚えた数を反映");
     ok(q2.perDay<q120.perDay, "覚えた分だけ目安が減る(毎日の学習で自動更新)");
@@ -1249,7 +1218,7 @@ function run(){
     eq(st[0], 0, "ミスでbox0(1分後に再挑戦)");
     eq(st[7], 3, "復帰先=box3を記憶");
     eq(st[1], now+60e3, "dueは1分後");
-    W.srsApply(st, true, now);
+    W.srsApply(st, true, now+61e3); // 期限(1分後)が来てからの正解
     eq(st[0], 3, "正解でbox3へ復帰");
     eq(st[7], 0, "復帰先はクリアされる");
     const st2=[1, 0, 1, 1, 0, 0, 0];
@@ -1461,6 +1430,195 @@ function run(){
     ok(W.document.getElementById("histBtn"), "設定にボタン");
     ok(W.document.getElementById("updateBtn").textContent.indexOf("🔄")<0, "更新ボタンにアイコンなし");
     W.closeModal();
+  });
+
+  /* ---- v4.13.0: 覚えた基準・時間帯目安・フリーズ・部分リセット・図鑑・アイコン・放置報酬 ---- */
+  t("「覚えた」の基準はbox5=7日あけた復習にも正解(v4.13.0)", ()=>{
+    eq(W.MASTER_BOX, 5, "基準の引き上げ(旧4=3日後まで)");
+    eq(W.INTERVALS[4], 7*864e5, "box4の復習間隔は7日=box5到達は7日あけた正解");
+  });
+  t("期限前の先取り正解では定着段階が上がらない(v4.13.0)", ()=>{
+    const now=Date.now();
+    const st=[2, now+864e5, 3, 1, 0, 0, 0, 0]; // 期限はまだ先
+    W.srsApply(st, true, now);
+    eq(st[0], 2, "boxは上がらない");
+    eq(st[2], 4, "正解回数は数える");
+    eq(st[1], now+864e5, "期限も動かない");
+    const st2=[2, now-1000, 3, 1, 0, 0, 0, 0]; // 期限が来ている
+    W.srsApply(st2, true, now);
+    eq(st2[0], 3, "期限後の正解は従来どおり+1");
+  });
+  t("クイズに定着ステップが出る(学習中=定着n/5・覚えた=✓)", ()=>{
+    eq(W.qStatsHTML(null), "", "新規は空");
+    ok(W.qStatsHTML([2,0,3,1,0,0,0]).indexOf("定着 2/5")>=0, "学習中はステップ表示");
+    ok(W.qStatsHTML([5,0,9,1,1,0,0]).indexOf("✓覚えた")>=0, "覚えたは✓");
+  });
+  t("paceEstimates: 直近100問が復習だけでも復習の実測を使う(v4.13.0)", ()=>{
+    const log=[]; for(let i=0;i<20;i++) log.push([0, i<13?1:0]); // 復習20問・正答65%
+    const e=W.paceEstimates(log);
+    ok(e.sampledR && !e.sampledN && !e.sampled, "復習だけサンプル済み");
+    ok(Math.abs(e.recall-0.65)<1e-9, "復習は実測65%");
+    ok(Math.abs(e.knownRate-0.15)<1e-9, "新規は標準値のまま");
+  });
+  t("paceByNow: 8時〜20時の按分で「いまの時刻までの小目標」を出す", ()=>{
+    const at=h=>new Date(2026,7,10,h,0).getTime();
+    eq(W.paceByNow(60, at(7)), 0, "8時前は0");
+    eq(W.paceByNow(60, at(8)), 0, "8時ちょうどは0");
+    eq(W.paceByNow(60, at(14)), 30, "14時=半分");
+    eq(W.paceByNow(60, at(20)), 60, "20時で全量");
+    eq(W.paceByNow(60, at(23)), 60, "以降も全量のまま");
+  });
+  t("フリーズ🧊: 休んだ日を自動で埋めて連続学習を守る", ()=>{
+    const G=W.G;
+    const oldDays=G.days, oldFrz=G.frz;
+    const key=i=>{ const dt=new Date(Date.now()-i*864e5);
+      return dt.getFullYear()+"-"+String(dt.getMonth()+1).padStart(2,"0")+"-"+String(dt.getDate()).padStart(2,"0"); };
+    G.days={};
+    G.days[key(2)]={a:5,c:5,m:0}; // おととい学習・昨日休み
+    G.frz=1;
+    eq(W.applyStreakFreeze(G), 1, "1日ぶん埋める");
+    eq(G.frz, 0, "在庫を消費");
+    eq(G.days[key(1)].fz, 1, "昨日にfzマーカー");
+    eq(W.studyStreak(), 1, "連続は途切れない(凍結日は日数に数えない)");
+    eq(W.applyStreakFreeze(G), 0, "二度目は何もしない(在庫0)");
+    G.days={}; G.days[key(3)]={a:5,c:5,m:0}; G.frz=1;
+    eq(W.applyStreakFreeze(G), 0, "2日空白は🧊1個では守れない");
+    eq(G.frz, 1, "無駄遣いしない(消費なし)");
+    G.days={}; G.frz=2;
+    eq(W.applyStreakFreeze(G), 0, "守る連続記録がなければ何もしない");
+    eq(G.frz, 2);
+    G.days=oldDays; G.frz=oldFrz;
+  });
+  t("ログボ7日目で🧊フリーズを入手(所持上限2)", ()=>{
+    const G=W.G, f0=G.frz;
+    ok(W.LOGIN_BONUS[6].f>=1, "7日目の報酬に🧊");
+    G.frz=0; W.grantReward({f:1}); eq(G.frz, 1, "付与");
+    W.grantReward({f:5}); eq(G.frz, W.FRZ_MAX, "上限で頭打ち");
+    eq(W.rewardText({g:100,t:1,f:1}), "🪙100 🎫1 🧊1", "報酬表記");
+    G.frz=f0;
+  });
+  t("mergeData: フリーズ・凍結日・アイコン・るすばん精算も引き継ぐ", ()=>{
+    const base=()=>({words:{},days:{},inv:{},chars:{},dungeons:{},counters:{},ach:{},inf:{best:0},
+                     gold:0,tickets:0,shards:0,xp:0});
+    const a=Object.assign(base(),{frz:1, faces:{c01:"data:image/png;base64,AAA"}, updatedAt:2,
+      days:{"2026-08-09":{a:0,c:0,m:0,fz:1}}, idle:{last:500}});
+    const b=Object.assign(base(),{frz:2, faces:{c02:"data:image/png;base64,BBB"}, updatedAt:1,
+      days:{"2026-08-09":{a:0,c:0,m:0}}, idle:{last:100}});
+    const m=W.mergeData(a,b);
+    eq(m.frz, 2, "フリーズは多い方");
+    ok(m.faces.c01 && m.faces.c02, "アイコンは和集合");
+    eq(m.days["2026-08-09"].fz, 1, "凍結マーカーを保持");
+    eq(m.idle.last, 500, "るすばん精算は更新が新しい側");
+  });
+  t("部分リセット: 学習記録・カードは消え、なかま・通貨・レベルは残る", ()=>{
+    const g={mode:"e2j", chars:{c01:{dup:3}}, party:{char:"c01", sentence:["abate|1|0"]},
+      gold:500, tickets:9, xp:777, shards:44, combo:5,
+      dungeons:{d1:{clears:2}}, inf:{best:12, run:{floor:3}},
+      words:{abate:[3,0,5,1,0,0,0]}, days:{"2026-08-01":{a:9,c:9,m:0}},
+      inv:{"abate|1|0":4}, pace:{goal:"2027-01-01", setAt:1, log:[[1,1]]},
+      frz:1, faces:{c01:"data:image/png;base64,AAA"}, login:{last:"2026-08-09",day:3}, gift10:1,
+      daily:{}, weekly:{}, counters:{cor:99}, ach:{acor:2}};
+    const r=W.partialResetData(g, 12345);
+    eq(r.resetAt, 12345, "世代印を進める(全端末に伝播)");
+    eq(r.chars.c01.dup, 3, "なかま(突破)は残る");
+    eq(r.gold, 500); eq(r.tickets, 9); eq(r.xp, 777, "通貨・レベルは残る");
+    eq(r.inf.best, 12, "最深記録は残る"); eq(r.inf.run, null, "探索中の回廊は終了");
+    eq(Object.keys(r.words).length, 0, "SRS記録は消える");
+    eq(Object.keys(r.days).length, 0, "日別のあゆみは消える");
+    eq(Object.keys(r.inv).length, 0, "カードは消える");
+    eq(r.shards, 0, "かけらも消える");
+    eq(r.pace.goal, null, "学習ペースの目標もリセット");
+    eq(r.party.char, "c01", "出撃キャラは残る");
+    eq(r.party.sentence.length, 0, "呪文は空に");
+    ok(r.faces.c01, "カスタムアイコンは残る");
+    eq(r.frz, 1, "フリーズは残る");
+    // 世代マージ: 学習していた他端末にもリセットが丸ごと伝播する
+    const other={words:{abate:[3,0,5,1,0,0,0]}, days:{}, inv:{"abate|1|0":4}, chars:{}, dungeons:{},
+      counters:{}, ach:{}, inf:{best:0}, gold:0, tickets:0, shards:0, xp:0, resetAt:0, updatedAt:99999};
+    const m=W.mergeData(other, r);
+    ok(!m.inv["abate|1|0"], "カードが復活しない");
+    eq(m.gold, 500, "リセット側が丸ごと勝つ");
+  });
+  t("設定に部分リセットボタンがある(全リセットも残る)", ()=>{
+    W.openSettings();
+    ok(W.document.getElementById("resetLearnBtn"), "学習記録とカードだけリセット");
+    ok(W.document.getElementById("resetBtn"), "全リセット");
+    W.closeModal();
+  });
+  t("図鑑: 覚えた/学習中/未学習の絞り込みと英字検索(v4.13.0)", ()=>{
+    const G=W.G;
+    const oldWords=G.words, oldInv=G.inv;
+    const a=W.WORDS[0].en, b=W.WORDS[1].en;
+    G.inv={}; G.words={};
+    G.words[a]=[5, Date.now()+90*864e5, 6,0,1,0,0]; // 覚えた
+    G.words[b]=[2, Date.now(), 2,1,0,0,0];          // 学習中
+    W.openDex("cards");
+    const doc=W.document;
+    doc.querySelector('#dexLearnSeg [data-l="mas"]').click();
+    eq(doc.querySelectorAll("#dexGrid .dexcell").length, 1, "覚えた=1語");
+    ok(doc.getElementById("dexCount").textContent.indexOf("1語")>=0, "件数表示");
+    doc.querySelector('#dexLearnSeg [data-l="learn"]').click();
+    eq(doc.querySelectorAll("#dexGrid .dexcell").length, 1, "学習中=1語");
+    doc.querySelector('#dexLearnSeg [data-l="new"]').click();
+    eq(doc.querySelectorAll("#dexGrid .dexcell").length, W.WORDS.length-2, "未学習=残り全部");
+    doc.querySelector('#dexLearnSeg [data-l="all"]').click();
+    const inp=doc.getElementById("dexSearch");
+    inp.value=a; inp.oninput({target:inp});
+    const dens=[...doc.querySelectorAll("#dexGrid .den")];
+    ok(dens.length>=1, "検索ヒットあり");
+    ok(dens.every(el=>el.textContent.toLowerCase().indexOf(a.toLowerCase())>=0), "ヒットだけに絞られる");
+    inp.value=""; inp.oninput({target:inp}); // 状態を戻す(他テストへの影響防止)
+    W.closeModal();
+    G.words=oldWords; G.inv=oldInv;
+  });
+  t("なかまアイコンは任意画像に変更できる(charFace)", ()=>{
+    const G=W.G;
+    const c=W.CHARS[0];
+    const old=G.faces[c.id];
+    delete G.faces[c.id];
+    eq(W.charFace(c), c.face, "未設定は絵文字");
+    G.faces[c.id]="data:image/png;base64,AAAA";
+    ok(W.charFace(c).indexOf("<img")===0, "設定するとimgタグ");
+    G.faces[c.id]="javascript:alert(1)";
+    eq(W.charFace(c), c.face, "dataURL以外は無視(不正値対策)");
+    G.faces[c.id]="data:image/png;base64,AAAA";
+    G.chars[c.id]=G.chars[c.id]||{dup:0};
+    W.openCharModal(c.id, {});
+    ok(W.document.getElementById("faceBtn"), "詳細モーダルに変更ボタン");
+    ok(W.document.getElementById("faceResetBtn"), "設定済みなら戻すボタンも出る");
+    W.closeModal();
+    if(old===undefined) delete G.faces[c.id]; else G.faces[c.id]=old;
+  });
+  t("るすばん探索: 経過時間×レートの🪙(tierで時給UP・上限24時間)", ()=>{
+    const G=W.G;
+    const oldD=G.dungeons, oldIdle=G.idle, g0=G.gold;
+    G.dungeons={};
+    eq(W.idleRate(G), 10, "未クリアでも時給10");
+    G.dungeons={d5:{clears:1}};
+    eq(W.idleRate(G), 60, "tier5クリアで時給10+2×25=60");
+    const now=Date.now();
+    G.idle={last:now-2*3600e3};
+    const r=W.idleGain(G, now);
+    eq(r.gold, 120, "2時間×60");
+    eq(G.gold, g0+120, "🪙が付与される");
+    ok(!W.idleGain(G, now+60e3), "精算直後(30分未満)は貯め直し");
+    G.idle={last:now-48*3600e3};
+    eq(W.idleGain(G, now).gold, 24*60, "上限24時間ぶん");
+    ok(!W.idleGain({idle:{last:0}, dungeons:{}, gold:0}, now), "初回は基準時刻を置くだけ");
+    G.dungeons=oldD; G.idle=oldIdle; G.gold=g0;
+  });
+  t("灰色帯対策: 日をまたいだ最初の起動でも1回だけリロード(v4.13.0)", ()=>{
+    const store=init=>{ const s=Object.assign({},init);
+      return {getItem:k=>(k in s? s[k]:null), setItem:(k,v)=>{s[k]=v}}; };
+    const st=store({}), ss=store({});
+    ok(W.shouldRebootForIOSGray(true, st, ss, "2026-08-09"), "初回起動で発火");
+    const ss2=store({}); // タスクキル→再起動(新しいセッション)
+    ok(!W.shouldRebootForIOSGray(true, st, ss2, "2026-08-09"), "同じ日の再起動では発火しない");
+    const ss3=store({});
+    ok(W.shouldRebootForIOSGray(true, st, ss3, "2026-08-10"), "日が変わった最初の起動で発火(ログボの日)");
+    ok(!W.shouldRebootForIOSGray(true, st, ss3, "2026-08-11"), "同一セッション内では再発火しない(ループ防止)");
+    const ss4=store({});
+    ok(!W.shouldRebootForIOSGray(false, store({}), ss4, "2026-08-10"), "非スタンドアロンでは発火しない");
   });
 
   /* ---- 起動状態 ---- */

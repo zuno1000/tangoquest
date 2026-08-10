@@ -2,10 +2,21 @@
 /* ================= ログインボーナス・任務・実績 ================= */
 
 /* ---- ログインボーナス(7日サイクル) ----
-   v3.7.0: 毎日最低🎫1=来るだけで毎日1回はガチャが引ける */
-const LOGIN_BONUS=[{t:1,g:200},{t:1,g:300},{t:2},{t:1,g:500},{t:2},{t:1,g:800},{t:3,g:1000}];
-function rewardText(r){ return (r.g? "🪙"+r.g:"")+(r.g&&r.t?" ":"")+(r.t? "🎫"+r.t:""); }
-function grantReward(r){ if(r.g) G.gold+=r.g; if(r.t) G.tickets+=r.t; }
+   v3.7.0: 毎日最低🎫1=来るだけで毎日1回はガチャが引ける
+   v4.13.0: 7日目に🧊フリーズ1個(連続学習の保険・週1ペースで補充) */
+const LOGIN_BONUS=[{t:1,g:200},{t:1,g:300},{t:2},{t:1,g:500},{t:2},{t:1,g:800},{t:3,g:1000,f:1}];
+function rewardText(r){
+  const p=[];
+  if(r.g) p.push("🪙"+r.g);
+  if(r.t) p.push("🎫"+r.t);
+  if(r.f) p.push("🧊"+r.f);
+  return p.join(" ");
+}
+function grantReward(r){
+  if(r.g) G.gold+=r.g;
+  if(r.t) G.tickets+=r.t;
+  if(r.f) G.frz=Math.min(FRZ_MAX, (G.frz||0)+r.f); // フリーズは上限あり(貯め込み防止)
+}
 
 function checkLogin(){
   const k=todayKey();
@@ -29,7 +40,8 @@ function checkLogin(){
         const day=i+1;
         const cls=day<G.login.day?" got":(day===G.login.day?" now":"");
         return '<div class="lday'+cls+'"><div class="ln">'+day+'日目</div><div class="lr">'+rewardText(b)+'</div></div>';
-      }).join("")+'</div>' : '')+
+      }).join("")+'</div>'+
+      '<div class="small" style="margin-top:8px">🧊=連続学習フリーズ: 学習できなかった日を自動で埋めて連続記録を守る(いま '+(G.frz||0)+'/'+FRZ_MAX+'個)</div>' : '')+
     '<div class="row" style="justify-content:center"><button class="btn primary" style="flex:1" data-close>受け取る</button></div>');
 }
 

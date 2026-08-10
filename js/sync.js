@@ -132,11 +132,11 @@ function mergeData(a, b){
     const x=m.words[en], y=b.words[en];
     if(!x || (y[2]+y[3])>(x[2]+x[3])) m.words[en]=y;
   }
-  // 日別学習記録: 日ごとに大きい方
+  // 日別学習記録: 日ごとに大きい方(fz=フリーズが守った日も「守られた」側を保持)
   for(const k in b.days||{}){
     const x=m.days[k], y=b.days[k];
     if(!x) m.days[k]=y;
-    else ["a","c","m","n","t","na","nc","ra","rc"].forEach(f=>{
+    else ["a","c","m","n","t","na","nc","ra","rc","fz"].forEach(f=>{
       x[f]=Math.max(x[f]||0, y[f]||0);
     });
   }
@@ -158,14 +158,17 @@ function mergeData(a, b){
   m.shards=Math.max(m.shards||0, b.shards||0);
   m.xp=Math.max(m.xp||0, b.xp||0);
   m.gift10=Math.max(m.gift10||0, b.gift10||0); // 初回プレゼントは受取済みを優先
+  m.frz=Math.max(m.frz||0, b.frz||0);          // フリーズ🧊は多い方(進捗を失わない方向)
+  m.faces=Object.assign({}, b.faces||{}, a.faces||{}); // カスタムアイコンは和集合(ローカル優先)
   for(const k in b.counters||{}) m.counters[k]=Math.max(m.counters[k]||0, b.counters[k]||0);
   m.inf=m.inf||{best:0,run:null};
   m.inf.best=Math.max(m.inf.best||0, (b.inf&&b.inf.best)||0);
   for(const id in b.ach||{}) m.ach[id]=Math.max(m.ach[id]||0, b.ach[id]||0);
-  // 任務・編成・ログインは更新が新しい側を優先
+  // 任務・編成・ログイン・るすばん探索の精算時刻は更新が新しい側を優先
   const newer=(b.updatedAt||0)>(a.updatedAt||0)? b : a;
   m.daily=newer.daily||m.daily; m.weekly=newer.weekly||m.weekly;
   m.party=newer.party||m.party; m.login=newer.login||m.login; m.mode=newer.mode||m.mode;
+  m.idle=newer.idle||m.idle;
   /* 学習ペース: 目標日は「設定/解除した時刻(setAt)」が新しい側が勝つ。
      updatedAt基準だと起動しただけの未設定端末が勝って目標が消える(v4.7.1までの不具合)。
      setAt同士が同じ(旧版=0)なら目標あり側を優先。推定ログは長い方(結合すると重複計上になる) */
@@ -295,6 +298,22 @@ async function appUpdate(){
   }
 }
 
+/* ---- 部分リセット(v4.13.0): 学習記録・カードだけ消して、なかま・通貨・レベル・
+   冒険の記録は残す。resetAt世代を進めるので、同期している全端末に丸ごと伝播する
+   (フィールド別マージだと消した単語が他端末から復活してしまうため)。
+   任務(daily/weekly)は残す=今日達成済みの学習系任務の二重受取を防ぐ。純関数 */
+function partialResetData(g, t){
+  return {v:1, resetAt:t, updatedAt:t, mode:g.mode||"e2j",
+    chars:g.chars||{}, party:{char:(g.party&&g.party.char)||null, sentence:[]},
+    gold:g.gold||0, tickets:g.tickets||0, xp:g.xp||0,
+    dungeons:g.dungeons||{}, inf:{best:(g.inf&&g.inf.best)||0, run:null},
+    daily:g.daily||{}, weekly:g.weekly||{}, counters:g.counters||{}, ach:g.ach||{},
+    login:g.login||{last:null,day:0}, gift10:g.gift10||0,
+    frz:g.frz||0, faces:g.faces||{}, idle:{last:t},
+    words:{}, days:{}, inv:{}, shards:0, combo:0,
+    pace:{goal:null, setAt:t, log:[]}};
+}
+
 /* ================= 設定モーダル ================= */
 function openSettings(){
   const d=dayRec();
@@ -306,6 +325,7 @@ function openSettings(){
     '<tr><td>覚えた単語</td><td>'+mastered+' / '+WORDS.length+'</td></tr>'+
     '<tr><td>学習した単語</td><td>'+Object.keys(G.words).length+'</td></tr>'+
     '<tr><td>連続学習日数</td><td>'+streak+'日(XPボーナス ×'+(+streakXpMult().toFixed(2))+')</td></tr>'+
+    '<tr><td>連続学習フリーズ</td><td>🧊'+(G.frz||0)+' / '+FRZ_MAX+'(休んだ日を自動でカバー)</td></tr>'+
     '</table>'+
     '<button class="btn" id="histBtn" style="margin-top:8px">📊 学習のあゆみ(これまでの記録)</button>'+
     '<h3 style="margin-top:16px">出題モード</h3>'+
@@ -326,6 +346,8 @@ function openSettings(){
     '<button class="btn" id="updateBtn">アップデートを確認</button>'+
     '<div class="small" style="margin-top:6px">ホーム画面から起動している場合(iOS等)もこのボタンで最新版に更新できる。学習データ・同期は消えない</div>'+
     '<h3 style="margin-top:16px">データ</h3>'+
+    '<button class="btn" id="resetLearnBtn">学習記録とカードだけリセット</button>'+
+    '<div class="small" style="margin:6px 0 10px">なかま・通貨・レベル・冒険の記録は残して、単語の学習をやり直す</div>'+
     '<button class="btn danger" id="resetBtn">データをすべてリセット</button>'+
     '<div class="small" style="margin-top:14px">LEXICA(レキシカ) v'+APP_VERSION+' ─ 英単語×ローグライクRPG<br>単語データ: 英検1級レベル '+WORDS.length+'語(<a href="https://github.com/zuno1000/tango" target="_blank" rel="noopener" style="color:var(--accent2)">tango</a> 由来)</div>');
   $("modeToggle").onclick=()=>{
@@ -345,6 +367,21 @@ function openSettings(){
   if(sb){ ensureGis(()=>{}); sb.onclick=syncNow; } // GIS先読み=タップ時にポップアップがブロックされない
   $("histBtn").onclick=openHistoryModal;
   $("updateBtn").onclick=appUpdate;
+  $("resetLearnBtn").onclick=()=>{
+    openModal('<h3>学習記録とカードをリセットする？</h3>'+
+      '<div class="small" style="line-height:1.7">消えるもの: 単語の学習記録(SRS・学習のあゆみ)・単語カード・かけら・学習ペースの目標。<br>'+
+      '残るもの: なかま(突破・カスタムアイコン)・🪙・🎫・レベル(XP)・ダンジョンや任務の記録。'+
+      (syncClientId()&&lastSyncAt()? '<br>Drive同期を使っているため、<b>他の端末も次回同期時に同じ状態になる</b>。':'')+
+      '<br>この操作は取り消せない。</div>'+
+      '<div class="row" style="margin-top:12px; gap:10px">'+
+      '<button class="btn" data-close>やめる</button>'+
+      '<button class="btn danger" id="resetLearnGo">リセットする</button></div>');
+    $("resetLearnGo").onclick=()=>{
+      // resetAt世代を進めた「なかま等だけ残る」セーブを書いてリロード(全端末に伝播)
+      localStorage.setItem(KEY, JSON.stringify(partialResetData(G, Date.now())));
+      location.reload();
+    };
+  };
   $("resetBtn").onclick=()=>{
     openModal('<h3>本当にリセットする？</h3>'+
       '<div class="small">学習記録・カード・なかま・通貨がすべて消える。'+

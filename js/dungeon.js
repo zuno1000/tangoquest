@@ -114,6 +114,31 @@ function repeatGoldMult(rec){
   return n>=2? 0.25 : 1;
 }
 
+/* ---- るすばん探索(v4.13.0): アプリを開くだけで経過時間ぶんの🪙が貯まる ----
+   放置ゲームの「ログインするだけでメリット」を最小構成で:
+   レートはクリア済み最高tierで決まる(冒険が進むほど留守番も稼ぐ)。
+   上限24時間ぶん=毎日開くのがいちばん得。精算は起動・復帰時に自動 */
+function idleRate(g){
+  let t=0;
+  for(const d of DUNGEONS){
+    const r=g.dungeons[d.id];
+    if(r && r.clears>0 && d.tier>t) t=d.tier;
+  }
+  return 10+2*t*t; // 🪙/時(未クリアでも10/時=最初のログインからメリットがある)
+}
+function idleGain(g, now){
+  now=now||Date.now();
+  if(!g.idle) g.idle={last:0};
+  if(!g.idle.last){ g.idle.last=now; return null; } // 初回は基準時刻を置くだけ
+  const hours=Math.min(24, (now-g.idle.last)/3600e3);
+  if(hours<0.5) return null; // 30分未満は貯めたまま(開くたびに出るとノイズ)
+  const gold=Math.floor(hours*idleRate(g));
+  if(gold<1) return null;
+  g.idle.last=now;
+  g.gold+=gold;
+  return {gold, hours, rate:idleRate(g)};
+}
+
 /* ---- ダンジョン攻略(即時シミュレーション → ビジュアルバトル演出) ---- */
 function startRun(d){
   const P=playerStats();
@@ -536,7 +561,7 @@ function renderEqChars(){
      アニメを断てば通常描画に戻り根治する。フォイル彩色(dup10)は静的なので残る */
   box.innerHTML=
     '<div class="eqhero'+dupClass(dup).replace(" shine","")+'" id="eqCurChar" style="--dupc:'+DUP_RGB[c.rar-1]+'">'+
-      '<div class="ecf">'+c.face+'</div>'+
+      '<div class="ecf">'+charFace(c)+'</div>'+
       '<div class="grow">'+
         '<div class="'+CHAR_RAR_CLASS[c.rar-1]+'" style="font-weight:800; font-size:11px">'+
           CHAR_RAR[c.rar-1]+(dup>=10? ' 👑+'+dup : dup? " +"+dup : "")+'</div>'+

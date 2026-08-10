@@ -124,35 +124,14 @@ function syncSentenceKey(en){
   }
 }
 
-/* ---- かけら経済: 不要カードを分解してかけらに、かけらで任意カードを強化 ---- */
-const SHARD_VAL=[1,3,8,20,50]; // レア度ごとの分解価値(1枚あたり・Lvに依らず一定)
+/* ---- かけら(レガシー通貨・v4.13.0で分解機能は廃止) ----
+   単語=1カード(v4.8.0)以降「カードは持っているほど強い(Lv=枚数-1)」ため、
+   分解は実質デメリットしかない死に機能になっていた(★1でも将来のLv素材)。
+   分解UI・関数は撤去し、手元に残っているかけらだけは今までどおり
+   「重ねる」に使い切れる(新規入手手段はない) */
+const SHARD_VAL=[1,3,8,20,50]; // レア度ごとの価値(重ねるコストの基準として残す)
 function enhCost(c){ return SHARD_VAL[c.rar-1]*2*(c.lv+1); } // 重ねるほど次の1枚が高くつく
 
-/* 分解は低レアの端数から溶かす=カードの★(最高到達)をできるだけ保つ。
-   かけら価値は溶かした1枚1枚のレアで決まる(価値のインフレなし) */
-function disassemble(key, n){
-  const en=parseKey(key).en;
-  const have=wordCopies(en);
-  if(!have) return 0;
-  n=Math.min(n||1, have);
-  let gain=0, left=n;
-  for(let r=1;r<=5 && left>0;r++){
-    const k=keyOf(en,r,0), c=G.inv[k]||0;
-    if(!c) continue;
-    const take=Math.min(c, left);
-    gain+=SHARD_VAL[r-1]*take;
-    if(c-take<=0) delete G.inv[k]; else G.inv[k]=c-take;
-    left-=take;
-  }
-  G.shards+=gain;
-  syncSentenceKey(en); // 0枚なら文から外れ、最高レアが変われば差し替わる
-  return gain;
-}
-/* 次に分解される1枚のかけら価値(=いちばん低いレアの端数) */
-function nextDisValue(en){
-  for(let r=1;r<=5;r++){ if((G.inv[keyOf(en,r,0)]||0)>0) return SHARD_VAL[r-1]; }
-  return 0;
-}
 /* かけらで1枚「重ねる」(Lv+1と同義・実カード不要)。枚数は最高レアの山に積む */
 function enhanceOne(key){
   const en=parseKey(key).en, ck=canonKeyOf(en);
@@ -163,25 +142,6 @@ function enhanceOne(key){
   G.inv[ck]++;
   track("merge");
   return ck;
-}
-/* 一括分解: 指定レア度以下の「単語」をまとめて分解。
-   v4: 枚数=強さなので編成中の単語には触れない。
-   v4.8.0: ★の高い単語の低レア端数もLvの素材なので残す(単語単位で判定) */
-function bulkDisassemble(maxRar, dry){
-  const eqEn=equippedEnSet();
-  let cnt=0, gain=0;
-  const ens=new Set(Object.keys(G.inv).map(k=>parseKey(k).en));
-  for(const en of ens){
-    if(eqEn.has(en) || wordMaxRar(en)>maxRar) continue;
-    for(let r=1;r<=maxRar;r++){
-      const k=keyOf(en,r,0), n=G.inv[k]||0;
-      if(!n) continue;
-      cnt+=n; gain+=SHARD_VAL[r-1]*n;
-      if(!dry) delete G.inv[k];
-    }
-  }
-  if(!dry) G.shards+=gain;
-  return {cnt, gain};
 }
 
 /* ---- 正解時のレア度判定 ----
@@ -224,7 +184,9 @@ function renderCards(){
   }
   items.sort((a,b)=> b.rar-a.rar || b.lv-a.lv || a.en.localeCompare(b.en));
   let total=0; for(const k in G.inv) total+=G.inv[k];
-  $("cardSummary").innerHTML="所持 "+fmt(total)+"枚 / "+kinds.size+"種 ・ <b style='color:var(--accent)'>✨"+fmt(G.shards)+"</b>";
+  // ✨かけらはレガシー通貨: 残高があるときだけ見せる(使い切ったら表示ごと消える)
+  $("cardSummary").innerHTML="所持 "+fmt(total)+"枚 / "+kinds.size+"種"+
+    (G.shards>0? " ・ <b style='color:var(--accent)'>✨"+fmt(G.shards)+"</b>":"");
   if(!items.length){ grid.innerHTML='<div class="empty" style="grid-column:1/-1">クイズに正解するとカードを入手できます</div>'; return; }
   const frag=document.createDocumentFragment();
   items.forEach(c=>{
@@ -286,18 +248,17 @@ function openCardModal(key){
   const cnt=wordCopies(en);
   const eq=equippedCountOf(key)>0;
   const cost=enhCost(c);
+  // ✨で重ねるボタンはかけらが残っている間だけ出す(レガシー・分解廃止=v4.13.0)
   openModal(
     '<h3>カード詳細</h3>'+cardDetailHTML(c)+
     '<div class="small" style="text-align:center">重ね '+cnt+'枚 = Lv+'+c.lv+
-      '(もう1枚で+'+(c.lv+1)+')'+(eq?" ・ 装備中":"")+' ・ ✨'+fmt(G.shards)+'</div>'+
+      '(もう1枚で+'+(c.lv+1)+')'+(eq?" ・ 装備中":"")+(G.shards>0? ' ・ ✨'+fmt(G.shards):'')+'</div>'+
     '<div class="row" style="margin-top:12px; gap:8px">'+
-      '<button class="btn primary" style="flex:1" id="enhBtn" '+(cnt<1||G.shards<cost?"disabled":"")+'>✨'+fmt(cost)+' で重ねる</button>'+
+      (G.shards>0? '<button class="btn primary" style="flex:1" id="enhBtn" '+(cnt<1||G.shards<cost?"disabled":"")+'>✨'+fmt(cost)+' で重ねる</button>':'')+
       '<button class="btn" style="flex:1" id="quickEqBtn" '+(eq?"disabled":"")+'>'+(eq?"呪文に配置中":"📜 呪文に置く")+'</button>'+
-    '</div>'+
-    '<div class="row" style="margin-top:8px; gap:8px">'+
-      '<button class="btn" style="flex:1" id="disBtn">1枚分解 → ✨'+fmt(nextDisValue(en))+(cnt>1?"(Lvが下がる)":"")+'</button>'+
     '</div>');
-  $("enhBtn").onclick=()=>{
+  const eb=$("enhBtn");
+  if(eb) eb.onclick=()=>{
     if(!enhanceOne(key)) return;
     saveG(); toast("重ねた! Lv+"+cardOf(key).lv+" になった"); vibe(30);
     renderCards(); openCardModal(key); refreshHeader();
@@ -307,13 +268,6 @@ function openCardModal(key){
     if(!slot){ toast("呪文が満杯か、すでに配置中"); return; }
     toast("呪文の"+slot+"語目に置いた");
     renderCards(); openCardModal(key);
-  };
-  $("disBtn").onclick=()=>{
-    const gain=disassemble(key,1);
-    if(!gain) return;
-    saveG(); toast("分解した → ✨"+fmt(gain));
-    renderCards(); refreshHeader();
-    if(wordCopies(en)) openCardModal(canonKeyOf(en)); else closeModal();
   };
 }
 
@@ -342,19 +296,4 @@ function normalizeSentenceRarity(g){
 }
 normalizeSentenceRarity(G);
 
-$("bulkDisBtn").onclick=()=>{
-  const p1=bulkDisassemble(1,true), p2=bulkDisassemble(2,true);
-  openModal('<h3>✨ 一括分解</h3>'+
-    '<div class="small" style="line-height:1.7">選んだレア度以下のカードをまとめて分解し、かけらにする。装備中のカードには触れない。<br>かけらは「重ねる」に使える。</div>'+
-    '<div class="row" style="margin-top:14px; gap:8px; flex-direction:column; align-items:stretch">'+
-    '<button class="btn" id="bd1" '+(p1.cnt?"":"disabled")+'>★1以下を分解 ('+p1.cnt+'枚 → ✨'+fmt(p1.gain)+')</button>'+
-    '<button class="btn" id="bd2" '+(p2.cnt?"":"disabled")+'>★2以下を分解 ('+p2.cnt+'枚 → ✨'+fmt(p2.gain)+')</button>'+
-    '</div>');
-  const run=maxRar=>{
-    const r=bulkDisassemble(maxRar,false);
-    saveG(); closeModal(); renderCards(); refreshHeader();
-    toast(r.cnt+"枚を分解 → ✨"+fmt(r.gain));
-  };
-  if(p1.cnt) $("bd1").onclick=()=>run(1);
-  if(p2.cnt) $("bd2").onclick=()=>run(2);
-};
+/* 一括分解ボタン(#bulkDisBtn)は分解機能の廃止に伴いindex.htmlごと撤去(v4.13.0) */

@@ -30,6 +30,10 @@ const EVENTS=[
   // {d:"2026-08-03", t:"..."} 形式でバナー以外のイベント告知を書く
 ];
 const NEWS=[
+  {d:"2026-08-10", t:"🏅 v4.13.0 「覚えた」の基準を見直し! 7日間あけた復習にも正解してはじめて「覚えた」になります(従来は3日後まで)。これにより覚えた単語の数が一時的に減って見えますが、学習記録は消えていません。クイズには「定着 ◯/5」の進捗表示と、覚えた瞬間のお祝いを追加。また出題対象がない時の先取り出題では定着段階が上がらないようにしました(忘却曲線どおりの間隔をあけた正解だけが段階を進めます)"},
+  {d:"2026-08-10", t:"🧊 v4.13.0 連続学習フリーズが登場! 学習できなかった日を自動で埋めて連続記録を守ります(ログインボーナス7日目で入手・最大2個)。さらに「るすばん探索」も追加: アプリを開くだけで、前回から経過した時間ぶんの🪙がもらえます(クリア済みダンジョンが深いほど時給アップ・最大24時間ぶん)"},
+  {d:"2026-08-10", t:"📕 v4.13.0 図鑑がパワーアップ! 単語の英字検索と、覚えた/学習中/未学習の絞り込みができるようになりました。なかまのアイコンは好きな画像に変更できます(なかま詳細→アイコンを変更)。設定には「学習記録とカードだけリセット」(なかま・通貨・レベルは残る)を追加"},
+  {d:"2026-08-10", t:"🔧 v4.13.0 ホームの目安に「いまの時刻までの小目標」を追加(8時〜20時を学習時間帯として按分)。直近100問が復習ばかりのときに分析が「まだ分析中」になる表示を修正。カードの分解機能は廃止しました(単語=1カード化で、カードは持っているほど強くなるため。手持ちの✨かけらは今までどおり「重ねる」に使えます)。ホーム画面起動時に画面上部が灰色になる不具合の自動復旧を強化(日をまたいだ最初の起動でも復旧します)"},
   {d:"2026-08-06", t:"📊 v4.12.0 学習のあゆみに全期間の新規/復習別の正答率を追加! 今日から解答の内訳を記録し、記録開始日以降のすべての解答から集計します(過去の分は内訳が残っていないため対象外)。「累計解答(全期間)」=アプリを使いはじめてからのすべての記録です"},
   {d:"2026-08-06", t:"📊 v4.11.1 学習のあゆみに「正答率(直近100問)」を追加! 新規と復習それぞれの正答率を確認できます(学習ペースの逆算に使っているのと同じ分析です)"},
   {d:"2026-08-06", t:"📊 v4.11.0 学習のあゆみで過去の記録もさかのぼれるように! グラフ上の◀▶で14日ずつ移動できます(期間の合計問数つき)。記録の数え方の説明も追加: 日付は端末の時計で0時に切り替わり、複数端末で同じ日に学習した場合は多い方の端末の数が残ります(合算はされません)"},
@@ -104,12 +108,13 @@ function renderHome(){
   $("homeBox").innerHTML=
     // ヒーロー(出撃キャラ)
     '<div class="panel hero" data-go="party">'+
-      '<div class="heroface">'+(ch?ch.face:"🗡️")+'</div>'+
+      '<div class="heroface">'+(ch?charFace(ch):"🗡️")+'</div>'+
       '<div class="grow">'+
         '<div style="font-weight:800; font-size:16px">'+(ch?esc(ch.name):"-")+'</div>'+
         '<div class="small" style="margin-top:2px">戦闘力 <b style="color:var(--accent); font-size:15px">'+fmt(P.power)+'</b></div>'+
         '<div class="small" style="margin-top:6px">📖 Lv'+lv+
-          (stk>=2? ' <span style="color:var(--accent); font-weight:800">🔥'+stk+'日連続(XP×'+(+streakXpMult().toFixed(2))+')</span>':'')+'</div>'+
+          (stk>=2? ' <span style="color:var(--accent); font-weight:800">🔥'+stk+'日連続(XP×'+(+streakXpMult().toFixed(2))+')</span>':'')+
+          (G.frz? ' <span title="連続学習フリーズ">🧊'+G.frz+'</span>':'')+'</div>'+
         '<div class="mbar" style="margin-top:3px"><i style="width:'+pct+'%"></i></div>'+
       '</div></div>'+
     // 学習ペース管理: 今日の目安メーター/未設定なら設定への導線
@@ -203,21 +208,35 @@ setInterval(()=>{
 }, 5000);
 
 /* ---- 起動 ---- */
-/* 灰色帯対策の初回リロード判定は state.js 冒頭(全初期化の前)に移動(v4.5.1) */
+/* 灰色帯対策の自動リロード判定は state.js 冒頭(全初期化の前)で実施(v4.5.1→v4.13.0拡張) */
+/* るすばん探索(放置報酬)とフリーズの自動適用(v4.13.0)。
+   どちらも起きたときだけ1つのトーストにまとめる(上書きされないように) */
+function settleIdleAndFreeze(){
+  const msgs=[];
+  const idle=idleGain(G);
+  if(idle) msgs.push("💤 るすばん探索: 🪙+"+fmt(idle.gold)+"("+(Math.round(idle.hours*10)/10)+"時間ぶん)");
+  const frozen=applyStreakFreeze(G);
+  if(frozen) msgs.push("🧊 フリーズが連続学習を守った("+frozen+"日ぶん)");
+  if(msgs.length){ saveG(); refreshHeader(); toast(msgs.join(" ／ ")); }
+}
 refreshHeader();
 refreshBellDot();
 newQuestion();          // 学習タブを開いた瞬間に出題できるよう先に準備
 infTick();              // 放置分の探索を反映
 refreshInfPill();
+settleIdleAndFreeze();  // renderHomeの前(連続日数・🪙の表示に反映するため)
 renderHome();           // ホームがランディング
 /* リロード確定中はログボを出さない(モーダルがリロードに巻き込まれて
    「一瞬出てすぐ消える」ため)。未受取のままなのでリロード後に改めて出る */
 if(!TQ_REBOOTING) checkLogin();
 saveG();
 
-/* PWAを閉じずに日をまたいだ場合: 復帰時に日付が変わっていたらログインボーナスを付与 */
+/* PWAを閉じずに日をまたいだ場合: 復帰時に日付が変わっていたらログインボーナスを付与。
+   るすばん探索・フリーズも復帰時に精算する */
 document.addEventListener("visibilitychange", ()=>{
-  if(!document.hidden && G.login.last!==todayKey()){
+  if(document.hidden) return;
+  settleIdleAndFreeze();
+  if(G.login.last!==todayKey()){
     checkLogin();
     refreshHeader();
   }
@@ -251,3 +270,4 @@ window.LTD_SLOTS=LTD_SLOTS;
 window.ROOT_DEFS=ROOT_DEFS; window.PREFIX_DEFS=PREFIX_DEFS; window.APP_VERSION=APP_VERSION;
 window.LOGIN_BONUS=LOGIN_BONUS; window.ACH_DEFS=ACH_DEFS;
 window.DAILY_DEFS=DAILY_DEFS; window.WEEKLY_DEFS=WEEKLY_DEFS;
+window.MASTER_BOX=MASTER_BOX; window.INTERVALS=INTERVALS; window.FRZ_MAX=FRZ_MAX;

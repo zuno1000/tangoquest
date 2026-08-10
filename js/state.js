@@ -1,25 +1,35 @@
 "use strict";
 /* ================= 状態管理 ================= */
 const KEY="tangoquest_v1";
-const APP_VERSION="4.12.0"; // リリースごとに更新(設定表示・更新確認のリモート版比較に使う)
+const APP_VERSION="4.13.0"; // リリースごとに更新(設定表示・更新確認のリモート版比較に使う)
 
-/* ---- iOSスタンドアロン初回起動の灰色帯対策(v4.5.0→v4.5.1で移設) ----
-   インストール直後の初回起動だけiOSがステータスバー領域を灰色に塗るため、
-   初回のみ自動リロードする。判定は全初期化の前(このファイル冒頭)で行い、
+/* ---- iOSスタンドアロン起動時の灰色帯対策(v4.5.0→v4.13.0で拡張) ----
+   インストール直後の初回起動に加え、日をまたいだ最初のコールドスタート
+   (ログインボーナスが出る起動)でもステータスバー領域が灰色に塗られ、
+   タスクキルまで残ることが実機で確認された(2026-08-10報告)。リロードで
+   直ることは確定しているため、「その日はじめての起動」も1回だけ自動リロード
+   する。sessionStorageのガードで同一セッション内の再発火(ループ)を防ぐ。
    リロード確定はTQ_REBOOTINGで起動時UIに伝える ─ location.reload()は非同期で
    後続スクリプトが走り切るため、ガードしないとログインボーナスのモーダルが
    一瞬開いてリロードに巻き込まれる(v4.5.0の実機バグ)。
    判定本体は純関数に切り出してテスト可能にしている */
-function shouldRebootForIOSGray(standalone, store){
-  if(!standalone || store.getItem("tq_booted")) return false;
-  store.setItem("tq_booted","1"); // 書けない環境は例外→呼び元のcatchへ=リロードしない
-  return true;
+function shouldRebootForIOSGray(standalone, store, session, today){
+  if(!standalone) return false;
+  if(session && session.getItem("tq_sboot")) return false; // このセッションでリロード済み
+  let fire=false;
+  if(!store.getItem("tq_booted")){ store.setItem("tq_booted","1"); fire=true; }
+  if(today && store.getItem("tq_bootDay")!==today){
+    store.setItem("tq_bootDay", today); // 書けない環境は例外→呼び元のcatchへ=リロードしない
+    fire=true;
+  }
+  if(fire && session) session.setItem("tq_sboot","1");
+  return fire;
 }
 var TQ_REBOOTING=false; // main.jsが参照(トップレベルletはwindowに載らないためvar)
 try{
   const sa=navigator.standalone ||
     (window.matchMedia && matchMedia("(display-mode: standalone)").matches);
-  if(shouldRebootForIOSGray(sa, localStorage)){
+  if(shouldRebootForIOSGray(sa, localStorage, sessionStorage, todayKey())){
     TQ_REBOOTING=true;
     location.reload();
   }
@@ -93,6 +103,9 @@ G.combo=G.combo||0;     // 連続正解数(ミスで0に。XPボーナス・ド�
 G.pace=G.pace||{goal:null, setAt:0, log:[]}; // 学習ペース管理(v4.7.0): 目標日+直近100問の結果
 if(!Array.isArray(G.pace.log)) G.pace.log=[];
 G.pace.setAt=G.pace.setAt||0; // 目標を設定/解除した時刻(同期はこれが新しい側が勝つ=v4.7.2)
+G.frz=G.frz||0;         // 連続学習フリーズ🧊の所持数(v4.13.0・最大FRZ_MAX)
+G.faces=G.faces||{};    // なかまのカスタムアイコン(charId -> dataURL・v4.13.0)
+G.idle=G.idle||{last:0}; // るすばん探索(放置報酬)の最終精算時刻(v4.13.0)
 G.updatedAt=G.updatedAt||0;
 G.resetAt=G.resetAt||0;     // リセット世代印(同期マージで新しい世代が丸ごと勝つ)
 
@@ -141,7 +154,8 @@ function track(ev, n){
 
 /* ---- 知識レベル: クイズ正解の積み重ねが直接強さになる ---- */
 function accountLevel(){ return Math.floor(Math.pow((G.xp||0)/50, 0.55))+1; }
-/* 連続学習日数(1問以上解いた日が対象。今日まだ解いていなくても途切れ扱いにしない) */
+/* 連続学習日数(1問以上解いた日が対象。今日まだ解いていなくても途切れ扱いにしない)。
+   フリーズ🧊が守った日(fz)は途切れないが日数には数えない(Duolingo等と同じ扱い) */
 function studyStreak(){
   let n=0; const t=new Date();
   for(let i=0;;i++){
@@ -149,10 +163,42 @@ function studyStreak(){
     const k=dt.getFullYear()+"-"+String(dt.getMonth()+1).padStart(2,"0")+"-"+String(dt.getDate()).padStart(2,"0");
     const r=G.days[k];
     if(r && r.a>0) n++;
+    else if(r && r.fz) continue; // フリーズが守った日: 数えないが途切れない
     else if(i===0) continue;
     else break;
   }
   return n;
+}
+
+/* ---- 連続学習フリーズ(v4.13.0・abceedのフリーズ参考) ----
+   学習しなかった日を🧊1個につき1日自動で埋めて、連続記録を守る。
+   入手はログインボーナス7日目(週1ペース)・所持は最大FRZ_MAX個。
+   起動時に「昨日から直近の学習日までの空白」を調べ、在庫で埋め切れる
+   ときだけ消費する(どうせ途切れている長い空白に無駄遣いしない)。
+   埋めた日は days[k].fz=1 として永続化(同期はmaxマージ=消えない)。
+   純関数(gとnowを受ける)=テスト可能。埋めた日数を返す */
+const FRZ_MAX=2;
+function applyStreakFreeze(g, now){
+  if(!(g.frz>0)) return 0;
+  const base=now!=null? new Date(now) : new Date();
+  const key=i=>{ const dt=new Date(base.getFullYear(), base.getMonth(), base.getDate()-i);
+    return dt.getFullYear()+"-"+String(dt.getMonth()+1).padStart(2,"0")+"-"+String(dt.getDate()).padStart(2,"0"); };
+  const gap=[];
+  for(let i=1;i<=60;i++){
+    const r=g.days[key(i)];
+    if(r && r.a>0){ // 直近の学習日に到達: ここまでの空白が守る対象
+      if(gap.length && gap.length<=g.frz){
+        gap.forEach(k=>{ g.days[k]=g.days[k]||{a:0,c:0,m:0}; g.days[k].fz=1; });
+        g.frz-=gap.length;
+        return gap.length;
+      }
+      return 0;
+    }
+    if(r && r.fz) continue; // すでに守られた日はチェーンの一部
+    gap.push(key(i));
+    if(gap.length>FRZ_MAX) return 0; // 在庫上限を超える空白は守れない(=もう途切れている)
+  }
+  return 0; // 60日さかのぼっても学習日がない=守る連続記録がない
 }
 /* 連続日数XPボーナス: 2日目から+5%/日、21日目以降は×2.0で頭打ち */
 function streakXpMult(){ return 1+0.05*Math.min(Math.max(studyStreak()-1,0), 20); }
