@@ -828,3 +828,20 @@ header .res span:last-child{overflow:hidden; text-overflow:ellipsis}
 #tdStats{height:15px; overflow:hidden; white-space:nowrap}
 /* なかまの攻撃ポップ(青・下から) */
 .tdpop.tdup{color:var(--accent2); font-size:11px; top:auto; bottom:-3px; text-shadow:none}
+
+/* ---- v4.19.0: 連続座標レーン(にゃんこ大戦争式・固定高の帯) ---- */
+#tdLane{display:block; height:64px; min-height:64px; grid-template-columns:none; gap:0;
+  background:var(--bg); border-radius:12px; margin-top:6px; overflow:visible;
+  box-shadow:inset 2px 2px 5px var(--shd), inset -2px -2px 5px var(--shl)}
+#tdLane .tde{position:absolute; top:3px; width:32px; text-align:center;
+  transition:left .45s ease; pointer-events:none; z-index:2}
+#tdLane .tde .te{font-size:17px; line-height:1.15}
+#tdLane .tde.tb .te{font-size:24px}
+#tdLane .tdf{position:absolute; bottom:3px; width:32px; text-align:center;
+  transition:left .45s ease; pointer-events:none; z-index:3}
+#tdLane .tdf .tu{font-size:16px; line-height:1.15}
+#tdLane .thp{margin:1px 4px 0}
+#tdLane .tdboom{transition:none; z-index:4}
+.tdpopw{position:absolute; top:-4px; width:36px; text-align:center; pointer-events:none; z-index:6}
+.tdpopw .tdpop{position:static; display:block}
+.tdpopw .tdpop.tdup{font-size:11px}

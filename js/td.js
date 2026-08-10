@@ -23,7 +23,15 @@
    ・3ウェーブ(6体/8体/10体+ボス)を守り切れば勝利で🪙
    ・時間制限はない: 焦らせるのは時計ではなく進軍。じっくり思い出す方が得 */
 
-const TD_LANE=8;
+/* v4.19.0 連続座標化(にゃんこ大戦争式): マスの概念を廃止。
+   フィールドはx=0(城)〜100(敵の出現点)の1次元。全員がx軸を単調に進み、
+   射程に敵が入ったら足を止めて攻撃する。重なりは許容し、描画は固定高の
+   帯に絶対配置する=数が増えても縦に伸びずクイズを圧迫しない */
+const TD_LANE=8;          // 互換用(進軍回数の目安=100/TD_STEP)
+const TD_LEN=100;         // フィールド全長
+const TD_STEP=12.5;       // 1問あたりの進軍距離(8問で城に到達=従来と同じ間合い)
+const TD_REACH=4;         // 近接の間合い(このx差以内なら殴り合える=重なり許容)
+function tdURange(u){ return TD_REACH+(u.rng||0)*TD_STEP; } // なかまの攻撃射程
 /* v4.17.0 砲撃のチャージ制: 「砲撃だけでクリアできてしまう」の是正。
    ・正解3回で⚡チャージ満タン→自動発射(威力はまとめて2.5×dpt=平均では従来より弱い)
    ・なかまが1体も場にいないと発射できない(呪文はなかまが詠唱する)
@@ -57,12 +65,14 @@ function tdWaves(d){
       const e=enemyFor(d.tier, floor, d.floors, false, d.names, d.boss, {elem:d.elem, trait:d.trait});
       e.icon=d.eicons[i%d.eicons.length];
       e.hpMax=e.hp;
+      e.uid="e"+w+"_"+i; // 描画の差分更新キー(v4.19.0)
       list.push(e);
     }
     if(w===2){
       const b=enemyFor(d.tier, d.floors, d.floors, true, d.names, d.boss, {elem:d.elem, trait:d.trait});
       b.icon=d.bossIcon;
       b.hpMax=b.hp;
+      b.uid="eboss";
       list.push(b);
     }
     waves.push(list);
@@ -96,7 +106,7 @@ function tdNewBattle(d, P, rustN){
   return {id:d.id, name:d.name, icon:d.icon, tier:d.tier, elem:d.elem,
     waves:tdWaves(d), wi:0, si:0,
     enemies:[],
-    units:[], mana:TD_MANA0, cd:{}, // なかま出撃(v4.16.0): 場のユニット・💠言霊・再出撃クールダウン
+    units:[], mana:TD_MANA0, cd:{}, seq:0, // なかま出撃: 場のユニット・💠言霊・再出撃CD・uid採番
     charge:0, // 砲撃チャージ(v4.17.0): 正解で+1・満タン+なかまありで発射
     castle:P.hp, castleMax:P.hp,
     em:elemMatch(P.elems||[], d.elem).dealt, // 属性相性は与ダメに乗る(対策編成が効く)
@@ -143,6 +153,7 @@ function tdDeploy(b, id){
   if(b.mana<u.cost || (b.cd[id]||0)>0) return null;
   b.mana-=u.cost;
   b.cd[id]=2;
+  u.uid="u"+(++b.seq);
   b.units.push(u);
   return u;
 }
@@ -155,17 +166,19 @@ function tdDeck(){
   return d.slice(0,6);
 }
 
-/* 交戦(毎tick・移動の前)。v4.17.1で射程対応:
-   ・なかまの攻撃: 射程内(自分のマス〜前方rngマス)でいちばん近い敵を撃つ。
-     近接(rng0)は同じマスだけ=従来どおり。後衛は前衛ごしに撃てる
-   ・敵の攻撃: 同じマスのなかま(先頭)を殴る(敵はすべて近接)
-   戻り値は演出用イベント(posは撃たれた敵のマス) */
+/* 交戦(毎tick・移動の前)。v4.19.0で連続座標に:
+   ・なかまの攻撃: 射程内(前方tdURange・重なりはTD_REACHまで許容)のいちばん近い敵を撃つ。
+     近接(rng0)は間合いTD_REACH=ほぼ密着。後衛は前衛ごしに撃てる
+   ・敵の攻撃: 間合いTD_REACH内のいちばん前のなかまを殴る(敵はすべて近接)
+   戻り値は演出用イベント(posは撃たれた側のx座標) */
 function tdCombat(b){
   const ev=[];
   for(const u of b.units){
     if(u.hp<=0) continue;
-    const es=b.enemies.filter(e=>e.hp>0 && e.pos>=u.pos && e.pos<=u.pos+(u.rng||0))
-      .sort((a,c)=>a.pos-c.pos);
+    const es=b.enemies.filter(e=>{
+      const dx=e.pos-u.pos;
+      return e.hp>0 && dx>=-TD_REACH && dx<=tdURange(u);
+    }).sort((a,c)=>a.pos-c.pos);
     const e=es[0];
     if(!e) continue;
     const dmg=Math.max(1, Math.round(u.atk*(e.boss? 1+(u.skBoss||0) : 1) - (e.def||0)*0.55));
@@ -174,19 +187,20 @@ function tdCombat(b){
     ev.push({side:"u", pos:e.pos, dmg, icon:e.icon, name:e.name, dead:e.hp<=0, boss:!!e.boss});
   }
   b.enemies=b.enemies.filter(e=>e.hp>0);
-  for(let p=0;p<TD_LANE;p++){
-    const us=b.units.filter(u=>u.pos===p && u.hp>0);
-    const es=b.enemies.filter(e=>e.pos===p && e.hp>0);
-    if(!us.length || !es.length) continue;
-    for(const e of es){
-      const u=us.find(x=>x.hp>0);
-      if(!u) break;
-      const dmg=Math.max(1, Math.round((e.atk||1) - u.def*0.55));
-      u.hp-=dmg;
-      ev.push({side:"e", pos:p, dmg, uid:u.id, uname:u.name, udead:u.hp<=0});
-    }
-    us.forEach(u=>{ if(u.skHeal && u.hp>0) u.hp=Math.min(u.hpMax, u.hp+Math.round(u.hpMax*u.skHeal*0.3)); });
+  for(const e of b.enemies){
+    const us=b.units.filter(u=>u.hp>0 && Math.abs(e.pos-u.pos)<=TD_REACH)
+      .sort((a,c)=>c.pos-a.pos); // いちばん前のなかまが盾になる
+    const u=us[0];
+    if(!u) continue;
+    const dmg=Math.max(1, Math.round((e.atk||1) - u.def*0.55));
+    u.hp-=dmg;
+    ev.push({side:"e", pos:u.pos, dmg, uid:u.id, uname:u.name, udead:u.hp<=0});
   }
+  // 自己再生(heal)は交戦中(間合いに敵がいる)のなかまだけ
+  b.units.forEach(u=>{
+    if(u.skHeal && u.hp>0 && b.enemies.some(e=>e.hp>0 && Math.abs(e.pos-u.pos)<=TD_REACH))
+      u.hp=Math.min(u.hpMax, u.hp+Math.round(u.hpMax*u.skHeal*0.3));
+  });
   b.units=b.units.filter(u=>u.hp>0);
   return ev;
 }
@@ -234,16 +248,16 @@ function tdFire(b, mult){
   return {hits, heal, beam, multiPop};
 }
 
-/* 1問ごとの進行: 交戦 → 進軍(なかまが同じマスの敵を足止め) → 城への到達処理 →
-   なかまの進軍(敵がいるマスでは交戦継続) → 増援 → ウェーブ/勝敗判定 → CD消化 */
+/* 1問ごとの進行(v4.19.0・連続座標): 交戦 → 敵の進軍(間合いに
+   なかまがいれば足を止めて戦う=にゃんこ式) → 城への到達処理 →
+   なかまの進軍(射程内に敵がいれば停止して撃つ) → 増援 → 判定 → CD消化 */
 function tdTick(b){
   b.ticks++;
   const ev={leaks:[], spawned:null, wave:0, win:false, lose:false, fights:[]};
   ev.fights=tdCombat(b);
   for(const e of b.enemies){
-    if(e.boss && b.ticks%2) continue; // ボスは2問に1歩(大物の貫禄+削る猶予)
-    if(b.units.some(u=>u.pos===e.pos)) continue; // なかまが足止め(アークナイツのブロック)
-    e.pos--;
+    if(b.units.some(u=>Math.abs(e.pos-u.pos)<=TD_REACH)) continue; // 間合いのなかまと交戦中
+    e.pos-=TD_STEP*(e.boss? 0.5:1); // ボスはゆっくり(従来の2問で1歩と同じ)
   }
   const rest=[];
   for(const e of b.enemies){
@@ -256,15 +270,15 @@ function tdTick(b){
   b.enemies=rest;
   // なかまの進軍(射程内に敵がいれば足を止めて撃ち続ける=後衛は距離を保つ)
   for(const u of b.units){
-    if(b.enemies.some(e=>e.pos>=u.pos && e.pos<=u.pos+(u.rng||0))) continue;
-    if(u.pos<TD_LANE-1) u.pos++;
+    if(b.enemies.some(e=>{ const dx=e.pos-u.pos; return dx>=-TD_REACH && dx<=tdURange(u); })) continue;
+    u.pos=Math.min(TD_LEN-6, u.pos+TD_STEP);
   }
   // 再出撃クールダウンの消化
   for(const k in b.cd){ if(b.cd[k]>0) b.cd[k]--; }
   const wave=b.waves[b.wi];
   if(wave && b.si<wave.length){
     const e=wave[b.si++];
-    e.pos=TD_LANE-1;
+    e.pos=TD_LEN;
     b.enemies.push(e);
     ev.spawned=e;
   }else if(!b.enemies.length && wave){
@@ -319,6 +333,7 @@ function tdStart(d){
   tdTick(TD); // 最初の1体を送り込む
   closeModal();
   switchTab("td");
+  $("tdLane").innerHTML=""; // 前の戦闘のスプライトを一掃
   tdQuestion();
   renderTDField(null);
   renderTDDeck();
@@ -438,40 +453,49 @@ function renderTDField(fire, ev, ok){
   const remain=TD.enemies.length+(wave? wave.length-TD.si : 0);
   $("tdTitle").innerHTML="⚔ "+esc(TD.name)+"<br>WAVE "+Math.min(TD.wi+1,3)+"/3 ・ 敵のこり "+remain+
     (TD.rust? ' ・ <span style="color:var(--ng)">⏳-'+Math.round((1-TD.rustM)*100)+'%</span>':'');
-  // レーン(左=城側)。上段=敵(赤バー)・下段=なかま(青バー)。
-  // 砲撃ヒットはダメージポップ・撃破(交戦含む)は爆発で見せる
-  const byPos={}, uByPos={};
-  TD.enemies.forEach(e=>{ (byPos[e.pos]=byPos[e.pos]||[]).push(e); });
-  TD.units.forEach(u=>{ (uByPos[u.pos]=uByPos[u.pos]||[]).push(u); });
-  const hitByPos={};
-  hits.forEach(h=>{ (hitByPos[h.pos]=hitByPos[h.pos]||[]).push(h); });
+  // レーン(v4.19.0・連続座標): 固定高の帯に絶対配置。上段=敵(赤バー)・下段=なかま(青バー)。
+  // 要素はuidで差分更新=CSSトランジションで滑らかに歩く。重なりは許容し、縦には伸びない
+  const lane=$("tdLane");
+  const X=v=>Math.max(0, Math.min(91, v*0.91)); // x(0..100)→left%(スプライト幅ぶん詰める)
+  const seen=new Set();
+  const place=(key, cls, pos, inner, hpPct)=>{
+    let el=lane.querySelector('[data-k="'+key+'"]');
+    if(!el){
+      el=document.createElement("div");
+      el.className=cls; el.dataset.k=key; el.innerHTML=inner;
+      lane.appendChild(el);
+    }
+    el.style.left=X(pos)+"%";
+    const bar=el.querySelector(".thp i");
+    if(bar) bar.style.width=Math.max(4, Math.round(hpPct))+"%";
+    seen.add(key);
+  };
+  TD.enemies.forEach(e=>place(e.uid, "tde"+(e.boss?" tb":""), e.pos,
+    '<div class="te">'+e.icon+'</div><div class="thp"><i></i></div>',
+    100*e.hp/(e.hpMax||e.hp)));
+  TD.units.forEach(u=>place(u.uid, "tdf", u.pos,
+    '<div class="tu">'+charFace(byChar[u.id])+'</div><div class="thp tup"><i></i></div>',
+    100*u.hp/(u.hpMax||u.hp)));
+  [...lane.querySelectorAll("[data-k]")].forEach(el=>{ if(!seen.has(el.dataset.k)) el.remove(); });
+  // 一時演出(ダメージポップ・撃破の爆発)は追加して時間で消す
+  const fx=(cls, pos, html, ms)=>{
+    const s=document.createElement("div");
+    s.className=cls; s.style.left=X(pos)+"%"; s.innerHTML=html;
+    lane.appendChild(s);
+    setTimeout(()=>s.remove(), ms);
+  };
+  hits.forEach((h,i)=>{
+    fx("tdpopw", h.pos, '<span class="tdpop" style="animation-delay:'+(Math.min(i,3)*120)+'ms">-'+fmt(h.take)+'</span>', 1000);
+    if(h.dead) fx("tde tdboom"+(h.boss?" tb":""), h.pos, '<div class="te">'+h.icon+'</div>', 600);
+  });
   const fights=(ev&&ev.fights)||[];
-  fights.forEach(f=>{ if(f.side==="u" && f.dead) (hitByPos[f.pos]=hitByPos[f.pos]||[]).push({take:f.dmg, dead:true, icon:f.icon, boss:f.boss, silent:true}); });
-  // なかまの攻撃はマスごとに合算した青ポップで見せる(v4.18.0: 攻撃している実感)
   const updmg={};
-  fights.forEach(f=>{ if(f.side==="u") updmg[f.pos]=(updmg[f.pos]||0)+f.dmg; });
-  let lane="";
-  for(let p=0;p<TD_LANE;p++){
-    const es=byPos[p]||[];
-    const us=uByPos[p]||[];
-    const hs=hitByPos[p]||[];
-    lane+='<div class="tdcell">'+
-      // ヒットごとにポップを重ねて時間差で出す(連撃・複数節の手数が見える)
-      hs.filter(h=>!h.silent).slice(0,3).map((h,i)=>'<span class="tdpop" style="animation-delay:'+(i*130)+'ms">-'+fmt(h.take)+'</span>').join("")+
-      (updmg[p]? '<span class="tdpop tdup">-'+fmt(updmg[p])+'</span>':'')+
-      es.slice(0,2).map(e=>
-        '<div class="te'+(e.boss?" tb":"")+'">'+e.icon+'</div>'+
-        '<div class="thp"><i style="width:'+Math.max(4, Math.round(100*e.hp/(e.hpMax||e.hp)))+'%"></i></div>'
-      ).join("")+
-      hs.filter(h=>h.dead).map(h=>'<div class="te tdboom'+(h.boss?" tb":"")+'">'+h.icon+'</div>').join("")+
-      (es.length>2? '<div class="tn">+'+(es.length-2)+'</div>':'')+
-      us.slice(0,2).map(u=>
-        '<div class="tu">'+charFace(byChar[u.id])+'</div>'+
-        '<div class="thp tup"><i style="width:'+Math.max(4, Math.round(100*u.hp/(u.hpMax||u.hp)))+'%"></i></div>'
-      ).join("")+
-      (us.length>2? '<div class="tn">+'+(us.length-2)+'</div>':'')+'</div>';
-  }
-  $("tdLane").innerHTML=lane;
+  fights.forEach(f=>{
+    if(f.side!=="u") return;
+    updmg[f.pos]=(updmg[f.pos]||0)+f.dmg;
+    if(f.dead) fx("tde tdboom"+(f.boss?" tb":""), f.pos, '<div class="te">'+f.icon+'</div>', 600);
+  });
+  for(const p in updmg) fx("tdpopw", +p, '<span class="tdpop tdup">-'+fmt(updmg[p])+'</span>', 1000);
   renderTDDeck(); // 💠・クールダウンの表示も追随
   // 貫通ビーム(レーンを貫く一閃)
   if(fire && fire.beam){

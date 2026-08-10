@@ -1724,13 +1724,13 @@ function run(){
   t("防衛線: 射程持ちのなかまは離れた敵を撃ち、距離を保つ", ()=>{
     const b=W.tdNewBattle(W.DUNGEONS[0], {hp:1000, dpt:10, catk:10, elems:[]});
     b.waves=[[],[],[]]; b.wi=3; // 増援なし
-    b.units=[{id:"c03",name:"ロディ",rar:1,cost:100,hp:280,hpMax:280,atk:40,def:16,rng:2,pos:3}];
-    b.enemies=[{name:"a",icon:"👾",hp:200,hpMax:200,def:0,atk:30,pos:5}];
+    b.units=[{uid:"u1",id:"c03",name:"ロディ",rar:1,cost:100,hp:280,hpMax:280,atk:40,def:16,rng:2,pos:30}];
+    b.enemies=[{uid:"e1",name:"a",icon:"👾",hp:200,hpMax:200,def:0,atk:30,pos:50}]; // 20離れている(射程4+25=29内)
     W.tdTick(b);
-    ok(b.enemies[0].hp<200, "2マス先の敵を攻撃できる");
+    ok(b.enemies[0].hp<200, "離れた敵を攻撃できる");
     eq(b.units[0].hp, 280, "離れているので反撃を受けない");
-    eq(b.units[0].pos, 3, "射程内に敵がいる間は前進しない(距離を保つ)");
-    eq(b.enemies[0].pos, 4, "足止めは同じマスだけ=敵は近づいてくる");
+    eq(b.units[0].pos, 30, "射程内に敵がいる間は前進しない(距離を保つ)");
+    eq(b.enemies[0].pos, 37.5, "敵は間合いに入るまで近づいてくる");
     const G=W.G;
     G.chars.c03=G.chars.c03||{dup:0};
     eq(W.tdUnitFrom("c03").rng, 2, "狩人は射程2");
@@ -1783,22 +1783,39 @@ function run(){
     b.cd.c01=0;
     ok(!W.tdDeploy(b, "c01"), "💠不足でも出せない");
   });
-  t("防衛線: なかまは敵を足止めして殴り合う(にゃんこ/アークナイツ式)", ()=>{
+  t("防衛線: 間合いに入ったなかまと敵は足を止めて殴り合う(にゃんこ式)", ()=>{
     const b=W.tdNewBattle(W.DUNGEONS[0], {hp:1000, dpt:10, catk:10, elems:[]});
     b.waves=[[],[],[]]; b.wi=3; // 増援なし
-    b.units=[{id:"c01",name:"ノア",rar:1,cost:100,hp:300,hpMax:300,atk:50,def:20,pos:3}];
-    b.enemies=[{name:"a",icon:"👾",hp:120,hpMax:120,def:0,atk:30,pos:3}];
+    b.units=[{uid:"u1",id:"c01",name:"ノア",rar:1,cost:100,hp:300,hpMax:300,atk:50,def:20,rng:0,pos:50}];
+    b.enemies=[{uid:"e1",name:"a",icon:"👾",hp:120,hpMax:120,def:0,atk:30,pos:52}]; // 間合い(4)内
     const ev=W.tdTick(b);
-    eq(b.enemies[0].pos, 3, "なかまがいるマスから進めない(足止め)");
+    eq(b.enemies[0].pos, 52, "交戦中の敵は進まない(足止め)");
+    eq(b.units[0].pos, 50, "なかまも足を止める(重なりは許容)");
     ok(b.enemies[0].hp<120, "なかまの攻撃が通る");
     ok(b.units[0].hp<300, "なかまも殴られる");
     ok(ev.fights.length>=2, "交戦イベントが記録される");
     W.tdTick(b); W.tdTick(b);
     eq(b.enemies.length, 0, "殴り合いの末に撃破");
     ok(b.units.length===1 && b.units[0].hp>0, "なかまは生き残る");
-    const p0=b.units[0].pos;
-    W.tdTick(b);
-    eq(b.units[0].pos, p0+1, "交戦が終われば前進する");
+    eq(b.units[0].pos, 62.5, "交戦が終われば前進する(+12.5)");
+  });
+  t("防衛線: レーンは重なりを許容し、数が増えても縦に伸びない", ()=>{
+    W.TD=W.tdNewBattle(W.DUNGEONS[0], {hp:100, dpt:10, catk:10, elems:[]});
+    W.document.getElementById("tdLane").innerHTML="";
+    W.renderTDField(null);
+    const laneEl=W.document.getElementById("tdLane");
+    const h0=laneEl.offsetHeight;
+    for(let i=0;i<10;i++) W.TD.enemies.push({uid:"t"+i, name:"a", icon:"👾", hp:9, hpMax:9, def:0, atk:1, pos:50});
+    W.TD.units=[{uid:"tu1",id:"c01",name:"ノア",rar:1,cost:100,hp:9,hpMax:9,atk:1,def:1,rng:0,pos:50},
+                {uid:"tu2",id:"c01",name:"ノア",rar:1,cost:100,hp:9,hpMax:9,atk:1,def:1,rng:0,pos:50}];
+    W.renderTDField(null);
+    eq(laneEl.offsetHeight, h0, "同じ座標に12体重なっても高さは固定");
+    eq(laneEl.querySelectorAll(".tde").length, 10, "敵は全員描画される(まとめ表示にしない)");
+    eq(laneEl.querySelectorAll(".tdf").length, 2, "なかまも全員描画される");
+    W.renderTDField(null);
+    eq(laneEl.querySelectorAll(".tde").length, 10, "再描画でも要素は増えない(uidで差分更新)");
+    W.TD=null;
+    laneEl.innerHTML="";
   });
   t("防衛線: 出撃デッキは保存され、未所持は除外・未設定は自動編成", ()=>{
     const G=W.G, old=(G.td&&G.td.deck)||null;
@@ -1819,16 +1836,15 @@ function run(){
     ok(ci.innerHTML.indexOf("巨大スライム")>=0, "ボス名もカットインに出る(文字ログは廃止)");
     W.TD=null;
   });
-  t("防衛線: ボスは2問に1歩・全滅で勝利・城陥落で敗北", ()=>{
+  t("防衛線: ボスは半分の速さで進軍・全滅で勝利・城陥落で敗北", ()=>{
     const P={hp:100, dpt:10, catk:10, elems:[]};
     const b=W.tdNewBattle(W.DUNGEONS[0], P);
     b.waves=[[],[],[]]; b.wi=3; // 増援なし
-    b.enemies=[{name:"B",icon:"👾",hp:99,hpMax:99,def:0,atk:10,pos:5,boss:true}];
-    b.ticks=0;
+    b.enemies=[{uid:"b1",name:"B",icon:"👾",hp:99,hpMax:99,def:0,atk:10,pos:50,boss:true},
+               {uid:"z1",name:"z",icon:"🐇",hp:99,hpMax:99,def:0,atk:10,pos:50}];
     W.tdTick(b);
-    eq(b.enemies[0].pos, 5, "奇数tickは動かない(2問で1歩)");
-    W.tdTick(b);
-    eq(b.enemies[0].pos, 4, "偶数tickで1歩");
+    eq(b.enemies[0].pos, 50-12.5/2, "ボスは半分の速さ");
+    eq(b.enemies[1].pos, 50-12.5, "雑魚は1問で1歩(12.5)");
     const b2=W.tdNewBattle(W.DUNGEONS[0], P);
     b2.waves=[[]]; b2.wi=0; b2.si=0; b2.enemies=[];
     const ev2=W.tdTick(b2);
