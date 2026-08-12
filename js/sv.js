@@ -47,6 +47,41 @@ const SV_HEAL_CAP=0.08;         // 吸収の回復上限(発射1回あたり最�
 const SV_MAXFOES=28;            // 同時出現数の上限(スマホ描画ガード)
 const SV_BEAM_DEG=32;           // 貫通ビームの有効角(度)
 
+/* ---- Phase2(v4.21.0): なかま召喚・宝箱・エリート ---- */
+const SV_SAT_MAX=3;             // なかま(衛星)の同時召喚数
+const SV_SAT_CD=1800;           // なかまの攻撃間隔(ms)
+const SV_SAT_DMG=0.35;          // なかまの攻撃係数(自軍dpt比×キャラ攻撃/40)
+                                //  ─ TDの「なかま=ただの壁」の反省: 火力を呪文に併走させる
+const SV_SAT_R=17;              // 周回半径(正規化座標)
+const SV_SAT_DEG=46;            // 周回速度(度/秒)
+const SV_CHEST_IV=45000;        // 宝箱スライムの出現間隔(ms)
+const SV_CHEST_TTL=20000;       // 宝箱スライムの滞在時間(ms・逃すと消える)
+const SV_CHEST_GOLD=15;         // 宝箱の🪙係数((2+tier)×これ)
+/* なかまの射程タイプ(TD_RANGEの後継): 弓・魔法・唄タイプは遠くの敵も撃てる */
+const SV_SATRNG={
+  c02:1, c04:1, c11:1, c19:1, c25:1, c31:1, c32:1, c34:1,       // 支援・準後衛
+  c03:2, c06:2, c13:2, c18:2, c20:2, c28:2, c30:2,              // 弓・魔法
+  c10:3, c22:3, c33:3,                                          // 大魔法・打ち上げ
+};
+
+/* ---- Phase3(v4.21.0): 永続強化「サバイバーの心得」・日替わりチャレンジ ---- */
+const SV_META=[
+  {id:"hp",   ic:"❤️", name:"体力の心得", desc:"自機の最大HP +6%/Lv",       max:5},
+  {id:"pow",  ic:"⚔",  name:"威力の心得", desc:"すべての攻撃 +5%/Lv",       max:5},
+  {id:"rate", ic:"⏩", name:"詠唱の心得", desc:"自動発火の間隔 -4%/Lv",     max:5},
+  {id:"gem",  ic:"🔷", name:"集中の心得", desc:"ラン開始時に◆+1/Lv",        max:3},
+  {id:"gold", ic:"💰", name:"金運の心得", desc:"獲得🪙 +8%/Lv",             max:5},
+];
+const SV_META_COST=[500,1500,4000,10000,25000]; // Lv1→2→…の🪙(恒常ガチャと並ぶgoldシンク)
+/* 日替わりの修飾(その日のルール)。mは敵・湧き・🪙への係数 */
+const SV_DAILY_MODS=[
+  {id:"horde", name:"大群の日", desc:"敵の数+40%・敵HP-20%", m:{spawn:0.7, ehp:0.8,  eatk:1,   espd:1,   gmult:1}},
+  {id:"tank",  name:"重装の日", desc:"敵HP+35%",             m:{spawn:1,   ehp:1.35, eatk:1,   espd:1,   gmult:1}},
+  {id:"rush",  name:"神速の日", desc:"敵の足+30%",           m:{spawn:1,   ehp:1,    eatk:1,   espd:1.3, gmult:1}},
+  {id:"pain",  name:"痛撃の日", desc:"敵の攻撃+40%・🪙1.5倍", m:{spawn:1,   ehp:1,    eatk:1.4, espd:1,   gmult:1.5}},
+];
+const SV_DAILY_GOLD=t=>1200+400*t; // デイリー初回勝利の🪙ボーナス(tierで増える)
+
 /* レベルアップの3択候補(ランの間だけの一時強化) */
 const SV_UPGRADES=[
   {id:"pow",  ic:"⚔",  name:"言霊の研磨",   desc:"すべての攻撃の威力 +25%"},
@@ -85,6 +120,68 @@ function svSpawnIv(tMs){
   return Math.round(SV_SPAWN0+(SV_SPAWN1-SV_SPAWN0)*p);
 }
 
+/* エリート個体の出現率: 1分過ぎから混ざりはじめ、上限15%(中盤の起伏) */
+function svEliteP(tMs){
+  if(tMs<45000) return 0;
+  return Math.min(0.15, 0.03+0.12*tMs/(SV_STAGE_SEC*1000));
+}
+
+/* 心得(永続強化)のボーナス(純関数)。metaは G.sv.meta = {id→Lv} */
+function svMetaBonus(meta){
+  meta=meta||{};
+  return {hpM:1+0.06*(meta.hp||0), powM:1+0.05*(meta.pow||0),
+          rateM:1-0.04*(meta.rate||0), gem0:Math.min(meta.gem||0, SV_GEM_LV0-1),
+          goldM:1+0.08*(meta.gold||0)};
+}
+/* 心得の購入(純関数寄り: gはG互換の{gold, sv}構造)。買えなければnull */
+function svBuyMeta(g, id){
+  g.sv=g.sv||{clears:{}}; g.sv.meta=g.sv.meta||{};
+  const def=SV_META.find(x=>x.id===id);
+  const lv=(g.sv.meta[id]||0);
+  if(!def || lv>=def.max) return null;
+  const cost=SV_META_COST[lv];
+  if((g.gold||0)<cost) return null;
+  g.gold-=cost;
+  g.sv.meta[id]=lv+1;
+  return {lv:lv+1, cost};
+}
+
+/* 日替わりチャレンジの内容(決定的: 日付ハッシュ→修飾・品詞しばり・ステージ番号)。
+   nStagesは解放済みステージ数(その範囲から選ぶ=詰まない) */
+function svDailyFor(dayKey, nStages){
+  const h=hashStr("svd"+dayKey);
+  return {mods:SV_DAILY_MODS[h%SV_DAILY_MODS.length],
+          pos:["v","n","adj","adv"][Math.floor(h/7)%4],
+          idx:Math.floor(h/29)%Math.max(1, nStages||1)};
+}
+
+/* 品詞しばりの出題(デイリー用)。pickWord(quiz.js)の骨格を品詞プールに絞って再現:
+   期限が来た復習を忘れかけ度順に優先→新規→先取り。SRSの帳簿付けは通常と同一。
+   ※quiz.jsを書き換えず複製しているのは可逆性のため */
+function svPickWord(pos){
+  if(!pos) return pickWord();
+  const now=Date.now();
+  const pool=WORDS.filter(w=>w.pos===pos);
+  const due=[], unseen=[];
+  for(const w of pool){
+    const st=G.words[w.en];
+    if(!st) unseen.push(w);
+    else if(st[1]<=now) due.push(w);
+  }
+  const fresh=a=>{ const f=a.filter(w=>!recentEns.includes(w.en)); return f.length? f : a; };
+  const d=fresh(due), u=fresh(unseen);
+  if(d.length && (u.length===0 || Math.random()>=0.25)){
+    d.sort((a,b)=>reviewUrgency(G.words[b.en],now)-reviewUrgency(G.words[a.en],now));
+    const p=d.slice(0, Math.min(8,d.length));
+    return p[Math.floor(Math.random()*p.length)];
+  }
+  if(u.length) return u[Math.floor(Math.random()*u.length)];
+  const seen=fresh(pool.filter(w=>G.words[w.en]));
+  seen.sort((a,b)=>(G.words[a.en][0]-G.words[b.en][0]) || (G.words[a.en][1]-G.words[b.en][1]));
+  const p2=seen.slice(0, Math.min(10,seen.length));
+  return p2[Math.floor(Math.random()*p2.length)] || pool[0] || WORDS[0];
+}
+
 /* 正解1問の◆ジェム。コンボが乗る(5連続で2個・10連続で3個) */
 function svGemGain(ok, combo){
   if(!ok) return 0;
@@ -119,22 +216,58 @@ function svFoe(d, tMs, boss){
 }
 
 /* 戦闘状態の生成。編成は出発時スナップショットで固定
-   (無限回廊と同じ思想: ラン中の装備替えは効かない=放置悪用も防げる) */
-function svNewRun(d, P, rustN){
+   (無限回廊と同じ思想: ラン中の装備替えは効かない=放置悪用も防げる)。
+   opts(v4.21.0)={meta:心得, mods:日替わり修飾, pos:品詞しばり, daily:デイリー扱い} */
+function svNewRun(d, P, rustN, opts){
+  opts=opts||{};
+  const mb=svMetaBonus(opts.meta);
   const b={id:d.id, name:d.name, icon:d.icon, tier:d.tier, elem:d.elem,
-    t:0, hp:P.hp, hpMax:P.hp, def:P.def||0,
+    t:0, hp:Math.round(P.hp*mb.hpM), hpMax:Math.round(P.hp*mb.hpM), def:P.def||0,
     P:svSnapshot(P),
     em:elemMatch(P.elems||[], d.elem).dealt,
     emTaken:elemMatch(P.elems||[], d.elem).taken,
     rust:rustN||0, rustM:svRustMult(rustN),
     enemies:[], seq:0, spawnAt:0,
-    lv:1, gem:0, kills:0, gold:0,
-    up:{pow:1, rate:1, burst:1, guard:1, gold:1},
+    sats:[], chestAt:SV_CHEST_IV, chests:0, lvups:0,
+    mods:opts.mods||{spawn:1, ehp:1, eatk:1, espd:1, gmult:1},
+    pos:opts.pos||null, dailyRun:!!opts.daily,
+    lv:1, gem:mb.gem0, kills:0, gold:0,
+    up:{pow:mb.powM, rate:mb.rateM, burst:1, guard:1, gold:mb.goldM},
     bossAt:SV_STAGE_SEC*1000, bossOn:false,
     over:false, win:false};
   b.weapons=b.P.cls.map((cl,i)=>(
     {V:cl.V, vt:cl.vt, w:cl.w, rep:cl.rep, name:cl.name, cd:600+i*700})); // 初弾は時間差
   return b;
+}
+
+/* ---- なかま召喚(v4.21.0): 自機の周りを回る「衛星砲台」 ----
+   TDの反省(なかま=ただの壁で火力貢献が薄い)への答え: 攻撃力は自軍のdptに
+   併走させ(×キャラ攻撃/40×スキル)、tierが上がっても火力貢献が保たれる。
+   スキルの読み替え: dmg=攻撃UP/boss=対ボス/vamp=与ダメの一部で自機回復/
+   heal=攻撃のたび自機を再生/guard=いるだけで被弾を軽減(オーラ) */
+function svSatFrom(id, dpt){
+  const c=byChar[id];
+  if(!c || !G.chars[id]) return null;
+  const st=charStats(id);
+  const sk=c.sk||{};
+  const rng=SV_SATRNG[id]||0;
+  return {id, name:c.name.split(" ").pop(), rar:c.rar,
+    dmg:Math.round(Math.max(1, dpt)*SV_SAT_DMG*(st.atk/40)*(sk.t==="dmg"? 1+sk.v : 1)),
+    reach:20+rng*8,
+    skBoss:sk.t==="boss"? sk.v : 0,
+    skVamp:sk.t==="vamp"? sk.v : 0,
+    skHeal:sk.t==="heal"? sk.v : 0,
+    skGuard:sk.t==="guard"? sk.v : 0,
+    cd:900, ang:0, x:SV_CX+SV_SAT_R, y:SV_CY};
+}
+function svSummon(b, id){
+  if(b.sats.length>=SV_SAT_MAX) return null;
+  const s=svSatFrom(id, b.P.dpt);
+  if(!s) return null;
+  s.uid="s"+(++b.seq);
+  s.ang=(360*b.sats.length/SV_SAT_MAX+90)%360; // 等間隔に散らして出す
+  b.sats.push(s);
+  return s;
 }
 
 /* 自機からの距離と角度(度) */
@@ -181,13 +314,16 @@ function svCast(b, w, powF, out){
   }
 }
 
-/* 撃破の精算: 死んだ敵を除去し、🪙とキル数を加算。ボス撃破=勝利 */
+/* 撃破の精算: 死んだ敵を除去し、🪙とキル数を加算。ボス撃破=勝利。
+   エリートは🪙4倍(gmult)・宝箱は大🪙+「ちからの3択」を予約(UI層が開く) */
 function svReap(b){
   const dead=b.enemies.filter(e=>e.hp<=0);
   b.enemies=b.enemies.filter(e=>e.hp>0);
   for(const e of dead){
     b.kills++;
-    b.gold+=Math.round((2+b.tier)*(e.boss? 25:1)*b.up.gold);
+    const base=e.chest? SV_CHEST_GOLD*(2+b.tier) : (2+b.tier)*(e.boss? 25 : (e.gmult||1));
+    b.gold+=Math.round(base*b.up.gold*((b.mods&&b.mods.gmult)||1));
+    if(e.chest) b.chests=(b.chests||0)+1;
     if(e.boss){ b.over=true; b.win=true; b.enemies=[]; }
   }
   return dead.length;
@@ -203,33 +339,58 @@ function svBurst(b, mult){
   return out;
 }
 
-/* 1tickの進行(dtミリ秒)。湧き → 進軍/接敵攻撃 → 自動発火 → 判定。
+/* 1tickの進行(dtミリ秒)。湧き(通常・宝箱・ボス) → 進軍/接敵攻撃 →
+   なかまの周回攻撃 → 武器の自動発火 → 精算 → 判定。
    戻り値は演出用イベント {spawned, hits, beams, heal, touches, bossIn, win, lose} */
 function svTick(b, dt){
   const ev={spawned:[], hits:[], beams:[], heal:0, touches:[], bossIn:false, win:false, lose:false};
   if(b.over) return ev;
   b.t+=dt;
+  const dd=b._d||DUNGEONS.find(x=>x.id===b.id);
+  const md=b.mods||{};
   // ボス出現(以降は通常の湧きを止め、ボスとの決戦に絞る)
   if(!b.bossOn && b.t>=b.bossAt){
     b.bossOn=true;
-    const boss=svFoe(b._d||DUNGEONS.find(x=>x.id===b.id), b.t, true);
+    const boss=svFoe(dd, b.t, true);
+    boss.hp=Math.round(boss.hp*(md.ehp||1)); boss.hpMax=boss.hp;
+    boss.atk=Math.round(boss.atk*(md.eatk||1));
     boss.uid="eboss";
     b.enemies.push(boss);
     ev.spawned.push(boss); ev.bossIn=true;
   }
-  // 通常の湧き(経過時間で間隔が縮む)
   if(!b.bossOn){
+    // 通常の湧き(経過時間で間隔が縮む・時々エリート・修飾を反映)
     while(b.t>=b.spawnAt){
-      b.spawnAt+=svSpawnIv(b.t);
+      b.spawnAt+=Math.round(svSpawnIv(b.t)*(md.spawn||1));
       if(b.enemies.length>=SV_MAXFOES) continue;
-      const e=svFoe(b._d||DUNGEONS.find(x=>x.id===b.id), b.t, false);
+      const e=svFoe(dd, b.t, false);
+      if(Math.random()<svEliteP(b.t)){
+        e.elite=true; e.hp=Math.round(e.hp*2.2); e.atk=Math.round(e.atk*1.35); e.gmult=4;
+      }
+      e.hp=Math.round(e.hp*(md.ehp||1)); e.hpMax=e.hp;
+      e.atk=Math.round(e.atk*(md.eatk||1));
+      e.sp=e.sp*(md.espd||1);
       e.uid="e"+(++b.seq);
       b.enemies.push(e);
       ev.spawned.push(e);
     }
+    // 宝箱スライム(無害・時間で消える。倒すと🪙+ちからの3択)
+    if(b.t>=b.chestAt){
+      b.chestAt+=SV_CHEST_IV;
+      const c=svFoe(dd, b.t, false);
+      c.chest=true; c.icon="🎁"; c.atk=0; c.sp=2.2;
+      c.hp=Math.round(c.hp*0.9); c.hpMax=c.hp;
+      c.ttl=SV_CHEST_TTL;
+      c.uid="e"+(++b.seq);
+      b.enemies.push(c);
+      ev.spawned.push(c);
+    }
   }
-  // 進軍: 間合いの外なら自機へ直進、間合い内なら足を止めて殴る
+  // 進軍: 間合いの外なら自機へ直進、間合い内なら足を止めて殴る(guard持ちのなかまは被弾を軽減)
+  const guardM=b.sats.reduce((m,s)=>m*(1-Math.min(0.3, 2*(s.skGuard||0))), 1);
+  const expired=[];
   for(const e of b.enemies){
+    if(e.ttl!=null){ e.ttl-=dt; if(e.ttl<=0){ expired.push(e.uid); continue; } }
     const dist=svDist(e);
     if(dist>SV_REACH){
       const step=e.sp*dt/1000;
@@ -240,10 +401,35 @@ function svTick(b, dt){
       e.atkCd-=dt;
       if(e.atkCd<=0){
         e.atkCd+=SV_TOUCH_CD;
-        const dmg=Math.max(1, Math.round((e.atk-b.def*0.55)*b.emTaken*b.up.guard));
-        b.hp-=dmg;
-        ev.touches.push({dmg, icon:e.icon});
+        if(e.atk>0){
+          const dmg=Math.max(1, Math.round((e.atk-b.def*0.55)*b.emTaken*b.up.guard*guardM));
+          b.hp-=dmg;
+          ev.touches.push({dmg, icon:e.icon});
+        }
       }
+    }
+  }
+  if(expired.length) b.enemies=b.enemies.filter(e=>expired.indexOf(e.uid)<0);
+  // なかま(衛星): 周回しながら射程内のいちばん近い敵を撃つ
+  for(const s of b.sats){
+    s.ang=(s.ang+SV_SAT_DEG*dt/1000)%360;
+    const rad=s.ang*Math.PI/180;
+    s.x=SV_CX+SV_SAT_R*Math.cos(rad);
+    s.y=SV_CY+SV_SAT_R*0.82*Math.sin(rad); // フィールドの縦横比に合わせた楕円軌道
+    s.cd-=dt;
+    if(s.cd<=0){
+      const es=b.enemies.filter(e=>e.hp>0 && Math.hypot(e.x-s.x, e.y-s.y)<=s.reach)
+        .sort((a,c)=>Math.hypot(a.x-s.x, a.y-s.y)-Math.hypot(c.x-s.x, c.y-s.y));
+      const e=es[0];
+      if(e){
+        s.cd+=SV_SAT_CD;
+        const raw=s.dmg*b.em*(e.boss? 1+(s.skBoss||0) : 1);
+        const take=Math.min(e.hp, Math.max(1, Math.round(raw-(e.def||0)*0.35)));
+        e.hp-=take;
+        ev.hits.push({name:e.name, icon:e.icon, take, dead:e.hp<=0, x:e.x, y:e.y, boss:!!e.boss, sat:true});
+        if(s.skVamp) b.hp=Math.min(b.hpMax, b.hp+Math.round(take*s.skVamp));
+        if(s.skHeal) b.hp=Math.min(b.hpMax, b.hp+Math.round(b.hpMax*s.skHeal*0.06));
+      }else s.cd=0; // 敵が来るまで構える
     }
   }
   // 武器の自動発火(それぞれのクールダウンで最近接を撃つ)
@@ -257,20 +443,32 @@ function svTick(b, dt){
       }
     }
     ev.heal+=out.heal;
-    svReap(b);
-    if(b.over && b.win) ev.win=true;
   }else{
     for(const w of b.weapons){ w.cd=Math.max(0, w.cd-dt); } // 敵がいない間は撃たず構える
   }
-  if(b.hp<=0){ b.hp=0; b.over=true; b.win=false; ev.lose=true; }
+  svReap(b);
+  if(b.over && b.win) ev.win=true;
+  if(!b.over && b.hp<=0){ b.hp=0; b.over=true; b.win=false; ev.lose=true; }
   return ev;
 }
 
-/* レベルアップの3択: 候補から3種を重複なしで引く */
-function svUpgradeChoices(){
-  return shuffle(SV_UPGRADES.slice()).slice(0,3);
+/* レベルアップの3択: 候補から3種を重複なしで引く。
+   bを渡すと「なかま召喚」の候補が混ざる(枠が空いていて未召喚のなかまがいるとき) */
+function svUpgradeChoices(b){
+  const pool=SV_UPGRADES.slice();
+  if(b && b.sats && b.sats.length<SV_SAT_MAX){
+    const used=new Set(b.sats.map(s=>s.id));
+    const cand=shuffle(Object.keys(G.chars).filter(id=>byChar[id] && !used.has(id))).slice(0,2);
+    cand.forEach(id=>{
+      const c=byChar[id];
+      pool.push({id:"sat:"+id, ic:c.face, name:c.name.split(" ").pop()+"を召喚",
+        desc:"なかまが自機を周回して自動攻撃"+(c.sk? "(固有スキル反映)":""), sat:1});
+    });
+  }
+  return shuffle(pool).slice(0,3);
 }
 function svApplyUpgrade(b, id){
+  if(id && String(id).indexOf("sat:")===0){ svSummon(b, id.slice(4)); return; }
   const u=b.up;
   if(id==="pow") u.pow*=1.25;
   else if(id==="rate") u.rate=Math.max(0.4, u.rate*0.82);
@@ -334,10 +532,13 @@ function svFx(el, cls){
   el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls);
 }
 
-function svStart(d){
+function svStart(d, extra){
   if(svLoop){ clearInterval(svLoop); svLoop=null; }
-  SV=svNewRun(d, playerStats(), svRustCount());
+  // 心得(永続強化)は常に反映。extra=デイリーの修飾・品詞しばりなど
+  const opts=Object.assign({meta:(G.sv&&G.sv.meta)||null}, extra||{});
+  SV=svNewRun(d, playerStats(), svRustCount(), opts);
   SV._d=d;
+  SV._extra=extra||null; // 「もう一度」で同じ条件を引き継ぐ
   closeModal();
   switchTab("sv");
   $("svField").innerHTML=""; // 前のランのスプライトを一掃
@@ -357,7 +558,8 @@ function svFrame(){
       $("overlay").classList.contains("show"))) return;
   const ev=svTick(SV, SV_TICK);
   renderSVField(ev);
-  if(SV.over) setTimeout(svFinish, 700);
+  if(SV.over){ setTimeout(svFinish, 700); return; }
+  if(SV.chests>0 || SV.lvups>0) svDrainPicks(); // 宝箱(自動発火で倒した分)の3択
 }
 
 /* 後片付け(テスト・退出用): ループを止めてランを破棄する */
@@ -380,7 +582,7 @@ function svQuestion(){
   if(!SV || SV.over) return;
   svAnswered=false;
   $("svNextBtn").style.visibility="hidden";
-  const w=pickWord();
+  const w=svPickWord(SV.pos); // 品詞しばり(デイリー)はここで効く。帳簿付けは通常と同一
   svCur={word:w, choices:buildChoices(w)};
   const st=G.words[w.en], e2j=G.mode==="e2j";
   // 学習タブと同じヘッダ表記: バッジ・「今日 X/Y問」・「これまで/定着」
@@ -418,7 +620,7 @@ function svAnswer(chosen, btn){
     // 一斉バースト(コンボで威力UP)+◆ジェム(コンボで増)
     const mult=1+0.04*Math.min(Math.max((G.combo||0)-1,0), 15);
     const fire=svBurst(SV, mult);
-    const lvup=svAddGems(SV, svGemGain(true, G.combo));
+    if(svAddGems(SV, svGemGain(true, G.combo))) SV.lvups=(SV.lvups||0)+1;
     renderSVField(fire);
     const f=$("svField");
     ["svfire","svfire2","svfire3"].forEach(c=>f.classList.remove(c));
@@ -427,29 +629,40 @@ function svAnswer(chosen, btn){
     if(SV.over){ setTimeout(svFinish, 700); return; }
     // 次の問題へ自動で進む(その間は時間停止=演出を見る間だけ)
     setTimeout(()=>{ if(SV && !SV.over && svAnswered) svQuestion(); }, 620);
-    if(lvup) setTimeout(()=>{ if(SV && !SV.over) svOpenUpgrade(); }, 700);
+    setTimeout(svDrainPicks, 700); // レベルアップ・宝箱の3択が予約されていれば開く
   }else{
     renderSVField(null);
     $("svNextBtn").style.visibility="visible"; // ミスは正解を見届けてから(その間は時間停止)
   }
 }
 
-/* レベルアップの3択モーダル(表示中はゲーム完全停止=じっくり選べる) */
-function svOpenUpgrade(){
-  const cs=svUpgradeChoices();
-  openModal('<h3>✨ レベルアップ! Lv'+SV.lv+'</h3>'+
+/* 予約された3択(レベルアップ・宝箱)を順に開く。モーダル表示中はゲーム完全停止 */
+function svDrainPicks(){
+  if(!SV || SV.over) return;
+  if($("overlay").classList.contains("show")) return; // いまのモーダルが閉じてから
+  if(SV.lvups>0){ SV.lvups--; svOpenUpgrade("✨ レベルアップ! Lv"+SV.lv); return; }
+  if(SV.chests>0){ SV.chests--; svOpenUpgrade("🎁 宝箱のちから"); }
+}
+
+/* 3択モーダル(じっくり選べる=時間停止)。titleでレベルアップ/宝箱を出し分け */
+function svOpenUpgrade(title){
+  if(!SV || SV.over) return;
+  const cs=svUpgradeChoices(SV);
+  openModal('<h3>'+(title||"✨ レベルアップ! Lv"+SV.lv)+'</h3>'+
     '<div class="small">言霊のちからを1つ選ぶ(このランの間だけ有効)</div>'+
-    cs.map(c=>'<button class="btn svup" data-up="'+c.id+'">'+
+    cs.map((c,i)=>'<button class="btn svup" data-i="'+i+'">'+
       '<span class="svupic">'+c.ic+'</span><span class="grow" style="text-align:left">'+
-      '<b>'+c.name+'</b><br><span class="small">'+c.desc+'</span></span></button>').join("")+
+      '<b>'+esc(c.name)+'</b><br><span class="small">'+c.desc+'</span></span></button>').join("")+
     '<div class="small" style="margin-top:8px">✕で閉じると見送り(選び直しはできない)</div>');
   $("modal").querySelectorAll(".svup").forEach(b=>{
     b.onclick=()=>{
       if(!SV) return;
-      svApplyUpgrade(SV, b.dataset.up);
+      const c=cs[+b.dataset.i];
+      svApplyUpgrade(SV, c.id);
       closeModal();
       renderSVField(null);
-      toast("✨ "+SV_UPGRADES.find(u=>u.id===b.dataset.up).name+" を得た");
+      toast("✨ "+c.name);
+      setTimeout(svDrainPicks, 200); // 続けて予約が残っていれば次を開く
     };
   });
 }
@@ -463,7 +676,7 @@ function renderSVField(ev){
   bar.style.width=pct+"%";
   bar.style.background=pct>50? "var(--ok)" : pct>25? "var(--accent)" : "var(--ng)";
   const remain=Math.max(0, Math.ceil((SV.bossAt-SV.t)/1000));
-  $("svTitle").innerHTML="💫 "+esc(SV.name)+"<br>"+
+  $("svTitle").innerHTML="💫 "+esc(SV.name)+(SV.pos? ' <span style="color:var(--accent2)">'+POS_LABEL[SV.pos]+'縛り</span>':'')+"<br>"+
     (SV.bossOn? '<span style="color:var(--ng)">👑 ボス戦!</span>' : "⏱ "+Math.floor(remain/60)+":"+String(remain%60).padStart(2,"0"))+
     " ・ 💀"+SV.kills+
     (SV.rust? ' ・ <span style="color:var(--ng)">⏳-'+Math.round((1-SV.rustM)*100)+'%</span>':'');
@@ -485,7 +698,7 @@ function renderSVField(ev){
     let el=f.querySelector('[data-k="'+e.uid+'"]');
     if(!el){
       el=document.createElement("div");
-      el.className="sve"+(e.boss?" svb":"");
+      el.className="sve"+(e.boss?" svb":"")+(e.elite?" svel":"")+(e.chest?" svch":"");
       el.dataset.k=e.uid;
       el.innerHTML='<div class="te">'+e.icon+'</div><div class="svhpb"><i></i></div>';
       f.appendChild(el);
@@ -493,6 +706,19 @@ function renderSVField(ev){
     el.style.left=e.x+"%"; el.style.top=e.y+"%";
     el.querySelector(".svhpb i").style.width=Math.max(4, Math.round(100*e.hp/(e.hpMax||e.hp)))+"%";
     seen.add(e.uid);
+  });
+  // なかま(衛星): 自機の周りを回る
+  SV.sats.forEach(s=>{
+    let el=f.querySelector('[data-k="'+s.uid+'"]');
+    if(!el){
+      el=document.createElement("div");
+      el.className="svs";
+      el.dataset.k=s.uid;
+      el.innerHTML='<span class="svsface">'+charFace(byChar[s.id])+'</span>';
+      f.appendChild(el);
+    }
+    el.style.left=s.x+"%"; el.style.top=s.y+"%";
+    seen.add(s.uid);
   });
   [...f.querySelectorAll("[data-k]")].forEach(el=>{ if(!seen.has(el.dataset.k)) el.remove(); });
   if(!ev) return;
@@ -504,7 +730,7 @@ function renderSVField(ev){
     setTimeout(()=>s.remove(), ms);
   };
   (ev.hits||[]).forEach((h,i)=>{
-    fx("svpopw", h.x, h.y, '<span class="svpop" style="animation-delay:'+(Math.min(i,4)*90)+'ms">-'+fmt(h.take)+'</span>', 950);
+    fx("svpopw", h.x, h.y, '<span class="svpop'+(h.sat?" svsat":"")+'" style="animation-delay:'+(Math.min(i,4)*90)+'ms">-'+fmt(h.take)+'</span>', 950);
     if(h.dead) fx("sve svboom"+(h.boss?" svb":""), h.x, h.y, '<div class="te">'+h.icon+'</div>', 600);
   });
   (ev.beams||[]).forEach(a=>{
@@ -535,13 +761,21 @@ function svFinish(){
   const survived=Math.min(SV_STAGE_SEC, Math.round(SV.t/1000));
   if(SV.win){
     const first=!(rec.clears[SV.id]>0);
-    const bonus=Math.round(60*SV.tier*SV.tier)+(first? 1000:0);
+    let bonus=Math.round(60*SV.tier*SV.tier)+(first? 1000:0);
     rec.clears[SV.id]=(rec.clears[SV.id]||0)+1;
+    // デイリーチャレンジの初回勝利ボーナス(1日1回。日付はdailyDoneに記録=同期対象)
+    let dailyGot=0;
+    if(SV.dailyRun && rec.dailyDone!==todayKey()){
+      rec.dailyDone=todayKey();
+      dailyGot=SV_DAILY_GOLD(SV.tier);
+      bonus+=dailyGot;
+    }
     G.gold+=SV.gold+bonus;
     html='<h3>🎉 生還!</h3>'+
       '<div class="small" style="text-align:center; margin-top:6px">'+SV.icon+' '+esc(SV.name)+' ─ ボスを討ち取った(💀'+SV.kills+'体)</div>'+
       '<div class="giftbox" style="margin-top:10px">報酬 <b>🪙'+fmt(SV.gold+bonus)+'</b>'+
-      (first? '<br><span class="small">はじめての生還ボーナス +🪙1000!</span>':'')+'</div>';
+      (first? '<br><span class="small">はじめての生還ボーナス +🪙1000!</span>':'')+
+      (dailyGot? '<br><span class="small">📅 今日のチャレンジ達成 +🪙'+fmt(dailyGot)+'!</span>':'')+'</div>';
   }else{
     G.gold+=SV.gold;
     html='<h3>💔 力尽きた…</h3>'+
@@ -555,8 +789,39 @@ function svFinish(){
     '<button class="btn" style="flex:1" id="svRetryBtn">もう一度</button>'+
     '<button class="btn primary" style="flex:1" id="svExitBtn">冒険へ戻る</button></div>');
   const d=DUNGEONS.find(x=>x.id===SV.id);
-  $("svRetryBtn").onclick=()=>svStart(d);
+  const extra=SV._extra;
+  $("svRetryBtn").onclick=()=>svStart(d, extra); // デイリーの修飾・縛りも同じ条件で
   $("svExitBtn").onclick=()=>{ svCleanup(); closeModal(); switchTab("adv"); };
+}
+
+/* 心得(永続強化)の購入モーダル。🪙シンク=冒険・サバイバーの稼ぎの行き先 */
+function svOpenMeta(){
+  const rec=svRec(); rec.meta=rec.meta||{};
+  let h='<h3>📜 サバイバーの心得</h3>'+
+    '<div class="small">🪙で修める永続強化。すべてのラン(次の出撃から)に効く</div>';
+  SV_META.forEach(m=>{
+    const lv=rec.meta[m.id]||0;
+    const cost=lv<m.max? SV_META_COST[lv] : null;
+    h+='<div class="row svmeta">'+
+      '<span class="svupic">'+m.ic+'</span>'+
+      '<span class="grow"><b>'+m.name+'</b> <span class="small">Lv'+lv+'/'+m.max+'</span>'+
+      '<br><span class="small">'+m.desc+'</span></span>'+
+      (cost!=null
+        ? '<button class="btn" data-meta="'+m.id+'" '+(G.gold<cost? "disabled":"")+'>🪙'+fmt(cost)+'</button>'
+        : '<span class="small" style="color:var(--ok); font-weight:800">MAX</span>')+
+      '</div>';
+  });
+  h+='<div class="small" style="margin-top:10px">所持 🪙'+fmt(G.gold)+'</div>';
+  openModal(h);
+  $("modal").querySelectorAll("[data-meta]").forEach(btn=>{
+    btn.onclick=()=>{
+      const r=svBuyMeta(G, btn.dataset.meta);
+      if(!r){ toast("🪙が足りない(冒険・サバイバーで稼ごう)"); return; }
+      saveG(); refreshHeader();
+      toast("📜 心得を修めた(Lv"+r.lv+")");
+      svOpenMeta();
+    };
+  });
 }
 
 /* ステージ選択(冒険タブの入口パネルから)。解放条件は冒険のダンジョンと共通 */
@@ -565,10 +830,24 @@ function openSVSelect(){
   let h='<h3>💫 単語のサバイバー(β)</h3>'+
     '<div class="small" style="line-height:1.7">全方位から押し寄せる敵をしのぐ<b>サバイバー系ローグライク</b>。'+
     'あなたは中央で呪文を自動詠唱し続ける ─ 動詞で撃ち方が変わる(強撃=一点/貫通=ビーム/吸収=HP回復/連撃=2体)。<br>'+
-    '<b>正解=全武器の一斉バースト+◆ジェム</b>(コンボで威力・獲得数UP)。◆が貯まると<b>レベルアップの3択</b>で、このランの間だけ強くなる。<br>'+
+    '<b>正解=全武器の一斉バースト+◆ジェム</b>(コンボで威力・獲得数UP)。◆が貯まると<b>レベルアップの3択</b>: '+
+    'ちからの強化に加えて<b>なかまの召喚</b>(最大3体が周回して自動攻撃・固有スキル反映)も出る。<br>'+
+    'ときどき<b>🎁宝箱スライム</b>が横切る(倒すと🪙+ちからの3択・逃すと消える)。時間が経つほど敵は増え、<b>エリート</b>(強いが🪙4倍)も混ざる。<br>'+
     '時間が流れるのは<b>問題を考えている間だけ</b>(答え合わせ・3択中は完全停止)。'+SV_STAGE_SEC+'秒生きのびるとボスが出現、倒せば勝利!<br>'+
     '倒した敵の🪙は<b>勝っても負けても全額持ち帰り</b>。解いた分は<b>ふつうの学習として記録される</b>(今日の目安・🎫・カードすべて)。<br>'+
-    '編成は出撃時のスナップショットで固定。⏳復習期限切れの野生語は言霊が錆びる(-6%/枚)。</div>';
+    '編成は出撃時のスナップショットで固定。⏳復習期限切れの野生語は言霊が錆びる(-6%/枚)。</div>'+
+    '<button class="btn" id="svMetaBtn" style="margin-top:10px; width:100%">📜 サバイバーの心得(🪙で永続強化)</button>';
+  // 日替わりチャレンジ: 解放済みステージ×修飾×品詞しばり(初回勝利に🪙ボーナス)
+  const un=DUNGEONS.filter((d,i)=>dgUnlocked(i));
+  const dc=svDailyFor(todayKey(), un.length);
+  const ds=un[dc.idx];
+  const dDone=rec.dailyDone===todayKey();
+  h+='<div class="panel svdaily">'+
+    '<div style="font-weight:800">📅 今日のチャレンジ'+(dDone? ' <span style="color:var(--ok)">✓達成</span>':'')+'</div>'+
+    '<div class="small">'+ds.icon+' '+esc(ds.name)+' ・ <b>'+dc.mods.name+'</b>('+dc.mods.desc+')'+
+    ' ・ しばり: <b>'+POS_LABEL[dc.pos]+'のみ</b><br>初回勝利: <b>🪙'+fmt(SV_DAILY_GOLD(ds.tier))+'</b>(明日は別の内容)</div>'+
+    '<button class="btn primary" id="svDailyBtn" style="margin-top:8px; width:100%">'+(dDone? 'もう一度あそぶ':'挑戦する')+'</button>'+
+    '</div>';
   if(SV && !SV.over){
     h+='<button class="btn primary" id="svResumeBtn" style="margin-top:10px; width:100%">▶ 戦闘に戻る('+esc(SV.name)+')</button>'+
       '<div class="small" style="margin-top:4px">離れている間、時間は止まっている</div>';
@@ -583,6 +862,11 @@ function openSVSelect(){
   });
   h+='</div>';
   openModal(h);
+  $("svMetaBtn").onclick=svOpenMeta;
+  $("svDailyBtn").onclick=()=>{
+    if(SV && !SV.over) svCleanup();
+    svStart(ds, {mods:Object.assign({}, dc.mods.m), pos:dc.pos, daily:true});
+  };
   const rb=$("svResumeBtn");
   if(rb) rb.onclick=()=>{ closeModal(); switchTab("sv"); renderSVField(null); };
   $("svStageList").querySelectorAll(".svstage").forEach(b=>{

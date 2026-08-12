@@ -796,3 +796,27 @@ header .res span:last-child{overflow:hidden; text-overflow:ellipsis}
   #svCutin.go{opacity:1}
   .sve{transition:none}
 }
+
+/* ---- v4.21.0: サバイバーPhase2/3(なかま召喚・宝箱・エリート・心得・デイリー) ---- */
+/* なかま(衛星): 自機の周りを回る。青の影で敵と見分ける */
+.svs{position:absolute; width:26px; margin-left:-13px; margin-top:-13px; text-align:center;
+  transition:left .26s linear, top .26s linear; pointer-events:none; z-index:3;
+  font-size:15px; line-height:1.2;
+  filter:drop-shadow(0 1px 3px rgba(91,108,255,.55))}
+.svs .cface{width:22px; height:22px; border-radius:6px}
+/* なかまの攻撃ポップ(青) */
+.svpop.svsat{color:var(--accent2); font-size:11px}
+/* エリート個体: 大きく・紫がかった彩り */
+.sve.svel .te{font-size:22px; filter:saturate(1.6) hue-rotate(-30deg) drop-shadow(0 0 4px rgba(155,89,255,.75))}
+/* 宝箱スライム: 金の光をまとってはねる */
+.sve.svch .te{animation:svchB 1.1s ease-in-out infinite;
+  filter:drop-shadow(0 0 5px rgba(255,181,71,.9))}
+@keyframes svchB{0%,100%{transform:translateY(0)} 50%{transform:translateY(-3px)}}
+/* 心得(永続強化)の行 */
+.svmeta{align-items:center; gap:10px; margin-top:10px}
+/* 日替わりチャレンジのパネル */
+.svdaily{margin-top:10px; line-height:1.7}
+@media (prefers-reduced-motion: reduce){
+  .sve.svch .te{animation:none}
+  .svs{transition:none}
+}

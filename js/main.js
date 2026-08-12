@@ -31,6 +31,7 @@ const EVENTS=[
   // {d:"2026-08-03", t:"..."} 形式でバナー以外のイベント告知を書く
 ];
 const NEWS=[
+  {d:"2026-08-12", t:"🎁 v4.21.0 サバイバーが大幅パワーアップ! ①レベルアップの3択に「なかまの召喚」が登場: 最大3体のなかまが自機の周りを回って自動攻撃します(攻撃力はあなたの呪文に併走・固有スキルも反映: 守り手は被弾を軽減、吸血や再生は自機を癒します) ②ときどき🎁宝箱スライムが横切ります。倒すと🪙+ちからの3択、逃すと消えます ③時間が経つとエリート個体(強いが🪙4倍)が混ざります ④📜「サバイバーの心得」: 🪙で買える永続強化(体力・威力・詠唱・集中・金運を各Lv5まで) ⑤📅日替わりチャレンジ: 毎日ちがうステージ×ルール(大群/重装/神速/痛撃)×品詞しばりで、初回勝利に🪙ボーナス!"},
   {d:"2026-08-12", t:"💫 v4.20.0 新モード「単語のサバイバー」(β)が冒険タブに登場! 全方位から押し寄せる敵を、呪文の自動詠唱と正解の一斉バーストでしのぐサバイバー系ローグライクです。正解で◆ジェムが貯まり、レベルアップのたびに3択(威力・連射・バースト・回復・守り・金運)でそのランの間だけ強くなれます。180秒生きのびるとボスが出現、倒せば勝利! 倒した敵の🪙は勝っても負けても全額持ち帰り。時間が流れるのは問題を考えている間だけなので、答え合わせや3択はじっくりどうぞ。解いた分はふつうの学習として記録されます(今日の目安・🎫・カードすべて)。※タワーディフェンス「単語の防衛線」(β)はこのモードに置き換わりました(実績も「サバイバー生還」に刷新。βでの試行にお付き合いありがとうございました!)"},
   {d:"2026-08-10", t:"🏃 v4.19.0 防衛線の戦場が「マス」から「連続フィールド」に! なかまと敵はにゃんこ大戦争のようにフィールドをなめらかに進み、射程に入ると足を止めて戦います。重なりも自由になり、何体たまってもレーンの高さは一定=クイズが圧迫されません(全員のHPバーもそれぞれ表示)。ボスはゆっくり迫ってきます"},
   {d:"2026-08-10", t:"🏹 v4.18.0 防衛線に「射程」が登場! 弓・魔法・唄タイプのなかまは離れた敵を攻撃できます(狩人=射程2・大魔導士=射程3など。近接の壁の後ろから撃つ後衛運用が可能に)。なかまの攻撃は青いダメージ表示で見えるようになりました。またクイズの単語枠を固定サイズにして、出題中と答え合わせ中で選択肢の位置がずれないように・選択肢が画面下部の余白いっぱいまで広がるように改善しました"},
@@ -284,3 +285,7 @@ window.MASTER_BOX=MASTER_BOX; window.INTERVALS=INTERVALS; window.FRZ_MAX=FRZ_MAX
 window.SV_STAGE_SEC=SV_STAGE_SEC; window.SV_REACH=SV_REACH; window.SV_TOUCH_CD=SV_TOUCH_CD;
 window.SV_CD=SV_CD; window.SV_UPGRADES=SV_UPGRADES; window.SV_AUTO=SV_AUTO; window.SV_BURST=SV_BURST;
 window.SV_HEAL_CAP=SV_HEAL_CAP; window.SV_MAXFOES=SV_MAXFOES; window.SV_SPAWN0=SV_SPAWN0; window.SV_SPAWN1=SV_SPAWN1;
+window.SV_SAT_MAX=SV_SAT_MAX; window.SV_SAT_CD=SV_SAT_CD; window.SV_SAT_DMG=SV_SAT_DMG;
+window.SV_CHEST_IV=SV_CHEST_IV; window.SV_CHEST_TTL=SV_CHEST_TTL; window.SV_CHEST_GOLD=SV_CHEST_GOLD;
+window.SV_META=SV_META; window.SV_META_COST=SV_META_COST; window.SV_DAILY_MODS=SV_DAILY_MODS;
+window.SV_DAILY_GOLD=SV_DAILY_GOLD;

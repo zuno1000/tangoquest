@@ -1925,6 +1925,172 @@ function run(){
     }
   });
 
+  /* ---- v4.21.0: サバイバーPhase2/3(なかま召喚・宝箱・エリート・心得・デイリー) ---- */
+  t("サバイバー: なかまを召喚すると周回して自動攻撃する(火力はdpt併走・スキル反映)", ()=>{
+    const G=W.G;
+    G.chars.c01=G.chars.c01||{dup:0}; // 剣の心得(dmg+5%)
+    const b=W.svNewRun(W.DUNGEONS[0], {hp:1000, dpt:100, catk:30, elems:[]}, 0);
+    b.spawnAt=1e9; b.weapons=[];
+    const s=W.svSummon(b, "c01");
+    ok(s && b.sats.length===1, "召喚できる");
+    eq(s.dmg, Math.round(100*W.SV_SAT_DMG*(W.charStats("c01").atk/40)*1.05),
+      "攻撃力=dpt×0.35×(キャラ攻撃/40)×スキル(壁ではなく砲台)");
+    s.ang=350; s.cd=0;
+    b.enemies=[{uid:"x",name:"a",icon:"👾",hp:1000,hpMax:1000,def:0,atk:0,x:60,y:50,sp:0,atkCd:9999}];
+    const a0=s.ang;
+    const ev=W.svTick(b, 250);
+    ok(s.ang!==a0, "なかまは周回する");
+    ok(b.enemies[0].hp<1000, "射程内の敵を自動攻撃");
+    ok(ev.hits.some(h=>h.sat), "なかまの攻撃は青ポップで見える");
+    W.svSummon(b, "c01"); W.svSummon(b, "c01"); W.svSummon(b, "c01");
+    ok(b.sats.length<=W.SV_SAT_MAX, "召喚は"+W.SV_SAT_MAX+"体まで");
+    eq(W.svSummon(b, "c01"), null, "満枠では召喚できない");
+  });
+  t("サバイバー: 守り手のなかまは被弾を軽減し、吸血は自機を癒す", ()=>{
+    const P={hp:1000, dpt:100, catk:30, elems:[]};
+    const b=W.svNewRun(W.DUNGEONS[0], P, 0);
+    b.spawnAt=1e9; b.weapons=[];
+    b.sats=[{id:"c07",uid:"s1",dmg:10,reach:0,skGuard:0.08,skBoss:0,skVamp:0,skHeal:0,cd:9999,ang:0,x:0,y:0}];
+    b.enemies=[{uid:"x",name:"a",icon:"👾",hp:900,hpMax:900,def:0,atk:100,x:55,y:50,sp:0,atkCd:0}];
+    W.svTick(b, 250);
+    eq(b.hp, 1000-Math.round(100*(1-2*0.08)), "guard 8%のオーラで被弾-16%");
+    const b2=W.svNewRun(W.DUNGEONS[0], P, 0);
+    b2.spawnAt=1e9; b2.weapons=[]; b2.hp=500;
+    b2.sats=[{id:"c01",uid:"s1",dmg:100,reach:99,skGuard:0,skBoss:0,skVamp:0.3,skHeal:0,cd:0,ang:350,x:0,y:0}];
+    b2.enemies=[{uid:"x",name:"a",icon:"👾",hp:1000,hpMax:1000,def:0,atk:0,x:60,y:50,sp:0,atkCd:9999}];
+    W.svTick(b2, 250);
+    eq(b2.hp, 530, "与ダメの30%で自機が回復");
+  });
+  t("サバイバー: 3択に「なかま召喚」が混ざる(枠が空いているときだけ)", ()=>{
+    const G=W.G;
+    G.chars.c01=G.chars.c01||{dup:0};
+    const b=W.svNewRun(W.DUNGEONS[0], {hp:1000, dpt:100, catk:30, elems:[]}, 0);
+    let seen=false;
+    for(let i=0;i<60 && !seen;i++)
+      seen=W.svUpgradeChoices(b).some(c=>String(c.id).indexOf("sat:")===0);
+    ok(seen, "召喚候補が3択に出る");
+    b.sats=[{id:"a"},{id:"b"},{id:"c"}]; // 満枠
+    for(let i=0;i<20;i++)
+      ok(!W.svUpgradeChoices(b).some(c=>String(c.id).indexOf("sat:")===0), "満枠では出ない");
+    b.sats=[];
+    W.svApplyUpgrade(b, "sat:c01");
+    eq(b.sats.length, 1, "sat:idの適用=召喚");
+  });
+  t("サバイバー: 宝箱スライムが時々あらわれ、倒すと🪙とちからの3択・逃すと消える", ()=>{
+    const P={hp:1000, dpt:100, catk:30, elems:[]};
+    const b=W.svNewRun(W.DUNGEONS[0], P, 0);
+    b.spawnAt=1e9; b.weapons=[];
+    b.t=W.SV_CHEST_IV-250;
+    W.svTick(b, 250);
+    const chest=b.enemies.find(e=>e.chest);
+    ok(chest, "SV_CHEST_IVで宝箱が湧く");
+    eq(chest.atk, 0, "宝箱は無害(殴ってこない)");
+    chest.hp=0;
+    W.svReap(b);
+    eq(b.gold, Math.round(W.SV_CHEST_GOLD*(2+b.tier)), "宝箱の🪙ボーナス");
+    eq(b.chests, 1, "ちからの3択が予約される");
+    const b2=W.svNewRun(W.DUNGEONS[0], P, 0);
+    b2.spawnAt=1e9; b2.weapons=[];
+    b2.t=W.SV_CHEST_IV-250;
+    W.svTick(b2, 250);
+    b2.enemies.find(e=>e.chest).ttl=100;
+    W.svTick(b2, 250);
+    ok(!b2.enemies.some(e=>e.chest), "滞在時間が過ぎると消える");
+  });
+  t("サバイバー: 時間経過でエリート個体が混ざる(🪙4倍)", ()=>{
+    eq(W.svEliteP(0), 0, "序盤は出ない");
+    ok(W.svEliteP(60000)>0, "1分過ぎから混ざる");
+    ok(W.svEliteP(1e9)<=0.15, "確率の上限は15%");
+    const b=W.svNewRun(W.DUNGEONS[0], {hp:1000, dpt:100, catk:30, elems:[]}, 0);
+    b.enemies=[{uid:"x",name:"a",icon:"👾",hp:0,hpMax:9,def:0,atk:1,x:60,y:50,sp:0,atkCd:9,gmult:4}];
+    W.svReap(b);
+    eq(b.gold, Math.round((2+b.tier)*4), "エリートは🪙4倍");
+  });
+  t("サバイバー: 心得(永続強化)は🪙で修め、次のランから効く", ()=>{
+    const g={gold:600, sv:{clears:{}, meta:{}}};
+    const r=W.svBuyMeta(g, "hp");
+    ok(r && r.lv===1, "買える");
+    eq(g.gold, 600-W.SV_META_COST[0], "🪙を消費");
+    eq(W.svBuyMeta(g, "hp"), null, "🪙不足では買えない(Lv2は🪙"+W.SV_META_COST[1]+")");
+    const g2={gold:1e9, sv:{meta:{}}};
+    for(let i=0;i<10;i++) W.svBuyMeta(g2, "gem");
+    eq(g2.sv.meta.gem, W.SV_META.find(m=>m.id==="gem").max, "上限Lvで止まる");
+    const mb=W.svMetaBonus({hp:2, pow:1, rate:1, gem:2, gold:3});
+    ok(Math.abs(mb.hpM-1.12)<1e-9, "HP+6%/Lv");
+    ok(Math.abs(mb.powM-1.05)<1e-9, "威力+5%/Lv");
+    ok(Math.abs(mb.rateM-0.96)<1e-9, "詠唱-4%/Lv");
+    eq(mb.gem0, 2, "開始◆");
+    ok(Math.abs(mb.goldM-1.24)<1e-9, "金運+8%/Lv");
+    const b=W.svNewRun(W.DUNGEONS[0], {hp:1000, dpt:100, catk:30, elems:[]}, 0, {meta:{hp:2, gem:2, pow:1}});
+    eq(b.hpMax, 1120, "最大HPに反映");
+    eq(b.gem, 2, "開始◆に反映(レベルアップ手前まで)");
+    ok(Math.abs(b.up.pow-1.05)<1e-9, "威力に反映");
+  });
+  t("サバイバー: 日替わりチャレンジは決定的(修飾+品詞しばり)・修飾は敵に効く", ()=>{
+    const a=W.svDailyFor("2026-08-12", 5), a2=W.svDailyFor("2026-08-12", 5);
+    eq(JSON.stringify(a), JSON.stringify(a2), "同じ日は同じ内容");
+    ok(a.idx>=0 && a.idx<5, "解放済みステージの範囲から選ぶ");
+    ok(["v","n","adj","adv"].indexOf(a.pos)>=0, "品詞しばりつき");
+    ok(W.SV_DAILY_MODS.some(m=>m.id===a.mods.id), "修飾は候補から");
+    eq(W.svDailyFor("2026-08-12", 1).idx, 0, "ステージが1つでも詰まない");
+    const P={hp:1000, dpt:100, catk:30, elems:[]};
+    const b=W.svNewRun(W.DUNGEONS[0], P, 0, {mods:{spawn:1, ehp:2, eatk:3, espd:1, gmult:1}});
+    W.svTick(b, 250);
+    const plain=W.svNewRun(W.DUNGEONS[0], P, 0);
+    W.svTick(plain, 250);
+    eq(b.enemies[0].hp, plain.enemies[0].hp*2, "修飾: 敵HP×2");
+    eq(b.enemies[0].atk, plain.enemies[0].atk*3, "修飾: 敵攻撃×3");
+  });
+  t("サバイバー: 品詞しばりの出題(帳簿はSRSと同一・しばりなしは通常出題)", ()=>{
+    for(let i=0;i<12;i++) eq(W.svPickWord("v").pos, "v", "動詞だけ出る");
+    for(let i=0;i<12;i++) eq(W.svPickWord("adj").pos, "adj", "形容詞だけ出る");
+    ok(W.svPickWord(null) && W.svPickWord(null).en, "しばりなしは通常の出題");
+  });
+  t("サバイバー: デイリー勝利ボーナスは1日1回だけ", ()=>{
+    const G=W.G, g0=G.gold;
+    const oldDone=G.sv && G.sv.dailyDone;
+    const oldClear=G.sv && G.sv.clears && G.sv.clears[W.DUNGEONS[0].id];
+    if(G.sv){ delete G.sv.dailyDone; delete G.sv.clears[W.DUNGEONS[0].id]; }
+    const P={hp:100, dpt:10, catk:10, elems:[]};
+    W.SV=W.svNewRun(W.DUNGEONS[0], P, 0, {daily:true});
+    W.SV._d=W.DUNGEONS[0];
+    W.SV.gold=0; W.SV.over=true; W.SV.win=true;
+    W.svFinish();
+    const daily=W.SV_DAILY_GOLD(W.DUNGEONS[0].tier);
+    eq(G.gold, g0+60+1000+daily, "初回勝利=通常60+初生還1000+デイリー"+daily);
+    W.closeModal();
+    W.SV=W.svNewRun(W.DUNGEONS[0], P, 0, {daily:true});
+    W.SV._d=W.DUNGEONS[0];
+    W.SV.gold=0; W.SV.over=true; W.SV.win=true;
+    W.svFinish();
+    eq(G.gold, g0+60+1000+daily+60, "同じ日の2勝目にデイリーボーナスはない");
+    W.closeModal(); W.svCleanup();
+    G.gold=g0;
+    if(oldDone) G.sv.dailyDone=oldDone; else delete G.sv.dailyDone;
+    if(oldClear) G.sv.clears[W.DUNGEONS[0].id]=oldClear; else delete G.sv.clears[W.DUNGEONS[0].id];
+  });
+  t("サバイバー: 心得・デイリー達成日も同期される(部分リセットでも残る)", ()=>{
+    const base=()=>({resetAt:0, words:{},days:{},inv:{},chars:{},dungeons:{},counters:{},ach:{},
+      inf:{best:0}, gold:0,tickets:0,shards:0,xp:0});
+    const a=Object.assign(base(), {updatedAt:1, sv:{clears:{}, meta:{hp:2}, dailyDone:"2026-08-10"}});
+    const b=Object.assign(base(), {updatedAt:2, sv:{clears:{}, meta:{hp:1, pow:3}, dailyDone:"2026-08-12"}});
+    const m=W.mergeData(a,b);
+    eq(m.sv.meta.hp, 2, "心得はLvが高い方");
+    eq(m.sv.meta.pow, 3, "片方にしかない心得も残る");
+    eq(m.sv.dailyDone, "2026-08-12", "達成日は新しい方(二重取り防止)");
+    const r=W.partialResetData({sv:{clears:{}, meta:{gold:4}, dailyDone:"2026-08-12"}}, 9);
+    eq(r.sv.meta.gold, 4, "心得は部分リセットでも残る");
+    eq(r.sv.dailyDone, "2026-08-12", "達成日も残る");
+  });
+  t("サバイバー: 入口に心得(永続強化)と日替わりチャレンジがある", ()=>{
+    W.openSVSelect();
+    ok(W.document.getElementById("svMetaBtn"), "心得ボタン");
+    ok(W.document.getElementById("svDailyBtn"), "デイリー挑戦ボタン");
+    W.svOpenMeta();
+    eq(W.document.querySelectorAll("#modal [data-meta]").length, W.SV_META.length, "全心得の購入行が並ぶ");
+    W.closeModal();
+  });
+
   /* ---- 起動状態 ---- */
   t("起動時に問題が出題されている", ()=>{
     ok(W.document.getElementById("promptWord").textContent.length>0);
