@@ -956,7 +956,7 @@ function run(){
     const dl=W.DAILY_DEFS.find(m=>m.id==="dl"), wl=W.WEEKLY_DEFS.find(m=>m.id==="wl");
     ok(dl.rew.g>0 && !dl.rew.t, "デイリークリア任務は🪙");
     ok(wl.rew.g>0 && !wl.rew.t, "ウィークリークリア任務は🪙");
-    ["aclr","ainf","achr","apul","adup","atd"].forEach(id=>{
+    ["aclr","ainf","achr","apul","adup","asv"].forEach(id=>{
       const a=W.ACH_DEFS.find(x=>x.id===id);
       ok(a.tiers.every(tr=>!tr[1].t), id+" の報酬に🎫が混ざっている");
     });
@@ -1636,277 +1636,293 @@ function run(){
       if(old===undefined) delete G.faces[c.id]; else G.faces[c.id]=old;
     }
   });
-
-  /* ---- v4.14.0: 単語の防衛線(β) ---- */
-  t("防衛線: 3ウェーブ(6/8/10+ボス)が生成される", ()=>{
-    const ws=W.tdWaves(W.DUNGEONS[0]);
-    eq(ws.length, 3, "3ウェーブ");
-    eq(ws[0].length, 6); eq(ws[1].length, 8); eq(ws[2].length, 11, "最終波は10体+ボス");
-    ok(ws[2][10].boss, "最後がボス");
-    ok(ws[0].every(e=>e.hp>0 && e.hpMax===e.hp && e.icon), "敵定義が揃っている");
-    ok(ws[2][0].hp>ws[0][0].hp, "波が進むほど深い階の敵(HP増)");
+  /* ---- v4.20.0: 単語のサバイバー(β・防衛線を置き換え) ---- */
+  t("サバイバー: 開始状態(自機HP=キャラHP・武器=呪文の節・Lv1)", ()=>{
+    const b=W.svNewRun(W.DUNGEONS[0], {hp:1000, dpt:100, catk:30, elems:[]}, 0);
+    eq(b.hp, 1000, "自機HP=プレイヤーHP");
+    eq(b.weapons.length, 1, "呪文が空ならキャラ攻撃の武器1本");
+    eq(b.weapons[0].V, 100);
+    eq(b.lv, 1); eq(b.gem, 0); eq(b.enemies.length, 0);
+    eq(b.bossAt, W.SV_STAGE_SEC*1000, "ボスは180秒後");
+    ok(!b.over && !b.bossOn);
+    ok(b.up.pow===1 && b.up.rate===1 && b.up.burst===1 && b.up.guard===1 && b.up.gold===1, "強化は素の状態");
   });
-  t("防衛線: 動詞タイプで撃ち方が変わる(強撃/貫通/吸収/連撃/反復)", ()=>{
-    const d=W.DUNGEONS[0];
-    const mk=cls=>{ const b=W.tdNewBattle(d, {hp:1000, dpt:100, catk:30, elems:[]});
-      b.P.cls=cls; b.waves=[[],[],[]]; return b; };
-    const foes=()=>[{name:"a",icon:"👾",hp:50,hpMax:50,def:0,atk:50,pos:2},
-                    {name:"b",icon:"🐇",hp:99999,hpMax:99999,def:0,atk:50,pos:5},
-                    {name:"c",icon:"🦀",hp:99999,hpMax:99999,def:0,atk:50,pos:7}];
-    let b=mk([{V:100,vt:0,w:1,rep:0}]); b.enemies=foes();
-    let f=W.tdFire(b,1);
-    eq(f.hits.length, 1, "強撃は一点"); ok(f.hits[0].dead, "先頭を撃破");
-    eq(b.enemies.length, 2, "他は無傷");
-    b=mk([{V:100,vt:1,w:1,rep:0}]); b.enemies=foes();
-    f=W.tdFire(b,1);
-    eq(f.hits.length, 3, "貫通はレーン全体に当たる");
-    ok(f.beam, "ビーム演出フラグ");
-    b=mk([{V:100,vt:2,w:1,rep:0}]); b.enemies=foes(); b.castle=500;
-    f=W.tdFire(b,1);
-    ok(f.heal>0 && b.castle>500, "吸収は城を回復する");
-    b=mk([{V:100,vt:3,w:1,rep:0}]); b.enemies=foes();
-    f=W.tdFire(b,1);
-    ok(f.multiPop, "連撃フラグ");
-    ok(new Set(f.hits.map(h=>h.pos)).size>=2, "前から2体に命中");
-    b=mk([{V:100,vt:0,w:1,rep:0.5}]); b.enemies=foes();
-    f=W.tdFire(b,1);
-    ok(f.hits.length>=2, "反復はもう一度撃つ");
-  });
-  t("防衛線: 左端まで来た敵は城に2.5×atkを与えて消える", ()=>{
-    const b=W.tdNewBattle(W.DUNGEONS[0], {hp:1000, dpt:500, catk:30, elems:[]});
-    eq(b.castle, 1000, "城HP=プレイヤーHP");
-    b.enemies=[{name:"a",icon:"👾",hp:10,hpMax:10,def:0,atk:50,pos:0}];
-    b.waves=[[],[],[]]; b.wi=0; b.si=0;
-    const ev=W.tdTick(b);
-    eq(ev.leaks.length, 1, "左端まで来た敵は城に到達");
-    eq(b.castle, 1000-125, "城に2.5×atkのダメージ");
-    eq(b.enemies.length, 0, "到達した敵は消える");
-  });
-  t("防衛線: 呪文の節が砲撃になる(キャラ倍率込み・空なら素の一撃)", ()=>{
-    const s=W.tdSnapshot({clauses:[{V:100,vt:1,w:1.2,rep:0.4,name:"x"}],
+  t("サバイバー: 呪文の節が武器になる(キャラ倍率込み・空なら素の一撃)", ()=>{
+    const s=W.svSnapshot({clauses:[{V:100,vt:1,w:1.2,rep:0.4,name:"x"}],
       charM:1.1, setM:1.05, amp:1.2, abDmg:0.1, dpt:150, catk:40, hp:500});
     eq(s.cls.length, 1);
     ok(Math.abs(s.cls[0].V-100*1.1*1.05*1.2*1.1)<1e-6, "キャラ・セット・増幅・スキルをVに織り込む");
     eq(s.cls[0].vt, 1); ok(Math.abs(s.cls[0].rep-0.4)<1e-9, "反復を引き継ぐ");
-    const s2=W.tdSnapshot({clauses:[], dpt:0, catk:34, hp:300});
+    const s2=W.svSnapshot({clauses:[], dpt:0, catk:34, hp:300});
     eq(s2.cls.length, 1); eq(s2.cls[0].V, 34, "呪文が空ならキャラ攻撃の一撃");
   });
-  t("防衛線: 復習期限切れの野生語は錆びて威力が下がる(TD限定ルール)", ()=>{
+  t("サバイバー: 敵は時間で湧き、経過とともに湧き間隔が縮む(VS式の激化)", ()=>{
+    const b=W.svNewRun(W.DUNGEONS[0], {hp:1000, dpt:100, catk:30, elems:[]}, 0);
+    W.svTick(b, 250);
+    eq(b.enemies.length, 1, "最初のtickで1体目が湧く");
+    const e=b.enemies[0];
+    ok(e.hp>0 && e.hpMax===e.hp && e.icon && e.uid, "敵定義が揃っている");
+    ok(e.x>=3 && e.x<=97 && e.y>=4 && e.y<=96, "フィールドの縁から湧く");
+    eq(W.svSpawnIv(0), W.SV_SPAWN0, "開始時の湧き間隔");
+    eq(W.svSpawnIv(W.SV_STAGE_SEC*1000), W.SV_SPAWN1, "終盤の湧き間隔");
+    const mid=W.svSpawnIv(W.SV_STAGE_SEC*500);
+    ok(mid<W.SV_SPAWN0 && mid>W.SV_SPAWN1, "間は線形に縮む");
+  });
+  t("サバイバー: 同時出現数に上限がある(スマホ描画ガード)", ()=>{
+    const b=W.svNewRun(W.DUNGEONS[0], {hp:1000, dpt:100, catk:30, elems:[]}, 0);
+    for(let i=0;i<W.SV_MAXFOES;i++)
+      b.enemies.push({uid:"c"+i,name:"a",icon:"👾",hp:9,hpMax:9,def:0,atk:1,x:90,y:50,sp:0,atkCd:9999});
+    b.spawnAt=b.t;
+    W.svTick(b, 250);
+    eq(b.enemies.length, W.SV_MAXFOES, "上限を超えて湧かない");
+  });
+  t("サバイバー: 敵は自機へ直進し、間合いで足を止めて殴る", ()=>{
+    const b=W.svNewRun(W.DUNGEONS[0], {hp:1000, dpt:100, catk:30, elems:[]}, 0);
+    b.spawnAt=1e9; b.weapons=[]; // 湧きと迎撃を止めて移動だけ見る
+    const e={uid:"x",name:"a",icon:"👾",hp:100,hpMax:100,def:0,atk:50,x:90,y:50,sp:8,atkCd:W.SV_TOUCH_CD,boss:false};
+    b.enemies=[e];
+    W.svTick(b, 1000);
+    eq(Math.round(e.x), 82, "1秒でsp=8だけ自機へ近づく");
+    eq(e.y, 50, "直進(y軸はそのまま)");
+    e.x=50+W.SV_REACH; e.atkCd=100;
+    const hp0=b.hp;
+    const ev=W.svTick(b, 250);
+    eq(ev.touches.length, 1, "間合いに入ると殴られる");
+    eq(b.hp, hp0-50, "素の被弾はatkそのまま(def0)");
+    eq(e.x, 50+W.SV_REACH, "殴っている間は前進しない");
+    // まもりの言霊(guard)は被弾を減らす
+    b.up.guard=0.5; e.atkCd=100;
+    W.svTick(b, 250);
+    eq(b.hp, hp0-50-25, "guard×0.5で被弾半減");
+  });
+  t("サバイバー: 武器はクールダウンで自動発火し、最近接を撃つ", ()=>{
+    const b=W.svNewRun(W.DUNGEONS[0], {hp:1000, dpt:100, catk:30, elems:[]}, 0);
+    b.spawnAt=1e9;
+    b.enemies=[{uid:"x",name:"a",icon:"👾",hp:1000,hpMax:1000,def:0,atk:1,x:60,y:50,sp:0,atkCd:9999}];
+    b.weapons=[{V:100,vt:0,w:1,rep:0,cd:200}];
+    const ev=W.svTick(b, 250);
+    eq(ev.hits.length, 1, "クールダウンが尽きた武器が撃つ");
+    eq(ev.hits[0].take, Math.round(100*W.SV_AUTO), "自動発火はSV_AUTO係数(バーストより弱い)");
+    ok(b.weapons[0].cd>0 && b.weapons[0].cd<=W.SV_CD[0], "CDが再装填される");
+    // 詠唱加速(rate)は再装填を速くする
+    b.up.rate=0.5; b.weapons[0].cd=100;
+    W.svTick(b, 250);
+    eq(b.weapons[0].cd, W.SV_CD[0]*0.5-150, "再装填はSV_CD×rate");
+  });
+  t("サバイバー: 正解バーストは動詞タイプで撃ち方が変わる(強撃/貫通/吸収/連撃/反復)", ()=>{
+    const P={hp:1000, dpt:100, catk:30, elems:[]};
+    const mk=cls=>{ const b=W.svNewRun(W.DUNGEONS[0], P, 0); b.spawnAt=1e9;
+      b.weapons=cls.map(c=>Object.assign({cd:9999}, c)); return b; };
+    const foes=()=>[
+      {uid:"a",name:"a",icon:"👾",hp:50,hpMax:50,def:0,atk:1,x:60,y:50,sp:0,atkCd:9999},      // 右・近い
+      {uid:"b",name:"b",icon:"🐇",hp:99999,hpMax:99999,def:0,atk:1,x:80,y:50,sp:0,atkCd:9999}, // 右・遠い(同方向)
+      {uid:"c",name:"c",icon:"🦀",hp:99999,hpMax:99999,def:0,atk:1,x:50,y:10,sp:0,atkCd:9999}];// 上(別方向)
+    let b=mk([{V:100,vt:0,w:1,rep:0}]); b.enemies=foes();
+    let f=W.svBurst(b, 1);
+    eq(f.hits.length, 1, "強撃は最近接に一点"); ok(f.hits[0].dead, "撃破");
+    eq(b.enemies.length, 2, "他は無傷");
+    eq(b.kills, 1, "キル数が増える"); ok(b.gold>0, "倒すと🪙");
+    b=mk([{V:100,vt:1,w:1,rep:0}]); b.enemies=foes();
+    f=W.svBurst(b, 1);
+    eq(f.hits.length, 2, "貫通は同方向の敵をまとめて貫く");
+    eq(f.beams.length, 1, "ビーム演出(角度つき)");
+    eq(b.enemies.find(e=>e.uid==="c").hp, 99999, "別方向の敵には当たらない");
+    b=mk([{V:100,vt:2,w:1,rep:0}]); b.enemies=foes(); b.hp=500;
+    f=W.svBurst(b, 1);
+    ok(f.heal>0 && b.hp>500, "吸収は自機を回復する");
+    ok(f.heal<=Math.round(b.hpMax*W.SV_HEAL_CAP), "回復は1発あたり最大HP8%まで");
+    b=mk([{V:100,vt:3,w:1,rep:0}]); b.enemies=foes();
+    f=W.svBurst(b, 1);
+    ok(new Set(f.hits.map(h=>h.name)).size>=2, "連撃は近い2体に命中");
+    b=mk([{V:100,vt:0,w:1,rep:0.5}]); b.enemies=foes();
+    f=W.svBurst(b, 1);
+    ok(f.hits.length>=2, "反復はもう一度撃つ");
+  });
+  t("サバイバー: 180秒生存でボス出現・以降は通常の湧きが止まる", ()=>{
+    const b=W.svNewRun(W.DUNGEONS[0], {hp:1000, dpt:100, catk:30, elems:[]}, 0);
+    b.t=b.bossAt-250; b.spawnAt=0;
+    const ev=W.svTick(b, 250);
+    ok(ev.bossIn && b.bossOn, "時間到達でボス出現");
+    ok(b.enemies.some(e=>e.boss), "ボスが場にいる");
+    W.svTick(b, 250);
+    eq(b.enemies.filter(e=>!e.boss).length, 0, "ボス戦中は通常の湧きが止まる");
+    // ボス撃破=勝利(残りの雑魚は消える)
+    const b2=W.svNewRun(W.DUNGEONS[0], {hp:1000, dpt:100, catk:30, elems:[]}, 0);
+    b2.spawnAt=1e9;
+    b2.weapons=[{V:1e9,vt:0,w:1,rep:0,cd:9999}];
+    b2.enemies=[{uid:"eboss",name:"B",icon:"👿",hp:100,hpMax:100,def:0,atk:1,x:60,y:50,sp:0,atkCd:9999,boss:true}];
+    W.svBurst(b2, 1);
+    ok(b2.over && b2.win, "ボス撃破で勝利");
+    eq(b2.enemies.length, 0, "勝利で場は片づく");
+  });
+  t("サバイバー: 自機HPが尽きたら敗北", ()=>{
+    const b=W.svNewRun(W.DUNGEONS[0], {hp:1000, dpt:100, catk:30, elems:[]}, 0);
+    b.spawnAt=1e9; b.weapons=[]; b.hp=10;
+    b.enemies=[{uid:"x",name:"a",icon:"👾",hp:100,hpMax:100,def:0,atk:50,x:55,y:50,sp:0,atkCd:0,boss:false}];
+    const ev=W.svTick(b, 250);
+    ok(ev.lose && b.over && !b.win, "HPが尽きたら敗北");
+    eq(b.hp, 0);
+  });
+  t("サバイバー: ◆ジェムは正解で獲得(コンボで増)・貯まるとレベルアップ", ()=>{
+    eq(W.svGemGain(true, 0), 1);
+    eq(W.svGemGain(true, 4), 1, "4連続までは1個");
+    eq(W.svGemGain(true, 5), 2, "5連続で2個");
+    eq(W.svGemGain(true, 10), 3, "10連続で3個");
+    eq(W.svGemGain(false, 9), 0, "ミスは0個");
+    eq(W.svXpNext(1), 4, "Lv2に必要な◆は4");
+    eq(W.svXpNext(3), 8, "必要◆は2ずつ増える");
+    const b={lv:1, gem:0};
+    ok(!W.svAddGems(b, 3), "3個ではまだ");
+    ok(W.svAddGems(b, 2), "4個目でレベルアップ");
+    eq(b.lv, 2); eq(b.gem, 1, "余りは持ち越し");
+  });
+  t("サバイバー: レベルアップの3択は重複なし・強化はランの間だけ効く", ()=>{
+    for(let i=0;i<10;i++){
+      const cs=W.svUpgradeChoices();
+      eq(cs.length, 3, "3択");
+      eq(new Set(cs.map(c=>c.id)).size, 3, "重複なし");
+      ok(cs.every(c=>W.SV_UPGRADES.some(u=>u.id===c.id)), "候補プールから選ばれる");
+    }
+    const b=W.svNewRun(W.DUNGEONS[0], {hp:1000, dpt:100, catk:30, elems:[]}, 0);
+    W.svApplyUpgrade(b, "pow");   ok(Math.abs(b.up.pow-1.25)<1e-9, "威力+25%");
+    W.svApplyUpgrade(b, "burst"); ok(Math.abs(b.up.burst-1.35)<1e-9, "バースト+35%");
+    W.svApplyUpgrade(b, "gold");  ok(Math.abs(b.up.gold-1.3)<1e-9, "金運+30%");
+    for(let i=0;i<20;i++) W.svApplyUpgrade(b, "rate");
+    ok(b.up.rate>=0.4, "連射は下限0.4で頭打ち");
+    for(let i=0;i<20;i++) W.svApplyUpgrade(b, "guard");
+    ok(b.up.guard>=0.4, "守りは下限0.4で頭打ち");
+    b.hp=100; const m0=b.hpMax;
+    W.svApplyUpgrade(b, "heal");
+    ok(b.hpMax>m0, "最大HP+10%");
+    ok(b.hp>100 && b.hp<=b.hpMax, "即時回復(上限まで)");
+  });
+  t("サバイバー: 時間が流れるのは出題中だけ(答え合わせ・3択・離脱中は停止)", ()=>{
+    ok(!W.svShouldPause(false,false,false,false), "出題中は流れる");
+    ok(W.svShouldPause(true,false,false,false), "答え合わせ中は止まる");
+    ok(W.svShouldPause(false,true,false,false), "タブ非表示で止まる");
+    ok(W.svShouldPause(false,false,true,false), "別画面で止まる");
+    ok(W.svShouldPause(false,false,false,true), "モーダル(3択)中は止まる");
+  });
+  t("サバイバー: 復習期限切れの野生語は言霊が錆びて威力が下がる", ()=>{
     const G=W.G, s0=G.party.sentence;
     const wild=W.WORDS.find(x=>W.rootIdsOf(x.en).length===0);
     const oldInv=G.inv[wild.en+"|1|0"], oldSt=G.words[wild.en];
     W.addCard(wild.en,1);
     G.words[wild.en]=[3, Date.now()-1000, 3,0,0,0,0]; // 期限切れ
     G.party.sentence=[wild.en+"|1|0"];
-    eq(W.tdRustCount(), 1, "錆び1枚");
-    ok(Math.abs(W.tdRustMult(1)-0.94)<1e-9, "-6%/枚");
-    ok(Math.abs(W.tdRustMult(10)-0.7)<1e-9, "下限は-30%");
+    eq(W.svRustCount(), 1, "錆び1枚");
+    ok(Math.abs(W.svRustMult(1)-0.94)<1e-9, "-6%/枚");
+    ok(Math.abs(W.svRustMult(10)-0.7)<1e-9, "下限は-30%");
     G.words[wild.en]=[3, Date.now()+864e5, 3,0,0,0,0]; // 復習済み
-    eq(W.tdRustCount(), 0, "復習すれば研ぎ直る");
+    eq(W.svRustCount(), 0, "復習すれば研ぎ直る");
     G.party.sentence=s0;
     if(oldSt) G.words[wild.en]=oldSt; else delete G.words[wild.en];
     if(oldInv) G.inv[wild.en+"|1|0"]=oldInv; else delete G.inv[wild.en+"|1|0"];
   });
-  t("防衛線: ウェーブの合間に現在の編成が反映される(tdResnap)", ()=>{
-    const G=W.G, s0=G.party.sentence;
-    W.TD=W.tdNewBattle(W.DUNGEONS[0], {hp:100, dpt:10, catk:10, elems:[]});
-    eq(W.TD.P.cls[0].V, 10, "開始時は素の一撃");
-    const n=W.WORDS.filter(x=>x.pos==="n")[12];
-    W.addCard(n.en,3);
-    G.party.sentence=[n.en+"|3|0"];
-    W.tdResnap();
-    ok(W.TD.P.cls[0].V>10, "編成した名詞が反映されて威力が上がる");
-    G.party.sentence=s0;
-    delete G.inv[n.en+"|3|0"];
-    W.TD=null;
-  });
-  /* ---- v4.18.0: 射程 ---- */
-  t("防衛線: 射程持ちのなかまは離れた敵を撃ち、距離を保つ", ()=>{
-    const b=W.tdNewBattle(W.DUNGEONS[0], {hp:1000, dpt:10, catk:10, elems:[]});
-    b.waves=[[],[],[]]; b.wi=3; // 増援なし
-    b.units=[{uid:"u1",id:"c03",name:"ロディ",rar:1,cost:100,hp:280,hpMax:280,atk:40,def:16,rng:2,pos:30}];
-    b.enemies=[{uid:"e1",name:"a",icon:"👾",hp:200,hpMax:200,def:0,atk:30,pos:50}]; // 20離れている(射程4+25=29内)
-    W.tdTick(b);
-    ok(b.enemies[0].hp<200, "離れた敵を攻撃できる");
-    eq(b.units[0].hp, 280, "離れているので反撃を受けない");
-    eq(b.units[0].pos, 30, "射程内に敵がいる間は前進しない(距離を保つ)");
-    eq(b.enemies[0].pos, 37.5, "敵は間合いに入るまで近づいてくる");
-    const G=W.G;
-    G.chars.c03=G.chars.c03||{dup:0};
-    eq(W.tdUnitFrom("c03").rng, 2, "狩人は射程2");
-    eq(W.tdUnitFrom("c01").rng, 0, "剣士は近接(射程0)");
-  });
-
-  /* ---- v4.17.0: 砲撃チャージ制(なかま×呪文の統合) ---- */
-  t("防衛線: 砲撃は正解3回のチャージ制で、なかまがいないと撃てない", ()=>{
-    const b=W.tdNewBattle(W.DUNGEONS[0], {hp:1000, dpt:100, catk:30, elems:[]});
-    eq(b.charge, 0, "チャージ0から");
-    ok(!W.tdVolleyReady(b), "チャージ0では撃てない");
-    b.charge=W.TD_CHARGE;
-    ok(!W.tdVolleyReady(b), "なかま0体では満タンでも撃てない(呪文はなかまが詠唱する)");
-    b.units=[{id:"c01",name:"ノア",rar:1,cost:100,hp:300,hpMax:300,atk:34,def:20,pos:0}];
-    ok(W.tdVolleyReady(b), "満チャージ+詠唱者ありで発射できる");
-    eq(W.TD_CHARGE, 3, "必要正解数は3");
-  });
-
-  /* ---- v4.16.0: なかま出撃方式 ---- */
-  t("防衛線: 💠言霊は正解で+100(コンボで増加)・ミスで+30", ()=>{
-    eq(W.tdManaGain(true, 0), 100);
-    eq(W.tdManaGain(true, 1), 100, "コンボ1はボーナスなし");
-    eq(W.tdManaGain(true, 3), 120, "コンボ3で+20");
-    eq(W.tdManaGain(true, 99), 150, "コンボボーナスは+50が上限");
-    eq(W.tdManaGain(false, 5), 30, "ミスでも少し貯まる");
-  });
-  t("防衛線: なかまはレア度コストで出撃し、スキルが折り込まれる", ()=>{
-    const G=W.G;
-    G.chars.c01=G.chars.c01||{dup:0}; // 剣の心得(dmg+5%)
-    G.chars.c07=G.chars.c07||{dup:0}; // 聖盾(guard 8%)
-    const u=W.tdUnitFrom("c01");
-    eq(u.cost, 100, "Nは💠100");
-    eq(u.atk, Math.round(W.charStats("c01").atk*1.05), "dmgスキルは攻撃に反映");
-    eq(u.pos, 0, "城前に出る");
-    const u7=W.tdUnitFrom("c07");
-    eq(u7.cost, 150, "Rは💠150");
-    eq(u7.def, Math.round(W.charStats("c07").def*1.16), "guardスキルは防御に反映");
-    eq(W.tdUnitFrom("c99"), null, "未所持は出せない");
-  });
-  t("防衛線: 出撃は💠を消費しクールダウンが付く・不足時は出せない", ()=>{
-    const G=W.G;
-    G.chars.c01=G.chars.c01||{dup:0};
-    const b=W.tdNewBattle(W.DUNGEONS[0], {hp:1000, dpt:10, catk:10, elems:[]});
-    eq(b.mana, 150, "初期💠150");
-    const u=W.tdDeploy(b, "c01");
-    ok(u && b.units.length===1, "出撃できる");
-    eq(b.mana, 50, "コスト分減る");
-    eq(b.cd.c01, 2, "再出撃まで2問");
-    ok(!W.tdDeploy(b, "c01"), "クールダウン中は出せない");
-    b.cd.c01=0;
-    ok(!W.tdDeploy(b, "c01"), "💠不足でも出せない");
-  });
-  t("防衛線: 間合いに入ったなかまと敵は足を止めて殴り合う(にゃんこ式)", ()=>{
-    const b=W.tdNewBattle(W.DUNGEONS[0], {hp:1000, dpt:10, catk:10, elems:[]});
-    b.waves=[[],[],[]]; b.wi=3; // 増援なし
-    b.units=[{uid:"u1",id:"c01",name:"ノア",rar:1,cost:100,hp:300,hpMax:300,atk:50,def:20,rng:0,pos:50}];
-    b.enemies=[{uid:"e1",name:"a",icon:"👾",hp:120,hpMax:120,def:0,atk:30,pos:52}]; // 間合い(4)内
-    const ev=W.tdTick(b);
-    eq(b.enemies[0].pos, 52, "交戦中の敵は進まない(足止め)");
-    eq(b.units[0].pos, 50, "なかまも足を止める(重なりは許容)");
-    ok(b.enemies[0].hp<120, "なかまの攻撃が通る");
-    ok(b.units[0].hp<300, "なかまも殴られる");
-    ok(ev.fights.length>=2, "交戦イベントが記録される");
-    W.tdTick(b); W.tdTick(b);
-    eq(b.enemies.length, 0, "殴り合いの末に撃破");
-    ok(b.units.length===1 && b.units[0].hp>0, "なかまは生き残る");
-    eq(b.units[0].pos, 62.5, "交戦が終われば前進する(+12.5)");
-  });
-  t("防衛線: レーンは重なりを許容し、数が増えても縦に伸びない", ()=>{
-    W.TD=W.tdNewBattle(W.DUNGEONS[0], {hp:100, dpt:10, catk:10, elems:[]});
-    W.document.getElementById("tdLane").innerHTML="";
-    W.renderTDField(null);
-    const laneEl=W.document.getElementById("tdLane");
-    const h0=laneEl.offsetHeight;
-    for(let i=0;i<10;i++) W.TD.enemies.push({uid:"t"+i, name:"a", icon:"👾", hp:9, hpMax:9, def:0, atk:1, pos:50});
-    W.TD.units=[{uid:"tu1",id:"c01",name:"ノア",rar:1,cost:100,hp:9,hpMax:9,atk:1,def:1,rng:0,pos:50},
-                {uid:"tu2",id:"c01",name:"ノア",rar:1,cost:100,hp:9,hpMax:9,atk:1,def:1,rng:0,pos:50}];
-    W.renderTDField(null);
-    eq(laneEl.offsetHeight, h0, "同じ座標に12体重なっても高さは固定");
-    eq(laneEl.querySelectorAll(".tde").length, 10, "敵は全員描画される(まとめ表示にしない)");
-    eq(laneEl.querySelectorAll(".tdf").length, 2, "なかまも全員描画される");
-    W.renderTDField(null);
-    eq(laneEl.querySelectorAll(".tde").length, 10, "再描画でも要素は増えない(uidで差分更新)");
-    W.TD=null;
-    laneEl.innerHTML="";
-  });
-  t("防衛線: 出撃デッキは保存され、未所持は除外・未設定は自動編成", ()=>{
-    const G=W.G, old=(G.td&&G.td.deck)||null;
-    G.td=G.td||{clears:{}};
-    G.td.deck=null;
-    const d=W.tdDeck();
-    ok(d.length>=1 && d.length<=6, "自動編成(最大6)");
-    ok(d.every(id=>G.chars[id]), "所持しているなかまだけ");
-    G.td.deck=["c01","c99"];
-    eq(W.tdDeck().join(","), "c01", "未所持(c99)は除外される");
-    G.td.deck=old;
-  });
-  t("防衛線: ボス出現でカットインが出る", ()=>{
-    W.TD=W.tdNewBattle(W.DUNGEONS[0], {hp:100, dpt:10, catk:10, elems:[]});
-    W.renderTDField(null, {leaks:[], spawned:{boss:true, icon:"👾", name:"巨大スライム"}, wave:0}, true);
-    const ci=W.document.getElementById("tdCutin");
-    ok(!ci.classList.contains("hidden") && ci.innerHTML.indexOf("BOSS")>=0, "カットイン表示");
-    ok(ci.innerHTML.indexOf("巨大スライム")>=0, "ボス名もカットインに出る(文字ログは廃止)");
-    W.TD=null;
-  });
-  t("防衛線: ボスは半分の速さで進軍・全滅で勝利・城陥落で敗北", ()=>{
-    const P={hp:100, dpt:10, catk:10, elems:[]};
-    const b=W.tdNewBattle(W.DUNGEONS[0], P);
-    b.waves=[[],[],[]]; b.wi=3; // 増援なし
-    b.enemies=[{uid:"b1",name:"B",icon:"👾",hp:99,hpMax:99,def:0,atk:10,pos:50,boss:true},
-               {uid:"z1",name:"z",icon:"🐇",hp:99,hpMax:99,def:0,atk:10,pos:50}];
-    W.tdTick(b);
-    eq(b.enemies[0].pos, 50-12.5/2, "ボスは半分の速さ");
-    eq(b.enemies[1].pos, 50-12.5, "雑魚は1問で1歩(12.5)");
-    const b2=W.tdNewBattle(W.DUNGEONS[0], P);
-    b2.waves=[[]]; b2.wi=0; b2.si=0; b2.enemies=[];
-    const ev2=W.tdTick(b2);
-    ok(ev2.win && b2.over && b2.win, "増援も敵もいなくなったら勝利");
-    const b3=W.tdNewBattle(W.DUNGEONS[0], P);
-    b3.waves=[[],[],[]]; b3.castle=50;
-    b3.enemies=[{name:"a",icon:"👾",hp:10,hpMax:10,def:0,atk:100,pos:0}];
-    const ev3=W.tdTick(b3);
-    ok(ev3.lose && b3.over && !b3.win, "城HPが尽きたら敗北");
-  });
-  t("防衛線: 呪文が空でもキャラ攻撃で最低限撃てる(新規プレイヤー保護)", ()=>{
-    const b=W.tdNewBattle(W.DUNGEONS[0], {hp:300, dpt:0, catk:34, elems:[]});
-    eq(b.P.dpt, 34, "dpt=0ならキャラ攻撃を使う");
-    b.enemies=[{name:"a",icon:"👾",hp:9999,hpMax:9999,def:0,atk:10,pos:3}];
-    const f=W.tdFire(b, 1);
-    ok(f.hits.length===1 && f.hits[0].take>0, "ダメージが出る");
-  });
-  t("防衛線: 解答は学習タブと同一に計上される(SRS・日別・🎫・コンボ)", ()=>{
+  t("サバイバー: 解答は学習タブと同一に計上される(SRS・日別・🎫・コンボ)", ()=>{
     const G=W.G;
     const w=W.WORDS.find(x=>!G.words[x.en]);
     const d0=W.dayRec().a, t0=G.tickets, c0=G.counters.ans;
-    const r=W.tdApplyAnswer(w, true);
+    const r=W.svApplyAnswer(w, true);
     ok(r.ok && r.wasNew, "新規判定");
     eq(G.words[w.en][0], 1, "SRS: 正解でbox1");
     eq(W.dayRec().a, d0+1, "日別記録に+1");
     eq(G.tickets, t0+1, "正解1問=🎫1");
     eq(G.counters.ans, c0+1, "累計解答+1");
     ok(G.combo>=1, "コンボ加算");
-    W.tdApplyAnswer(w, false);
+    W.svApplyAnswer(w, false);
     eq(G.combo, 0, "ミスでコンボ0");
   });
-  t("防衛線: 冒険タブの入口から開始でき、学習タブに触れずに問題が出る", ()=>{
+  t("サバイバー: 勝っても負けても🪙は持ち帰り・勝利はボーナス+クリア記録", ()=>{
+    const G=W.G, g0=G.gold;
+    const had=G.sv && G.sv.clears && G.sv.clears[W.DUNGEONS[0].id];
+    W.SV=W.svNewRun(W.DUNGEONS[0], {hp:100, dpt:10, catk:10, elems:[]}, 0);
+    W.SV._d=W.DUNGEONS[0];
+    W.SV.gold=77; W.SV.over=true; W.SV.win=false;
+    W.svFinish();
+    eq(G.gold, g0+77, "敗北でも倒した分は持ち帰り");
+    W.closeModal();
+    W.SV=W.svNewRun(W.DUNGEONS[0], {hp:100, dpt:10, catk:10, elems:[]}, 0);
+    W.SV._d=W.DUNGEONS[0];
+    W.SV.gold=10; W.SV.over=true; W.SV.win=true;
+    W.svFinish();
+    eq(G.sv.clears[W.DUNGEONS[0].id], 1, "クリア記録(実績「サバイバー生還」の材料)");
+    eq(G.gold, g0+77+10+60+1000, "勝利は🪙60×tier²+はじめての生還1000");
+    W.closeModal();
+    W.svCleanup();
+    G.gold=g0;
+    if(had) G.sv.clears[W.DUNGEONS[0].id]=had; else delete G.sv.clears[W.DUNGEONS[0].id];
+  });
+  t("サバイバー: クリア記録は同期でステージごとに多い方・部分リセットでも残る", ()=>{
+    const base=()=>({resetAt:0, words:{},days:{},inv:{},chars:{},dungeons:{},counters:{},ach:{},
+      inf:{best:0}, gold:0,tickets:0,shards:0,xp:0});
+    const a=Object.assign(base(), {updatedAt:1, sv:{clears:{d1:2}}});
+    const b=Object.assign(base(), {updatedAt:2, sv:{clears:{d1:1, d2:3}}});
+    const m=W.mergeData(a,b);
+    eq(m.sv.clears.d1, 2, "多い方が勝つ");
+    eq(m.sv.clears.d2, 3, "片方にしかない記録も残る");
+    const r=W.partialResetData({sv:{clears:{x:2}}}, 123);
+    eq(r.sv.clears.x, 2, "部分リセットは冒険の記録として残す");
+  });
+  t("サバイバー: フィールドは固定高で、敵が何体いても伸びない(uid差分更新)", ()=>{
+    W.SV=W.svNewRun(W.DUNGEONS[0], {hp:100, dpt:10, catk:10, elems:[]}, 0);
+    const f=W.document.getElementById("svField");
+    f.innerHTML="";
+    W.renderSVField(null);
+    ok(f.querySelector("#svMe"), "自機が中央にいる");
+    const h0=f.offsetHeight;
+    for(let i=0;i<15;i++)
+      W.SV.enemies.push({uid:"t"+i,name:"a",icon:"👾",hp:9,hpMax:9,def:0,atk:1,x:50,y:30,sp:1,atkCd:999});
+    W.renderSVField(null);
+    eq(f.offsetHeight, h0, "同じ座標に15体重なっても高さは固定");
+    eq(f.querySelectorAll(".sve").length, 15, "敵は全員描画される(まとめ表示にしない)");
+    W.renderSVField(null);
+    eq(f.querySelectorAll(".sve").length, 15, "再描画でも要素は増えない(uidで差分更新)");
+    W.SV.enemies=[];
+    W.renderSVField(null);
+    eq(f.querySelectorAll(".sve").length, 0, "いなくなった敵は消える");
+    W.SV=null;
+    f.innerHTML="";
+  });
+  t("サバイバー: ボス出現でカットインが出る", ()=>{
+    W.SV=W.svNewRun(W.DUNGEONS[0], {hp:100, dpt:10, catk:10, elems:[]}, 0);
+    W.SV.enemies.push({uid:"eboss",name:"巨大スライム",icon:"👾",hp:9,hpMax:9,def:0,atk:1,x:90,y:50,sp:1,atkCd:999,boss:true});
+    W.renderSVField({hits:[], beams:[], heal:0, touches:[], bossIn:true, spawned:[]});
+    const ci=W.document.getElementById("svCutin");
+    ok(!ci.classList.contains("hidden") && ci.innerHTML.indexOf("BOSS")>=0, "カットイン表示");
+    ok(ci.innerHTML.indexOf("巨大スライム")>=0, "ボス名もカットインに出る");
+    W.SV=null;
+    W.document.getElementById("svField").innerHTML="";
+  });
+  t("サバイバー: 冒険タブの入口から開始でき、学習タブに触れずに問題が出る", ()=>{
     const G=W.G;
     W.switchTab("adv");
-    ok(W.document.getElementById("tdEntry"), "冒険タブに入口パネル");
-    W.tdStart(W.DUNGEONS[0]);
-    const doc=W.document;
-    ok(!doc.getElementById("tdView").classList.contains("hidden"), "防衛線ビューが開く");
-    ok(doc.getElementById("quizView").classList.contains("hidden"), "学習タブは独立のまま");
-    ok(doc.getElementById("tdWord").textContent.length>0, "問題が出ている");
-    eq(doc.querySelectorAll("#tdChoices .choice").length, 4, "4択");
-    ok(doc.getElementById("tdCount").textContent.indexOf("今日")>=0, "学習タブと同じ「今日 X/Y問」表記");
-    ok(doc.getElementById("tdStats"), "「これまで・定着」の行がある");
-    ok(doc.querySelectorAll("#tdDeck .tdu").length>=1, "出撃バーになかまのボタン");
-    ok(doc.querySelector("#tdDeck .tdmana"), "💠残高の表示");
-    eq(W.TD.enemies.length, 1, "最初の敵が湧いている");
-    ok(!doc.getElementById("tdLog"), "文字ログは廃止されている(v4.17.0)");
-    // 満チャージ+なかまを場に置いてから正解 → 砲撃が発射される
-    W.TD.mana=999;
-    ok(W.tdDeploy(W.TD, "c01"), "なかまを出撃");
-    W.TD.charge=2; // 次の正解で満タン
-    const w=W.tdCur.word, e2j=G.mode==="e2j";
-    const btn=[...doc.querySelectorAll("#tdChoices .choice")].find(b=>b.textContent===(e2j? w.ja : w.en));
-    const hp0=W.TD.enemies[0].hp, mana0=W.TD.mana-100; // 出撃後の残高
-    btn.click(); // 正解を選ぶ → 満チャージなので即座に射撃フェーズ
-    ok(W.TD.enemies.length===0 || W.TD.enemies[0].hp<hp0, "敵にダメージ(または撃破)");
-    eq(W.TD.charge, 0, "発射でチャージが空になる");
-    ok(W.TD.mana>mana0, "正解で💠が増える");
-    ok(doc.querySelector("#tdLane .tdpop"), "ダメージポップが出る");
-    ok(doc.getElementById("tdLane").classList.contains("tdfire"), "レーンの発火演出");
-    W.TD=null; // 後片付け(遅延の進軍・次問タイマーも止まる)
-    W.switchTab("home");
+    ok(W.document.getElementById("svEntry"), "冒険タブに入口パネル");
+    W.svStart(W.DUNGEONS[0]);
+    try{
+      const doc=W.document;
+      ok(!doc.getElementById("svView").classList.contains("hidden"), "サバイバービューが開く");
+      ok(doc.getElementById("quizView").classList.contains("hidden"), "学習タブは独立のまま");
+      ok(doc.getElementById("svWord").textContent.length>0, "問題が出ている");
+      eq(doc.querySelectorAll("#svChoices .choice").length, 4, "4択");
+      ok(doc.getElementById("svCount").textContent.indexOf("今日")>=0, "学習タブと同じ「今日 X/Y問」表記");
+      ok(doc.getElementById("svStats"), "「これまで・定着」の行がある");
+      ok(doc.querySelector("#svField #svMe"), "自機が中央にいる");
+      eq(W.SV.enemies.length, 1, "最初の敵が湧いている");
+      // 敵を自機のそばに置いて正解 → 一斉バースト+◆ジェム
+      W.SV.enemies[0].x=58; W.SV.enemies[0].y=50;
+      const hp0=W.SV.enemies[0].hp;
+      const w=W.svCur.word, e2j=G.mode==="e2j";
+      const btn=[...doc.querySelectorAll("#svChoices .choice")].find(b=>b.textContent===(e2j? w.ja : w.en));
+      btn.click();
+      ok(W.SV.enemies.length===0 || W.SV.enemies[0].hp<hp0, "正解バーストで敵にダメージ(または撃破)");
+      ok(W.SV.gem>0 || W.SV.lv>1, "◆ジェムが貯まる");
+      ok(doc.querySelector("#svField .svpop"), "ダメージポップが出る");
+      ok(doc.getElementById("svField").classList.contains("svfire"), "バーストの閃光");
+    }finally{
+      W.svCleanup(); // ループ(setInterval)も止める=後続テスト・ヘッドレスを汚さない
+      W.switchTab("home");
+    }
   });
 
   /* ---- 起動状態 ---- */

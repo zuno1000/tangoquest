@@ -100,37 +100,41 @@
 
 <!-- ============ 冒険 ============ -->
 <main id="advView" class="hidden">
-  <!-- 単語の防衛線(β・v4.14.0): 撤去するときはこのパネルとtdView・js/td.jsを消すだけ -->
-  <div class="panel tdentry" id="tdEntry" style="margin-top:6px">
-    <div class="row"><div class="grow" style="font-weight:800">⚔ 単語の防衛線 <span class="tdbeta">β</span></div><b>›</b></div>
-    <div class="small" style="margin-top:3px">クイズの正解が砲撃になる新モード ─ 解いた分は学習として記録</div>
+  <!-- 単語のサバイバー(β・v4.20.0): 撤去するときはこのパネルとsvView・js/sv.jsを消すだけ -->
+  <div class="panel sventry" id="svEntry" style="margin-top:6px">
+    <div class="row"><div class="grow" style="font-weight:800">💫 単語のサバイバー <span class="svbeta">β</span></div><b>›</b></div>
+    <div class="small" style="margin-top:3px">押し寄せる敵を正解のバーストでしのぐ新モード ─ 解いた分は学習として記録</div>
   </div>
   <div class="panel" id="infPanel" style="margin-top:12px"></div>
   <h2>ダンジョン</h2>
   <div id="dungeonList"></div>
 </main>
 
-<!-- ============ 単語の防衛線(β・冒険タブから入る) ============ -->
-<main id="tdView" class="hidden">
-  <!-- ヘッダーは1行に圧縮: 戻る+ステージ/WAVE+城HP(クイズUIを最大化する=v4.14.1) -->
-  <div class="row" id="tdHead" style="margin-top:4px; gap:8px; align-items:center">
-    <button class="btn" id="tdBack" style="padding:7px 12px">←</button>
-    <div class="grow" style="font-weight:800; font-size:12px; line-height:1.3" id="tdTitle"></div>
-    <div id="tdCastleWrap">🏰<div class="bHp tdchp"><i id="tdCastleBar"></i></div><b id="tdCastleHp"></b></div>
+<!-- ============ 単語のサバイバー(β・冒険タブから入る) ============ -->
+<main id="svView" class="hidden">
+  <!-- ヘッダーは1行に圧縮: 戻る+ステージ/残り時間+自機HP(クイズUIを最大化する=防衛線の知見) -->
+  <div class="row" id="svHead" style="margin-top:4px; gap:8px; align-items:center">
+    <button class="btn" id="svBack" style="padding:7px 12px">←</button>
+    <div class="grow" style="font-weight:800; font-size:12px; line-height:1.3" id="svTitle"></div>
+    <div id="svHpWrap">🛡<div class="bHp svchp"><i id="svHpBar"></i></div><b id="svHpTxt"></b></div>
   </div>
-  <div id="tdLane"></div>
-  <div id="tdDeck"></div>
-  <div id="tdCutin" class="hidden"></div>
-  <div id="tdPrompt">
-    <span id="tdBadge"></span>
-    <span id="tdCount"></span>
-    <div id="tdWord"></div>
-    <div id="tdStats"></div>
+  <div id="svField"></div>
+  <div id="svMeta">
+    <span id="svLv">Lv1</span>
+    <div class="svxp"><i id="svXpBar"></i></div>
+    <span id="svGold">🪙0</span>
   </div>
-  <div class="choices" id="tdChoices"></div>
+  <div id="svCutin" class="hidden"></div>
+  <div id="svPrompt">
+    <span id="svBadge"></span>
+    <span id="svCount"></span>
+    <div id="svWord"></div>
+    <div id="svStats"></div>
+  </div>
+  <div class="choices" id="svChoices"></div>
   <!-- 次へは常設枠(visibilityで出し入れ)=出題中と確認中で選択肢の位置が動かない -->
-  <div class="row" id="tdCtrl" style="margin-top:8px">
-    <button class="btn primary" style="flex:1; visibility:hidden" id="tdNextBtn">次へ ▶</button>
+  <div class="row" id="svCtrl" style="margin-top:8px">
+    <button class="btn primary" style="flex:1; visibility:hidden" id="svNextBtn">次へ ▶</button>
   </div>
 </main>
 
@@ -172,7 +176,7 @@
 <script src="js/dungeon.js"></script>
 <script src="js/missions.js"></script>
 <script src="js/dex.js"></script>
-<script src="js/td.js"></script>
+<script src="js/sv.js"></script>
 <script src="js/sync.js"></script>
 <script src="js/main.js"></script>
 </body>

@@ -163,6 +163,9 @@ function mergeData(a, b){
   for(const k in b.counters||{}) m.counters[k]=Math.max(m.counters[k]||0, b.counters[k]||0);
   m.inf=m.inf||{best:0,run:null};
   m.inf.best=Math.max(m.inf.best||0, (b.inf&&b.inf.best)||0);
+  // サバイバーのクリア記録: ステージごとに多い方(v4.20.0)
+  m.sv=m.sv||{clears:{}}; m.sv.clears=m.sv.clears||{};
+  for(const id in (b.sv&&b.sv.clears)||{}) m.sv.clears[id]=Math.max(m.sv.clears[id]||0, b.sv.clears[id]||0);
   for(const id in b.ach||{}) m.ach[id]=Math.max(m.ach[id]||0, b.ach[id]||0);
   // 任務・編成・ログイン・るすばん探索の精算時刻は更新が新しい側を優先
   const newer=(b.updatedAt||0)>(a.updatedAt||0)? b : a;
@@ -307,6 +310,7 @@ function partialResetData(g, t){
     chars:g.chars||{}, party:{char:(g.party&&g.party.char)||null, sentence:[]},
     gold:g.gold||0, tickets:g.tickets||0, xp:g.xp||0,
     dungeons:g.dungeons||{}, inf:{best:(g.inf&&g.inf.best)||0, run:null},
+    sv:{clears:(g.sv&&g.sv.clears)||{}}, // サバイバーの記録は冒険の記録として残す
     daily:g.daily||{}, weekly:g.weekly||{}, counters:g.counters||{}, ach:g.ach||{},
     login:g.login||{last:null,day:0}, gift10:g.gift10||0,
     frz:g.frz||0, faces:g.faces||{}, idle:{last:t},

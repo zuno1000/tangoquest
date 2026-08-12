@@ -697,151 +697,102 @@ header .res span:last-child{overflow:hidden; text-overflow:ellipsis}
 .bigchar .cface{display:block; width:min(100%, 200px); height:auto; aspect-ratio:1;
   object-fit:cover; border-radius:14px; margin:0 auto}
 
-/* ---- v4.14.0: 単語の防衛線(β) ---- */
-.tdentry{cursor:pointer}
-.tdentry:active{transform:scale(.99)}
-.tdbeta{font-size:9px; font-weight:800; color:#fff; background:var(--accent2); border-radius:6px; padding:1px 6px; vertical-align:2px}
-#tdLane{display:grid; grid-template-columns:repeat(8,1fr); gap:4px; margin-top:8px}
-.tdcell{background:var(--bg); border-radius:10px; min-height:52px; padding:4px 2px 3px; text-align:center;
+
+/* ---- v4.20.0: 単語のサバイバー(β) ----
+   防衛線(v4.14〜4.19)を置き換える新モード。レイアウトの知見は継承:
+   固定寸法+visibility切替で位置ずれを断つ/縦フレックスで選択肢が余白いっぱいに伸びる */
+.sventry{cursor:pointer}
+.sventry:active{transform:scale(.99)}
+.svbeta{font-size:9px; font-weight:800; color:#fff; background:var(--accent2); border-radius:6px; padding:1px 6px; vertical-align:2px}
+/* ビュー全体: 縦フレックス(選択肢が下部余白を全部使う) */
+#svView{display:flex; flex-direction:column; overflow:hidden}
+#svHead,#svField,#svMeta,#svPrompt,#svCtrl{flex:0 0 auto}
+#svView .choices{flex:1; min-height:0; gap:9px; margin-top:8px}
+#svView .choice{flex:1; min-height:48px; max-height:110px; font-size:17px; border-radius:15px}
+/* ヘッダーの自機HP */
+#svHpWrap{display:flex; align-items:center; gap:5px; flex:0 0 auto; font-size:15px}
+#svHpWrap .svchp{width:66px; height:7px; margin-top:0; flex:0 0 auto}
+#svHpWrap b{font-size:10px; color:var(--sub); min-width:28px; text-align:right}
+#svHpWrap.svheal{animation:svheal .7s}
+@keyframes svheal{0%{filter:none} 30%{filter:drop-shadow(0 0 7px rgba(39,165,103,.95)) saturate(1.4)} 100%{filter:none}}
+#svHead.svshake{animation:svshake .45s}
+@keyframes svshake{0%,100%{transform:translateX(0)} 25%{transform:translateX(-5px)} 50%{transform:translateX(5px)} 75%{transform:translateX(-3px)}}
+/* フィールド: 固定高のアリーナ(自機中央・敵は絶対配置+CSSトランジションで迫る) */
+#svField{position:relative; height:170px; min-height:170px; background:var(--bg); border-radius:12px;
+  margin-top:6px; overflow:hidden;
   box-shadow:inset 2px 2px 5px var(--shd), inset -2px -2px 5px var(--shl)}
-.tdcell .te{font-size:19px; line-height:1.15}
-.tdcell .te.tb{font-size:26px}
-.tdcell .thp{height:4px; background:var(--bg2); border-radius:2px; margin:2px 2px 0; overflow:hidden}
-.tdcell .thp i{display:block; height:100%; background:var(--ng); border-radius:2px}
-.tdcell .tn{font-size:9px; color:var(--sub); font-weight:800}
-#tdLog{margin:4px 2px 0; min-height:34px; line-height:1.5}
-#tdPrompt{background:var(--bg); border-radius:18px; padding:12px 14px; margin-top:8px; text-align:center;
-  box-shadow:-5px -5px 10px var(--shl), 5px 5px 10px var(--shd)}
-#tdBadge{font-size:11px; font-weight:800; color:var(--accent2)}
-#tdWord{font-size:30px; font-weight:900; line-height:1.25; word-break:break-word}
-#tdView .choices{margin-top:10px}
-#tdView .choice{min-height:48px}
-
-/* ---- v4.14.1: 防衛線UIのコンパクト化+射撃演出 ---- */
-#tdCastleWrap{display:flex; align-items:center; gap:5px; flex:0 0 auto; font-size:15px}
-#tdCastleWrap .tdchp{width:66px; height:7px; margin-top:0; flex:0 0 auto}
-#tdCastleWrap b{font-size:10px; color:var(--sub); min-width:28px; text-align:right}
-#tdLane{gap:3px; margin-top:6px}
-.tdcell{min-height:42px; padding:3px 2px 2px; border-radius:8px; position:relative}
-.tdcell .te{font-size:16px}
-.tdcell .te.tb{font-size:22px}
-#tdLog{min-height:36px; margin:4px 2px 0; font-size:11px; line-height:1.45}
-#tdPrompt{padding:18px 14px 16px; margin-top:6px}
-#tdWord{font-size:38px}
-#tdView .choice{min-height:56px; font-size:17px}
-/* 射撃・撃破・被弾の演出 */
-.tdpop{position:absolute; left:0; right:0; top:-6px; text-align:center; font-size:13px; font-weight:900;
-  color:var(--accent); text-shadow:0 1px 0 var(--shl); animation:tdpop .8s ease-out forwards;
-  pointer-events:none; z-index:2}
-@keyframes tdpop{0%{opacity:0; transform:translateY(8px)} 20%{opacity:1} 100%{opacity:0; transform:translateY(-16px)}}
-.tdcell .tdboom{animation:tdboom .55s ease-out forwards}
-@keyframes tdboom{0%{transform:scale(1); opacity:1} 40%{transform:scale(1.45)} 100%{transform:scale(.1); opacity:0}}
-#tdLane.tdfire{animation:tdlanefire .45s}
-@keyframes tdlanefire{0%{filter:brightness(1)} 30%{filter:brightness(1.3) saturate(1.2)} 100%{filter:brightness(1)}}
-#tdHead.tdshake{animation:tdshake .45s}
-@keyframes tdshake{0%,100%{transform:translateX(0)} 25%{transform:translateX(-5px)} 50%{transform:translateX(5px)} 75%{transform:translateX(-3px)}}
-@media (prefers-reduced-motion: reduce){
-  .tdpop,.tdcell .tdboom,#tdLane.tdfire,#tdHead.tdshake{animation:none}
-  .tdpop{opacity:1}
-}
-
-/* ---- v4.15.0: 防衛線Phase2の演出(動詞タイプ・ボスカットイン・コンボ閃光) ---- */
-#tdLane{position:relative}
-.tdbeam{position:absolute; left:2px; right:2px; top:50%; height:3px; margin-top:-2px; border-radius:2px; z-index:3;
-  background:linear-gradient(90deg, rgba(91,108,255,0), rgba(91,108,255,.95), rgba(91,108,255,0));
-  animation:tdbeam .55s ease-out forwards; pointer-events:none}
-@keyframes tdbeam{0%{opacity:0; transform:scaleX(.15)} 30%{opacity:1; transform:scaleX(1)} 100%{opacity:0}}
-#tdCastleWrap.tdheal{animation:tdheal .7s}
-@keyframes tdheal{0%{filter:none} 30%{filter:drop-shadow(0 0 7px rgba(39,165,103,.95)) saturate(1.4)} 100%{filter:none}}
-#tdLane.tdfire2{animation:tdlanefire2 .5s}
-@keyframes tdlanefire2{0%{filter:brightness(1)} 30%{filter:brightness(1.5) saturate(1.35)} 100%{filter:brightness(1)}}
-#tdLane.tdfire3{animation:tdlanefire3 .6s}
-@keyframes tdlanefire3{0%{filter:brightness(1)} 25%{filter:brightness(1.85) saturate(1.6) drop-shadow(0 0 9px rgba(255,181,71,.85))} 100%{filter:brightness(1)}}
-#tdCutin{position:fixed; left:0; right:0; top:30%; z-index:70; text-align:center; pointer-events:none;
+#svMe{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); z-index:3;
+  font-size:24px; text-align:center; pointer-events:none;
+  filter:drop-shadow(0 2px 5px rgba(91,108,255,.45))}
+#svMe .cface{width:30px; height:30px; border-radius:8px}
+.sve{position:absolute; width:32px; margin-left:-16px; margin-top:-15px; text-align:center;
+  transition:left .26s linear, top .26s linear; pointer-events:none; z-index:2}
+.sve .te{font-size:17px; line-height:1.15}
+.sve.svb .te{font-size:26px}
+.svhpb{height:3px; background:var(--bg2); border-radius:2px; margin:1px 5px 0; overflow:hidden}
+.svhpb i{display:block; height:100%; background:var(--ng); border-radius:2px}
+.svboom{transition:none; z-index:4}
+.svboom .te{animation:svboomA .55s ease-out forwards}
+@keyframes svboomA{0%{transform:scale(1); opacity:1} 40%{transform:scale(1.45)} 100%{transform:scale(.1); opacity:0}}
+/* ダメージポップ(敵=青系アクセント/被弾=赤) */
+.svpopw{position:absolute; width:40px; margin-left:-20px; margin-top:-24px; text-align:center;
+  pointer-events:none; z-index:6}
+.svpop{display:block; font-size:13px; font-weight:900; color:var(--accent);
+  text-shadow:0 1px 0 var(--shl); animation:svpopA .8s ease-out forwards}
+.svpop.svhit{color:var(--ng); font-size:12px}
+@keyframes svpopA{0%{opacity:0; transform:translateY(8px)} 20%{opacity:1} 100%{opacity:0; transform:translateY(-16px)}}
+/* 貫通ビーム(自機から敵方向へ一閃) */
+.svbeam{position:absolute; left:50%; top:50%; width:50%; height:3px; margin-top:-1.5px; border-radius:2px;
+  transform-origin:left center; z-index:3; pointer-events:none;
+  background:linear-gradient(90deg, rgba(91,108,255,.1), rgba(91,108,255,.95), rgba(91,108,255,0));
+  animation:svbeamA .55s ease-out forwards}
+@keyframes svbeamA{0%{opacity:0} 30%{opacity:1} 100%{opacity:0}}
+/* バーストの閃光(コンボ3段階) */
+#svField.svfire{animation:svfireA .45s}
+@keyframes svfireA{0%{filter:brightness(1)} 30%{filter:brightness(1.3) saturate(1.2)} 100%{filter:brightness(1)}}
+#svField.svfire2{animation:svfireB .5s}
+@keyframes svfireB{0%{filter:brightness(1)} 30%{filter:brightness(1.5) saturate(1.35)} 100%{filter:brightness(1)}}
+#svField.svfire3{animation:svfireC .6s}
+@keyframes svfireC{0%{filter:brightness(1)} 25%{filter:brightness(1.85) saturate(1.6) drop-shadow(0 0 9px rgba(255,181,71,.85))} 100%{filter:brightness(1)}}
+/* メーター行: Lv・◆ゲージ・🪙 */
+#svMeta{display:flex; align-items:center; gap:8px; margin-top:6px; padding:0 2px;
+  font-size:12px; font-weight:800}
+#svLv{color:var(--accent2); flex:0 0 auto}
+.svxp{flex:1; height:8px; background:var(--bg); border-radius:4px; overflow:hidden;
+  box-shadow:inset 1px 1px 3px var(--shd), inset -1px -1px 3px var(--shl)}
+.svxp i{display:block; height:100%; width:0; border-radius:4px;
+  background:linear-gradient(90deg, var(--accent2), var(--accent)); transition:width .3s}
+#svGold{color:var(--sub); font-size:11px; flex:0 0 auto; min-width:48px; text-align:right}
+/* カットイン(ボス・開始告知) */
+#svCutin{position:fixed; left:0; right:0; top:30%; z-index:70; text-align:center; pointer-events:none;
   font-weight:900; color:var(--ink); opacity:0;
   text-shadow:0 2px 10px rgba(136,152,184,.6)}
-#tdCutin .ci1{font-size:14px; color:var(--ng); letter-spacing:8px}
-#tdCutin .ci2{font-size:56px; line-height:1.15; filter:drop-shadow(0 4px 10px rgba(61,74,99,.4))}
-#tdCutin .ci3{font-size:19px}
-#tdCutin.go{animation:tdcutin 1.45s ease-out forwards}
-@keyframes tdcutin{0%{opacity:0; transform:scale(.5)} 14%{opacity:1; transform:scale(1.12)} 24%{transform:scale(1)} 78%{opacity:1} 100%{opacity:0; transform:scale(1.04)}}
+#svCutin .ci1{font-size:14px; color:var(--ng); letter-spacing:8px}
+#svCutin .ci2{font-size:56px; line-height:1.15; filter:drop-shadow(0 4px 10px rgba(61,74,99,.4))}
+#svCutin .ci3{font-size:19px}
+#svCutin.go{animation:svcutin 1.45s ease-out forwards}
+@keyframes svcutin{0%{opacity:0; transform:scale(.5)} 14%{opacity:1; transform:scale(1.12)} 24%{transform:scale(1)} 78%{opacity:1} 100%{opacity:0; transform:scale(1.04)}}
+/* 単語枠は固定高: 出題中/確認中/単語の長短でレイアウトが動かない */
+#svPrompt{position:relative; height:138px; padding:26px 12px 8px; margin-top:6px;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; overflow:hidden;
+  background:var(--bg); border-radius:18px; text-align:center;
+  box-shadow:-5px -5px 10px var(--shl), 5px 5px 10px var(--shd)}
+#svBadge{position:absolute; top:8px; left:10px; font-size:11px; font-weight:800; color:var(--accent2);
+  border-radius:999px; padding:3px 9px; background:var(--bg2)}
+#svCount{position:absolute; top:10px; right:12px; font-size:11px; color:var(--sub)}
+#svWord{font-size:34px; font-weight:900; line-height:1.25; word-break:break-word}
+#svStats{font-size:11px; color:var(--sub); margin-top:4px; height:15px; overflow:hidden; white-space:nowrap}
+#svStats .qo{color:var(--ok); font-weight:700}
+#svStats .qx{color:var(--ng); font-weight:700}
+#svStats .qstep{color:var(--accent2); font-weight:800}
+#svStats .qmas{color:var(--ok); font-weight:800}
+/* レベルアップ3択のボタン */
+.svup{display:flex; align-items:center; gap:10px; width:100%; margin-top:10px; text-align:left; padding:10px 12px}
+.svupic{font-size:22px; flex:0 0 auto}
 @media (prefers-reduced-motion: reduce){
-  .tdbeam,#tdCastleWrap.tdheal,#tdLane.tdfire2,#tdLane.tdfire3,#tdCutin.go{animation:none}
-  #tdCutin.go{opacity:1}
+  .svpop,.svboom .te,.svbeam,#svField.svfire,#svField.svfire2,#svField.svfire3,
+  #svHead.svshake,#svHpWrap.svheal,#svCutin.go{animation:none}
+  .svpop{opacity:1}
+  #svCutin.go{opacity:1}
+  .sve{transition:none}
 }
-
-/* ---- v4.16.0: 防衛線「なかま出撃」方式 ---- */
-/* 出撃バー: 💠残高+デッキ6枠 */
-#tdDeck{display:flex; gap:5px; align-items:stretch; margin-top:6px}
-.tdmana{flex:0 0 auto; display:flex; flex-direction:column; align-items:center; justify-content:center;
-  min-width:48px; border-radius:12px; background:var(--bg); font-size:13px; font-weight:800; color:var(--accent2);
-  box-shadow:inset 2px 2px 5px var(--shd), inset -2px -2px 5px var(--shl)}
-.tdu{flex:1; position:relative; border:1.5px solid transparent; border-radius:12px; background:var(--bg);
-  padding:4px 0 3px; cursor:pointer; min-height:46px;
-  box-shadow:-3px -3px 7px var(--shl), 3px 3px 7px var(--shd)}
-.tdu:disabled{opacity:.45; box-shadow:none; cursor:default}
-.tdu .tduf{display:block; font-size:20px; line-height:1.15}
-.tdu .tduc{display:block; font-size:9px; font-weight:800; color:var(--accent2)}
-.tdu .tducd{display:block; font-size:10px; font-weight:900; color:var(--ng)}
-.tdu:active:not(:disabled){transform:scale(.94)}
-/* レーン上のなかま(下段・青バー) */
-.tdcell .tu{font-size:15px; line-height:1.1; margin-top:1px}
-.tdcell .thp.tup i{background:var(--accent2)}
-/* クイズヘッダの学習タブ互換表記 */
-#tdPrompt{position:relative}
-#tdBadge{position:absolute; top:8px; left:10px; border-radius:999px; padding:3px 9px; background:var(--bg2)}
-#tdCount{position:absolute; top:10px; right:12px; font-size:11px; color:var(--sub)}
-#tdWord{margin-top:14px}
-#tdStats{font-size:12px; color:var(--sub); margin-top:5px; min-height:17px}
-#tdStats .qo{color:var(--ok); font-weight:700}
-#tdStats .qx{color:var(--ng); font-weight:700}
-#tdStats .qstep{color:var(--accent2); font-weight:800}
-#tdStats .qmas{color:var(--ok); font-weight:800}
-/* デッキ編成モーダル */
-#tdDeckGrid{display:grid; grid-template-columns:repeat(3,1fr); gap:11px; padding:2px}
-#tdDeckGrid .charcard.tdsel{border-color:var(--accent2);
-  box-shadow:0 0 0 2px var(--accent2), -3px -3px 7px var(--shl), 3px 3px 7px var(--shd)}
-
-/* ---- v4.17.0: ログ廃止によるクイズ領域の拡大+チャージ表示 ---- */
-.tdmana .tdchg{display:block; font-size:9px; font-weight:800; color:var(--sub); margin-top:1px; line-height:1.2}
-#tdDeck{margin-top:5px}
-.tdmana{min-width:52px; padding:2px 4px}
-.tdu{min-height:42px; padding:3px 0 2px}
-.tdcell{min-height:40px}
-#tdPrompt{padding:12px 12px 10px; margin-top:6px}
-#tdWord{font-size:34px; margin-top:12px}
-#tdStats{font-size:11px; min-height:15px; margin-top:4px}
-#tdView .choices{gap:8px; margin-top:8px}
-#tdView .choice{min-height:48px; font-size:16px; border-radius:15px}
-
-/* ---- v4.18.0: 射程・レイアウト固定化(位置ずれ解消+下部余白の活用) ---- */
-/* tdViewは縦フレックス: 選択肢が余白を全部使って伸びる(学習タブと同じ思想) */
-#tdView{display:flex; flex-direction:column; overflow:hidden}
-#tdHead,#tdLane,#tdDeck,#tdPrompt,#tdCtrl{flex:0 0 auto}
-#tdView .choices{flex:1; min-height:0; gap:9px}
-#tdView .choice{flex:1; min-height:48px; max-height:110px; font-size:17px}
-/* 単語枠は固定高: 出題中/確認中/単語の長短でレイアウトが動かない
-   (バッジ行のぶん上に余白を取り、2行の長い単語も収まる) */
-#tdPrompt{height:138px; padding:26px 12px 8px; display:flex; flex-direction:column;
-  align-items:center; justify-content:center; overflow:hidden}
-#tdWord{margin-top:0}
-#tdStats{height:15px; overflow:hidden; white-space:nowrap}
-/* なかまの攻撃ポップ(青・下から) */
-.tdpop.tdup{color:var(--accent2); font-size:11px; top:auto; bottom:-3px; text-shadow:none}
-
-/* ---- v4.19.0: 連続座標レーン(にゃんこ大戦争式・固定高の帯) ---- */
-#tdLane{display:block; height:64px; min-height:64px; grid-template-columns:none; gap:0;
-  background:var(--bg); border-radius:12px; margin-top:6px; overflow:visible;
-  box-shadow:inset 2px 2px 5px var(--shd), inset -2px -2px 5px var(--shl)}
-#tdLane .tde{position:absolute; top:3px; width:32px; text-align:center;
-  transition:left .45s ease; pointer-events:none; z-index:2}
-#tdLane .tde .te{font-size:17px; line-height:1.15}
-#tdLane .tde.tb .te{font-size:24px}
-#tdLane .tdf{position:absolute; bottom:3px; width:32px; text-align:center;
-  transition:left .45s ease; pointer-events:none; z-index:3}
-#tdLane .tdf .tu{font-size:16px; line-height:1.15}
-#tdLane .thp{margin:1px 4px 0}
-#tdLane .tdboom{transition:none; z-index:4}
-.tdpopw{position:absolute; top:-4px; width:36px; text-align:center; pointer-events:none; z-index:6}
-.tdpopw .tdpop{position:static; display:block}
-.tdpopw .tdpop.tdup{font-size:11px}

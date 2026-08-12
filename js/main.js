@@ -8,7 +8,7 @@ const TABS={
   adv:     {view:"advView",     nav:"navAdv",     on:()=>renderAdv()},
   gacha:   {view:"gachaView",   nav:"navGacha",   on:()=>renderGacha()},
   mission: {view:"missionView", nav:null,         on:()=>{ renderMissions(); refreshMissionDot(); }},
-  td:      {view:"tdView",      nav:null,         on:()=>{}}, // 単語の防衛線(β・冒険タブから入る)
+  sv:      {view:"svView",      nav:null,         on:()=>{}}, // 単語のサバイバー(β・冒険タブから入る)
 };
 function switchTab(name){
   closeModal();
@@ -31,6 +31,7 @@ const EVENTS=[
   // {d:"2026-08-03", t:"..."} 形式でバナー以外のイベント告知を書く
 ];
 const NEWS=[
+  {d:"2026-08-12", t:"💫 v4.20.0 新モード「単語のサバイバー」(β)が冒険タブに登場! 全方位から押し寄せる敵を、呪文の自動詠唱と正解の一斉バーストでしのぐサバイバー系ローグライクです。正解で◆ジェムが貯まり、レベルアップのたびに3択(威力・連射・バースト・回復・守り・金運)でそのランの間だけ強くなれます。180秒生きのびるとボスが出現、倒せば勝利! 倒した敵の🪙は勝っても負けても全額持ち帰り。時間が流れるのは問題を考えている間だけなので、答え合わせや3択はじっくりどうぞ。解いた分はふつうの学習として記録されます(今日の目安・🎫・カードすべて)。※タワーディフェンス「単語の防衛線」(β)はこのモードに置き換わりました(実績も「サバイバー生還」に刷新。βでの試行にお付き合いありがとうございました!)"},
   {d:"2026-08-10", t:"🏃 v4.19.0 防衛線の戦場が「マス」から「連続フィールド」に! なかまと敵はにゃんこ大戦争のようにフィールドをなめらかに進み、射程に入ると足を止めて戦います。重なりも自由になり、何体たまってもレーンの高さは一定=クイズが圧迫されません(全員のHPバーもそれぞれ表示)。ボスはゆっくり迫ってきます"},
   {d:"2026-08-10", t:"🏹 v4.18.0 防衛線に「射程」が登場! 弓・魔法・唄タイプのなかまは離れた敵を攻撃できます(狩人=射程2・大魔導士=射程3など。近接の壁の後ろから撃つ後衛運用が可能に)。なかまの攻撃は青いダメージ表示で見えるようになりました。またクイズの単語枠を固定サイズにして、出題中と答え合わせ中で選択肢の位置がずれないように・選択肢が画面下部の余白いっぱいまで広がるように改善しました"},
   {d:"2026-08-10", t:"⚡ v4.17.0 防衛線のゲームシステムを刷新! 砲撃は⚡チャージ制(正解3回で自動発射)になり、さらに「なかまが1体もいないと撃てない」ようになりました ─ なかまで戦線を支え、貯めた砲撃で薙ぎ払う、が防衛の基本形です。戦況の文字ログは廃止し(出来事はダメージポップ・爆発・カットインなどの演出で伝わります)、そのぶんクイズを広く・「次へ」ボタンまでスクロールなしで収まるようにしました"},
@@ -280,4 +281,6 @@ window.ROOT_DEFS=ROOT_DEFS; window.PREFIX_DEFS=PREFIX_DEFS; window.APP_VERSION=A
 window.LOGIN_BONUS=LOGIN_BONUS; window.ACH_DEFS=ACH_DEFS;
 window.DAILY_DEFS=DAILY_DEFS; window.WEEKLY_DEFS=WEEKLY_DEFS;
 window.MASTER_BOX=MASTER_BOX; window.INTERVALS=INTERVALS; window.FRZ_MAX=FRZ_MAX;
-window.TD_CHARGE=TD_CHARGE; window.TD_VOLLEY=TD_VOLLEY;
+window.SV_STAGE_SEC=SV_STAGE_SEC; window.SV_REACH=SV_REACH; window.SV_TOUCH_CD=SV_TOUCH_CD;
+window.SV_CD=SV_CD; window.SV_UPGRADES=SV_UPGRADES; window.SV_AUTO=SV_AUTO; window.SV_BURST=SV_BURST;
+window.SV_HEAL_CAP=SV_HEAL_CAP; window.SV_MAXFOES=SV_MAXFOES; window.SV_SPAWN0=SV_SPAWN0; window.SV_SPAWN1=SV_SPAWN1;

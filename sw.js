@@ -1,10 +1,10 @@
 /* TangoQuest service worker — cache-first */
-const CACHE="tangoquest-v55"; // 表示名はLEXICAだがキャッシュ名系統は維持
+const CACHE="tangoquest-v56"; // 表示名はLEXICAだがキャッシュ名系統は維持
 const ASSETS=[
   "./", "index.html", "manifest.json",
   "css/style.css",
   "js/words.js","js/roots.js","js/util.js","js/state.js","js/cards.js","js/chars.js",
-  "js/battle.js","js/pace.js","js/quiz.js","js/dungeon.js","js/missions.js","js/dex.js","js/td.js","js/sync.js","js/main.js",
+  "js/battle.js","js/pace.js","js/quiz.js","js/dungeon.js","js/missions.js","js/dex.js","js/sv.js","js/sync.js","js/main.js",
   "icon-192.png","icon-512.png"
 ];
 /* 資産はHTTPキャッシュ・CDNを迂回して取り込む(cache:no-store+版クエリ)。

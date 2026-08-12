@@ -76,8 +76,8 @@ const ACH_DEFS=[
    tiers:[[10,{g:300}],[50,{t:2}],[200,{t:4}],[600,{t:6}]]},
   {id:"aclr", name:"ダンジョン累計クリア", cur:()=>G.counters.clears,
    tiers:[[5,{g:500}],[25,{g:2000}],[100,{g:5000}]]},
-  /* 単語の防衛線(β): G.tdはtd.jsが管理。モード撤去時もこの実績はcur=0で無害 */
-  {id:"atd", name:"防衛線クリア", cur:()=>{let n=0; const c=(G.td&&G.td.clears)||{}; for(const k in c) n+=c[k]; return n;},
+  /* 単語のサバイバー(β): G.svはsv.jsが管理。モード撤去時もこの実績はcur=0で無害 */
+  {id:"asv", name:"サバイバー生還", cur:()=>{let n=0; const c=(G.sv&&G.sv.clears)||{}; for(const k in c) n+=c[k]; return n;},
    tiers:[[1,{g:500}],[5,{g:2000}],[15,{g:5000}],[40,{g:10000}]]},
   {id:"ainf", name:"無限回廊 最深記録", cur:()=>G.inf.best,
    tiers:[[10,{g:500}],[30,{g:2000}],[60,{g:3000}],[100,{g:5000}]]},
