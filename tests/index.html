@@ -1999,8 +1999,9 @@ function run(){
   });
   t("サバイバー: 時間経過でエリート個体が混ざる(🪙4倍)", ()=>{
     eq(W.svEliteP(0), 0, "序盤は出ない");
-    ok(W.svEliteP(60000)>0, "1分過ぎから混ざる");
-    ok(W.svEliteP(1e9)<=0.15, "確率の上限は15%");
+    ok(W.svEliteP(30000)===0 || W.svEliteP(30000)>0, "境界で例外を出さない");
+    ok(W.svEliteP(31000)>0, "30秒過ぎから混ざる(v4.22.0で前倒し)");
+    ok(W.svEliteP(1e9)<=0.20, "確率の上限は20%(v4.22.0で増量)");
     const b=W.svNewRun(W.DUNGEONS[0], {hp:1000, dpt:100, catk:30, elems:[]}, 0);
     b.enemies=[{uid:"x",name:"a",icon:"👾",hp:0,hpMax:9,def:0,atk:1,x:60,y:50,sp:0,atkCd:9,gmult:4}];
     W.svReap(b);
@@ -2086,9 +2087,315 @@ function run(){
     W.openSVSelect();
     ok(W.document.getElementById("svMetaBtn"), "心得ボタン");
     ok(W.document.getElementById("svDailyBtn"), "デイリー挑戦ボタン");
+    ok(W.document.getElementById("svEndlessBtn"), "終わりなき荒野の挑戦ボタン(v4.22.0)");
     W.svOpenMeta();
     eq(W.document.querySelectorAll("#modal [data-meta]").length, W.SV_META.length, "全心得の購入行が並ぶ");
     W.closeModal();
+  });
+
+  /* ---- v4.22.0: バグ修正・次へフロー・シナジー基盤・終わりなき荒野 ---- */
+  const svOut=()=>({hits:[], beams:[], heal:0, shots:[], arcs:[], rings:[]});
+  const svFoeAt=(uid,x,y,hp,def)=>({uid, name:"a", icon:"👾", hp:hp||100, hpMax:hp||100,
+    def:def||0, atk:10, x, y, sp:0, atkCd:9e9});
+  const svRun=(P,opts)=>{ const b=W.svNewRun(W.DUNGEONS[0], P||{hp:1000, dpt:100, catk:30, elems:[]}, 0, opts);
+    b.spawnAt=9e9; b.chestAt=9e9; b.bossAt=9e9; return b; };
+
+  t("学習タブの解答はサバイバーの選択肢を巻き込まない(セレクタスコープ=v4.22.0根治)", ()=>{
+    W.svStart(W.DUNGEONS[0]);
+    const doc=W.document;
+    eq(doc.querySelectorAll("#svChoices .choice:disabled").length, 0, "開始直後は押せる");
+    // サバイバー中断→学習タブで解答(バグの再現手順)
+    // ※quiz.jsのcurはlet(window非公開)のため、正解は表示中の単語から逆引きする
+    W.switchTab("quiz");
+    W.newQuestion();
+    const prompt=doc.getElementById("promptWord").textContent;
+    const e2j=W.G.mode==="e2j";
+    const w=W.WORDS.find(x=>(e2j? x.en : x.ja)===prompt);
+    const btn=[...doc.querySelectorAll("#choices .choice")].find(b=>b.textContent===(e2j? w.ja : w.en));
+    btn.click();
+    eq(doc.querySelectorAll("#svChoices .choice:disabled").length, 0,
+      "学習タブの答え合わせがサバイバーの選択肢を無効化しない");
+    doc.getElementById("nextBtn").click(); // 学習タブを出題中に戻す(後続テストのため)
+    W.svCleanup();
+    W.document.getElementById("svField").innerHTML="";
+  });
+  t("svRestore: 復帰時、出題中なら選択肢をsvCurから再構築(押せない盤面を残さない)", ()=>{
+    W.svStart(W.DUNGEONS[0]);
+    const doc=W.document;
+    const word=W.svCur.word.en;
+    // 何らかの理由で選択肢が壊れた状況を再現(旧バグ相当)
+    doc.querySelectorAll("#svChoices .choice").forEach(b=>{ b.disabled=true; b.classList.add("dim"); });
+    W.svRestore();
+    eq(doc.querySelectorAll("#svChoices .choice").length, 4, "4択が再構築される");
+    eq(doc.querySelectorAll("#svChoices .choice:disabled").length, 0, "すべて押せる");
+    eq(W.svCur.word.en, word, "問題は同じまま(進んでいない)");
+    W.svCleanup();
+    doc.getElementById("svField").innerHTML="";
+  });
+  t("次へ必須(v4.22.0): 正解しても自動で進まず、「次へ」が3択を1つずつ消化して次問へ", ()=>{
+    W.svStart(W.DUNGEONS[0]);
+    const doc=W.document;
+    W.SV.enemies.forEach(e=>{ e.x=90; e.y=50; });
+    const w=W.svCur.word, e2j=W.G.mode==="e2j";
+    const btn=[...doc.querySelectorAll("#svChoices .choice")].find(b=>b.textContent===(e2j? w.ja : w.en));
+    btn.click();
+    ok(doc.getElementById("svNextBtn").style.visibility!=="hidden", "正解後に「次へ」が出る");
+    eq(doc.getElementById("svChoices").querySelectorAll(".choice").length, 4, "選択肢はそのまま(答え合わせ表示)");
+    // レベルアップの予約を積んで「次へ」→ 3択モーダルが先に開く
+    W.SV.lvups=1;
+    W.svNext();
+    ok(doc.getElementById("overlay").classList.contains("show"), "予約された3択が開く");
+    eq(W.SV.lvups, 0, "予約は消化される");
+    W.closeModal(); // 見送り
+    W.svNext();
+    ok(!doc.getElementById("overlay").classList.contains("show"), "予約がなければモーダルは開かない");
+    ok(doc.querySelectorAll("#svChoices .choice:disabled").length===0, "次の問題が出て押せる");
+    W.svCleanup();
+    doc.getElementById("svField").innerHTML="";
+  });
+  t("svHit(一本道): 基本式は従来と同じ(防御係数→ボス倍率)", ()=>{
+    const b=svRun();
+    const out=svOut();
+    const e=svFoeAt("x", 60, 50, 1000, 10);
+    b.enemies=[e];
+    const take=W.svHit(b, e, 100, {defF:0.55, bossM:1}, out);
+    eq(take, Math.max(1, Math.round(100-10*0.55)), "防御0.55掛けを引いた値");
+    eq(out.hits.length, 1, "ヒットが記録される");
+    ok(!out.hits[0].crit, "会心は未取得なら絶対に出ない");
+  });
+  t("会心(規則): 取得するまで確率0・取得後は金色の2倍が出る", ()=>{
+    const b=svRun();
+    for(let i=0;i<200;i++){
+      const out=svOut(); const e=svFoeAt("x",60,50,1e6,0); b.enemies=[e];
+      W.svHit(b, e, 100, {}, out);
+      ok(!out.hits[0].crit && out.hits[0].take===100, "未取得ラン200回で会心ゼロ(決定的)");
+    }
+    b.rules={crit:3};
+    let seen=0;
+    for(let i=0;i<300;i++){
+      const out=svOut(); const e=svFoeAt("x",60,50,1e6,0); b.enemies=[e];
+      W.svHit(b, e, 100, {}, out);
+      if(out.hits[0].crit){ seen++; eq(out.hits[0].take, 200, "会心は2倍"); }
+    }
+    ok(seen>0, "取得後は会心が出る(28%×300回)");
+  });
+  t("延焼(規則): 攻撃した敵が燃え、時間経過で焼け落ちる", ()=>{
+    const b=svRun();
+    b.rules={burn:1};
+    const e=svFoeAt("x", 90, 50, 1000, 0);
+    b.enemies=[e];
+    W.svHit(b, e, 200, {}, svOut());
+    ok(e.burnT>0, "燃えている");
+    eq(e.burnV, Math.round(200*0.5), "追い焼きはこの一撃の50%");
+    const hp0=e.hp;
+    W.svTick(b, 250);
+    ok(e.hp<hp0, "tickごとに焼ける");
+  });
+  t("連鎖(規則): 稲妻が近くの敵へ跳ぶ(未取得は跳ばない)", ()=>{
+    const b=svRun();
+    const mk=()=>{ b.enemies=[svFoeAt("a",60,50,1e6,0), svFoeAt("b",64,50,1e6,0)]; };
+    mk();
+    const out0=svOut();
+    W.svHit(b, b.enemies[0], 100, {}, out0);
+    eq(out0.arcs.length, 0, "未取得は連鎖しない");
+    b.rules={chain:2};
+    let arced=false;
+    for(let i=0;i<60 && !arced;i++){
+      mk(); const out=svOut();
+      W.svHit(b, b.enemies[0], 100, {src:"weapon"}, out);
+      if(out.arcs.length){ arced=true; ok(b.enemies[1].hp<1e6, "跳ね先もダメージを受ける"); }
+    }
+    ok(arced, "取得後は連鎖が出る(55%×60回)");
+  });
+  t("処刑(規則): 残りわずかな雑魚は討ち取る・ボスには効かない", ()=>{
+    const b=svRun();
+    b.rules={exec:1};
+    const e=svFoeAt("x", 60, 50, 1000, 0); e.hp=200; // 一撃後に18%残る調整
+    b.enemies=[e];
+    const out=svOut();
+    W.svHit(b, e, 25, {}, out); // 200-25=175 ≦ 1000×18%
+    ok(out.hits[0].exec && e.hp===0, "18%以下で処刑");
+    const boss=svFoeAt("bs", 60, 50, 1000, 0); boss.boss=true; boss.hp=100;
+    b.enemies=[boss];
+    W.svHit(b, boss, 10, {}, svOut());
+    ok(boss.hp>0, "ボスは処刑できない");
+  });
+  t("爆散(規則): 倒した敵が爆発して周囲を巻き込む", ()=>{
+    const b=svRun();
+    b.rules={blast:1};
+    const dead=svFoeAt("a", 60, 50, 10, 0);
+    const near=svFoeAt("b", 65, 50, 1e6, 0);
+    const far=svFoeAt("c", 10, 50, 1e6, 0);
+    b.enemies=[dead, near, far];
+    const out=svOut();
+    W.svHit(b, dead, 999, {}, out);
+    eq(out.rings.length, 1, "爆発リング");
+    ok(near.hp<1e6, "近くの敵は巻き込まれる");
+    eq(far.hp, 1e6, "遠くの敵は無事");
+  });
+  t("トゲ(規則): 殴られたら、その敵に自動で反撃する", ()=>{
+    const b=svRun();
+    b.rules={thorn:1};
+    const e=svFoeAt("x", 50+W.SV_REACH, 50, 1e6, 0); e.atk=50; e.atkCd=100;
+    b.enemies=[e];
+    const ev=W.svTick(b, 250);
+    ok(ev.touches.length>0, "殴られている");
+    ok(e.hp<1e6, "反撃が入る");
+    eq(1e6-e.hp, Math.max(1, Math.round(b.P.dpt*0.4)), "反撃は自軍dpt比");
+  });
+  t("衝波(規則): 正解バーストが敵を押し返す", ()=>{
+    const b=svRun();
+    b.rules={wave:1};
+    const e=svFoeAt("x", 50+W.SV_REACH, 50, 1e9, 1e9); // 倒せない敵で押し返しだけ見る
+    b.enemies=[e];
+    const d0=Math.abs(e.x-50);
+    W.svBurst(b, 1);
+    ok(Math.abs(e.x-50)>d0, "自機から遠ざかる");
+  });
+  t("共鳴・鼓舞(規則): なかまの攻撃が強くなり、バーストにも参加する", ()=>{
+    W.G.chars.c01=W.G.chars.c01||{dup:0};
+    const b=svRun();
+    const s=W.svSummon(b, "c01");
+    s.x=50; s.y=50;
+    const e=svFoeAt("x", 52, 50, 1e6, 0);
+    b.enemies=[e];
+    const out=svOut();
+    W.svSatAttack(b, s, out, 1);
+    const base=out.hits[0].take;
+    b.rules={reso:1};
+    b.enemies=[svFoeAt("y", 52, 50, 1e6, 0)];
+    const out2=svOut();
+    W.svSatAttack(b, s, out2, 1);
+    eq(out2.hits[0].take, Math.max(1, Math.round(s.dmg*1.3-0)), "共鳴で×1.3(基礎式は不変)");
+    ok(out2.hits[0].take>base, "共鳴前より強い");
+    // 鼓舞: バーストになかまが参加する
+    b.rules={cheer:1};
+    b.enemies=[svFoeAt("z", 52, 50, 1e9, 1e9)];
+    const fire=W.svBurst(b, 1);
+    ok(fire.hits.some(h=>h.sat), "なかまの一撃が混ざる");
+  });
+  t("あふれる癒し(規則): あふれた回復がシールドになり、被弾を先に受け止める", ()=>{
+    const b=svRun();
+    b.rules={ovh:1};
+    b.hp=b.hpMax;
+    W.svHealPlayer(b, 200); // 全部あふれる
+    eq(b.shield, 100, "あふれの50%がシールドに");
+    b.shield=Math.round(b.hpMax*0.3)+0; // 上限確認
+    W.svHealPlayer(b, 1e9);
+    eq(b.shield, Math.round(b.hpMax*0.3), "上限は最大HP30%");
+    b.shield=40;
+    const e=svFoeAt("x", 50+W.SV_REACH, 50, 1e9, 0); e.atk=30; e.atkCd=100;
+    b.enemies=[e];
+    const hp0=b.hp;
+    W.svTick(b, 250);
+    eq(b.hp, hp0, "シールドが吸収してHPは減らない");
+    ok(b.shield<40, "シールドが削れる");
+  });
+  t("絆(規則): なかまの枠が+1される(最大5)", ()=>{
+    W.G.chars.c01=W.G.chars.c01||{dup:0};
+    const b=svRun();
+    W.svApplyUpgrade(b, "bond");
+    eq(b.satMax, W.SV_SAT_MAX+1, "枠+1");
+    for(let i=0;i<9;i++) W.svApplyUpgrade(b, "bond");
+    eq(b.satMax, 5, "上限5");
+    for(let i=0;i<6;i++) W.svSummon(b, "c01");
+    eq(b.sats.length, 5, "5体まで召喚できる");
+  });
+  t("3択の上限とレア優先: max到達の強化は出ない・宝箱はレア規則が先頭", ()=>{
+    const b=svRun();
+    b.taken={pow:5}; // powはmax到達
+    for(let i=0;i<40;i++){
+      ok(!W.svUpgradeChoices(b).some(c=>c.id==="pow"), "max到達のpowは出ない");
+    }
+    const cs=W.svUpgradeChoices(b, {rare:true});
+    ok(cs.length===3 && cs[0].rare, "宝箱の3択はレア規則が先頭");
+    ok(W.SV_UPGRADES.length>=19, "強化・規則は約20種(現在"+W.SV_UPGRADES.length+")");
+    ok(W.SV_UPGRADES.filter(u=>u.rare).length>=6, "レア規則は6種以上");
+  });
+  t("終わりなき荒野: 1分ごとに深化・湧きは180秒以降も加速(下限450ms)", ()=>{
+    eq(W.svEndlessStage(0).id, "d1", "開始はd1");
+    eq(W.svEndlessStage(W.SV_EL_STAGE_IV).id, "d2", "1分でd2");
+    eq(W.svEndlessStage(1e9).id, W.DUNGEONS[W.DUNGEONS.length-1].id, "最深で頭打ち");
+    ok(W.svEndlessHpM(1e9)>1, "頭打ち後もインフレは続く");
+    eq(W.svEndlessSpawnIv(0), W.svSpawnIv(0), "180秒までは通常と同じ");
+    ok(W.svEndlessSpawnIv(240000)<W.SV_SPAWN1, "180秒以降も縮み続ける");
+    eq(W.svEndlessSpawnIv(1e9), W.SV_EL_SPAWN_MIN, "下限450ms");
+  });
+  t("終わりなき荒野: 属性等倍・ボスは2分ごとに乱入し倒しても終わらない", ()=>{
+    const b=W.svNewRun(W.SV_ENDLESS, {hp:1000, dpt:100, catk:30, elems:[]}, 0);
+    eq(b.em, 1, "与ダメ等倍"); eq(b.emTaken, 1, "被ダメ等倍");
+    eq(b.bossAt, W.SV_EL_BOSS_IV, "最初のボスは2分後");
+    b.spawnAt=9e9; b.chestAt=9e9;
+    b.t=W.SV_EL_BOSS_IV-250;
+    const ev=W.svTick(b, 250);
+    ok(ev.bossIn && b.enemies.some(e=>e.boss), "ボスが乱入する");
+    eq(b.bossAt, W.SV_EL_BOSS_IV*2, "次のボスが予約される");
+    b.enemies.forEach(e=>{ if(e.boss) e.hp=0; });
+    W.svReap(b);
+    ok(!b.over && !b.win, "ボスを倒しても終わらない");
+    eq(b.bossKills, 1, "ボス討伐数が刻まれる");
+  });
+  t("終わりなき荒野: 記録(生存秒・キル)が残り、同期マージ・部分リセットにも耐える", ()=>{
+    const oldEl=W.G.sv && W.G.sv.endless;
+    W.SV=W.svNewRun(W.SV_ENDLESS, {hp:100, dpt:10, catk:10, elems:[]}, 0);
+    W.SV._d=W.SV_ENDLESS;
+    W.SV.t=95000; W.SV.kills=42; W.SV.gold=5; W.SV.over=true; W.SV.win=false;
+    W.svFinish();
+    eq(W.G.sv.endless.best, 95, "ベスト秒数");
+    eq(W.G.sv.endless.kills, 42, "ベストキル");
+    W.closeModal(); W.svCleanup();
+    const base=()=>({resetAt:0, words:{},days:{},inv:{},chars:{},dungeons:{},counters:{},ach:{},
+      inf:{best:0}, gold:0,tickets:0,shards:0,xp:0});
+    const a=Object.assign(base(), {updatedAt:1, sv:{clears:{}, endless:{best:120, kills:10}}});
+    const c=Object.assign(base(), {updatedAt:2, sv:{clears:{}, endless:{best:90, kills:30}}});
+    const m=W.mergeData(a,c);
+    eq(m.sv.endless.best, 120, "ベスト秒はmax");
+    eq(m.sv.endless.kills, 30, "キルもmax");
+    const r=W.partialResetData({sv:{clears:{}, endless:{best:77, kills:7}}}, 9);
+    eq(r.sv.endless.best, 77, "部分リセットでも荒野の記録は残る");
+    if(oldEl) W.G.sv.endless=oldEl; else delete W.G.sv.endless;
+  });
+  t("なかまの戦闘スタイル: 剣舞は2体・疾風は間隔短縮・重圧はひるみ(基礎式は不変)", ()=>{
+    const ids={dmg:null, spd:null, hp:null};
+    W.CHARS.forEach(c=>{ if(c.sk && ids[c.sk.t]===null) ids[c.sk.t]=c.id; });
+    ok(ids.dmg && ids.spd && ids.hp, "サンプルキャラが揃う");
+    Object.values(ids).forEach(id=>{ W.G.chars[id]=W.G.chars[id]||{dup:0}; });
+    const b=svRun();
+    // 剣舞(dmg): 射程内の2体を斬る
+    const s1=W.svSatFrom(ids.dmg, 100); s1.x=50; s1.y=50;
+    b.enemies=[svFoeAt("a",52,50,1e6,0), svFoeAt("b",54,50,1e6,0)];
+    const out=svOut();
+    W.svSatAttack(b, s1, out, 1);
+    eq(out.hits.length, 2, "2体に当たる");
+    eq(out.hits[0].take, Math.max(1,Math.round(s1.dmg)), "1体目は基礎式どおり");
+    // 疾風(spd): 攻撃間隔が短い
+    const s2=W.svSatFrom(ids.spd, 100);
+    ok(s2.iv<W.SV_SAT_CD, "間隔短縮");
+    // 重圧(hp): 攻撃した敵がひるむ
+    const s3=W.svSatFrom(ids.hp, 100); s3.x=50; s3.y=50;
+    b.enemies=[svFoeAt("c",52,50,1e6,0)];
+    W.svSatAttack(b, s3, svOut(), 1);
+    ok(b.enemies[0].stunT>0, "ひるんでいる");
+  });
+  t("サバイバー: 正誤確認中は単語タップで辞書(srchクラス)", ()=>{
+    W.svStart(W.DUNGEONS[0]);
+    const doc=W.document;
+    ok(!doc.getElementById("svPrompt").classList.contains("srch"), "出題中はリンクなし");
+    W.SV.enemies.forEach(e=>{ e.x=90; e.y=50; });
+    const w=W.svCur.word, e2j=W.G.mode==="e2j";
+    const btn=[...doc.querySelectorAll("#svChoices .choice")].find(b=>b.textContent===(e2j? w.ja : w.en));
+    btn.click();
+    ok(doc.getElementById("svPrompt").classList.contains("srch"), "確認中はリンクあり");
+    W.svCleanup();
+    doc.getElementById("svField").innerHTML="";
+  });
+  t("プレイ中は下部ナビ非表示(body.svplay)・戻ると復活", ()=>{
+    W.svStart(W.DUNGEONS[0]);
+    ok(W.document.body.classList.contains("svplay"), "svタブでsvplayが付く");
+    W.svCleanup();
+    W.switchTab("adv");
+    ok(!W.document.body.classList.contains("svplay"), "冒険タブに戻ると外れる");
+    W.document.getElementById("svField").innerHTML="";
   });
 
   /* ---- 起動状態 ---- */

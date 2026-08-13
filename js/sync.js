@@ -172,6 +172,13 @@ function mergeData(a, b){
   for(const k in bsm) m.sv.meta[k]=Math.max(m.sv.meta[k]||0, bsm[k]||0);
   const bdd=(b.sv&&b.sv.dailyDone)||"";
   if(bdd && bdd>(m.sv.dailyDone||"")) m.sv.dailyDone=bdd; // YYYY-MM-DDは辞書順=時系列
+  // 終わりなき荒野の記録: ベスト秒数・キルとも多い方(v4.22.0)
+  const bel=(b.sv&&b.sv.endless)||null;
+  if(bel || m.sv.endless){
+    const mel=m.sv.endless||{};
+    m.sv.endless={best:Math.max(mel.best||0, (bel&&bel.best)||0),
+                  kills:Math.max(mel.kills||0, (bel&&bel.kills)||0)};
+  }
   for(const id in b.ach||{}) m.ach[id]=Math.max(m.ach[id]||0, b.ach[id]||0);
   // 任務・編成・ログイン・るすばん探索の精算時刻は更新が新しい側を優先
   const newer=(b.updatedAt||0)>(a.updatedAt||0)? b : a;
@@ -317,7 +324,8 @@ function partialResetData(g, t){
     gold:g.gold||0, tickets:g.tickets||0, xp:g.xp||0,
     dungeons:g.dungeons||{}, inf:{best:(g.inf&&g.inf.best)||0, run:null},
     sv:{clears:(g.sv&&g.sv.clears)||{}, meta:(g.sv&&g.sv.meta)||{},
-        dailyDone:(g.sv&&g.sv.dailyDone)||null}, // サバイバーの記録・心得は冒険の記録として残す
+        dailyDone:(g.sv&&g.sv.dailyDone)||null,
+        endless:(g.sv&&g.sv.endless)||null}, // サバイバーの記録・心得・荒野は冒険の記録として残す
     daily:g.daily||{}, weekly:g.weekly||{}, counters:g.counters||{}, ach:g.ach||{},
     login:g.login||{last:null,day:0}, gift10:g.gift10||0,
     frz:g.frz||0, faces:g.faces||{}, idle:{last:t},

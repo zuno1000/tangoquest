@@ -155,7 +155,10 @@ function answer(chosen, btn){
   if(answered) return;
   answered=true;
   const w=cur.word, ok=chosen.en===w.en, e2j=G.mode==="e2j";
-  document.querySelectorAll(".choice").forEach(b=>{
+  /* 学習タブの選択肢(#choices)だけを対象にする。documentグローバルだと、
+     時間停止で保持中のサバイバーの選択肢まで無効化+半透明化してしまい
+     「戦闘に戻ると押せない」バグになる(v4.22.0で根治・2026-08-13特定) */
+  document.querySelectorAll("#choices .choice").forEach(b=>{
     b.disabled=true;
     const isCorrect = b.textContent === (e2j? w.ja : w.en);
     if(isCorrect) b.classList.add("correct");
