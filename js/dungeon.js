@@ -1,8 +1,12 @@
 "use strict";
-/* ================= ダンジョン & 編成 & 無限回廊 ================= */
+/* ================= ステージ定義 & 編成 =================
+   v4.25.0: 冒険=サバイバー一本化 ─ 旧ダンジョン(オート戦闘)と無限回廊は廃止。
+   DUNGEONSはサバイバーのステージ定義・敵カタログとして続投し、解放連鎖(dgUnlocked)は
+   サバイバーの生還記録(G.sv.clears)が進める(旧クリア記録 G.dungeons でも解放済みを維持)。
+   るすばん探索(idleGain)と編成(おまかせ・スロットUI)もこのファイルが担う */
 
 /* elem: 敵の属性(0火/1水/2風/3光/4闇) / trait: 敵の特性(なし・tough・fierce・swift)。
-   ダンジョンごとに有効な編成が変わる=編成を考える理由になる */
+   ステージごとに有効な編成が変わる=編成を考える理由になる */
 const DUNGEONS=[
   {id:"d1", tier:1, floors:5,  icon:"🌾", name:"はじまりの草原", elem:2,
    names:["スライム","野ウサギ","いたずら妖精"], eicons:["👾","🐇","🧚"], boss:"巨大スライム", bossIcon:"👾"},
@@ -48,81 +52,28 @@ const TRAITS={
   swift: {ic:"💨", name:"神速",  desc:"素早く先手を取ってくる ─ 素早さで対抗"},
 };
 
-function dgRec(id){ if(!G.dungeons[id]) G.dungeons[id]={clears:0, lastClearDay:null}; return G.dungeons[id]; }
-function dgUnlocked(i){ return i===0 || (G.dungeons[DUNGEONS[i-1].id]&&G.dungeons[DUNGEONS[i-1].id].clears>0); }
+/* 解放連鎖: 前のステージを制していれば次が解放。
+   v4.25.0からは「サバイバーで生還」(G.sv.clears)が進める。旧ダンジョンのクリア記録
+   (G.dungeons)でも解放済みのまま=既存プレイヤーの進行を失わない */
+function dgUnlocked(i){
+  if(i===0) return true;
+  const id=DUNGEONS[i-1].id;
+  return !!((G.dungeons[id]&&G.dungeons[id].clears>0) ||
+            (G.sv&&G.sv.clears&&G.sv.clears[id]>0));
+}
 
-/* ---- 冒険タブ描画(世界マップ風の蛇行パス) ---- */
 function recPower(d){ return Math.round(Math.pow(1.55,d.tier-1)*(1+0.13*(d.floors-1))*430); } // 推奨戦闘力の目安
-
-function renderAdv(){
-  renderInfPanel();
-  const list=$("dungeonList"); list.innerHTML="";
-  let frontier=-1; // 最前線 = 未クリアで解放済みの最初のダンジョン
-  DUNGEONS.forEach((d,i)=>{
-    const rec=G.dungeons[d.id];
-    if(frontier<0 && dgUnlocked(i) && !(rec&&rec.clears>0)) frontier=i;
-  });
-  DUNGEONS.forEach((d,i)=>{
-    const un=dgUnlocked(i), rec=G.dungeons[d.id];
-    const cleared=rec&&rec.clears>0;
-    const node=document.createElement("div");
-    node.className="dnode"+(i%2?" alt":"")+(un?"":" locked")+(i===frontier?" current":"");
-    node.innerHTML=
-      '<div class="dic">'+(un? d.icon : "🔒")+'</div>'+
-      '<div class="grow"><div class="dname">'+d.name+
-        (cleared? ' <span class="dclear">✓'+rec.clears+'</span>':'')+
-        (i===frontier? ' <span class="dnew">NEW</span>':'')+'</div>'+
-      '<div class="dinfo">'+(un
-        ? '全'+d.floors+'F ・ '+ELEM_ICON[d.elem]+ELEM_NAME[d.elem]+'属性'+
-          (d.trait? ' ・ '+TRAITS[d.trait].ic+TRAITS[d.trait].name:'')+' ・ 推奨 '+fmt(recPower(d))
-        : '前のダンジョンをクリアで解放')+'</div></div>';
-    if(un) node.onclick=()=>openDungeonModal(d);
-    list.appendChild(node);
-  });
-}
-
-function openDungeonModal(d){
-  const P=playerStats();
-  const rec=G.dungeons[d.id];
-  const rp=recPower(d);
-  const okp=P.power>=rp;
-  // 属性相性: 敵属性に有利な属性と、いまの編成での効果を見せる(対策を促す)
-  const adv=ELEM_BEATS.indexOf(d.elem);
-  const m=elemMatch(P.elems, d.elem);
-  const matchTxt = m.adv>0
-    ? '有利カード<b style="color:var(--ok)">'+m.adv+'枚</b> → 与ダメ<b style="color:var(--ok)">+'+Math.round((m.dealt-1)*100)+'%</b>'+
-      (m.taken<1? ' ・ 被ダメ<b style="color:var(--ok)">-'+Math.round((1-m.taken)*100)+'%</b>':'')
-    : '<span style="color:var(--sub)">'+ELEM_ICON[adv]+ELEM_NAME[adv]+'属性のカードを装備すると有利に戦える</span>';
-  openModal('<h3>'+d.icon+' '+esc(d.name)+'</h3>'+
-    '<div class="small" style="line-height:1.9">'+
-    '全'+d.floors+'F ・ ボス『'+d.boss+'』'+d.bossIcon+'<br>'+
-    '敵は'+ELEM_ICON[d.elem]+ELEM_NAME[d.elem]+'属性(弱点: '+ELEM_ICON[adv]+ELEM_NAME[adv]+')<br>'+matchTxt+
-    (d.trait? '<br>'+TRAITS[d.trait].ic+'<b>'+TRAITS[d.trait].name+'</b>: '+TRAITS[d.trait].desc:'')+'<br>'+
-    '推奨戦闘力 <b style="color:'+(okp?"var(--ok)":"var(--ng)")+'">'+fmt(rp)+'</b>(いまの戦闘力 '+fmt(P.power)+')<br>'+
-    (rec&&rec.clears? 'クリア'+rec.clears+'回 ・ 本日初クリアで🪙1000' : '初クリア報酬: 🪙3000')+'</div>'+
-    (okp? "" : '<div class="small" style="margin-top:6px; color:var(--ng)">戦闘力が足りない<br>クイズでカードを集め、弱点属性で編成を組もう</div>')+
-    '<div class="row" style="margin-top:14px; gap:8px">'+
-    '<button class="btn" style="flex:1" data-close>やめる</button>'+
-    '<button class="btn primary" style="flex:2" id="dgGo">⚔ 挑む</button></div>');
-  $("dgGo").onclick=()=>startRun(d);
-}
-
-/* 同じダンジョンを1日に周回し続けてもガチャ経済が壊れないように:
-   本日3回目のクリア以降はゴールド25%(学習報酬を優位にする是正・翌日リセット) */
-function repeatGoldMult(rec){
-  const n=(rec && rec.lastClearDay===todayKey() && rec.dayClears)||0;
-  return n>=2? 0.25 : 1;
-}
 
 /* ---- るすばん探索(v4.13.0): アプリを開くだけで経過時間ぶんの🪙が貯まる ----
    放置ゲームの「ログインするだけでメリット」を最小構成で:
-   レートはクリア済み最高tierで決まる(冒険が進むほど留守番も稼ぐ)。
+   レートは制した最高tierで決まる(冒険が進むほど留守番も稼ぐ)。
    上限24時間ぶん=毎日開くのがいちばん得。精算は起動・復帰時に自動 */
 function idleRate(g){
   let t=0;
   for(const d of DUNGEONS){
-    const r=g.dungeons[d.id];
-    if(r && r.clears>0 && d.tier>t) t=d.tier;
+    const r=g.dungeons&&g.dungeons[d.id];        // 旧ダンジョンのクリア記録(互換)
+    const s=g.sv&&g.sv.clears&&g.sv.clears[d.id]; // サバイバーの生還記録(v4.25.0〜)
+    if(((r&&r.clears>0)||s>0) && d.tier>t) t=d.tier;
   }
   return 10+2*t*t; // 🪙/時(未クリアでも10/時=最初のログインからメリットがある)
 }
@@ -139,318 +90,13 @@ function idleGain(g, now){
   return {gold, hours, rate:idleRate(g)};
 }
 
-/* ---- ダンジョン攻略(即時シミュレーション → ビジュアルバトル演出) ---- */
-function startRun(d){
-  const P=playerStats();
-  track("run");
-  const rec=dgRec(d.id);
-  const gmul=repeatGoldMult(rec);
-  const floors=[]; // {f, boss, E, icon, hpStart, hpAfter, win, events}
-  let cleared=0, gold=0, hp=P.hp;
-  for(let f=1; f<=d.floors; f++){
-    const boss=f===d.floors;
-    const E=enemyFor(d.tier, f, d.floors, boss, d.names, d.boss, {elem:d.elem, trait:d.trait});
-    const r=simBattle(Object.assign({}, P, {hp}), E);
-    const fl={f, boss, E, icon:boss? d.bossIcon : d.eicons[(f-1)%d.eicons.length],
-              hpStart:hp, win:r.win, events:r.log};
-    if(!r.win){ floors.push(fl); break; }
-    cleared=f;
-    gold+=Math.round(8*d.tier*d.tier*(1+(P.goldBonus||0)/100)*gmul);
-    hp=Math.min(P.hp, Math.round(r.php + P.hp*(0.25+(P.abHeal||0)))); // 各階クリア後 25%回復(+回復スキル)
-    fl.hpAfter=hp;
-    floors.push(fl);
-  }
-  const full=cleared===d.floors;
-  /* 報酬確定。v4.6.0: 冒険の報酬はすべて🪙(恒常召喚のコイン)に一本化 ─
-     🎫(限定召喚チケット)は学習だけが源泉。初クリア🎫3→🪙3000・本日初🎫1→🪙1000 */
-  if(full){
-    gold+=Math.round(40*d.tier*d.tier*(1+(P.goldBonus||0)/100)*gmul);
-    if(rec.clears===0) gold+=3000;
-    else if(rec.lastClearDay!==todayKey()) gold+=1000;      // 本日初クリア
-    rec.dayClears = rec.lastClearDay===todayKey()? (rec.dayClears||0)+1 : 1;
-    rec.clears++; rec.lastClearDay=todayKey();
-    track("clear");
-  }
-  G.gold+=gold;
-  saveG(); refreshHeader(); renderAdv();
-  playRun(d, P, floors, {full, cleared, gold, reduced:gmul<1});
-}
-
-/* ---- 演出プレイヤー ---- */
+/* ---- 振動(演出の共通部品。旧・演出プレイヤーから続投) ---- */
 const CAN_VIBRATE = typeof navigator!=="undefined" && "vibrate" in navigator;
 function vibe(pat){
   if(!CAN_VIBRATE || localStorage.getItem("tq_vibe")==="off") return;
   try{ navigator.vibrate(pat); }catch(e){}
 }
 
-const SPEED_ICONS={1:"🚶", 2:"🏃", 3:"⚡"};
-function playRun(d, P, floors, R){
-  let speed=+(localStorage.getItem("tq_bspeed")||1);
-  if(![1,2,3].includes(speed)) speed=1;
-  openModal('<h3>'+d.icon+' '+esc(d.name)+'</h3>'+
-    '<div id="bScene">'+
-      '<div id="bFloorTxt"></div>'+
-      '<div id="bArena">'+
-        '<div class="bUnit" id="bP">'+
-          '<div class="bFace" id="bPFace">'+P.face+'</div>'+
-          '<div class="bUName">'+esc(P.name)+'</div>'+
-          '<div class="bHp"><i id="bPHp"></i></div><div class="bHpN" id="bPHpN"></div></div>'+
-        '<div class="bUnit" id="bE">'+
-          '<div class="bFace" id="bEFace"></div>'+
-          '<div class="bUName" id="bEName"></div>'+
-          '<div class="bHp"><i id="bEHp"></i></div><div class="bHpN" id="bEHpN"></div></div>'+
-      '</div>'+
-      '<div id="bAct"></div>'+
-    '</div>'+
-    '<div class="row" id="bCtrl" style="margin-top:10px">'+
-      '<button class="btn" id="bSpeedBtn">'+SPEED_ICONS[speed]+' ×'+speed+'</button>'+
-      '<div class="grow"></div>'+
-      '<button class="btn" id="bSkipBtn">結果へ ▶▶</button>'+
-    '</div>');
-
-  // ステップ列を組み立てる(長い攻防は前後だけ再生)
-  const steps=[];
-  floors.forEach(fl=>{
-    steps.push({k:"floor", fl, ms:750});
-    let ev=fl.events;
-    if(ev.length>12){
-      const head=ev.slice(0,7), tail=ev.slice(-4), mid=ev[ev.length-5];
-      steps.push(...head.map(e=>({k:"atk", e, ms:e.sk?600:320})));
-      steps.push({k:"ff", e:mid, ms:800});
-      steps.push(...tail.map(e=>({k:"atk", e, ms:e.sk?600:320})));
-    }else{
-      steps.push(...ev.map(e=>({k:"atk", e, ms:e.sk?600:320})));
-    }
-    if(fl.win) steps.push({k:"kill", fl, ms:700});
-    else steps.push({k:"dead", fl, ms:1000});
-  });
-  steps.push({k:"end", ms:0});
-
-  const maxHpE=fl=>fl.E.hp;
-  let curFl=null;
-  const alive=()=>!!$("bArena"); // モーダルが閉じられたら停止
-  const setHp=(el, nEl, v, max)=>{
-    const r=Math.max(0, Math.min(1, v/max));
-    el.style.width=(r*100)+"%";
-    el.style.background = r>0.5? "var(--ok)" : r>0.25? "var(--accent)" : "var(--ng)";
-    nEl.textContent=fmt(v);
-  };
-  const pop=(unit, txt, cls)=>{
-    const p=document.createElement("div");
-    p.className="bpop "+(cls||"");
-    p.textContent=txt;
-    p.style.left=(25+Math.random()*30)+"%";
-    unit.appendChild(p);
-    setTimeout(()=>p.remove(), 950);
-  };
-  const shake=(el, big)=>{
-    el.classList.remove("bShake","bShakeBig");
-    void el.offsetWidth;
-    el.classList.add(big?"bShakeBig":"bShake");
-  };
-  const flash=el=>{
-    el.classList.remove("bFlash");
-    void el.offsetWidth;
-    el.classList.add("bFlash");
-  };
-  const act=(txt, cls)=>{
-    const a=$("bAct"); if(!a) return;
-    a.className=cls||"";
-    a.textContent=txt;
-  };
-
-  let i=0, timer=null;
-  const doStep=st=>{
-    switch(st.k){
-      case "floor":{
-        curFl=st.fl;
-        $("bFloorTxt").innerHTML=st.fl.f+"F <span class='small'>/ "+d.floors+"F</span>"+(st.fl.boss?" <b class='bBoss'>BOSS</b>":"");
-        $("bEFace").textContent=st.fl.icon;
-        $("bEFace").classList.toggle("boss", st.fl.boss);
-        $("bEFace").style.opacity=1; $("bEFace").style.transform="";
-        $("bEName").textContent=(st.fl.E.elem!=null? ELEM_ICON[st.fl.E.elem]+" ":"")+st.fl.E.name;
-        setHp($("bEHp"), $("bEHpN"), st.fl.E.hp, st.fl.E.hp);
-        setHp($("bPHp"), $("bPHpN"), st.fl.hpStart, P.hp);
-        act(st.fl.E.name+" が現れた!", st.fl.boss?"boss":"");
-        if(st.fl.boss) vibe(60);
-        break;
-      }
-      case "atk":{
-        const e=st.e;
-        if(e.side==="p"){
-          const eU=$("bE");
-          setHp($("bEHp"), $("bEHpN"), e.ehp, maxHpE(curFl));
-          $("bPFace").classList.remove("lunge"); void $("bPFace").offsetWidth; $("bPFace").classList.add("lunge");
-          if(e.heal){ setHp($("bPHp"), $("bPHpN"), e.php, P.hp); pop($("bP"), "+"+fmt(e.heal), "heal"); }
-          if(e.sk){
-            pop(eU, fmt(e.dmg), "crit");
-            shake(eU, true); flash($("bEFace"));
-            act("⚡『"+e.sk+"』!", "skill");
-            vibe(35);
-          }else{
-            pop(eU, fmt(e.dmg));
-            shake(eU, false);
-          }
-        }else{
-          const pU=$("bP");
-          setHp($("bPHp"), $("bPHpN"), e.php, P.hp);
-          pop(pU, fmt(e.dmg), "hurt");
-          shake(pU, false);
-        }
-        break;
-      }
-      case "ff":{
-        act("…激しい攻防が続く…");
-        setHp($("bEHp"), $("bEHpN"), st.e.ehp, maxHpE(curFl));
-        setHp($("bPHp"), $("bPHpN"), st.e.php, P.hp);
-        shake($("bE"), false); shake($("bP"), false);
-        break;
-      }
-      case "kill":{
-        const f=$("bEFace");
-        flash(f);
-        f.style.transform="scale(1.25)"; f.style.opacity=0;
-        act(st.fl.E.name+"を倒した!", "win");
-        if(st.fl.hpAfter!=null && st.fl.hpAfter>0){
-          const healed=st.fl.hpAfter;
-          setHp($("bPHp"), $("bPHpN"), healed, P.hp);
-          pop($("bP"), "回復", "heal");
-        }
-        if(st.fl.boss) vibe([40,60,90]);
-        break;
-      }
-      case "dead":{
-        $("bPFace").textContent="💀";
-        act("力尽きた… "+st.fl.f+"Fで敗退", "lose");
-        shake($("bP"), true);
-        vibe(120);
-        break;
-      }
-      case "end": showResult(); return;
-    }
-  };
-
-  const showResult=()=>{
-    if(!alive()) return;
-    clearTimeout(timer); timer=null;
-    const scene=$("bScene");
-    scene.innerHTML=
-      '<div id="bResult" class="'+(R.full?"win":"lose")+'">'+
-      '<div class="brTitle">'+(R.full? "🏆 完全攻略!" : "⚔ "+(R.cleared+1)+"Fで敗退…")+'</div>'+
-      (R.full? "" : '<div class="small">'+R.cleared+'Fまで突破。カードを集めて再挑戦しよう</div>')+
-      '<div class="brRew">🪙 <b id="brGold">0</b></div>'+
-      (R.reduced? '<div class="small" style="margin-top:8px">周回報酬は本日3回目から減少中。<br>クイズを解く方がお得(正解1問で🎫1)</div>':"")+
-      '</div>';
-    $("bCtrl").innerHTML='<button class="btn primary" style="flex:1" data-close>閉じる</button>';
-    $("bCtrl").querySelector("[data-close]").onclick=closeModal;
-    if(R.full) vibe([40,60,90]);
-    // ゴールドのカウントアップ
-    const gEl=$("brGold"), t0=Date.now(), dur=600;
-    const tick=()=>{
-      if(!$("brGold")) return;
-      const r=Math.min(1,(Date.now()-t0)/dur);
-      gEl.textContent="+"+fmt(R.gold*(2-r)*r); // ease-out
-      if(r<1) requestAnimationFrame(tick);
-    };
-    requestAnimationFrame(tick);
-  };
-
-  const next=()=>{
-    if(!alive()) { clearTimeout(timer); return; }
-    if(i>=steps.length) return;
-    const st=steps[i++];
-    doStep(st);
-    if(st.k!=="end") timer=setTimeout(next, Math.max(120, st.ms/speed));
-  };
-  $("bSpeedBtn").onclick=()=>{
-    speed=speed>=3?1:speed+1;
-    localStorage.setItem("tq_bspeed", speed);
-    $("bSpeedBtn").textContent=SPEED_ICONS[speed]+" ×"+speed;
-  };
-  $("bSkipBtn").onclick=showResult;
-  next();
-}
-
-/* ================= 無限回廊(放置探索) ================= */
-const INF_FLOOR_SEC=25;
-
-function infEnemy(floor){
-  /* v4.6.0: ダンジョンと同思想でHPは深さに応じて厚く(数ターンの攻防)、
-     攻撃はプレイヤーの耐久に併走する緩い曲線に(旧1.09^fは深層で即死のみ) */
-  const p=Math.pow(1.09, floor);
-  const hpB=Math.min(3, 1+0.04*floor);
-  const names=["深層スライム","彷徨う鎧","影の獣","迷宮の番人","古の魔像"];
-  return {name:floor+"Fの"+names[floor%names.length], hp:Math.round(140*p*hpB),
-          atk:Math.round(36*Math.pow(1.035, floor)), def:Math.round(9*p*hpB),
-          spd:9+Math.floor(floor/5),
-          elem:floor%5}; // 階ごとに属性が巡る(偏った編成は深層で止まりやすい)
-}
-
-/* 経過時間ぶんの階層を逐次シミュレート(敗北で探索終了) */
-function infTick(){
-  const run=G.inf.run;
-  if(!run || run.dead) return;
-  let avail=Math.floor((Date.now()-run.startAt)/(INF_FLOOR_SEC*1000)) - run.simmed;
-  avail=Math.min(avail, 500);
-  let changed=false;
-  while(avail-->0){
-    run.simmed++;
-    changed=true;
-    const E=infEnemy(run.floor+1);
-    const r=simBattle(Object.assign({}, run.P), E); // 各階HP全快で挑む
-    if(r.win){
-      run.floor++;
-      run.gold+=Math.round((8+run.floor*2)*(1+(run.P.goldBonus||0)/100));
-      if(run.floor%10===0) run.gold+=1000; // v4.6.0: 🎫1→🪙1000(冒険報酬はコインに一本化)
-      if(run.floor>G.inf.best) G.inf.best=run.floor;
-    }else{ run.dead=true; break; }
-  }
-  if(changed) saveG();
-}
-
-function infStart(){
-  if(!dgUnlocked(1)){ toast("まず「はじまりの草原」をクリアしよう"); return; }
-  G.inf.run={startAt:Date.now(), simmed:0, floor:0, gold:0, tickets:0, dead:false, P:playerStats()};
-  track("run"); saveG();
-  toast("無限回廊へ出発! クイズの間も探索が進む");
-  renderAdv(); refreshInfPill();
-}
-function infCollect(){
-  const run=G.inf.run; if(!run) return;
-  infTick();
-  G.gold+=run.gold; G.tickets+=run.tickets||0; // 旧版の探索中セーブとの互換(v4.5以前の🎫)
-  toast("探索終了: "+run.floor+"F到達 ／ 🪙"+fmt(run.gold)+(run.tickets?" 🎫"+run.tickets:""));
-  G.inf.run=null;
-  saveG(); refreshHeader(); renderAdv(); refreshInfPill();
-}
-
-function renderInfPanel(){
-  infTick();
-  const p=$("infPanel"); const run=G.inf.run;
-  const best=G.inf.best? "最深記録 "+G.inf.best+"F" : "";
-  if(!run){
-    p.innerHTML='<div class="row"><div class="grow">'+
-      '<div style="font-weight:800; font-size:15px">🌀 無限回廊</div>'+
-      '<div class="small" style="margin-top:3px">クイズ中も自動で進む放置探索。<br>10階ごとに🪙1000'+(best?'<br>'+best:'')+'</div></div>'+
-      '<button class="btn gold" id="infStartBtn" '+(dgUnlocked(1)?"":"disabled")+'>出発</button></div>';
-    const b=$("infStartBtn"); if(b&&!b.disabled) b.onclick=infStart;
-  }else{
-    p.innerHTML='<div class="row"><div class="grow">'+
-      '<div style="font-weight:800; font-size:15px">🌀 探索'+(run.dead?"終了(敗退)":"中")+' ─ '+run.floor+'F</div>'+
-      '<div class="small" style="margin-top:3px">獲得予定: 🪙'+fmt(run.gold)+(run.tickets?" ／ 🎫"+run.tickets:"")+
-      (best?'<br>'+best:'')+'</div></div>'+
-      '<button class="btn primary" id="infColBtn">'+(run.dead?"報告する":"回収")+'</button></div>';
-    $("infColBtn").onclick=infCollect;
-  }
-}
-function refreshInfPill(){
-  const run=G.inf.run, pill=$("infPill");
-  if(!run){ pill.classList.remove("show"); return; }
-  infTick();
-  pill.classList.add("show");
-  $("infPillTxt").textContent=run.dead? run.floor+"Fで敗退(報告待ち)" : run.floor+"F 探索中";
-}
-$("infPill").onclick=()=>switchTab("adv");
 
 /* ================= 編成(呪文文) =================
    文のスロットUI・ライブ数式プレビュー・おまかせ編成(山登り法)。

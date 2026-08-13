@@ -956,7 +956,7 @@ function run(){
     const dl=W.DAILY_DEFS.find(m=>m.id==="dl"), wl=W.WEEKLY_DEFS.find(m=>m.id==="wl");
     ok(dl.rew.g>0 && !dl.rew.t, "デイリークリア任務は🪙");
     ok(wl.rew.g>0 && !wl.rew.t, "ウィークリークリア任務は🪙");
-    ["aclr","ainf","achr","apul","adup","asv"].forEach(id=>{
+    ["aclr","aend","achr","apul","adup","asv"].forEach(id=>{ // ainf→aend(v4.25.0)
       const a=W.ACH_DEFS.find(x=>x.id===id);
       ok(a.tiers.every(tr=>!tr[1].t), id+" の報酬に🎫が混ざっている");
     });
@@ -977,12 +977,64 @@ function run(){
   t("ログインボーナスは毎日🎫1以上", ()=>{
     ok(W.LOGIN_BONUS.length===7 && W.LOGIN_BONUS.every(x=>(x.t||0)>=1), JSON.stringify(W.LOGIN_BONUS));
   });
-  t("ダンジョン周回: 本日3回目以降のクリアはゴールド25%", ()=>{
-    const today=W.todayKey();
-    eq(W.repeatGoldMult({clears:5, lastClearDay:today, dayClears:2}), 0.25, "3回目〜");
-    eq(W.repeatGoldMult({clears:5, lastClearDay:today, dayClears:1}), 1, "2回目まで");
-    eq(W.repeatGoldMult({clears:5, lastClearDay:"2000-01-01", dayClears:9}), 1, "日が変われば戻る");
-    eq(W.repeatGoldMult({clears:0, lastClearDay:null}), 1, "初回");
+  t("冒険=サバイバー一本化(v4.25.0): 旧ダンジョン・無限回廊のコードが撤去されている", ()=>{
+    ok(typeof W.repeatGoldMult==="undefined", "repeatGoldMult(周回減衰)は撤去");
+    ok(typeof W.startRun==="undefined", "startRun(オート戦闘)は撤去");
+    ok(typeof W.infTick==="undefined", "infTick(無限回廊)は撤去");
+    ok(typeof W.renderInfPanel==="undefined", "renderInfPanel(無限回廊UI)は撤去");
+    ok(!W.document.getElementById("infPill"), "無限回廊ピルは撤去");
+    ok(!W.document.getElementById("dungeonList"), "ダンジョン一覧は撤去");
+    ok(W.document.getElementById("svHub"), "冒険タブはサバイバーのハブ");
+    ok(typeof W.enemyFor==="function" && typeof W.simBattle==="function",
+      "敵生成・戦闘計算(battle.js)は続投");
+  });
+  t("ステージ解放(v4.25.0): サバイバーの生還で進む・旧ダンジョンのクリアでも解放済みを維持", ()=>{
+    const G=W.G;
+    const oldD=G.dungeons, oldSv=G.sv;
+    G.dungeons={}; G.sv={clears:{}};
+    ok(W.dgUnlocked(0), "最初のステージは常に解放");
+    ok(!W.dgUnlocked(1), "未生還では次は閉じている");
+    G.sv.clears.d1=1;
+    ok(W.dgUnlocked(1), "サバイバーの生還で解放");
+    G.sv.clears={};
+    G.dungeons={d1:{clears:2}};
+    ok(W.dgUnlocked(1), "旧ダンジョンのクリア記録でも解放(既存プレイヤー互換)");
+    G.dungeons=oldD; G.sv=oldSv;
+  });
+  t("任務・実績(v4.25.0): サバイバー仕様に置き換わっている", ()=>{
+    ok(W.DAILY_DEFS.find(m=>m.id==="dr").name.indexOf("サバイバー")>=0, "デイリーdr");
+    ok(W.DAILY_DEFS.find(m=>m.id==="dl").name.indexOf("生還")>=0, "デイリーdl");
+    ok(W.WEEKLY_DEFS.find(m=>m.id==="wl").name.indexOf("生還")>=0, "ウィークリーwl");
+    ok(!W.ACH_DEFS.some(a=>a.id==="ainf"), "無限回廊の実績は撤去");
+    const ae=W.ACH_DEFS.find(a=>a.id==="aend");
+    ok(ae && ae.name.indexOf("荒野")>=0, "荒野の生存記録の実績に交代");
+    const G=W.G, oldSv=G.sv;
+    G.sv={clears:{}, endless:{best:200, kills:5}};
+    eq(ae.cur(), 200, "実績値=荒野のベスト秒数");
+    G.sv=oldSv;
+    ok(W.ACH_DEFS.some(a=>a.id==="aclr"), "累計クリアの実績(aclr)は生還の実績として続投");
+  });
+  t("サバイバー: 出撃で任務「挑む」が計上される(旧ダンジョンのtrack移譲)", ()=>{
+    const G=W.G, r0=G.counters.runs;
+    W.svStart(W.DUNGEONS[0]);
+    eq(G.counters.runs, r0+1, "svStartがtrack('run')する");
+    W.svCleanup();
+    W.document.getElementById("svField").innerHTML="";
+    W.switchTab("home");
+  });
+  t("無限回廊の最終精算(v4.25.0): 探索中の🪙は起動時に持ち帰り、runは消える", ()=>{
+    const G=W.G, g0=G.gold;
+    const oldInf=JSON.parse(JSON.stringify(G.inf||{best:0,run:null}));
+    const oldIdle=G.idle, oldFrz=G.frz;
+    G.idle={last:Date.now()}; G.frz=0; // るすばん・フリーズを黙らせて精算だけ見る
+    G.inf={best:12, run:{startAt:Date.now(), simmed:3, floor:3, gold:500, dead:false}};
+    W.settleIdleAndFreeze();
+    eq(G.gold, g0+500, "探索分の🪙を精算");
+    eq(G.inf.run, null, "探索は終了");
+    eq(G.inf.best, 12, "最深記録は残る(同期マージも従来どおり)");
+    W.settleIdleAndFreeze();
+    eq(G.gold, g0+500, "二重精算はない");
+    G.inf=oldInf; G.idle=oldIdle; G.frz=oldFrz; G.gold=g0;
   });
   t("実績が拡張されている(なかま32段階・ガチャ1000・突破合計)", ()=>{
     const by={}; W.ACH_DEFS.forEach(a=>by[a.id]=a);
@@ -1591,11 +1643,13 @@ function run(){
   });
   t("るすばん探索: 経過時間×レートの🪙(tierで時給UP・上限24時間)", ()=>{
     const G=W.G;
-    const oldD=G.dungeons, oldIdle=G.idle, g0=G.gold;
-    G.dungeons={};
+    const oldD=G.dungeons, oldSv=G.sv, oldIdle=G.idle, g0=G.gold;
+    G.dungeons={}; G.sv={clears:{}};
     eq(W.idleRate(G), 10, "未クリアでも時給10");
     G.dungeons={d5:{clears:1}};
-    eq(W.idleRate(G), 60, "tier5クリアで時給10+2×25=60");
+    eq(W.idleRate(G), 60, "旧ダンジョンtier5クリアで時給10+2×25=60(互換)");
+    G.dungeons={}; G.sv={clears:{d5:1}};
+    eq(W.idleRate(G), 60, "サバイバーのtier5生還でも同じ時給(v4.25.0)");
     const now=Date.now();
     G.idle={last:now-2*3600e3};
     const r=W.idleGain(G, now);
@@ -1605,7 +1659,7 @@ function run(){
     G.idle={last:now-48*3600e3};
     eq(W.idleGain(G, now).gold, 24*60, "上限24時間ぶん");
     ok(!W.idleGain({idle:{last:0}, dungeons:{}, gold:0}, now), "初回は基準時刻を置くだけ");
-    G.dungeons=oldD; G.idle=oldIdle; G.gold=g0;
+    G.dungeons=oldD; G.sv=oldSv; G.idle=oldIdle; G.gold=g0;
   });
   t("灰色帯対策: 日をまたいだ最初の起動でも1回だけリロード(v4.13.0)", ()=>{
     const store=init=>{ const s=Object.assign({},init);
@@ -1787,10 +1841,12 @@ function run(){
     W.svApplyUpgrade(b, "pow");   ok(Math.abs(b.up.pow-1.25)<1e-9, "威力+25%");
     W.svApplyUpgrade(b, "burst"); ok(Math.abs(b.up.burst-1.35)<1e-9, "バースト+35%");
     W.svApplyUpgrade(b, "gold");  ok(Math.abs(b.up.gold-1.3)<1e-9, "金運+30%");
+    /* v4.25.0 上限撤廃: rate/guardの下限0.4は撤去(乗算逓減=ゼロには届かない。
+       発火間隔はsvTickの下限500ms・被弾は最低1ダメージが最後の受け皿) */
     for(let i=0;i<20;i++) W.svApplyUpgrade(b, "rate");
-    ok(b.up.rate>=0.4, "連射は下限0.4で頭打ち");
+    ok(b.up.rate>0 && b.up.rate<0.05, "連射は逓減しつつゼロにならない(0.82^20)");
     for(let i=0;i<20;i++) W.svApplyUpgrade(b, "guard");
-    ok(b.up.guard>=0.4, "守りは下限0.4で頭打ち");
+    ok(b.up.guard>0 && b.up.guard<0.05, "守りも逓減しつつゼロにならない(0.85^20)");
     b.hp=100; const m0=b.hpMax;
     W.svApplyUpgrade(b, "heal");
     ok(b.hpMax>m0, "最大HP+10%");
@@ -1836,22 +1892,29 @@ function run(){
   t("サバイバー: 勝っても負けても🪙は持ち帰り・勝利はボーナス+クリア記録", ()=>{
     const G=W.G, g0=G.gold;
     const had=G.sv && G.sv.clears && G.sv.clears[W.DUNGEONS[0].id];
+    const hadWd=G.sv && G.sv.winDay;
+    if(G.sv) delete G.sv.winDay; // 本日初生還ボーナスを確定させる(v4.25.0)
+    const c0=G.counters.clears;
     W.SV=W.svNewRun(W.DUNGEONS[0], {hp:100, dpt:10, catk:10, elems:[]}, 0);
     W.SV._d=W.DUNGEONS[0];
     W.SV.gold=77; W.SV.over=true; W.SV.win=false;
     W.svFinish();
     eq(G.gold, g0+77, "敗北でも倒した分は持ち帰り");
+    eq(G.counters.clears, c0, "敗北はクリアに数えない");
     W.closeModal();
     W.SV=W.svNewRun(W.DUNGEONS[0], {hp:100, dpt:10, catk:10, elems:[]}, 0);
     W.SV._d=W.DUNGEONS[0];
     W.SV.gold=10; W.SV.over=true; W.SV.win=true;
     W.svFinish();
     eq(G.sv.clears[W.DUNGEONS[0].id], 1, "クリア記録(実績「サバイバー生還」の材料)");
-    eq(G.gold, g0+77+10+60+1000, "勝利は🪙60×tier²+はじめての生還1000");
+    eq(G.gold, g0+77+10+60+3000+1000, "勝利=🪙60×tier²+初生還3000+本日初生還1000(v4.25.0)");
+    eq(G.sv.winDay, W.todayKey(), "本日初生還の受取日が刻まれる");
+    eq(G.counters.clears, c0+1, "任務・実績のクリア計上はsvFinishが担う(v4.25.0)");
     W.closeModal();
     W.svCleanup();
-    G.gold=g0;
+    G.gold=g0; G.counters.clears=c0;
     if(had) G.sv.clears[W.DUNGEONS[0].id]=had; else delete G.sv.clears[W.DUNGEONS[0].id];
+    if(hadWd) G.sv.winDay=hadWd; else delete G.sv.winDay;
   });
   t("サバイバー: クリア記録は同期でステージごとに多い方・部分リセットでも残る", ()=>{
     const base=()=>({resetAt:0, words:{},days:{},inv:{},chars:{},dungeons:{},counters:{},ach:{},
@@ -1894,10 +1957,10 @@ function run(){
     W.SV=null;
     W.document.getElementById("svField").innerHTML="";
   });
-  t("サバイバー: 冒険タブの入口から開始でき、学習タブに触れずに問題が出る", ()=>{
+  t("サバイバー: 冒険タブから開始でき、学習タブに触れずに問題が出る", ()=>{
     const G=W.G;
     W.switchTab("adv");
-    ok(W.document.getElementById("svEntry"), "冒険タブに入口パネル");
+    ok(W.document.querySelector("#svHub #svStageList .svstage[data-i]"), "冒険タブにステージ一覧(v4.25.0)");
     W.svStart(W.DUNGEONS[0]);
     try{
       const doc=W.document;
@@ -2013,9 +2076,6 @@ function run(){
     ok(r && r.lv===1, "買える");
     eq(g.gold, 600-W.SV_META_COST[0], "🪙を消費");
     eq(W.svBuyMeta(g, "hp"), null, "🪙不足では買えない(Lv2は🪙"+W.SV_META_COST[1]+")");
-    const g2={gold:1e9, sv:{meta:{}}};
-    for(let i=0;i<10;i++) W.svBuyMeta(g2, "gem");
-    eq(g2.sv.meta.gem, W.SV_META.find(m=>m.id==="gem").max, "上限Lvで止まる");
     const mb=W.svMetaBonus({hp:2, pow:1, rate:1, gem:2, gold:3});
     ok(Math.abs(mb.hpM-1.12)<1e-9, "HP+6%/Lv");
     ok(Math.abs(mb.powM-1.05)<1e-9, "威力+5%/Lv");
@@ -2026,6 +2086,21 @@ function run(){
     eq(b.hpMax, 1120, "最大HPに反映");
     eq(b.gem, 2, "開始◆に反映(レベルアップ手前まで)");
     ok(Math.abs(b.up.pow-1.05)<1e-9, "威力に反映");
+  });
+  t("心得の上限撤廃(v4.25.0): 何段でも修められ、6段目からは費用×2.5の幾何級数", ()=>{
+    eq(W.svMetaCost(0), W.SV_META_COST[0], "Lv1の費用は従来どおり");
+    eq(W.svMetaCost(4), W.SV_META_COST[4], "Lv5の費用も従来どおり");
+    eq(W.svMetaCost(5), Math.round(25000*2.5), "6段目=🪙62,500");
+    eq(W.svMetaCost(7), Math.round(25000*2.5*2.5*2.5), "以降も×2.5ずつ");
+    const g2={gold:1e9, sv:{meta:{}}};
+    for(let i=0;i<10;i++) ok(W.svBuyMeta(g2, "gem"), "旧上限(3)を超えて買える");
+    eq(g2.sv.meta.gem, 10, "Lv10まで修まる");
+    ok(W.svMetaBonus({rate:99}).rateM===0, "詠唱の逓減は0で頭打ち(発火間隔は下限500msが受ける)");
+    // 集中の心得: あふれた開始◆は開始時レベル+3択予約に変換される
+    const b=W.svNewRun(W.DUNGEONS[0], {hp:1000, dpt:100, catk:30, elems:[]}, 0, {meta:{gem:10}});
+    eq(b.lv, 3, "◆10=Lv3スタート(4+6を消費)");
+    eq(b.gem, 0, "余り◆0");
+    eq(b.lvups, 2, "レベルアップの3択が2回予約される");
   });
   t("サバイバー: 日替わりチャレンジは決定的(修飾+品詞しばり)・修飾は敵に効く", ()=>{
     const a=W.svDailyFor("2026-08-12", 5), a2=W.svDailyFor("2026-08-12", 5);
@@ -2051,24 +2126,27 @@ function run(){
     const G=W.G, g0=G.gold;
     const oldDone=G.sv && G.sv.dailyDone;
     const oldClear=G.sv && G.sv.clears && G.sv.clears[W.DUNGEONS[0].id];
-    if(G.sv){ delete G.sv.dailyDone; delete G.sv.clears[W.DUNGEONS[0].id]; }
+    const oldWd=G.sv && G.sv.winDay;
+    if(G.sv){ delete G.sv.dailyDone; delete G.sv.clears[W.DUNGEONS[0].id];
+      G.sv.winDay=W.todayKey(); } // 本日初生還ボーナスは受取済みにして切り離す(v4.25.0)
     const P={hp:100, dpt:10, catk:10, elems:[]};
     W.SV=W.svNewRun(W.DUNGEONS[0], P, 0, {daily:true});
     W.SV._d=W.DUNGEONS[0];
     W.SV.gold=0; W.SV.over=true; W.SV.win=true;
     W.svFinish();
     const daily=W.SV_DAILY_GOLD(W.DUNGEONS[0].tier);
-    eq(G.gold, g0+60+1000+daily, "初回勝利=通常60+初生還1000+デイリー"+daily);
+    eq(G.gold, g0+60+3000+daily, "初回勝利=通常60+初生還3000+デイリー"+daily);
     W.closeModal();
     W.SV=W.svNewRun(W.DUNGEONS[0], P, 0, {daily:true});
     W.SV._d=W.DUNGEONS[0];
     W.SV.gold=0; W.SV.over=true; W.SV.win=true;
     W.svFinish();
-    eq(G.gold, g0+60+1000+daily+60, "同じ日の2勝目にデイリーボーナスはない");
+    eq(G.gold, g0+60+3000+daily+60, "同じ日の2勝目にデイリーボーナスはない");
     W.closeModal(); W.svCleanup();
     G.gold=g0;
     if(oldDone) G.sv.dailyDone=oldDone; else delete G.sv.dailyDone;
     if(oldClear) G.sv.clears[W.DUNGEONS[0].id]=oldClear; else delete G.sv.clears[W.DUNGEONS[0].id];
+    if(oldWd) G.sv.winDay=oldWd; else delete G.sv.winDay;
   });
   t("サバイバー: 心得・デイリー達成日も同期される(部分リセットでも残る)", ()=>{
     const base=()=>({resetAt:0, words:{},days:{},inv:{},chars:{},dungeons:{},counters:{},ach:{},
@@ -2079,17 +2157,24 @@ function run(){
     eq(m.sv.meta.hp, 2, "心得はLvが高い方");
     eq(m.sv.meta.pow, 3, "片方にしかない心得も残る");
     eq(m.sv.dailyDone, "2026-08-12", "達成日は新しい方(二重取り防止)");
-    const r=W.partialResetData({sv:{clears:{}, meta:{gold:4}, dailyDone:"2026-08-12"}}, 9);
+    const a2=Object.assign(base(), {updatedAt:1, sv:{clears:{}, winDay:"2026-08-13"}});
+    const b2=Object.assign(base(), {updatedAt:2, sv:{clears:{}, winDay:"2026-08-11"}});
+    eq(W.mergeData(a2,b2).sv.winDay, "2026-08-13", "本日初生還の受取日も新しい方(v4.25.0)");
+    const r=W.partialResetData({sv:{clears:{}, meta:{gold:4}, dailyDone:"2026-08-12", winDay:"2026-08-13"}}, 9);
     eq(r.sv.meta.gold, 4, "心得は部分リセットでも残る");
     eq(r.sv.dailyDone, "2026-08-12", "達成日も残る");
+    eq(r.sv.winDay, "2026-08-13", "本日初生還の受取日も残る(二重取り防止)");
   });
-  t("サバイバー: 入口に心得(永続強化)と日替わりチャレンジがある", ()=>{
-    W.openSVSelect();
+  t("冒険タブ(v4.25.0): 心得・日替わり・荒野・ステージ一覧がハブに並ぶ", ()=>{
+    W.renderAdv();
     ok(W.document.getElementById("svMetaBtn"), "心得ボタン");
     ok(W.document.getElementById("svDailyBtn"), "デイリー挑戦ボタン");
-    ok(W.document.getElementById("svEndlessBtn"), "終わりなき荒野の挑戦ボタン(v4.22.0)");
+    ok(W.document.getElementById("svEndlessBtn"), "終わりなき荒野の挑戦ボタン");
+    ok(W.document.querySelectorAll("#svStageList .svstage").length===W.DUNGEONS.length,
+      "全ステージが並ぶ(未解放は🔒)");
     W.svOpenMeta();
     eq(W.document.querySelectorAll("#modal [data-meta]").length, W.SV_META.length, "全心得の購入行が並ぶ");
+    ok(W.document.querySelector("#modal [data-meta]"), "MAX表示はなく常に購入できる(上限撤廃)");
     W.closeModal();
   });
 
@@ -2291,22 +2376,21 @@ function run(){
     eq(b.hp, hp0, "シールドが吸収してHPは減らない");
     ok(b.shield<40, "シールドが削れる");
   });
-  t("絆(規則): なかまの枠が+1される(最大5)", ()=>{
+  t("絆(規則): なかまの枠が+1される(v4.25.0で上限撤廃)", ()=>{
     W.G.chars.c01=W.G.chars.c01||{dup:0};
     const b=svRun();
     W.svApplyUpgrade(b, "bond");
     eq(b.satMax, W.SV_SAT_MAX+1, "枠+1");
     for(let i=0;i<9;i++) W.svApplyUpgrade(b, "bond");
-    eq(b.satMax, 5, "上限5");
-    for(let i=0;i<6;i++) W.svSummon(b, "c01");
-    eq(b.sats.length, 5, "5体まで召喚できる");
+    eq(b.satMax, W.SV_SAT_MAX+10, "何度でも重ねられる(旧上限5を超える)");
   });
-  t("3択の上限とレア優先: max到達の強化は出ない・宝箱はレア規則が先頭", ()=>{
+  t("3択の上限撤廃とレア優先(v4.25.0): 取得済みでも出続ける・宝箱はレア規則が先頭", ()=>{
+    ok(W.SV_UPGRADES.every(u=>!u.max), "全強化からmax(取得上限)が消えている");
     const b=svRun();
-    b.taken={pow:5}; // powはmax到達
-    for(let i=0;i<40;i++){
-      ok(!W.svUpgradeChoices(b).some(c=>c.id==="pow"), "max到達のpowは出ない");
-    }
+    b.taken={pow:5}; // 旧上限だった回数を取得済みでも…
+    let seen=false;
+    for(let i=0;i<60 && !seen;i++) seen=W.svUpgradeChoices(b).some(c=>c.id==="pow");
+    ok(seen, "旧max到達のpowも引き続き候補に出る");
     const cs=W.svUpgradeChoices(b, {rare:true});
     ok(cs.length===3 && cs[0].rare, "宝箱の3択はレア規則が先頭");
     ok(W.SV_UPGRADES.length>=19, "強化・規則は約20種(現在"+W.SV_UPGRADES.length+")");
@@ -2425,11 +2509,14 @@ function run(){
     eq(r.count, 4, "実行は見積もりどおり");
     eq(g.gold, 0, "🪙を消費");
     eq(Object.values(g.sv.meta).reduce((a,b)=>a+b,0), 4, "計4段修まる");
-    const gg={gold:1e9, sv:{clears:{}, meta:{}}};
-    const full=W.SV_META.reduce((s,m)=>s+W.SV_META_COST.slice(0,m.max).reduce((a,b)=>a+b,0),0);
-    eq(W.svBuyMetaAll(gg).spent, full, "カンストまでの総額と一致");
-    ok(W.SV_META.every(m=>gg.sv.meta[m.id]===m.max), "全系統がMAXに");
-    eq(W.svBuyMetaAll(gg).count, 0, "カンスト後は何も買わない");
+    /* v4.25.0 上限撤廃: カンストはない。旧カンスト総額を超える🪙を渡すと
+       6段目(×2.5の幾何級数)へ突入し、🪙が尽きるまで安い順に買い続けて必ず止まる */
+    const oldFull=W.SV_META.length*W.SV_META_COST.reduce((a,b)=>a+b,0); // 旧・全系統Lv5の総額(🪙205,000)
+    const gg={gold:oldFull+W.svMetaCost(5), sv:{clears:{}, meta:{}}};
+    const rr=W.svBuyMetaAll(gg);
+    eq(rr.count, W.SV_META.length*W.SV_META_COST.length+1, "旧カンスト+1段(6段目)まで買える");
+    ok(Object.values(gg.sv.meta).some(lv=>lv===6), "どれか1系統がLv6に");
+    ok(gg.gold<W.svMetaCost(5), "残額が最安の次段に届かなくなったら止まる");
   });
   t("選択肢: 長い訳語は文字を縮めて1行に収める(fitChoiceFont・harborのFB)", ()=>{
     const doc=W.document;
@@ -2450,8 +2537,8 @@ function run(){
   });
   t("説明は丸?ボタンに集約され、タップで開閉する(todaybgm方式)", ()=>{
     const doc=W.document;
-    W.openSVSelect();
-    const btn=doc.querySelector('#modal .help-btn[data-help="hlp-svsel"]');
+    W.renderAdv(); // v4.25.0: サバイバーの説明は冒険タブ(#svHub)の?に
+    const btn=doc.querySelector('#svHub .help-btn[data-help="hlp-svsel"]');
     const note=doc.getElementById("hlp-svsel");
     ok(btn && note, "?ボタンと注釈がある");
     ok(note.hidden, "注釈は畳まれている");
@@ -2461,7 +2548,6 @@ function run(){
     eq(btn.getAttribute("aria-expanded"), "true", "aria-expanded連動");
     btn.click();
     ok(note.hidden, "もう一度タップで閉じる");
-    W.closeModal();
     W.openSettings();
     ok(doc.querySelector('#modal .help-btn[data-help="hlp-upd"]'), "設定(更新)にも?");
     ok(doc.getElementById("hlp-upd").hidden, "畳まれている");
@@ -2567,7 +2653,17 @@ async function runAsync(W){
     const txt=await fetch("../css/style.css?t="+Date.now()).then(r=>r.text());
     ok(txt.indexOf(".svcol{display:contents}")>=0, "スマホはレイアウト透過(従来どおり)");
     ok(txt.indexOf("(min-width:1024px) and (pointer:fine)")>=0, "PC(マウス主体)だけで発動");
-    ok(txt.indexOf("grid-template-columns:210px")>=0, "左サイドバー化");
+    ok(txt.indexOf("grid-template-columns:220px")>=0, "左サイドバー化");
+  });
+  await ta("PCレイアウト(v4.25.0): 横幅の上限を撤廃し、グリッド系ビューは広く使う", async()=>{
+    const txt=await fetch("../css/style.css?t="+Date.now()).then(r=>r.text());
+    const pc=txt.slice(txt.indexOf("(min-width:1024px) and (pointer:fine)"));
+    ok(pc.indexOf("body{max-width:none")>=0, "bodyの980px上限を撤廃=画面幅いっぱい");
+    ok(pc.indexOf("main#partyView,main#gachaView,main#advView{max-width:1120px}")>=0, "グリッド系ビューは広く");
+    ok(pc.indexOf(".tilegrid{grid-template-columns:repeat(4,1fr)}")>=0, "ホームのタイルは4列");
+    ok(pc.indexOf("#cardGrid{grid-template-columns:repeat(auto-fill, minmax(150px,1fr))}")>=0, "カード一覧は列が自動で増える");
+    ok(pc.indexOf("#svStageList{display:grid")>=0, "冒険のステージ一覧はグリッド");
+    ok(pc.indexOf("main#svView{max-width:1520px")>=0, "サバイバー2カラムも広く");
   });
   await ta("repairCaches: キャッシュ内の古い資産を最新の内容に置き換える", async()=>{
     ok("caches" in W, "Cache API");

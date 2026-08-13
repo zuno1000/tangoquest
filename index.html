@@ -12,7 +12,7 @@
        灰色に塗られるiOSバグがある(IMG_1673)→ main.js の初回自動リロードで回避 -->
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="theme-color" content="#E8EDF5">
-<meta name="description" content="LEXICA(レキシカ) ─ 英単語を解いてカードを集め、ダンジョンを攻略する単語学習RPG。">
+<meta name="description" content="LEXICA(レキシカ) ─ 英単語を解いてカードを集め、押し寄せる敵をしのぐ単語学習サバイバーRPG。">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -39,7 +39,6 @@
 
 <!-- ============ 学習(クイズ) ============ -->
 <main id="quizView" class="hidden">
-  <div id="infPill"><span>🌀 無限回廊</span><b id="infPillTxt"></b></div>
   <div id="promptCard">
     <span id="qBadge">新規</span>
     <span id="qCount"></span>
@@ -98,16 +97,9 @@
   </div>
 </main>
 
-<!-- ============ 冒険 ============ -->
+<!-- ============ 冒険(v4.25.0: サバイバー一本化 ─ 中身はsv.jsのrenderAdvが描く) ============ -->
 <main id="advView" class="hidden">
-  <!-- 単語のサバイバー(β・v4.20.0): 撤去するときはこのパネルとsvView・js/sv.jsを消すだけ -->
-  <div class="panel sventry" id="svEntry" style="margin-top:6px">
-    <div class="row"><div class="grow" style="font-weight:800">💫 単語のサバイバー <span class="svbeta">β</span></div><b>›</b></div>
-    <div class="small" style="margin-top:3px">正解のバーストで敵をしのぐローグライク</div>
-  </div>
-  <div class="panel" id="infPanel" style="margin-top:12px"></div>
-  <h2>ダンジョン</h2>
-  <div id="dungeonList"></div>
+  <div id="svHub"></div>
 </main>
 
 <!-- ============ 単語のサバイバー(β・冒険タブから入る) ============ -->

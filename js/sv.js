@@ -1,12 +1,12 @@
 "use strict";
-/* ================= 単語のサバイバー(サバイバー系ローグライク・β / v4.20.0) =================
-   「クイズを解くこと」がそのまま生存戦術になる新モード。冒険タブから遊ぶ。
+/* ================= 単語のサバイバー(サバイバー系ローグライク / v4.20.0〜) =================
+   「クイズを解くこと」がそのまま生存戦術になるモード。
    単語の防衛線(TD・v4.14〜4.19)を置き換える形で導入(2026-08-12ユーザー方針)。
+   v4.25.0で旧ダンジョン(オート戦闘)・無限回廊を置き換え、冒険タブのメインコンテンツに
+   昇格(βを卒業)。冒険タブの中身(#svHub)はこのファイルのrenderAdvが描く。
 
-   ■ 可逆性の約束(防衛線と同じ):
+   ■ 学習タブとの約束(防衛線から継承):
    既存の学習タブ(quiz.js・quizViewのUI)には一切手を入れない。
-   このモードは js/sv.js(本ファイル)+ index.htmlのsvView/svEntryブロック+
-   CSSのv4.20.0ブロック+TABSの1行だけで成立しており、それらを消せば元に戻る。
    学習の計上(SRS・日別記録・🎫・XP・カード)は学習タブと同一の帳簿付けを
    行うため、このモードで解いた分も正史の学習記録になる。
 
@@ -64,15 +64,21 @@ const SV_SATRNG={
   c10:3, c22:3, c33:3,                                          // 大魔法・打ち上げ
 };
 
-/* ---- Phase3(v4.21.0): 永続強化「サバイバーの心得」・日替わりチャレンジ ---- */
+/* ---- Phase3(v4.21.0): 永続強化「サバイバーの心得」・日替わりチャレンジ ----
+   v4.25.0: 上限(max)を撤廃 ─ 何段でも修められる。6段目からは費用が×2.5ずつ
+   跳ね上がる幾何級数=無限のgoldシンク(冒険=サバイバー一本化で🪙の行き先を太くする) */
 const SV_META=[
-  {id:"hp",   ic:"❤️", name:"体力の心得", desc:"自機の最大HP +6%/Lv",       max:5},
-  {id:"pow",  ic:"⚔",  name:"威力の心得", desc:"すべての攻撃 +5%/Lv",       max:5},
-  {id:"rate", ic:"⏩", name:"詠唱の心得", desc:"自動発火の間隔 -4%/Lv",     max:5},
-  {id:"gem",  ic:"🔷", name:"集中の心得", desc:"ラン開始時に◆+1/Lv",        max:3},
-  {id:"gold", ic:"💰", name:"金運の心得", desc:"獲得🪙 +8%/Lv",             max:5},
+  {id:"hp",   ic:"❤️", name:"体力の心得", desc:"自機の最大HP +6%/Lv"},
+  {id:"pow",  ic:"⚔",  name:"威力の心得", desc:"すべての攻撃 +5%/Lv"},
+  {id:"rate", ic:"⏩", name:"詠唱の心得", desc:"自動発火の間隔 -4%/Lv"},
+  {id:"gem",  ic:"🔷", name:"集中の心得", desc:"ラン開始時に◆+1/Lv(あふれた分は開始時レベルに)"},
+  {id:"gold", ic:"💰", name:"金運の心得", desc:"獲得🪙 +8%/Lv"},
 ];
-const SV_META_COST=[500,1500,4000,10000,25000]; // Lv1→2→…の🪙(恒常ガチャと並ぶgoldシンク)
+const SV_META_COST=[500,1500,4000,10000,25000]; // Lv1→5の🪙。6段目以降はsvMetaCostが外挿する
+function svMetaCost(lv){
+  if(lv<SV_META_COST.length) return SV_META_COST[lv];
+  return Math.round(SV_META_COST[SV_META_COST.length-1]*Math.pow(2.5, lv-SV_META_COST.length+1));
+}
 /* 日替わりの修飾(その日のルール)。mは敵・湧き・🪙への係数 */
 const SV_DAILY_MODS=[
   {id:"horde", name:"大群の日", desc:"敵の数+40%・敵HP-20%", m:{spawn:0.7, ehp:0.8,  eatk:1,   espd:1,   gmult:1}},
@@ -96,33 +102,36 @@ const SV_EL_DECAY=0.93;        // 180秒以降の湧き間隔: 毎分-7%
    v4.22.0でシナジー基盤に拡張: rule=trueのものは「オンヒット規則」として
    b.rulesに積まれ、svHit(全攻撃の一本道)で自動発火する=武器/バースト/なかま/
    反撃のどれにも波及して、固定コンボ表なしで創発する(v3呪文文法と同じ思想)。
-   rare=trueは出現率が低く、宝箱の3択では優先して出る。maxは取得回数の上限 */
+   rare=trueは出現率が低く、宝箱の3択では優先して出る。
+   v4.25.0: 取得回数の上限(max)を全撤廃 ─ 何度でも重ねられる(実機FBによる無制限開放)。
+   逓減・下限で壊れない設計: 発火間隔はsvTickの下限500ms・被弾は最低1ダメージ・
+   rate/guardは乗算逓減(0.82^n/0.85^n)なので、無限に積んでもゼロ・無敵にはならない */
 const SV_UPGRADES=[
   // 基本: 数値の底上げ(従来の6種+効果はそのまま)
-  {id:"pow",  ic:"⚔",  name:"言霊の研磨",   desc:"すべての攻撃の威力 +25%", max:5},
-  {id:"rate", ic:"⏩", name:"詠唱加速",     desc:"自動発火の間隔 -18%", max:5},
-  {id:"burst",ic:"💥", name:"会心の正解",   desc:"正解バーストの威力 +35%", max:5},
-  {id:"heal", ic:"🌿", name:"いやしの言葉", desc:"いますぐHP40%回復 & 最大HP +10%", max:5},
-  {id:"guard",ic:"🛡", name:"まもりの言霊", desc:"受けるダメージ -15%", max:5},
-  {id:"gold", ic:"💰", name:"金運の言霊",   desc:"獲得ゴールド +30%", max:5},
+  {id:"pow",  ic:"⚔",  name:"言霊の研磨",   desc:"すべての攻撃の威力 +25%"},
+  {id:"rate", ic:"⏩", name:"詠唱加速",     desc:"自動発火の間隔 -18%"},
+  {id:"burst",ic:"💥", name:"会心の正解",   desc:"正解バーストの威力 +35%"},
+  {id:"heal", ic:"🌿", name:"いやしの言葉", desc:"いますぐHP40%回復 & 最大HP +10%"},
+  {id:"guard",ic:"🛡", name:"まもりの言霊", desc:"受けるダメージ -15%"},
+  {id:"gold", ic:"💰", name:"金運の言霊",   desc:"獲得ゴールド +30%"},
   // 基本: オンヒット規則(すべての攻撃に乗る)
-  {id:"crit", ic:"🎯", name:"会心の言霊",   desc:"すべての攻撃が12%で会心(2倍)。重ねると+8%", max:3, rule:1},
-  {id:"burn", ic:"🔥", name:"延焼",         desc:"攻撃した敵が燃える(3秒かけて追加ダメージ)", max:3, rule:1},
-  {id:"chill",ic:"❄️", name:"氷結",         desc:"攻撃した敵の足が凍えて遅くなる", max:3, rule:1},
-  {id:"thorn",ic:"🌵", name:"トゲの言霊",   desc:"殴られたとき、その敵に自動で反撃する", max:3, rule:1},
-  {id:"wave", ic:"🌊", name:"衝波",         desc:"正解バーストのたび敵を押し返す", max:3, rule:1},
-  {id:"reso", ic:"🎼", name:"共鳴",         desc:"なかまの攻撃 +30%", max:3, rule:1},
-  {id:"cheer",ic:"📯", name:"鼓舞",         desc:"正解バーストになかまも一斉参加する", max:2, rule:1},
+  {id:"crit", ic:"🎯", name:"会心の言霊",   desc:"すべての攻撃が12%で会心(2倍)。重ねると+8%", rule:1},
+  {id:"burn", ic:"🔥", name:"延焼",         desc:"攻撃した敵が燃える(3秒かけて追加ダメージ)", rule:1},
+  {id:"chill",ic:"❄️", name:"氷結",         desc:"攻撃した敵の足が凍えて遅くなる", rule:1},
+  {id:"thorn",ic:"🌵", name:"トゲの言霊",   desc:"殴られたとき、その敵に自動で反撃する", rule:1},
+  {id:"wave", ic:"🌊", name:"衝波",         desc:"正解バーストのたび敵を押し返す", rule:1},
+  {id:"reso", ic:"🎼", name:"共鳴",         desc:"なかまの攻撃 +30%", rule:1},
+  {id:"cheer",ic:"📯", name:"鼓舞",         desc:"正解バーストになかまも一斉参加する", rule:1},
   // v4.24.0: なかま自体の戦い方を強化する規則(実機FB「攻撃速度・攻撃範囲の強化が欲しい」)
-  {id:"haste",ic:"🐎", name:"早駆け",       desc:"なかまの攻撃間隔 -15%", max:3, rule:1},
-  {id:"reach",ic:"🔭", name:"遠見",         desc:"なかまの射程 +30%", max:3, rule:1},
+  {id:"haste",ic:"🐎", name:"早駆け",       desc:"なかまの攻撃間隔 -15%", rule:1},
+  {id:"reach",ic:"🔭", name:"遠見",         desc:"なかまの射程 +30%", rule:1},
   // レア: ランを塗り替える規則(宝箱の3択で優先)
-  {id:"chain",ic:"⚡", name:"連鎖",         desc:"攻撃が近くの敵へ稲妻で連鎖する", max:2, rule:1, rare:1},
-  {id:"echo", ic:"🌀", name:"やまびこ",     desc:"正解バーストがもう一度響く(50%威力)", max:2, rule:1, rare:1},
-  {id:"exec", ic:"💀", name:"処刑",         desc:"HPが残りわずかな敵を即座に討ち取る(ボス以外)", max:2, rule:1, rare:1},
-  {id:"blast",ic:"🎆", name:"爆散",         desc:"倒した敵が爆発して周囲を巻き込む", max:2, rule:1, rare:1},
-  {id:"ovh",  ic:"🔰", name:"あふれる癒し", desc:"あふれた回復がシールドになる(最大HP30%まで)", max:2, rule:1, rare:1},
-  {id:"bond", ic:"👥", name:"絆",           desc:"なかまの枠 +1(最大5体)", max:2, rule:1, rare:1},
+  {id:"chain",ic:"⚡", name:"連鎖",         desc:"攻撃が近くの敵へ稲妻で連鎖する", rule:1, rare:1},
+  {id:"echo", ic:"🌀", name:"やまびこ",     desc:"正解バーストがもう一度響く(50%威力)", rule:1, rare:1},
+  {id:"exec", ic:"💀", name:"処刑",         desc:"HPが残りわずかな敵を即座に討ち取る(ボス以外)", rule:1, rare:1},
+  {id:"blast",ic:"🎆", name:"爆散",         desc:"倒した敵が爆発して周囲を巻き込む", rule:1, rare:1},
+  {id:"ovh",  ic:"🔰", name:"あふれる癒し", desc:"あふれた回復がシールドになる(最大HP30%まで)", rule:1, rare:1},
+  {id:"bond", ic:"👥", name:"絆",           desc:"なかまの枠 +1", rule:1, rare:1},
 ];
 
 /* ---- 純関数(テスト対象) ---- */
@@ -176,11 +185,13 @@ function svEndlessSpawnIv(tMs){
     Math.round(SV_SPAWN1*Math.pow(SV_EL_DECAY, (tMs-SV_STAGE_SEC*1000)/60000)));
 }
 
-/* 心得(永続強化)のボーナス(純関数)。metaは G.sv.meta = {id→Lv} */
+/* 心得(永続強化)のボーナス(純関数)。metaは G.sv.meta = {id→Lv}。
+   v4.25.0 上限撤廃: rateMは0で頭打ち(発火間隔はさらにsvTickの下限500msが受け止める)、
+   gem0は無制限(あふれた◆はsvNewRunが開始時レベル+3択予約に変換する) */
 function svMetaBonus(meta){
   meta=meta||{};
   return {hpM:1+0.06*(meta.hp||0), powM:1+0.05*(meta.pow||0),
-          rateM:1-0.04*(meta.rate||0), gem0:Math.min(meta.gem||0, SV_GEM_LV0-1),
+          rateM:Math.max(0, 1-0.04*(meta.rate||0)), gem0:(meta.gem||0),
           goldM:1+0.08*(meta.gold||0)};
 }
 /* 心得の購入(純関数寄り: gはG互換の{gold, sv}構造)。買えなければnull */
@@ -188,8 +199,8 @@ function svBuyMeta(g, id){
   g.sv=g.sv||{clears:{}}; g.sv.meta=g.sv.meta||{};
   const def=SV_META.find(x=>x.id===id);
   const lv=(g.sv.meta[id]||0);
-  if(!def || lv>=def.max) return null;
-  const cost=SV_META_COST[lv];
+  if(!def) return null;
+  const cost=svMetaCost(lv);
   if((g.gold||0)<cost) return null;
   g.gold-=cost;
   g.sv.meta[id]=lv+1;
@@ -203,9 +214,7 @@ function svBuyMetaAll(g, dryRun){
   for(;;){
     let best=null;
     for(const m of SV_META){
-      const lv=meta[m.id]||0;
-      if(lv>=m.max) continue;
-      const cost=SV_META_COST[lv];
+      const cost=svMetaCost(meta[m.id]||0); // 上限なし(v4.25.0)。費用が幾何級数なので必ず止まる
       if(cost<=gold && (!best || cost<best.cost)) best={id:m.id, cost};
     }
     if(!best) break;
@@ -317,6 +326,8 @@ function svNewRun(d, P, rustN, opts){
     endless, bossKills:0,
     bossAt:endless? SV_EL_BOSS_IV : SV_STAGE_SEC*1000, bossOn:false,
     over:false, win:false};
+  // 集中の心得の上限撤廃(v4.25.0): 開始◆が必要数を超えた分は開始時レベル+3択予約に変換
+  while(b.gem>=svXpNext(b.lv)){ b.gem-=svXpNext(b.lv); b.lv++; b.lvups++; }
   b.weapons=b.P.cls.map((cl,i)=>(
     {V:cl.V, vt:cl.vt, w:cl.w, rep:cl.rep, name:cl.name, cd:600+i*700})); // 初弾は時間差
   return b;
@@ -703,13 +714,15 @@ function svApplyUpgrade(b, id){
     // オンヒット規則: Lvを積むだけ。発火はsvHit/svBurst/svTickの一本道が担う
     b.rules=b.rules||{};
     b.rules[id]=(b.rules[id]||0)+1;
-    if(id==="bond") b.satMax=Math.min(5, SV_SAT_MAX+b.rules.bond); // 絆: なかま枠+1(最大5)
+    if(id==="bond") b.satMax=SV_SAT_MAX+b.rules.bond; // 絆: なかま枠+1(v4.25.0で上限撤廃)
     return;
   }
+  /* rate/guardの下限(0.4)はv4.25.0で撤廃 ─ 乗算逓減でゼロには届かず、
+     発火間隔はsvTickの下限500ms・被弾は最低1ダメージが最後の受け皿になる */
   if(id==="pow") u.pow*=1.25;
-  else if(id==="rate") u.rate=Math.max(0.4, u.rate*0.82);
+  else if(id==="rate") u.rate*=0.82;
   else if(id==="burst") u.burst*=1.35;
-  else if(id==="guard") u.guard=Math.max(0.4, u.guard*0.85);
+  else if(id==="guard") u.guard*=0.85;
   else if(id==="gold") u.gold*=1.3;
   else if(id==="heal"){
     b.hpMax=Math.round(b.hpMax*1.1);
@@ -774,6 +787,7 @@ function svStart(d, extra){
   if(svLoop){ clearInterval(svLoop); svLoop=null; }
   // 心得(永続強化)は常に反映。extra=デイリーの修飾・品詞しばりなど
   const opts=Object.assign({meta:(G.sv&&G.sv.meta)||null}, extra||{});
+  track("run"); // 冒険=サバイバー一本化(v4.25.0): 任務「1回挑む」の計上はここが担う
   SV=svNewRun(d, playerStats(), svRustCount(), opts);
   SV._d=d;
   SV._extra=extra||null; // 「もう一度」で同じ条件を引き継ぐ
@@ -1091,9 +1105,14 @@ function svFinish(){
       (newBest? ' <span style="color:var(--accent); font-weight:800">🏅新記録!</span>' : '<br>ベスト: '+Math.floor((rec.endless.best)/60)+":"+String(rec.endless.best%60).padStart(2,"0"))+
       '<br>倒した分の <b>🪙'+fmt(SV.gold)+'</b> と、解いた分の🎫・XP・カードはすべて持ち帰っている。</div>';
   }else if(SV.win){
+    /* 冒険=サバイバー一本化(v4.25.0): 初生還🪙3000(旧ダンジョンの初クリア相当)+
+       本日初生還🪙1000(旧・本日初クリア相当)。任務・実績の「クリア」計上もここが担う */
     const first=!(rec.clears[SV.id]>0);
-    let bonus=Math.round(60*SV.tier*SV.tier)+(first? 1000:0);
+    const firstToday=rec.winDay!==todayKey();
+    let bonus=Math.round(60*SV.tier*SV.tier)+(first? 3000:0)+(firstToday? 1000:0);
     rec.clears[SV.id]=(rec.clears[SV.id]||0)+1;
+    rec.winDay=todayKey();
+    track("clear");
     // デイリーチャレンジの初回勝利ボーナス(1日1回。日付はdailyDoneに記録=同期対象)
     let dailyGot=0;
     if(SV.dailyRun && rec.dailyDone!==todayKey()){
@@ -1105,7 +1124,8 @@ function svFinish(){
     html='<h3>🎉 生還!</h3>'+
       '<div class="small" style="text-align:center; margin-top:6px">'+SV.icon+' '+esc(SV.name)+' ─ ボスを討ち取った(💀'+SV.kills+'体)</div>'+
       '<div class="giftbox" style="margin-top:10px">報酬 <b>🪙'+fmt(SV.gold+bonus)+'</b>'+
-      (first? '<br><span class="small">はじめての生還ボーナス +🪙1000!</span>':'')+
+      (first? '<br><span class="small">はじめての生還ボーナス +🪙3000!</span>':'')+
+      (firstToday&&!first? '<br><span class="small">本日最初の生還 +🪙1000!</span>':'')+
       (dailyGot? '<br><span class="small">📅 今日のチャレンジ達成 +🪙'+fmt(dailyGot)+'!</span>':'')+'</div>';
   }else{
     G.gold+=SV.gold;
@@ -1130,17 +1150,16 @@ function svOpenMeta(){
   const rec=svRec(); rec.meta=rec.meta||{};
   let h='<h3>📜 サバイバーの心得 '+helpBtn("hlp-svmeta")+'</h3>'+
     helpNote("hlp-svmeta", '🪙で修める永続強化。すべてのラン(次の出撃から)に効く。'+
+      '<b>上限なし</b> ─ 何段でも修められる(6段目からは費用が段ごとに×2.5)。'+
       '「一括で修める」は安い順に買えるだけ買う(総レベルがいちばん増える買い方)');
   SV_META.forEach(m=>{
     const lv=rec.meta[m.id]||0;
-    const cost=lv<m.max? SV_META_COST[lv] : null;
+    const cost=svMetaCost(lv); // 上限なし(v4.25.0)
     h+='<div class="row svmeta">'+
       '<span class="svupic">'+m.ic+'</span>'+
-      '<span class="grow"><b>'+m.name+'</b> <span class="small">Lv'+lv+'/'+m.max+'</span>'+
+      '<span class="grow"><b>'+m.name+'</b> <span class="small">Lv'+lv+'</span>'+
       '<br><span class="small">'+m.desc+'</span></span>'+
-      (cost!=null
-        ? '<button class="btn" data-meta="'+m.id+'" '+(G.gold<cost? "disabled":"")+'>🪙'+fmt(cost)+'</button>'
-        : '<span class="small" style="color:var(--ok); font-weight:800">MAX</span>')+
+      '<button class="btn" data-meta="'+m.id+'" '+(G.gold<cost? "disabled":"")+'>🪙'+fmtShort(cost)+'</button>'+
       '</div>';
   });
   // 一括強化(v4.23.0実機FB): 押す前に「何段・いくら」を見せる=確認ダイアログ不要
@@ -1169,27 +1188,37 @@ function svOpenMeta(){
   };
 }
 
-/* ステージ選択(冒険タブの入口パネルから)。解放条件は冒険のダンジョンと共通 */
-function openSVSelect(){
+/* ---- 冒険タブ本体(v4.25.0: 冒険=サバイバー一本化) ----
+   旧ダンジョン(オート戦闘)と無限回廊を廃止し、サバイバーのハブを冒険タブ直下に描く。
+   ステージ定義(DUNGEONS)と解放連鎖(dgUnlocked)は続投 ─ 解放は「サバイバーで生還」が
+   進める(旧ダンジョンのクリア記録でも解放済みのまま=既存プレイヤーの進行を失わない)。
+   旧openSVSelect(モーダル)の置き換え。TABS.adv.on()から呼ばれる */
+function renderAdv(){
+  const box=$("svHub"); if(!box) return;
   const rec=svRec();
-  // 遊び方の長文は?に集約(v4.23.0): 画面には選ぶものだけを並べる
-  let h='<h3>💫 単語のサバイバー(β) '+helpBtn("hlp-svsel")+'</h3>'+
+  let h='<div class="row" style="align-items:center; margin-top:4px; gap:8px">'+
+    '<div class="grow" style="font-weight:800; font-size:17px">💫 単語のサバイバー '+helpBtn("hlp-svsel")+'</div>'+
+    '<button class="btn" id="svMetaBtn">📜 心得</button></div>'+
     helpNote("hlp-svsel", '全方位から押し寄せる敵をしのぐ<b>サバイバー系ローグライク</b>。'+
     'あなたは中央で呪文を自動詠唱し続ける ─ 動詞で撃ち方が変わる(強撃=一点/貫通=ビーム/吸収=HP回復/連撃=2体)。<br>'+
     '<b>正解=全武器の一斉バースト+◆ジェム</b>(コンボで威力・獲得数UP)。◆が貯まると<b>レベルアップの3択</b>: '+
     '約20種の強化・<b>オンヒット規則</b>(会心・延焼・連鎖・爆散など=武器にもなかまにも乗って組み合わさる)・'+
-    '<b>なかまの召喚</b>(周回して自動攻撃・戦闘スタイルはスキルで変わる)から選ぶ。<br>'+
+    '<b>なかまの召喚</b>(周回して自動攻撃・戦闘スタイルはスキルで変わる)から選ぶ。<b>どの強化も取得回数に上限はない</b>。<br>'+
     'ときどき<b>🎁宝箱スライム</b>が横切る(倒すと🪙+<b>レア規則優先</b>の3択・逃すと消える)。時間が経つほど敵は増え、<b>エリート</b>(強いが🪙4倍)も混ざる。<br>'+
     '時間が流れるのは<b>出題中と答え合わせ中</b>(3択・離脱中は完全停止)。'+SV_STAGE_SEC+'秒生きのびるとボスが出現、倒せば勝利!<br>'+
-    '倒した敵の🪙は<b>勝っても負けても全額持ち帰り</b>。解いた分は<b>ふつうの学習として記録される</b>(今日の目安・🎫・カードすべて)。<br>'+
-    '編成は出撃時のスナップショットで固定。⏳復習期限切れの野生語は言霊が錆びる(-6%/枚)。')+
-    '<button class="btn" id="svMetaBtn" style="margin-top:10px; width:100%">📜 サバイバーの心得(🪙で永続強化)</button>';
+    '倒した敵の🪙は<b>勝っても負けても全額持ち帰り</b>(初生還🪙3000・本日最初の生還🪙1000)。解いた分は<b>ふつうの学習として記録される</b>(今日の目安・🎫・カードすべて)。<br>'+
+    '生還すると次のステージが解放される。編成は出撃時のスナップショットで固定。⏳復習期限切れの野生語は言霊が錆びる(-6%/枚)。');
+  if(SV && !SV.over){
+    h+='<button class="btn primary" id="svResumeBtn" style="margin-top:10px; width:100%">▶ 戦闘に戻る('+esc(SV.name)+')</button>'+
+      '<div class="small" style="margin-top:4px">離れている間、時間は止まっている</div>';
+  }
   // 日替わりチャレンジ: 解放済みステージ×修飾×品詞しばり(初回勝利に🪙ボーナス)
   const un=DUNGEONS.filter((d,i)=>dgUnlocked(i));
   const dc=svDailyFor(todayKey(), un.length);
   const ds=un[dc.idx];
   const dDone=rec.dailyDone===todayKey();
-  h+='<div class="panel svdaily">'+
+  h+='<div class="svhub2">'+
+    '<div class="panel svdaily">'+
     '<div style="font-weight:800">📅 今日のチャレンジ'+(dDone? ' <span style="color:var(--ok)">✓達成</span>':'')+' '+helpBtn("hlp-svdaily")+'</div>'+
     helpNote("hlp-svdaily", '毎日ちがうステージ×ルール×品詞しばりが日替わりで出る。初回勝利に🪙ボーナス(明日は別の内容)')+
     '<div class="small">'+ds.icon+' '+esc(ds.name)+' ・ <b>'+dc.mods.name+'</b>('+dc.mods.desc+')'+
@@ -1200,27 +1229,33 @@ function openSVSelect(){
   const er=rec.endless||{best:0, kills:0};
   h+='<div class="panel svdaily">'+
     '<div style="font-weight:800">🏜️ 終わりなき荒野 <span class="svbeta">∞</span> '+helpBtn("hlp-svend")+'</div>'+
-    helpNote("hlp-svend", '勝利のない無限モード。敵は1分ごとに深いダンジョンのものへ入れ替わり、'+
+    helpNote("hlp-svend", '勝利のない無限モード。敵は1分ごとに深いステージのものへ入れ替わり、'+
       '2分ごとにボスが乱入する(倒しても終わらない)。属性相性なし。'+
       '倒れるまで戦うか、画面上の🏳でいつでも切り上げて🪙と記録を持ち帰れる')+
     '<div class="small">倒れるまで戦う無限モード'+
     (er.best? ' ・ ベスト: <b>⏱'+Math.floor(er.best/60)+":"+String(er.best%60).padStart(2,"0")+'</b> ・ 💀'+er.kills : '')+'</div>'+
     '<button class="btn" id="svEndlessBtn" style="margin-top:8px; width:100%">挑戦する</button>'+
-    '</div>';
-  if(SV && !SV.over){
-    h+='<button class="btn primary" id="svResumeBtn" style="margin-top:10px; width:100%">▶ 戦闘に戻る('+esc(SV.name)+')</button>'+
-      '<div class="small" style="margin-top:4px">離れている間、時間は止まっている</div>';
-  }
-  h+='<div style="margin-top:10px" id="svStageList">';
+    '</div></div>';
+  // ステージ一覧: 解放済み=挑戦可・未解放=🔒(前のステージで生還すると解放)
+  h+='<div style="font-weight:800; font-size:15px; margin:14px 4px 2px">ステージ</div><div id="svStageList">';
   DUNGEONS.forEach((d,i)=>{
-    if(!dgUnlocked(i)) return;
+    const unl=dgUnlocked(i);
     const n=rec.clears[d.id]||0;
-    h+='<button class="btn svstage" data-i="'+i+'" style="width:100%; margin-top:8px; text-align:left">'+
-      d.icon+' '+esc(d.name)+' <span class="small">tier'+d.tier+' ・ 推奨 '+fmt(recPower(d))+
-      (n? ' ・ ✓'+n : '')+'</span></button>';
+    if(unl){
+      h+='<button class="btn svstage" data-i="'+i+'">'+
+        '<span class="svstic">'+d.icon+'</span><span class="grow" style="text-align:left"><b>'+esc(d.name)+'</b>'+
+        (n? ' <span class="dclear">✓'+n+'</span>':'')+
+        '<br><span class="small">tier'+d.tier+' ・ '+ELEM_ICON[d.elem]+ELEM_NAME[d.elem]+'属性'+
+        (d.trait? ' ・ '+TRAITS[d.trait].ic+TRAITS[d.trait].name:'')+
+        ' ・ 推奨 '+fmt(recPower(d))+'</span></span></button>';
+    }else{
+      h+='<button class="btn svstage locked" disabled>'+
+        '<span class="svstic">🔒</span><span class="grow" style="text-align:left"><b>'+esc(d.name)+'</b>'+
+        '<br><span class="small">前のステージで生還すると解放</span></span></button>';
+    }
   });
   h+='</div>';
-  openModal(h);
+  box.innerHTML=h;
   $("svMetaBtn").onclick=svOpenMeta;
   $("svDailyBtn").onclick=()=>{
     if(SV && !SV.over) svCleanup();
@@ -1231,8 +1266,8 @@ function openSVSelect(){
     svStart(SV_ENDLESS);
   };
   const rb=$("svResumeBtn");
-  if(rb) rb.onclick=()=>{ closeModal(); switchTab("sv"); svRestore(); };
-  $("svStageList").querySelectorAll(".svstage").forEach(b=>{
+  if(rb) rb.onclick=()=>{ switchTab("sv"); svRestore(); };
+  $("svStageList").querySelectorAll(".svstage[data-i]").forEach(b=>{
     b.onclick=()=>{
       if(SV && !SV.over) svCleanup(); // 進行中のランは破棄して新しく始める
       svStart(DUNGEONS[+b.dataset.i]);
@@ -1241,7 +1276,6 @@ function openSVSelect(){
 }
 
 /* ---- 静的DOMへのバインド ---- */
-$("svEntry").onclick=openSVSelect;
 $("svBack").onclick=()=>switchTab("adv"); // ランは保持(時間停止・入口から「戦闘に戻る」)
 /* 🏳=荒野(無限)を死亡以外で自主的に切り上げる(v4.24.0実機FB)。
    確認モーダルが開いている間は時間停止(svShouldPauseのmodalOpen)なので焦らず選べる */

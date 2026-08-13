@@ -172,6 +172,9 @@ function mergeData(a, b){
   for(const k in bsm) m.sv.meta[k]=Math.max(m.sv.meta[k]||0, bsm[k]||0);
   const bdd=(b.sv&&b.sv.dailyDone)||"";
   if(bdd && bdd>(m.sv.dailyDone||"")) m.sv.dailyDone=bdd; // YYYY-MM-DDは辞書順=時系列
+  // 本日初生還ボーナスの受取日(v4.25.0): dailyDoneと同じ日付文字列マージ=二重取り防止
+  const bwd=(b.sv&&b.sv.winDay)||"";
+  if(bwd && bwd>(m.sv.winDay||"")) m.sv.winDay=bwd;
   // 終わりなき荒野の記録: ベスト秒数・キルとも多い方(v4.22.0)
   const bel=(b.sv&&b.sv.endless)||null;
   if(bel || m.sv.endless){
@@ -325,6 +328,7 @@ function partialResetData(g, t){
     dungeons:g.dungeons||{}, inf:{best:(g.inf&&g.inf.best)||0, run:null},
     sv:{clears:(g.sv&&g.sv.clears)||{}, meta:(g.sv&&g.sv.meta)||{},
         dailyDone:(g.sv&&g.sv.dailyDone)||null,
+        winDay:(g.sv&&g.sv.winDay)||null,
         endless:(g.sv&&g.sv.endless)||null}, // サバイバーの記録・心得・荒野は冒険の記録として残す
     daily:g.daily||{}, weekly:g.weekly||{}, counters:g.counters||{}, ach:g.ach||{},
     login:g.login||{last:null,day:0}, gift10:g.gift10||0,
@@ -391,7 +395,7 @@ function openSettings(){
   $("resetLearnBtn").onclick=()=>{
     openModal('<h3>学習記録とカードをリセットする？</h3>'+
       '<div class="small" style="line-height:1.7">消えるもの: 単語の学習記録(SRS・学習のあゆみ)・単語カード・かけら・学習ペースの目標。<br>'+
-      '残るもの: なかま(突破・カスタムアイコン)・🪙・🎫・レベル(XP)・ダンジョンや任務の記録。'+
+      '残るもの: なかま(突破・カスタムアイコン)・🪙・🎫・レベル(XP)・冒険(サバイバー)や任務の記録。'+
       (syncClientId()&&lastSyncAt()? '<br>Drive同期を使っているため、<b>他の端末も次回同期時に同じ状態になる</b>。':'')+
       '<br>この操作は取り消せない。</div>'+
       '<div class="row" style="margin-top:12px; gap:10px">'+

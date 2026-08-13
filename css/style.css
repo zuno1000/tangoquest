@@ -33,7 +33,7 @@ body{
 button{font-family:inherit; color:var(--ink)}
 
 /* Soft UI 影レシピ: 浮き(raised)と窪み(inset) */
-.panel,.ccard,.tile,.dnode,.charcard,.gres,.gbanner,.hero,
+.panel,.ccard,.tile,.charcard,.gres,.gbanner,.hero,
 .choice,.wslot.filled,.eqhero{
   box-shadow:-5px -5px 10px var(--shl), 5px 5px 10px var(--shd);
 }
@@ -87,11 +87,6 @@ nav button .dot{position:absolute; top:-2px; right:-8px; width:9px; height:9px; 
 
 /* ---- quiz ---- */
 #quizView{display:flex; flex-direction:column; overflow:hidden}
-#infPill{display:none; align-items:center; gap:6px; background:var(--bg);
-  border-radius:999px; padding:7px 14px; font-size:12px; color:var(--sub); margin-bottom:6px; cursor:pointer;
-  box-shadow:-3px -3px 6px var(--shl), 3px 3px 6px var(--shd)}
-#infPill.show{display:flex}
-#infPill b{color:var(--accent)}
 #promptCard{
   background:var(--card2); border-radius:24px; padding:14px 16px; text-align:center;
   position:relative; flex:0 0 auto;
@@ -231,24 +226,8 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
   display:flex; align-items:center; justify-content:center; font-size:30px; flex:0 0 auto;
   box-shadow:inset 3px 3px 6px var(--shd), inset -3px -3px 6px var(--shl)}
 
-/* ---- dungeon map(蛇行パス) ---- */
-#dungeonList{position:relative; padding:4px 0}
-#dungeonList::before{content:""; position:absolute; left:50%; top:8px; bottom:8px; width:4px;
-  background:var(--bg2); border-radius:3px;
-  box-shadow:inset 1px 1px 3px var(--shd), inset -1px -1px 3px var(--shl)}
-.dnode{position:relative; width:74%; display:flex; align-items:center; gap:10px;
-  background:var(--bg); border-radius:18px; padding:13px 12px; margin-bottom:14px; cursor:pointer}
-.dnode.alt{margin-left:26%}
-.dnode.locked{opacity:.5; cursor:default}
-.dnode.current{animation:dglow 1.6s infinite alternate}
-@keyframes dglow{
-  from{box-shadow:-5px -5px 10px var(--shl), 5px 5px 10px var(--shd), 0 0 4px rgba(91,108,255,.2)}
-  to{box-shadow:-5px -5px 10px var(--shl), 5px 5px 10px var(--shd), 0 0 14px rgba(91,108,255,.55)}}
-.dnode .dic{font-size:28px; width:36px; text-align:center; flex:0 0 auto}
-.dnode .dname{font-weight:800; font-size:14px}
-.dnode .dinfo{font-size:11px; color:var(--sub); margin-top:2px}
+/* ✓クリア回数(冒険のステージ一覧で使用。旧dungeon mapから続投) */
 .dclear{color:var(--ok); font-size:11px; font-weight:800}
-.dnew{color:#fff; background:var(--accent2); font-size:10px; font-weight:800; border-radius:6px; padding:1px 6px}
 
 /* ---- 呪文の文(語順スロット): 空き=窪み / 配置済み=浮き ---- */
 #sentenceRow{display:grid; grid-template-columns:repeat(4,1fr); gap:9px}
@@ -619,7 +598,7 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
 @media (prefers-reduced-motion: reduce){ .dexprog i{animation:none} }
 
 /* ---- マイクロインタラクション ---- */
-.tile:active,.ccard:active,.dnode:active:not(.locked){filter:brightness(1.04)}
+.tile:active,.ccard:active{filter:brightness(1.04)}
 
 /* ---- 学習ペース管理(v4.7.0) ----
    今日の目安メーター: 学習タブ(#paceBar)とホーム(#homePace)で共用。
@@ -698,12 +677,15 @@ header .res span:last-child{overflow:hidden; text-overflow:ellipsis}
   object-fit:cover; border-radius:14px; margin:0 auto}
 
 
-/* ---- v4.20.0: 単語のサバイバー(β) ----
-   防衛線(v4.14〜4.19)を置き換える新モード。レイアウトの知見は継承:
+/* ---- v4.20.0: 単語のサバイバー ----
+   防衛線(v4.14〜4.19)を置き換えたモード(v4.25.0で冒険のメインに)。レイアウトの知見は継承:
    固定寸法+visibility切替で位置ずれを断つ/縦フレックスで選択肢が余白いっぱいに伸びる */
-.sventry{cursor:pointer}
-.sventry:active{transform:scale(.99)}
 .svbeta{font-size:9px; font-weight:800; color:#fff; background:var(--accent2); border-radius:6px; padding:1px 6px; vertical-align:2px}
+/* 冒険ハブ(v4.25.0: サバイバー一本化)。ステージはリスト(スマホ)/グリッド(PC) */
+.svstage{width:100%; margin-top:8px; text-align:left; display:flex; align-items:center; gap:10px}
+.svstage.locked{opacity:.5}
+.svstic{font-size:26px; width:32px; text-align:center; flex:0 0 auto}
+.svhub2 .svdaily{margin-top:10px}
 /* ビュー全体: 縦フレックス(選択肢が下部余白を全部使う) */
 #svView{display:flex; flex-direction:column; overflow:hidden}
 #svHead,#svField,#svMeta,#svPrompt,#svCtrl{flex:0 0 auto}
@@ -898,11 +880,24 @@ body.svplay #svView{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
   body{zoom:1.15}
 }
 @media (min-width:1024px) and (pointer:fine){
-  body{max-width:980px; display:grid;
-    grid-template-columns:210px minmax(0,1fr);
+  /* v4.25.0: 横幅の上限(980px)を撤廃 ─ 画面の横スペースを使い切る。
+     本文はビューごとに「広くして得をする幅」まで広げる(読み物系は読みやすい幅を保つ) */
+  body{max-width:none; display:grid;
+    grid-template-columns:220px minmax(0,1fr);
     grid-template-rows:auto minmax(0,1fr)}
   header{grid-column:2; grid-row:1}
-  main{grid-column:2; grid-row:2; width:100%; max-width:640px; justify-self:center}
+  main{grid-column:2; grid-row:2; width:100%; max-width:700px; justify-self:center}
+  /* グリッド系ビューは広く(列が自動で増える) */
+  main#homeView{max-width:900px}
+  main#partyView,main#gachaView,main#advView{max-width:1120px}
+  .tilegrid{grid-template-columns:repeat(4,1fr)}
+  #cardGrid{grid-template-columns:repeat(auto-fill, minmax(150px,1fr))}
+  #charGrid,#pickCharGrid{grid-template-columns:repeat(auto-fill, minmax(160px,1fr))}
+  #sentenceRow{grid-template-columns:repeat(auto-fill, minmax(140px,1fr))}
+  /* 冒険ハブ: デイリー/荒野を横並び・ステージ一覧はカードグリッド */
+  .svhub2{display:grid; grid-template-columns:1fr 1fr; gap:12px; align-items:stretch}
+  #svStageList{display:grid; grid-template-columns:repeat(auto-fill, minmax(330px,1fr)); gap:10px; margin-top:8px}
+  #svStageList .svstage{margin-top:0}
   /* サイドバー: 縦ナビ(アイコン+ラベルを横並びの行に) */
   nav{grid-column:1; grid-row:1/3; flex-direction:column; justify-content:flex-start;
     gap:6px; padding:18px 12px;
@@ -915,9 +910,9 @@ body.svplay #svView{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
   body.svplay #svView{padding-bottom:16px}
   /* モーダルはボトムシートではなく中央のダイアログに */
   #overlay{align-items:center; padding:24px}
-  #modal{border-radius:28px; max-width:560px; max-height:82vh}
+  #modal{border-radius:28px; max-width:640px; max-height:82vh}
   /* サバイバー: 戦場(左)とクイズ(右)の2カラム。フィールドは縦の余白いっぱいに */
-  main#svView{max-width:none; justify-self:stretch;
+  main#svView{max-width:1520px; justify-self:center;
     display:grid; grid-template-columns:minmax(0,5fr) minmax(0,6fr);
     column-gap:22px; align-items:stretch}
   #svView .svcol{display:flex; flex-direction:column; min-height:0}

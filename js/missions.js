@@ -53,15 +53,17 @@ const DAILY_DEFS=[
   {id:"dc", name:"クイズで10問正解する",      target:10, cur:d=>d.c,     rew:{t:1}},
   {id:"dc2",name:"クイズで30問正解する",      target:30, cur:d=>d.c,     rew:{t:2}},
   {id:"dk", name:"カードを5枚入手する",       target:5,  cur:d=>d.card,  rew:{g:200}},
-  {id:"dr", name:"ダンジョンに1回挑む",       target:1,  cur:d=>d.run,   rew:{g:300}},
-  {id:"dl", name:"ダンジョンを1回クリアする", target:1,  cur:d=>d.clear, rew:{g:1000}},
+  /* v4.25.0 冒険=サバイバー一本化: run/clearの計上はsv.js(svStart/svFinish)が担う。
+     idと計上フィールドは不変=過去の受取記録・同期と互換 */
+  {id:"dr", name:"サバイバーに1回挑む",       target:1,  cur:d=>d.run,   rew:{g:300}},
+  {id:"dl", name:"サバイバーで1回生還する",   target:1,  cur:d=>d.clear, rew:{g:1000}},
 ];
 const WEEKLY_DEFS=[
   {id:"wa", name:"クイズに150問答える",       target:150, cur:w=>w.a,     rew:{g:800}},
   {id:"wc", name:"クイズで80問正解する",      target:80,  cur:w=>w.c,     rew:{t:3}},
   {id:"wc2",name:"クイズで300問正解する",     target:300, cur:w=>w.c,     rew:{t:8}},
   {id:"wm", name:"カードを5回重ねる",         target:5,   cur:w=>w.merge, rew:{t:1}},
-  {id:"wl", name:"ダンジョンを5回クリアする", target:5,   cur:w=>w.clear, rew:{g:2000}},
+  {id:"wl", name:"サバイバーで5回生還する",   target:5,   cur:w=>w.clear, rew:{g:2000}},
   {id:"wp", name:"ガチャを3回引く",           target:3,   cur:w=>w.pull,  rew:{g:1000}},
 ];
 /* 実績(段階制)。学習系(正解・覚えた・カード)は🎫/冒険・ガチャ系は🪙 */
@@ -74,13 +76,17 @@ const ACH_DEFS=[
    tiers:[[10,{g:200}],[50,{t:1}],[200,{t:3}],[500,{t:5}]]},
   {id:"amrg", name:"累計重ね",       cur:()=>G.counters.merges,
    tiers:[[10,{g:300}],[50,{t:2}],[200,{t:4}],[600,{t:6}]]},
-  {id:"aclr", name:"ダンジョン累計クリア", cur:()=>G.counters.clears,
+  /* v4.25.0: 旧「ダンジョン累計クリア」を継承(counters.clearsはサバイバーの生還が進める。
+     過去のダンジョンクリア分も数に残る=実績を失わない) */
+  {id:"aclr", name:"累計生還(冒険)", cur:()=>G.counters.clears,
    tiers:[[5,{g:500}],[25,{g:2000}],[100,{g:5000}]]},
-  /* 単語のサバイバー(β): G.svはsv.jsが管理。モード撤去時もこの実績はcur=0で無害 */
+  /* 単語のサバイバー: G.svはsv.jsが管理。モード撤去時もこの実績はcur=0で無害 */
   {id:"asv", name:"サバイバー生還", cur:()=>{let n=0; const c=(G.sv&&G.sv.clears)||{}; for(const k in c) n+=c[k]; return n;},
    tiers:[[1,{g:500}],[5,{g:2000}],[15,{g:5000}],[40,{g:10000}]]},
-  {id:"ainf", name:"無限回廊 最深記録", cur:()=>G.inf.best,
-   tiers:[[10,{g:500}],[30,{g:2000}],[60,{g:3000}],[100,{g:5000}]]},
+  /* v4.25.0: 無限回廊の実績を「終わりなき荒野」の生存記録に置き換え(idも新設。
+     旧ainfの受取済みティアはG.achに残るだけで無害) */
+  {id:"aend", name:"荒野の最長生存(秒)", cur:()=>((G.sv&&G.sv.endless&&G.sv.endless.best)||0),
+   tiers:[[60,{g:500}],[180,{g:2000}],[360,{g:3000}],[600,{g:5000}],[900,{g:10000}]]},
   {id:"achr", name:"なかまの数",     cur:()=>Object.keys(G.chars).length,
    tiers:[[3,{g:300}],[6,{g:2000}],[10,{g:3000}],[16,{g:3000}],[24,{g:5000}],[32,{g:10000}]]},
   {id:"apul", name:"累計ガチャ",     cur:()=>G.counters.pulls,

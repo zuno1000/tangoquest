@@ -3,7 +3,7 @@
 
 const TABS={
   home:    {view:"homeView",    nav:"navHome",    on:()=>renderHome()},
-  quiz:    {view:"quizView",    nav:"navQuiz",    on:()=>{ refreshInfPill(); refitChoices("#choices .choice"); }},
+  quiz:    {view:"quizView",    nav:"navQuiz",    on:()=>{ refitChoices("#choices .choice"); }},
   party:   {view:"partyView",   nav:"navParty",   on:()=>renderParty()},
   adv:     {view:"advView",     nav:"navAdv",     on:()=>renderAdv()},
   gacha:   {view:"gachaView",   nav:"navGacha",   on:()=>renderGacha()},
@@ -34,6 +34,9 @@ const EVENTS=[
   // {d:"2026-08-03", t:"..."} 形式でバナー以外のイベント告知を書く
 ];
 const NEWS=[
+  {d:"2026-08-13", t:"🗺 v4.25.0 冒険が「単語のサバイバー」に一本化! 従来のダンジョン(オート戦闘)と無限回廊は役目を終え、冒険タブを開くとすぐステージ一覧・日替わりチャレンジ・終わりなき荒野が並びます。ステージの解放は「生還」で進み(これまでのダンジョンのクリア状況はそのまま引き継がれます)、初生還は🪙3000・毎日最初の生還に🪙1000。任務・実績もサバイバー仕様になりました(無限回廊の実績は「荒野の最長生存」に交代)。探索中だった無限回廊のぶんの🪙は、次にアプリを開いたとき自動で精算します。るすばん探索の時給は「生還した最高ステージ」で決まります(これまでのダンジョン記録も有効)"},
+  {d:"2026-08-13", t:"♾ v4.25.0 強化の上限をぜんぶ開放! ①サバイバーの心得はLv上限なしに(6段目からは費用が1段ごとに×2.5と高額になります。「集中の心得」で開始◆があふれた分は開始時のレベルアップに変わります) ②レベルアップ・宝箱の3択も取得回数の上限を撤廃 ─ 会心も連鎖も絆(なかま枠+1)も何度でも重ねられます。あなただけの最強ビルドをどうぞ(詠唱間隔0.5秒・被弾は最低1ダメージなどの下限だけ残しているので、ゲームは壊れません)"},
+  {d:"2026-08-13", t:"🖥 v4.25.0 パソコンの画面を横いっぱいに! 横幅の上限(980px)をなくし、ホーム・編成・ガチャ・冒険はカードや一覧が横に並ぶ広いレイアウトになりました。サバイバーの戦場+クイズの2カラムも画面いっぱいまで広がります(スマホの表示は変わりません)"},
   {d:"2026-08-13", t:"🖥 v4.24.0 まとめてアップデート! ①終わりなき荒野に🏳ボタンが登場: 倒れる前に自分のタイミングで切り上げて、ここまでの記録(生存時間・討伐数)と🪙を持ち帰れます ②レベルアップ・宝箱の3択に、なかま自体を強化する新しい言霊が2種: 「早駆け」(なかまの攻撃間隔-15%)と「遠見」(なかまの射程+30%)。共鳴・鼓舞・絆と組み合わせて、なかま軸のビルドがさらに楽しく ③パソコンで開いたときの画面を最適化: 下部タブが左のサイドバーになり、サバイバーは戦場とクイズの2カラム表示に。モーダルも画面中央に出ます(スマホの表示は今までどおり変わりません)"},
   {d:"2026-08-13", t:"⚔ v4.23.0 サバイバーの遊び心地を改善! ①答え合わせ中もゲームが進むようになりました ─ 結果を眺めている間も敵は迫ります(レベルアップ・宝箱の3択と、タブを離れている間は今までどおり完全停止) ②◆ゲージの右に「次のLvまであと◯問」を表示(🪙は上のステージ名の行へ移動) ③サバイバーの心得に「一括で修める」ボタンを追加: 安い順に買えるだけまとめて強化できます"},
   {d:"2026-08-13", t:"🔧 v4.23.0 使い心地の改善! ①オフラインでも起動・学習できるようになりました(一度オンラインで開けば、文字の書体も含めて丸ごと保存されます) ②長い訳語の選択肢は文字を少し縮めて1行に収めます(harborなど、文末の1文字だけが2行目に落ちる表示を解消) ③画面のあちこちにあった長い説明文を丸い「?」ボタンに集約しました。タップすると説明が開きます(サバイバー・学習ペース・あゆみ・設定など)"},
@@ -120,7 +123,6 @@ function renderHome(){
   const cur=xpNeedFor(lv), next=xpNeedFor(lv+1);
   const pct=Math.min(100, Math.round(100*(G.xp-cur)/Math.max(1, next-cur)));
   const b=activeBanner();
-  const run=G.inf.run;
   const stk=studyStreak();
   const mn=claimableCount();
   const cdx=cardDexStats(), xdx=charDexStats();
@@ -150,8 +152,10 @@ function renderHome(){
         Math.floor((Date.now()-lastSyncAt())/864e5)+'日 ─ タップして同期</div>':'')+
     // ショートカット
     '<div class="tilegrid">'+
-      '<div class="tile" data-go="adv"><div class="tic">🗺️</div><div class="tname">冒険</div>'+
-        '<div class="tsub">'+(run? "🌀 "+run.floor+"F探索中" : "ダンジョンへ")+'</div></div>'+
+      '<div class="tile" data-go="adv"><div class="tic">💫</div><div class="tname">冒険</div>'+
+        '<div class="tsub">'+((G.sv&&G.sv.endless&&G.sv.endless.best)
+          ? "🏜️ベスト ⏱"+Math.floor(G.sv.endless.best/60)+":"+String(G.sv.endless.best%60).padStart(2,"0")
+          : "サバイバーへ")+'</div></div>'+
       '<div class="tile'+(b?" ltd":"")+'" data-go="gacha"><div class="tic">🔮</div><div class="tname">ガチャ</div>'+
         '<div class="tsub">'+(b? "☄️ 限定開催中!" : "🎫"+fmt(G.tickets))+'</div></div>'+
       '<div class="tile" data-go="party"><div class="tic">📜</div><div class="tname">編成</div>'+
@@ -219,19 +223,22 @@ function openNews(){
 }
 $("bellBtn").onclick=openNews;
 
-/* ---- 定期処理: 無限回廊の進行・ピル更新 ---- */
-setInterval(()=>{
-  infTick();
-  refreshInfPill();
-  if(!$("advView").classList.contains("hidden")) renderInfPanel();
-}, 5000);
-
 /* ---- 起動 ---- */
 /* 灰色帯対策の自動リロード判定は state.js 冒頭(全初期化の前)で実施(v4.5.1→v4.13.0拡張) */
 /* るすばん探索(放置報酬)とフリーズの自動適用(v4.13.0)。
    どちらも起きたときだけ1つのトーストにまとめる(上書きされないように) */
 function settleIdleAndFreeze(){
   const msgs=[];
+  /* v4.25.0: 無限回廊の廃止 ─ 探索中だった分の🪙はここで最終精算する(1回だけ)。
+     G.inf.bestは記録として残す(同期マージも従来どおり) */
+  if(G.inf && G.inf.run){
+    const g=G.inf.run.gold||0, tk=G.inf.run.tickets||0; // tk=v4.5以前の探索セーブ互換
+    G.inf.run=null;
+    if(g>0 || tk>0){
+      G.gold+=g; G.tickets+=tk;
+      msgs.push("🌀 無限回廊の最終精算: 🪙+"+fmt(g)+(tk? " 🎫+"+tk:"")+"(回廊はサバイバーに道を譲った)");
+    }else saveG();
+  }
   const idle=idleGain(G);
   if(idle) msgs.push("💤 るすばん探索: 🪙+"+fmt(idle.gold)+"("+(Math.round(idle.hours*10)/10)+"時間ぶん)");
   const frozen=applyStreakFreeze(G);
@@ -241,8 +248,6 @@ function settleIdleAndFreeze(){
 refreshHeader();
 refreshBellDot();
 newQuestion();          // 学習タブを開いた瞬間に出題できるよう先に準備
-infTick();              // 放置分の探索を反映
-refreshInfPill();
 settleIdleAndFreeze();  // renderHomeの前(連続日数・🪙の表示に反映するため)
 renderHome();           // ホームがランディング
 /* リロード確定中はログボを出さない(モーダルがリロードに巻き込まれて
