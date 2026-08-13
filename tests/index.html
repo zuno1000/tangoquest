@@ -2472,6 +2472,59 @@ function run(){
     W.closeModal();
   });
 
+  /* ---- v4.24.0: 荒野の🏳切り上げ・なかま強化(早駆け/遠見)・PCレイアウト ---- */
+  t("荒野(無限): 🏳で死亡以外に切り上げて記録と🪙を持ち帰れる", ()=>{
+    const G=W.G, g0=G.gold;
+    W.svRec();
+    const oldEnd=G.sv.endless? Object.assign({}, G.sv.endless) : null;
+    G.sv.endless={best:0, kills:0};
+    W.svStart(W.SV_ENDLESS);
+    const doc=W.document;
+    ok(!doc.getElementById("svQuitBtn").hidden, "荒野では🏳が出る");
+    W.SV.t=95000; W.SV.kills=12; W.SV.gold=55;
+    doc.getElementById("svQuitBtn").click();
+    ok(doc.getElementById("svQuitGo"), "確認モーダルが開く(その間は時間停止)");
+    doc.getElementById("svQuitGo").click();
+    ok(doc.getElementById("modal").innerHTML.indexOf("帰還")>=0, "結果は「果てた」ではなく「帰還」");
+    eq(G.gold, g0+55, "🪙は全額持ち帰り");
+    eq(G.sv.endless.best, 95, "生存記録が残る");
+    eq(G.sv.endless.kills, 12, "討伐記録が残る");
+    W.closeModal(); W.svCleanup();
+    G.gold=g0;
+    if(oldEnd) G.sv.endless=oldEnd; else delete G.sv.endless;
+    W.svStart(W.DUNGEONS[0]);
+    ok(doc.getElementById("svQuitBtn").hidden, "通常ステージでは🏳は出ない");
+    W.svCleanup();
+    doc.getElementById("svField").innerHTML="";
+  });
+  t("なかま強化: 遠見=射程+30%・早駆け=攻撃間隔-15%(3択の候補に入る)", ()=>{
+    ok(W.SV_UPGRADES.some(u=>u.id==="reach" && u.rule), "遠見が候補にある");
+    ok(W.SV_UPGRADES.some(u=>u.id==="haste" && u.rule), "早駆けが候補にある");
+    // 遠見: 素の射程の外の敵に、取得後だけ届く
+    const b=svRun();
+    const s=W.svSummon(b, "c01");
+    ok(s, "なかまを召喚");
+    s.x=50; s.y=50;
+    b.enemies=[svFoeAt("x", 50+Math.round(s.reach*1.2), 50, 1e6, 0)];
+    ok(!W.svSatAttack(b, s, svOut(), 1), "素の射程では届かない");
+    W.svApplyUpgrade(b, "reach");
+    ok(W.svSatAttack(b, s, svOut(), 1), "遠見+30%で届く");
+    // 早駆け: 攻撃後の再装填が縮む(Lv2で×0.85²・下限500ms)
+    const b2=svRun(); const s2=W.svSummon(b2, "c01");
+    b2.enemies=[svFoeAt("y", 50, 50, 1e9, 0)]; b2.enemies[0].atkCd=9e9;
+    s2.cd=0;
+    W.svTick(b2, 250);
+    const base=s2.cd;
+    eq(base, (s2.iv||W.SV_SAT_CD)-250, "素の再装填はiv");
+    const b3=svRun(); const s3=W.svSummon(b3, "c01");
+    W.svApplyUpgrade(b3, "haste"); W.svApplyUpgrade(b3, "haste");
+    b3.enemies=[svFoeAt("z", 50, 50, 1e9, 0)]; b3.enemies[0].atkCd=9e9;
+    s3.cd=0;
+    W.svTick(b3, 250);
+    eq(s3.cd, Math.max(500, Math.round((s3.iv||W.SV_SAT_CD)*Math.pow(0.85,2)))-250, "Lv2で×0.85²");
+    ok(s3.cd<base, "再装填が縮んでいる");
+  });
+
   /* ---- 起動状態 ---- */
   t("起動時に問題が出題されている", ()=>{
     ok(W.document.getElementById("promptWord").textContent.length>0);
@@ -2509,6 +2562,12 @@ async function runAsync(W){
     ok(txt.indexOf('mode==="navigate"')>=0, "オフラインのナビゲーションは殻(./)で起動する");
     ok(txt.indexOf("FONT_CACHE")>=0 && txt.indexOf("fonts.gstatic.com")>=0, "Google Fontsもキャッシュする");
     ok(txt.indexOf("k!==CACHE && k!==FONT_CACHE")>=0, "フォントキャッシュはリリースをまたいで保持");
+  });
+  await ta("PCレイアウト: display:contentsラッパー+pointer:fine限定のデスクトップCSS", async()=>{
+    const txt=await fetch("../css/style.css?t="+Date.now()).then(r=>r.text());
+    ok(txt.indexOf(".svcol{display:contents}")>=0, "スマホはレイアウト透過(従来どおり)");
+    ok(txt.indexOf("(min-width:1024px) and (pointer:fine)")>=0, "PC(マウス主体)だけで発動");
+    ok(txt.indexOf("grid-template-columns:210px")>=0, "左サイドバー化");
   });
   await ta("repairCaches: キャッシュ内の古い資産を最新の内容に置き換える", async()=>{
     ok("caches" in W, "Cache API");

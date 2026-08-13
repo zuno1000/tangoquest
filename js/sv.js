@@ -113,6 +113,9 @@ const SV_UPGRADES=[
   {id:"wave", ic:"🌊", name:"衝波",         desc:"正解バーストのたび敵を押し返す", max:3, rule:1},
   {id:"reso", ic:"🎼", name:"共鳴",         desc:"なかまの攻撃 +30%", max:3, rule:1},
   {id:"cheer",ic:"📯", name:"鼓舞",         desc:"正解バーストになかまも一斉参加する", max:2, rule:1},
+  // v4.24.0: なかま自体の戦い方を強化する規則(実機FB「攻撃速度・攻撃範囲の強化が欲しい」)
+  {id:"haste",ic:"🐎", name:"早駆け",       desc:"なかまの攻撃間隔 -15%", max:3, rule:1},
+  {id:"reach",ic:"🔭", name:"遠見",         desc:"なかまの射程 +30%", max:3, rule:1},
   // レア: ランを塗り替える規則(宝箱の3択で優先)
   {id:"chain",ic:"⚡", name:"連鎖",         desc:"攻撃が近くの敵へ稲妻で連鎖する", max:2, rule:1, rare:1},
   {id:"echo", ic:"🌀", name:"やまびこ",     desc:"正解バーストがもう一度響く(50%威力)", max:2, rule:1, rare:1},
@@ -472,7 +475,8 @@ function svCast(b, w, powF, out){
 function svSatAttack(b, s, out, powM){
   const r=b.rules||{};
   const resoM=1+0.3*(r.reso||0);
-  const inReach=b.enemies.filter(e=>e.hp>0 && Math.hypot(e.x-s.x, e.y-s.y)<=s.reach)
+  const reach=s.reach*(1+0.3*(r.reach||0)); // 遠見: 射程+30%/Lv(v4.24.0)
+  const inReach=b.enemies.filter(e=>e.hp>0 && Math.hypot(e.x-s.x, e.y-s.y)<=reach)
     .sort((a,c)=>Math.hypot(a.x-s.x, a.y-s.y)-Math.hypot(c.x-s.x, c.y-s.y));
   if(!inReach.length) return false;
   // 剣舞(dmg): 一度に2体まで斬る(2体目は60%)
@@ -637,7 +641,9 @@ function svTick(b, dt){
     s.y=SV_CY+SV_SAT_R*0.82*Math.sin(rad); // フィールドの縦横比に合わせた楕円軌道
     s.cd-=dt;
     if(s.cd<=0){
-      if(svSatAttack(b, s, ev, 1)) s.cd+=(s.iv||SV_SAT_CD);
+      // 早駆け(規則): 再装填が-15%/Lv(下限500ms・v4.24.0)
+      if(svSatAttack(b, s, ev, 1))
+        s.cd+=Math.max(500, Math.round((s.iv||SV_SAT_CD)*Math.pow(0.85, r.haste||0)));
       else s.cd=0; // 敵が来るまで構える
     }
   }
@@ -773,6 +779,7 @@ function svStart(d, extra){
   SV._extra=extra||null; // 「もう一度」で同じ条件を引き継ぐ
   closeModal();
   switchTab("sv");
+  $("svQuitBtn").hidden=!d.endless; // 🏳切り上げは荒野(無限)だけ(v4.24.0)
   $("svField").innerHTML=""; // 前のランのスプライトを一掃
   svQuestion();
   svTick(SV, SV_TICK);       // 最初の1体を湧かせて即座に見せる
@@ -949,7 +956,7 @@ function renderSVField(ev){
       : "⏱ "+Math.floor(remain/60)+":"+String(remain%60).padStart(2,"0");
   }
   $("svTitle").innerHTML="💫 "+esc(SV.name)+(SV.pos? ' <span style="color:var(--accent2)">'+POS_LABEL[SV.pos]+'縛り</span>':'')+"<br>"+
-    clock+" ・ 💀"+SV.kills+" ・ 🪙"+fmtShort(SV.gold)+
+    clock+' ・ <span class="svnb">💀'+SV.kills+'</span> ・ <span class="svnb">🪙'+fmtShort(SV.gold)+'</span>'+
     (SV.rust? ' ・ <span style="color:var(--ng)">⏳-'+Math.round((1-SV.rustM)*100)+'%</span>':'');
   // メーター行: Lv・◆ゲージ・次のLvまであと◯問(🪙はタイトル行へ移設=v4.23.0実機FB)
   $("svLv").textContent="Lv"+SV.lv;
@@ -1078,7 +1085,8 @@ function svFinish(){
     rec.endless.best=Math.max(rec.endless.best||0, sec);
     rec.endless.kills=Math.max(rec.endless.kills||0, SV.kills);
     G.gold+=SV.gold;
-    html='<h3>🏜️ 荒野に果てた…</h3>'+
+    // 🏳切り上げ(v4.24.0)は「果てた」ではなく「帰還」。記録の扱いは死亡時と同一
+    html='<h3>'+(SV.retreat? '🏜️ 荒野から帰還!' : '🏜️ 荒野に果てた…')+'</h3>'+
       '<div class="small" style="line-height:1.7; margin-top:6px">⏱ <b>'+Math.floor(sec/60)+":"+String(sec%60).padStart(2,"0")+'</b> 生存 ・ 💀'+SV.kills+'体(👑ボス'+(SV.bossKills||0)+')'+
       (newBest? ' <span style="color:var(--accent); font-weight:800">🏅新記録!</span>' : '<br>ベスト: '+Math.floor((rec.endless.best)/60)+":"+String(rec.endless.best%60).padStart(2,"0"))+
       '<br>倒した分の <b>🪙'+fmt(SV.gold)+'</b> と、解いた分の🎫・XP・カードはすべて持ち帰っている。</div>';
@@ -1193,7 +1201,8 @@ function openSVSelect(){
   h+='<div class="panel svdaily">'+
     '<div style="font-weight:800">🏜️ 終わりなき荒野 <span class="svbeta">∞</span> '+helpBtn("hlp-svend")+'</div>'+
     helpNote("hlp-svend", '勝利のない無限モード。敵は1分ごとに深いダンジョンのものへ入れ替わり、'+
-      '2分ごとにボスが乱入する(倒しても終わらない)。属性相性なし・倒れるまで戦って🪙と記録を持ち帰る')+
+      '2分ごとにボスが乱入する(倒しても終わらない)。属性相性なし。'+
+      '倒れるまで戦うか、画面上の🏳でいつでも切り上げて🪙と記録を持ち帰れる')+
     '<div class="small">倒れるまで戦う無限モード'+
     (er.best? ' ・ ベスト: <b>⏱'+Math.floor(er.best/60)+":"+String(er.best%60).padStart(2,"0")+'</b> ・ 💀'+er.kills : '')+'</div>'+
     '<button class="btn" id="svEndlessBtn" style="margin-top:8px; width:100%">挑戦する</button>'+
@@ -1234,6 +1243,24 @@ function openSVSelect(){
 /* ---- 静的DOMへのバインド ---- */
 $("svEntry").onclick=openSVSelect;
 $("svBack").onclick=()=>switchTab("adv"); // ランは保持(時間停止・入口から「戦闘に戻る」)
+/* 🏳=荒野(無限)を死亡以外で自主的に切り上げる(v4.24.0実機FB)。
+   確認モーダルが開いている間は時間停止(svShouldPauseのmodalOpen)なので焦らず選べる */
+$("svQuitBtn").onclick=()=>{
+  if(!SV || SV.over || !SV.endless) return;
+  const sec=Math.floor(SV.t/1000);
+  openModal('<h3>🏳 ここで切り上げる?</h3>'+
+    '<div class="small">ここまでの記録(⏱'+Math.floor(sec/60)+":"+String(sec%60).padStart(2,"0")+
+    ' ・ 💀'+SV.kills+')と <b>🪙'+fmt(SV.gold)+'</b> をすべて持ち帰って終了する</div>'+
+    '<div class="row" style="margin-top:12px; gap:10px">'+
+    '<button class="btn" data-close>戦い続ける</button>'+
+    '<button class="btn primary" id="svQuitGo">持ち帰る</button></div>');
+  $("svQuitGo").onclick=()=>{
+    if(!SV) return;
+    SV.over=true; SV.retreat=true;
+    closeModal();
+    svFinish();
+  };
+};
 $("svNextBtn").onclick=svNext; // 予約の3択を1つずつ消化→次の問題(v4.22.0の決定的フロー)
 /* 正誤確認中は単語タップで辞書(Weblio)へ ─ 学習タブのpromptCardと同じ流儀(v4.22.0)。
    出題中は誤タップ防止のため無効(srchクラスで見た目も切り替え) */
