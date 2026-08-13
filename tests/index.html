@@ -1796,12 +1796,12 @@ function run(){
     ok(b.hpMax>m0, "最大HP+10%");
     ok(b.hp>100 && b.hp<=b.hpMax, "即時回復(上限まで)");
   });
-  t("サバイバー: 時間が流れるのは出題中だけ(答え合わせ・3択・離脱中は停止)", ()=>{
-    ok(!W.svShouldPause(false,false,false,false), "出題中は流れる");
-    ok(W.svShouldPause(true,false,false,false), "答え合わせ中は止まる");
-    ok(W.svShouldPause(false,true,false,false), "タブ非表示で止まる");
-    ok(W.svShouldPause(false,false,true,false), "別画面で止まる");
-    ok(W.svShouldPause(false,false,false,true), "モーダル(3択)中は止まる");
+  t("サバイバー: 時間は出題中+答え合わせ中に流れる(3択・離脱中は停止)v4.23.0", ()=>{
+    ok(!W.svShouldPause(false,false,false), "出題中・答え合わせ中は流れる");
+    ok(W.svShouldPause(true,false,false), "タブ非表示で止まる");
+    ok(W.svShouldPause(false,true,false), "別画面で止まる");
+    ok(W.svShouldPause(false,false,true), "モーダル(3択)中は止まる");
+    eq(W.svShouldPause.length, 3, "answered引数は撤廃=答え合わせで止めない(実機FB)");
   });
   t("サバイバー: 復習期限切れの野生語は言霊が錆びて威力が下がる", ()=>{
     const G=W.G, s0=G.party.sentence;
@@ -2398,6 +2398,80 @@ function run(){
     W.document.getElementById("svField").innerHTML="";
   });
 
+  /* ---- v4.23.0: 実機FB対応(ゲージ表示・一括心得・選択肢フィット・?集約) ---- */
+  t("サバイバー: ◆ゲージ右に「次のLvまであと◯問」・🪙はタイトル行へ", ()=>{
+    eq(W.svNeedAnswers({lv:1, gem:0}, 0), 4, "Lv1・◆0・コンボなし=あと4問");
+    eq(W.svNeedAnswers({lv:1, gem:3}, 0), 1, "◆3=あと1問");
+    eq(W.svNeedAnswers({lv:1, gem:0}, 10), 2, "10コンボ中は◆3/問=あと2問");
+    eq(W.svNeedAnswers({lv:1, gem:4}, 0), 1, "レベルアップ確定でも最低1問");
+    W.SV=W.svNewRun(W.DUNGEONS[0], {hp:100, dpt:10, catk:10, elems:[]}, 0);
+    const c0=W.G.combo; W.G.combo=0;
+    W.renderSVField(null);
+    const doc=W.document;
+    eq(doc.getElementById("svNeed").textContent, "あと4問", "ゲージ右に常駐表示");
+    ok(doc.getElementById("svTitle").innerHTML.indexOf("🪙")>=0, "🪙はステージ名の行");
+    ok(!doc.getElementById("svGold"), "旧🪙表示は撤去");
+    W.G.combo=c0; W.svCleanup();
+    doc.getElementById("svField").innerHTML="";
+  });
+  t("サバイバー: 心得の一括強化は安い順に買えるだけ買う(dryRunは触れない)", ()=>{
+    const g={gold:2000, sv:{clears:{}, meta:{}}};
+    const est=W.svBuyMetaAll(g, true);
+    eq(g.gold, 2000, "dryRunは🪙を消費しない");
+    eq(Object.keys(g.sv.meta).length, 0, "dryRunは心得も変えない");
+    eq(est.count, 4, "Lv1(🪙500)を4系統ぶん買える(5つ目は🪙不足)");
+    eq(est.spent, 2000, "見積もり=実費");
+    const r=W.svBuyMetaAll(g);
+    eq(r.count, 4, "実行は見積もりどおり");
+    eq(g.gold, 0, "🪙を消費");
+    eq(Object.values(g.sv.meta).reduce((a,b)=>a+b,0), 4, "計4段修まる");
+    const gg={gold:1e9, sv:{clears:{}, meta:{}}};
+    const full=W.SV_META.reduce((s,m)=>s+W.SV_META_COST.slice(0,m.max).reduce((a,b)=>a+b,0),0);
+    eq(W.svBuyMetaAll(gg).spent, full, "カンストまでの総額と一致");
+    ok(W.SV_META.every(m=>gg.sv.meta[m.id]===m.max), "全系統がMAXに");
+    eq(W.svBuyMetaAll(gg).count, 0, "カンスト後は何も買わない");
+  });
+  t("選択肢: 長い訳語は文字を縮めて1行に収める(fitChoiceFont・harborのFB)", ()=>{
+    const doc=W.document;
+    const b=doc.createElement("button");
+    b.className="choice";
+    b.style.cssText="width:300px; position:absolute; left:-9999px; top:0";
+    b.textContent="（感情を）心に抱く、（犯人を）かくまう"; // harborの訳(2行目に1文字だけ落ちていた)
+    doc.body.appendChild(b);
+    W.fitChoiceFont(b);
+    const fs=parseFloat(b.style.fontSize);
+    ok(fs && fs<17, "文字が縮む(font-size="+b.style.fontSize+")");
+    ok(fs>=13, "最小13pxで止まる");
+    ok(!b.classList.contains("fitmeasure"), "計測用クラスは後片付けされる");
+    b.style.fontSize=""; b.textContent="港";
+    W.fitChoiceFont(b);
+    ok(!b.style.fontSize, "短い訳語は縮めない");
+    b.remove();
+  });
+  t("説明は丸?ボタンに集約され、タップで開閉する(todaybgm方式)", ()=>{
+    const doc=W.document;
+    W.openSVSelect();
+    const btn=doc.querySelector('#modal .help-btn[data-help="hlp-svsel"]');
+    const note=doc.getElementById("hlp-svsel");
+    ok(btn && note, "?ボタンと注釈がある");
+    ok(note.hidden, "注釈は畳まれている");
+    ok(note.innerHTML.indexOf("サバイバー系ローグライク")>=0, "長文説明は注釈の中");
+    btn.click();
+    ok(!note.hidden, "?タップで開く");
+    eq(btn.getAttribute("aria-expanded"), "true", "aria-expanded連動");
+    btn.click();
+    ok(note.hidden, "もう一度タップで閉じる");
+    W.closeModal();
+    W.openSettings();
+    ok(doc.querySelector('#modal .help-btn[data-help="hlp-upd"]'), "設定(更新)にも?");
+    ok(doc.getElementById("hlp-upd").hidden, "畳まれている");
+    W.closeModal();
+    W.openHistoryModal();
+    ok(doc.getElementById("hlp-hist"), "あゆみの説明も?に");
+    ok(doc.getElementById("hlp-hist").hidden, "畳まれている");
+    W.closeModal();
+  });
+
   /* ---- 起動状態 ---- */
   t("起動時に問題が出題されている", ()=>{
     ok(W.document.getElementById("promptWord").textContent.length>0);
@@ -2429,6 +2503,12 @@ async function runAsync(W){
     ok(txt.indexOf("addAll(")<0, "addAll(HTTPキャッシュ素通り)を使わない");
     ok(txt.indexOf('cache:"no-store"')>=0, "no-storeで取得する");
     ok(txt.indexOf('"?v="+CACHE')>=0, "版クエリでCDNも迂回する");
+  });
+  await ta("sw.js: オフライン対応(ナビゲーションの殻フォールバック+フォントキャッシュ)", async()=>{
+    const txt=await fetch("../sw.js?t="+Date.now()).then(r=>r.text());
+    ok(txt.indexOf('mode==="navigate"')>=0, "オフラインのナビゲーションは殻(./)で起動する");
+    ok(txt.indexOf("FONT_CACHE")>=0 && txt.indexOf("fonts.gstatic.com")>=0, "Google Fontsもキャッシュする");
+    ok(txt.indexOf("k!==CACHE && k!==FONT_CACHE")>=0, "フォントキャッシュはリリースをまたいで保持");
   });
   await ta("repairCaches: キャッシュ内の古い資産を最新の内容に置き換える", async()=>{
     ok("caches" in W, "Cache API");

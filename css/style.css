@@ -762,7 +762,8 @@ header .res span:last-child{overflow:hidden; text-overflow:ellipsis}
   box-shadow:inset 1px 1px 3px var(--shd), inset -1px -1px 3px var(--shl)}
 .svxp i{display:block; height:100%; width:0; border-radius:4px;
   background:linear-gradient(90deg, var(--accent2), var(--accent)); transition:width .3s}
-#svGold{color:var(--sub); font-size:11px; flex:0 0 auto; min-width:48px; text-align:right}
+/* ゲージ右は「次のLvまであと◯問」(v4.23.0・🪙はsvTitle行へ移設) */
+#svNeed{color:var(--sub); font-size:11px; flex:0 0 auto; min-width:48px; text-align:right}
 /* カットイン(ボス・開始告知) */
 #svCutin{position:fixed; left:0; right:0; top:30%; z-index:70; text-align:center; pointer-events:none;
   font-weight:900; color:var(--ink); opacity:0;
@@ -865,3 +866,22 @@ body.svplay #svView{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
   .svshot{transition:none}
   .svarc,.svring{animation:none; opacity:0}
 }
+
+/* ---- v4.23.0 ---- */
+/* 説明の丸?ボタン(todaybgm v0.9.1方式): 注釈は.help-note(hidden)に格納し、
+   ?のタップで開閉。開いている間は?がアクセント色に反転する。
+   CJK見出しに揃えるためvertical-align:middle+約1.5px持ち上げ(todaybgmの知見) */
+.help-btn{border:none; background:var(--bg); color:var(--sub); width:24px; height:24px;
+  border-radius:50%; font-size:13px; font-weight:800; cursor:pointer; flex:0 0 auto;
+  vertical-align:middle; position:relative; top:-1.5px; padding:0;
+  box-shadow:inset 2px 2px 4px var(--shd), inset -2px -2px 4px var(--shl)}
+.help-btn[aria-expanded="true"]{color:#fff; background:var(--accent2); box-shadow:none}
+.help-note{margin:6px 0 8px; padding:10px 12px; border-radius:12px; background:var(--bg2);
+  font-size:12px; color:var(--sub); line-height:1.7; word-break:auto-phrase;
+  box-shadow:inset 2px 2px 5px var(--shd), inset -2px -2px 5px var(--shl)}
+/* 長い訳語の選択肢: JSが1行に収まるまで文字を縮める(fitChoiceFont)。
+   .fitmeasureは計測用の一時クラス(nowrapでの必要幅をscrollWidthから読む)。
+   それでも収まらない長文はtext-wrap:balanceが2行をほぼ等分し、
+   「文末の1文字だけ2行目に落ちる」不格好な折返しを防ぐ(非対応ブラウザは従来どおり) */
+.choice{text-wrap:balance}
+.choice.fitmeasure{white-space:nowrap}

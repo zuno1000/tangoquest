@@ -349,24 +349,26 @@ function openSettings(){
     '<button class="btn" id="histBtn" style="margin-top:8px">📊 学習のあゆみ(これまでの記録)</button>'+
     '<h3 style="margin-top:16px">出題モード</h3>'+
     '<button class="btn" id="modeToggle">'+(G.mode==="e2j"?"EN → 日本語":"日本語 → EN")+' (タップで切替)</button>'+
-    '<h3 style="margin-top:16px">演出</h3>'+
+    // 各項目の注釈は?に集約(v4.23.0・todaybgm方式)
+    '<h3 style="margin-top:16px">演出 '+helpBtn("hlp-vibe")+'</h3>'+
     (CAN_VIBRATE
-      ? '<button class="btn" id="vibeToggle">振動: '+(localStorage.getItem("tq_vibe")==="off"?"OFF":"ON")+'</button>'+
-        '<div class="small" style="margin-top:6px">ONにするとテスト振動が鳴る。鳴らない場合は端末のマナーモード/バイブ設定を確認</div>'
-      : '<button class="btn" disabled>振動: この端末は非対応</button>'+
-        '<div class="small" style="margin-top:6px">iPhone・iPad・PCのブラウザは振動APIに対応していない(Android Chrome等で使える)</div>')+
-    '<h3 style="margin-top:16px">端末間同期(Googleドライブ)</h3>'+
+      ? helpNote("hlp-vibe", 'ONにするとテスト振動が鳴る。鳴らない場合は端末のマナーモード/バイブ設定を確認')+
+        '<button class="btn" id="vibeToggle">振動: '+(localStorage.getItem("tq_vibe")==="off"?"OFF":"ON")+'</button>'
+      : helpNote("hlp-vibe", 'iPhone・iPad・PCのブラウザは振動APIに対応していない(Android Chrome等で使える)')+
+        '<button class="btn" disabled>振動: この端末は非対応</button>')+
+    '<h3 style="margin-top:16px">端末間同期(Googleドライブ) '+helpBtn("hlp-sync")+'</h3>'+
     (syncClientId()
-      ? '<div class="small">あなた自身のGoogleドライブ(アプリ専用領域)に保存。進捗を失わない方向でマージされる。</div>'+
-        '<div class="small" style="margin-top:4px">最終同期: '+(lastSyncAt()? fmtSyncTime(lastSyncAt()) : 'この端末ではまだ同期していない')+'</div>'+
+      ? helpNote("hlp-sync", 'あなた自身のGoogleドライブ(アプリ専用領域)に保存。進捗を失わない方向でマージされる')+
+        '<div class="small">最終同期: '+(lastSyncAt()? fmtSyncTime(lastSyncAt()) : 'この端末ではまだ同期していない')+'</div>'+
         '<button class="btn primary" id="syncBtn" style="margin-top:8px">今すぐ同期</button>'
-      : '<div class="small">未設定。GCPでOAuthクライアントIDを発行し js/sync.js に設定すると使える(README参照)。データは端末内に保存されている。</div>')+
-    '<h3 style="margin-top:16px">アプリの更新</h3>'+
+      : helpNote("hlp-sync", '未設定。GCPでOAuthクライアントIDを発行し js/sync.js に設定すると使える(README参照)。データは端末内に保存されている'))+
+    '<h3 style="margin-top:16px">アプリの更新 '+helpBtn("hlp-upd")+'</h3>'+
+    helpNote("hlp-upd", 'ホーム画面から起動している場合(iOS等)もこのボタンで最新版に更新できる。学習データ・同期は消えない')+
     '<button class="btn" id="updateBtn">アップデートを確認</button>'+
-    '<div class="small" style="margin-top:6px">ホーム画面から起動している場合(iOS等)もこのボタンで最新版に更新できる。学習データ・同期は消えない</div>'+
-    '<h3 style="margin-top:16px">データ</h3>'+
+    '<h3 style="margin-top:16px">データ '+helpBtn("hlp-reset")+'</h3>'+
+    helpNote("hlp-reset", '「学習記録とカードだけリセット」はなかま・通貨・レベル・冒険の記録を残して単語の学習をやり直す。どちらも確認画面が出る')+
     '<button class="btn" id="resetLearnBtn">学習記録とカードだけリセット</button>'+
-    '<div class="small" style="margin:6px 0 10px">なかま・通貨・レベル・冒険の記録は残して、単語の学習をやり直す</div>'+
+    '<div style="height:10px"></div>'+
     '<button class="btn danger" id="resetBtn">データをすべてリセット</button>'+
     '<div class="small" style="margin-top:14px">LEXICA(レキシカ) v'+APP_VERSION+' ─ 英単語×ローグライクRPG<br>単語データ: 英検1級レベル '+WORDS.length+'語(<a href="https://github.com/zuno1000/tango" target="_blank" rel="noopener" style="color:var(--accent2)">tango</a> 由来)</div>');
   $("modeToggle").onclick=()=>{

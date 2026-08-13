@@ -41,6 +41,20 @@ function bindTap(el, fn){
   });
 }
 
+/* ---- 説明の丸?ボタン(v4.23.0・todaybgm v0.9.1と同じ流儀) ----
+   注釈は常時表示せず、hidden属性の.help-noteに格納して?のタップで開閉する。
+   モーダル・ホームのどこにでも現れるため、ハンドラはdocumentに1本だけ委譲で張る */
+function helpBtn(id){ return '<button class="help-btn" data-help="'+id+'" aria-expanded="false">?</button>'; }
+function helpNote(id, html){ return '<div class="help-note" id="'+id+'" hidden>'+html+'</div>'; }
+document.addEventListener("click", e=>{
+  const b=e.target && e.target.closest && e.target.closest(".help-btn");
+  if(!b) return;
+  const n=document.getElementById(b.dataset.help);
+  if(!n) return;
+  n.hidden=!n.hidden;
+  b.setAttribute("aria-expanded", n.hidden? "false":"true");
+});
+
 /* ---- modal ---- */
 function openModal(html){
   const m=$("modal");

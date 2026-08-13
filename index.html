@@ -103,7 +103,7 @@
   <!-- 単語のサバイバー(β・v4.20.0): 撤去するときはこのパネルとsvView・js/sv.jsを消すだけ -->
   <div class="panel sventry" id="svEntry" style="margin-top:6px">
     <div class="row"><div class="grow" style="font-weight:800">💫 単語のサバイバー <span class="svbeta">β</span></div><b>›</b></div>
-    <div class="small" style="margin-top:3px">押し寄せる敵を正解のバーストでしのぐ新モード ─ 解いた分は学習として記録</div>
+    <div class="small" style="margin-top:3px">正解のバーストで敵をしのぐローグライク</div>
   </div>
   <div class="panel" id="infPanel" style="margin-top:12px"></div>
   <h2>ダンジョン</h2>
@@ -119,10 +119,11 @@
     <div id="svHpWrap">🛡<div class="bHp svchp"><i id="svHpBar"></i></div><b id="svHpTxt"></b></div>
   </div>
   <div id="svField"></div>
+  <!-- ゲージ右は「次のLvまであと◯問」(v4.23.0実機FB)。🪙はヘッダーのsvTitle行へ -->
   <div id="svMeta">
     <span id="svLv">Lv1</span>
     <div class="svxp"><i id="svXpBar"></i></div>
-    <span id="svGold">🪙0</span>
+    <span id="svNeed"></span>
   </div>
   <div id="svCutin" class="hidden"></div>
   <div id="svPrompt">

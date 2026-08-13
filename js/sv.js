@@ -26,8 +26,8 @@
    ・◆が貯まるとレベルアップ: ゲームを止めて3択(威力/連射/バースト/回復/
      守り/金運)。ランの間だけの一時強化=ローグライクの成長
    ・180秒(論理時間)生き延びるとボス出現。倒せば勝利で🪙
-   ・時間は「出題中」だけ流れる: 答え合わせ・3択・タブ移動中は完全停止。
-     じっくり考える余地は保証しつつ、考えている間も敵は迫る
+   ・時間は「出題中と答え合わせ中」に流れる(v4.23.0実機FBで答え合わせ中も進行に変更)。
+     3択・タブ移動中は完全停止=じっくり選ぶ権利は保証しつつ、戦場から目を離すと敵は迫る
    ・倒した敵の🪙は勝っても負けても全額持ち帰り(ローグライトの快感) */
 
 /* ---- 定数(ゲームバランスはここに集約=実機FBごとの調整を速く) ---- */
@@ -192,6 +192,30 @@ function svBuyMeta(g, id){
   g.sv.meta[id]=lv+1;
   return {lv:lv+1, cost};
 }
+/* 心得の一括強化(v4.23.0実機FB): 安い順に買えるだけ買う=総レベルが最大になる貪欲法。
+   dryRun=trueならgに触れず見積もりだけ返す(ボタンに「+◯・🪙◯」を出すため) */
+function svBuyMetaAll(g, dryRun){
+  const meta=Object.assign({}, (g.sv&&g.sv.meta)||{});
+  let gold=g.gold||0, count=0, spent=0;
+  for(;;){
+    let best=null;
+    for(const m of SV_META){
+      const lv=meta[m.id]||0;
+      if(lv>=m.max) continue;
+      const cost=SV_META_COST[lv];
+      if(cost<=gold && (!best || cost<best.cost)) best={id:m.id, cost};
+    }
+    if(!best) break;
+    gold-=best.cost; spent+=best.cost; count++;
+    meta[best.id]=(meta[best.id]||0)+1;
+  }
+  if(count && !dryRun){
+    g.gold=gold;
+    g.sv=g.sv||{clears:{}};
+    g.sv.meta=meta;
+  }
+  return {count, spent};
+}
 
 /* 日替わりチャレンジの内容(決定的: 日付ハッシュ→修飾・品詞しばり・ステージ番号)。
    nStagesは解放済みステージ数(その範囲から選ぶ=詰まない) */
@@ -236,6 +260,11 @@ function svGemGain(ok, combo){
 }
 /* 次のレベルに必要な◆: 4, 6, 8, …(1ラン40問正解でLv+5前後になる調整) */
 function svXpNext(lv){ return SV_GEM_LV0+SV_GEM_STEP*(lv-1); }
+/* 次のレベルまでに必要な正解数(いまのコンボの◆獲得数で換算・v4.23.0)。
+   ◆ゲージの右に「あと◯問」で常駐=正解が何問ぶんの前進かをその場で示す */
+function svNeedAnswers(b, combo){
+  return Math.max(1, Math.ceil((svXpNext(b.lv)-b.gem)/svGemGain(true, combo||0)));
+}
 /* ◆を加算し、レベルアップしたらtrue(余りは持ち越し) */
 function svAddGems(b, n){
   b.gem+=n;
@@ -682,9 +711,11 @@ function svApplyUpgrade(b, id){
   }
 }
 
-/* 時間停止の条件(純関数): 答え合わせ中・タブ非表示・別画面・モーダル(3択含む)中 */
-function svShouldPause(answered, hidden, viewHidden, modalOpen){
-  return !!(answered || hidden || viewHidden || modalOpen);
+/* 時間停止の条件(純関数): タブ非表示・別画面・モーダル(3択含む)中。
+   v4.23.0実機FB: 答え合わせ中は止めない ─ 結果を眺めている間も敵は迫る
+   (じっくり考える権利は「出題そのものに制限時間がない」ことが引き続き担保する) */
+function svShouldPause(hidden, viewHidden, modalOpen){
+  return !!(hidden || viewHidden || modalOpen);
 }
 
 /* 解答の学習計上。quiz.jsのanswer()と同一の帳簿付け(SRS・日別・ペース・🎫・XP・
@@ -750,13 +781,13 @@ function svStart(d, extra){
   svLoop=setInterval(svFrame, SV_TICK);
 }
 
-/* 論理tickの駆動。時間が流れるのは「出題中」だけ:
-   答え合わせ・レベルアップ3択・タブ非表示・別画面のときは完全停止。
+/* 論理tickの駆動。時間が流れるのは出題中+答え合わせ中(v4.23.0):
+   レベルアップ3択・タブ非表示・別画面のときは完全停止。
    v4.22.0: 3択のdrainはここでは開かない ─ 予約は「次へ」(svNext)が1つずつ消化する
    決定的フローに一本化(出題中にモーダルが割り込んでこない) */
 function svFrame(){
   if(!SV || SV.over) return;
-  if(svShouldPause(svAnswered, document.hidden,
+  if(svShouldPause(document.hidden,
       $("svView").classList.contains("hidden"),
       $("overlay").classList.contains("show"))) return;
   const ev=svTick(SV, SV_TICK);
@@ -811,6 +842,7 @@ function svRenderQuestion(){
     b.onclick=()=>svAnswer(c, b);
     box.appendChild(b);
   });
+  refitChoices("#svChoices .choice"); // 長い訳語は縮めて1行に(quiz.jsと同じ・v4.23.0)
 }
 
 function svAnswer(chosen, btn){
@@ -842,8 +874,8 @@ function svAnswer(chosen, btn){
   }else{
     renderSVField(null);
   }
-  /* 正解でもミスでも「次へ」必須(v4.22.0実機FB): 自動進行タイマーを廃止し、
-     バーストの結果・定着の変化をじっくり見られる(その間は時間停止) */
+  /* 正解でもミスでも「次へ」必須(v4.22.0実機FB): 自動進行タイマーを廃止。
+     v4.23.0: 確認中も時間は流れる ─ 眺めている間も敵は迫る(svFrameが駆動を継続) */
   $("svNextBtn").style.visibility="visible";
 }
 
@@ -876,14 +908,14 @@ function svRestore(){
 function svOpenUpgrade(title, opts){
   if(!SV || SV.over) return;
   const cs=svUpgradeChoices(SV, opts);
-  openModal('<h3>'+(title||"✨ レベルアップ! Lv"+SV.lv)+'</h3>'+
-    '<div class="small">言霊のちからを1つ選ぶ(このランの間だけ有効)</div>'+
+  // 注釈は?に集約(v4.23.0): 常時出ていた2行の説明を畳んでシンプルに
+  openModal('<h3>'+(title||"✨ レベルアップ! Lv"+SV.lv)+' '+helpBtn("hlp-svup")+'</h3>'+
+    helpNote("hlp-svup", '言霊のちからを1つ選ぶ(このランの間だけ有効)。✕で閉じると見送り(選び直しはできない)')+
     cs.map((c,i)=>'<button class="btn svup'+(c.rare? " svrare":"")+'" data-i="'+i+'">'+
       '<span class="svupic">'+c.ic+'</span><span class="grow" style="text-align:left">'+
       '<b>'+esc(c.name)+(c.rare? ' <span class="small" style="color:#e8a400; font-weight:800">レア</span>':'')+'</b>'+
       ((SV.taken&&SV.taken[c.id])? ' <span class="small">Lv'+SV.taken[c.id]+(c.max? "/"+c.max:"")+'</span>':'')+
-      '<br><span class="small">'+c.desc+'</span></span></button>').join("")+
-    '<div class="small" style="margin-top:8px">✕で閉じると見送り(選び直しはできない)</div>');
+      '<br><span class="small">'+c.desc+'</span></span></button>').join(""));
   $("modal").querySelectorAll(".svup").forEach(b=>{
     b.onclick=()=>{
       if(!SV) return;
@@ -917,12 +949,12 @@ function renderSVField(ev){
       : "⏱ "+Math.floor(remain/60)+":"+String(remain%60).padStart(2,"0");
   }
   $("svTitle").innerHTML="💫 "+esc(SV.name)+(SV.pos? ' <span style="color:var(--accent2)">'+POS_LABEL[SV.pos]+'縛り</span>':'')+"<br>"+
-    clock+" ・ 💀"+SV.kills+
+    clock+" ・ 💀"+SV.kills+" ・ 🪙"+fmtShort(SV.gold)+
     (SV.rust? ' ・ <span style="color:var(--ng)">⏳-'+Math.round((1-SV.rustM)*100)+'%</span>':'');
-  // メーター行: Lv・◆ゲージ・🪙
+  // メーター行: Lv・◆ゲージ・次のLvまであと◯問(🪙はタイトル行へ移設=v4.23.0実機FB)
   $("svLv").textContent="Lv"+SV.lv;
   $("svXpBar").style.width=Math.min(100, Math.round(100*SV.gem/svXpNext(SV.lv)))+"%";
-  $("svGold").textContent="🪙"+fmt(SV.gold);
+  $("svNeed").textContent="あと"+svNeedAnswers(SV, G.combo)+"問";
   // フィールド: 自機は中央固定・敵はuid差分更新(CSSトランジションでなめらかに迫る)
   const f=$("svField");
   let me=f.querySelector("#svMe");
@@ -1088,8 +1120,9 @@ function svFinish(){
 /* 心得(永続強化)の購入モーダル。🪙シンク=冒険・サバイバーの稼ぎの行き先 */
 function svOpenMeta(){
   const rec=svRec(); rec.meta=rec.meta||{};
-  let h='<h3>📜 サバイバーの心得</h3>'+
-    '<div class="small">🪙で修める永続強化。すべてのラン(次の出撃から)に効く</div>';
+  let h='<h3>📜 サバイバーの心得 '+helpBtn("hlp-svmeta")+'</h3>'+
+    helpNote("hlp-svmeta", '🪙で修める永続強化。すべてのラン(次の出撃から)に効く。'+
+      '「一括で修める」は安い順に買えるだけ買う(総レベルがいちばん増える買い方)');
   SV_META.forEach(m=>{
     const lv=rec.meta[m.id]||0;
     const cost=lv<m.max? SV_META_COST[lv] : null;
@@ -1102,6 +1135,11 @@ function svOpenMeta(){
         : '<span class="small" style="color:var(--ok); font-weight:800">MAX</span>')+
       '</div>';
   });
+  // 一括強化(v4.23.0実機FB): 押す前に「何段・いくら」を見せる=確認ダイアログ不要
+  const est=svBuyMetaAll(G, true);
+  if(est.count)
+    h+='<button class="btn primary" id="svMetaAll" style="margin-top:12px; width:100%">'+
+      '一括で修める(+'+est.count+'段 ・ 🪙'+fmt(est.spent)+')</button>';
   h+='<div class="small" style="margin-top:10px">所持 🪙'+fmt(G.gold)+'</div>';
   openModal(h);
   $("modal").querySelectorAll("[data-meta]").forEach(btn=>{
@@ -1113,21 +1151,30 @@ function svOpenMeta(){
       svOpenMeta();
     };
   });
+  const all=$("svMetaAll");
+  if(all) all.onclick=()=>{
+    const r=svBuyMetaAll(G);
+    if(!r.count) return;
+    saveG(); refreshHeader();
+    toast("📜 心得を+"+r.count+"段 修めた(🪙"+fmt(r.spent)+")");
+    svOpenMeta();
+  };
 }
 
 /* ステージ選択(冒険タブの入口パネルから)。解放条件は冒険のダンジョンと共通 */
 function openSVSelect(){
   const rec=svRec();
-  let h='<h3>💫 単語のサバイバー(β)</h3>'+
-    '<div class="small" style="line-height:1.7">全方位から押し寄せる敵をしのぐ<b>サバイバー系ローグライク</b>。'+
+  // 遊び方の長文は?に集約(v4.23.0): 画面には選ぶものだけを並べる
+  let h='<h3>💫 単語のサバイバー(β) '+helpBtn("hlp-svsel")+'</h3>'+
+    helpNote("hlp-svsel", '全方位から押し寄せる敵をしのぐ<b>サバイバー系ローグライク</b>。'+
     'あなたは中央で呪文を自動詠唱し続ける ─ 動詞で撃ち方が変わる(強撃=一点/貫通=ビーム/吸収=HP回復/連撃=2体)。<br>'+
     '<b>正解=全武器の一斉バースト+◆ジェム</b>(コンボで威力・獲得数UP)。◆が貯まると<b>レベルアップの3択</b>: '+
     '約20種の強化・<b>オンヒット規則</b>(会心・延焼・連鎖・爆散など=武器にもなかまにも乗って組み合わさる)・'+
     '<b>なかまの召喚</b>(周回して自動攻撃・戦闘スタイルはスキルで変わる)から選ぶ。<br>'+
     'ときどき<b>🎁宝箱スライム</b>が横切る(倒すと🪙+<b>レア規則優先</b>の3択・逃すと消える)。時間が経つほど敵は増え、<b>エリート</b>(強いが🪙4倍)も混ざる。<br>'+
-    '時間が流れるのは<b>問題を考えている間だけ</b>(答え合わせ・3択中は完全停止)。'+SV_STAGE_SEC+'秒生きのびるとボスが出現、倒せば勝利!<br>'+
+    '時間が流れるのは<b>出題中と答え合わせ中</b>(3択・離脱中は完全停止)。'+SV_STAGE_SEC+'秒生きのびるとボスが出現、倒せば勝利!<br>'+
     '倒した敵の🪙は<b>勝っても負けても全額持ち帰り</b>。解いた分は<b>ふつうの学習として記録される</b>(今日の目安・🎫・カードすべて)。<br>'+
-    '編成は出撃時のスナップショットで固定。⏳復習期限切れの野生語は言霊が錆びる(-6%/枚)。</div>'+
+    '編成は出撃時のスナップショットで固定。⏳復習期限切れの野生語は言霊が錆びる(-6%/枚)。')+
     '<button class="btn" id="svMetaBtn" style="margin-top:10px; width:100%">📜 サバイバーの心得(🪙で永続強化)</button>';
   // 日替わりチャレンジ: 解放済みステージ×修飾×品詞しばり(初回勝利に🪙ボーナス)
   const un=DUNGEONS.filter((d,i)=>dgUnlocked(i));
@@ -1135,18 +1182,20 @@ function openSVSelect(){
   const ds=un[dc.idx];
   const dDone=rec.dailyDone===todayKey();
   h+='<div class="panel svdaily">'+
-    '<div style="font-weight:800">📅 今日のチャレンジ'+(dDone? ' <span style="color:var(--ok)">✓達成</span>':'')+'</div>'+
+    '<div style="font-weight:800">📅 今日のチャレンジ'+(dDone? ' <span style="color:var(--ok)">✓達成</span>':'')+' '+helpBtn("hlp-svdaily")+'</div>'+
+    helpNote("hlp-svdaily", '毎日ちがうステージ×ルール×品詞しばりが日替わりで出る。初回勝利に🪙ボーナス(明日は別の内容)')+
     '<div class="small">'+ds.icon+' '+esc(ds.name)+' ・ <b>'+dc.mods.name+'</b>('+dc.mods.desc+')'+
-    ' ・ しばり: <b>'+POS_LABEL[dc.pos]+'のみ</b><br>初回勝利: <b>🪙'+fmt(SV_DAILY_GOLD(ds.tier))+'</b>(明日は別の内容)</div>'+
+    ' ・ しばり: <b>'+POS_LABEL[dc.pos]+'のみ</b><br>初回勝利: <b>🪙'+fmt(SV_DAILY_GOLD(ds.tier))+'</b></div>'+
     '<button class="btn primary" id="svDailyBtn" style="margin-top:8px; width:100%">'+(dDone? 'もう一度あそぶ':'挑戦する')+'</button>'+
     '</div>';
   // 終わりなき荒野(v4.22.0): 勝利のない無限モード。記録(生存秒・キル)を持ち帰る
   const er=rec.endless||{best:0, kills:0};
   h+='<div class="panel svdaily">'+
-    '<div style="font-weight:800">🏜️ 終わりなき荒野 <span class="svbeta">∞</span></div>'+
-    '<div class="small">敵は1分ごとに深いダンジョンのものへ入れ替わり、2分ごとにボスが乱入する(倒しても終わらない)。'+
-    '属性相性なし・倒れるまで戦って🪙と記録を持ち帰る。'+
-    (er.best? '<br>ベスト: <b>⏱'+Math.floor(er.best/60)+":"+String(er.best%60).padStart(2,"0")+'</b> ・ 💀'+er.kills : '')+'</div>'+
+    '<div style="font-weight:800">🏜️ 終わりなき荒野 <span class="svbeta">∞</span> '+helpBtn("hlp-svend")+'</div>'+
+    helpNote("hlp-svend", '勝利のない無限モード。敵は1分ごとに深いダンジョンのものへ入れ替わり、'+
+      '2分ごとにボスが乱入する(倒しても終わらない)。属性相性なし・倒れるまで戦って🪙と記録を持ち帰る')+
+    '<div class="small">倒れるまで戦う無限モード'+
+    (er.best? ' ・ ベスト: <b>⏱'+Math.floor(er.best/60)+":"+String(er.best%60).padStart(2,"0")+'</b> ・ 💀'+er.kills : '')+'</div>'+
     '<button class="btn" id="svEndlessBtn" style="margin-top:8px; width:100%">挑戦する</button>'+
     '</div>';
   if(SV && !SV.over){

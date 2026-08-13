@@ -177,8 +177,10 @@ function openPaceModal(){
   const total=WORDS.length, pct=Math.round(100*mastered/total);
   const today=todayKey();
   const cur=(G.pace&&G.pace.goal)||addDays(today,180);
-  openModal('<h3>🎯 学習ペース管理</h3>'+
-    '<div class="small">目標日を決めると、全'+fmt(total)+'語を覚え切るのに必要な「1日の問題数」を毎日逆算して案内する。</div>'+
+  // 説明は?に集約(v4.23.0)
+  openModal('<h3>🎯 学習ペース管理 '+helpBtn("hlp-pace")+'</h3>'+
+    helpNote("hlp-pace", '目標日を決めると、全'+fmt(total)+'語を覚え切るのに必要な「1日の問題数」を毎日逆算して案内する。'+
+      '目安は直近100問の分析(既知語率・復習の正答率)から見積もり、学習を進めるほど自動で更新される')+
     '<div class="panel" style="margin-top:10px">'+
       '<div class="row"><div class="grow small">覚えた単語</div><b>'+fmt(mastered)+' / '+fmt(total)+'語</b></div>'+
       '<div class="mbar" style="margin-top:6px"><i style="width:'+pct+'%"></i></div></div>'+
@@ -195,8 +197,7 @@ function openPaceModal(){
             (est.sampledN? '':'(標準値: 直近に新規の出題が少ない)')+
           ' ・ 復習の正答率 '+Math.round(est.recall*100)+'%'+
             (est.sampledR? '':'(標準値: 直近に復習の出題が少ない)')
-        : 'まだ分析中(新規・復習をそれぞれ8問以上解くと精度が上がる。いまは標準値で計算)')+
-      ' ─ 学習を進めるほど目安は自動で更新される</div>'+
+        : 'まだ分析中(新規・復習をそれぞれ8問以上解くと精度が上がる。いまは標準値で計算)')+'</div>'+
     '<button class="btn" id="paceHist" style="margin-top:12px">📊 学習のあゆみ(これまでの記録)</button>'+
     '<div class="row" style="gap:10px; margin-top:12px">'+
       ((G.pace&&G.pace.goal)? '<button class="btn" id="goalClear">目標を解除</button>':'')+
@@ -289,7 +290,23 @@ function openHistoryModal(page){
       if(!bdFrom || k<bdFrom) bdFrom=k;
     }
   }
-  openModal('<h3>📊 学習のあゆみ</h3>'+
+  // 目安・フリーズ・数え方の長い説明は?に集約(v4.23.0)
+  openModal('<h3>📊 学習のあゆみ '+helpBtn("hlp-hist")+'</h3>'+
+    helpNote("hlp-hist",
+      '💡 <b>目安のしくみ</b>: 目安は毎日「残りの問題数 ÷ 目標日までの残り日数」で引き直される。'+
+      '今日多く解けば残りが減って<b>明日からの目安は下がり</b>、届かなかった分は'+
+      '<b>残りの日数全体に薄く分け直される</b>(翌日にまとめて上乗せはされない)。'+
+      'その日の目安は朝の時点で固定され、ミスしても途中で増えない。'+
+      'また「残りの問題数」は<b>実測の正答率</b>から見積もるため、たくさん解いて'+
+      '復習の正答率が下がっている間は<b>翌日の目安が増える</b>ことがある'+
+      '(1語を覚え切るのに必要な問題数の見積もりが増えるため。正答率が持ち直せば目安も下がる)<br><br>'+
+      '🧊 <b>フリーズ</b>: 学習できなかった日を1個につき1日自動で埋めて連続学習を守る'+
+      '(ログインボーナス7日目で入手・最大'+FRZ_MAX+'個。埋めた日は連続日数には数えない)<br><br>'+
+      '📱 <b>記録の数え方</b>: グラフと期間の合計は表示中の14日分・「全期間」は'+
+      'アプリを使いはじめてからのすべての記録(リセットしない限り残り続ける)。'+
+      '日付は端末の時計基準(0時で翌日に切り替わる)。'+
+      '複数の端末で<b>同じ日</b>に学習して同期した場合、その日の記録は多い方の端末の数になる(合算はされない)。'+
+      '新規/復習別の全期間集計は内訳の記録を始めた日(v4.12.0)以降が対象')+
     '<div class="row histnav" style="gap:8px; margin-top:6px">'+
       '<button class="btn hnav" id="histPrev"'+(hasPrev?'':' disabled')+'>◀</button>'+
       '<div class="grow" style="text-align:center; font-weight:800">'+h[0].md+' 〜 '+h[13].md+
@@ -310,22 +327,7 @@ function openHistoryModal(page){
       '<tr><td>学習した日数</td><td>'+daysN+'日(連続 '+studyStreak()+'日 ・ 🧊'+(G.frz||0)+'/'+FRZ_MAX+')</td></tr>'+
       (tgtDays? '<tr><td>この期間の目安達成</td><td>'+hitDays+' / '+tgtDays+'日</td></tr>':'')+
       '<tr><td>覚えた単語</td><td>'+fmt(mastered)+' / '+fmt(WORDS.length)+'語</td></tr>'+
-    '</table>'+
-    '<div class="panel" style="margin-top:12px"><div class="small">'+
-      '💡 <b>目安のしくみ</b>: 目安は毎日「残りの問題数 ÷ 目標日までの残り日数」で引き直される。'+
-      '今日多く解けば残りが減って<b>明日からの目安は下がり</b>、届かなかった分は'+
-      '<b>残りの日数全体に薄く分け直される</b>(翌日にまとめて上乗せはされない)。'+
-      'その日の目安は朝の時点で固定され、ミスしても途中で増えない。'+
-      'また「残りの問題数」は<b>実測の正答率</b>から見積もるため、たくさん解いて'+
-      '復習の正答率が下がっている間は<b>翌日の目安が増える</b>ことがある'+
-      '(1語を覚え切るのに必要な問題数の見積もりが増えるため。正答率が持ち直せば目安も下がる)<br><br>'+
-      '🧊 <b>フリーズ</b>: 学習できなかった日を1個につき1日自動で埋めて連続学習を守る'+
-      '(ログインボーナス7日目で入手・最大'+FRZ_MAX+'個。埋めた日は連続日数には数えない)<br><br>'+
-      '📱 <b>記録の数え方</b>: グラフと期間の合計は表示中の14日分・「全期間」は'+
-      'アプリを使いはじめてからのすべての記録(リセットしない限り残り続ける)。'+
-      '日付は端末の時計基準(0時で翌日に切り替わる)。'+
-      '複数の端末で<b>同じ日</b>に学習して同期した場合、その日の記録は多い方の端末の数になる(合算はされない)。'+
-      '新規/復習別の全期間集計は内訳の記録を始めた日(v4.12.0)以降が対象</div></div>');
+    '</table>');
   $("histPrev").onclick=()=>{ if(hasPrev) openHistoryModal(page+1); };
   $("histNext").onclick=()=>{ if(page>0) openHistoryModal(page-1); };
 }

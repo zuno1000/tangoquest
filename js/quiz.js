@@ -118,6 +118,23 @@ function buildChoices(word){
   return shuffle([word, ...pool.slice(0,3)]);
 }
 
+/* 長い訳語の選択肢は1行に収まるまで文字をわずかに縮める(最小13px・v4.23.0)。
+   harbor「（感情を）心に抱く、（犯人を）かくまう」等は17pxだと折り返して
+   文末の1文字だけが2行目に落ちていた(実機FB)。最小まで縮めても収まらない長文だけ
+   2行を許し、CSSのtext-wrap:balanceが2行をほぼ等分して端の1文字落ちを防ぐ */
+function fitChoiceFont(b){
+  b.style.fontSize="";
+  if(!b.clientWidth) return; // 非表示タブでは測れない(表示時にrefitChoicesが再実行)
+  b.classList.add("fitmeasure");
+  let fs=parseFloat(getComputedStyle(b).fontSize)||17;
+  while(b.scrollWidth>b.clientWidth && fs>13){
+    fs=Math.max(13, fs-0.5);
+    b.style.fontSize=fs+"px";
+  }
+  b.classList.remove("fitmeasure");
+}
+function refitChoices(sel){ document.querySelectorAll(sel).forEach(fitChoiceFont); }
+
 function renderQuestion(){
   answered=false;
   $("resultBar").classList.remove("show");
@@ -143,6 +160,7 @@ function renderQuestion(){
     b.onclick=()=>answer(c,b);
     box.appendChild(b);
   });
+  refitChoices("#choices .choice");
 }
 
 function newQuestion(){
