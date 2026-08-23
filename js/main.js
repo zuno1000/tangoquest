@@ -9,7 +9,8 @@ const TABS={
   adv:     {view:"advView",     nav:"navAdv",     on:()=>renderAdv()},
   gacha:   {view:"gachaView",   nav:"navGacha",   on:()=>renderGacha()},
   mission: {view:"missionView", nav:null,         on:()=>{ renderMissions(); refreshMissionDot(); }},
-  sv:      {view:"svView",      nav:null,         on:()=>{}}, // 単語のサバイバー(β・冒険タブから入る)
+  sv:      {view:"svView",      nav:null,         on:()=>{}}, // 単語のサバイバー(冒険タブから入る)
+  slot:    {view:"slotView",    nav:null,         on:()=>{}}, // ことだまスロット(ミニゲーム・冒険タブから入る v4.27.0)
 };
 function switchTab(name){
   closeModal();
@@ -17,9 +18,9 @@ function switchTab(name){
     $(TABS[k].view).classList.toggle("hidden", k!==name);
     if(TABS[k].nav) $(TABS[k].nav).classList.toggle("active", k===name);
   }
-  /* サバイバーのプレイ中は下部ナビを消して縦の余白を選択肢に渡す
+  /* サバイバー・スロットのプレイ中は下部ナビを消して縦の余白を選択肢に渡す
      (「次へ」がナビに被る実機FBへの対応=v4.22.0)。CSSのbody.svplayが担う */
-  document.body.classList.toggle("svplay", name==="sv");
+  document.body.classList.toggle("svplay", name==="sv"||name==="slot");
   TABS[name].on();
 }
 $("navHome").onclick=()=>switchTab("home");
@@ -35,7 +36,7 @@ const EVENTS=[
   // {d:"2026-08-03", t:"..."} 形式でバナー以外のイベント告知を書く
 ];
 const NEWS=[
-  {d:"2026-08-24", t:"🎰 v4.26.0 学習画面にミニゲーム「ことだまスロット」が登場! 学習画面上部の「🎰 スロットであそぶ」から掛け金(🪙100/500/2000)を選ぶと、クイズに正解するたびリールが回ります(ミスでは回りません)。連続正解コンボが続くほど当たりやすくなるので、集中して解くほどお得。あいこ2つ=2倍・3つ揃い=6倍・💎=15倍・7️⃣=50倍! 「やめる」でいつでも畳めます"},
+  {d:"2026-08-24", t:"🎰 v4.27.0 ミニゲーム「ことだまスロット」は冒険タブに引っ越して生まれ変わりました! サバイバーと同じ「上=ゲーム/下=クイズ」の画面で、リールは約3秒ごとに勝手に回り続けます(そのたび掛け金🪙を払う)。素の回転は少しずつ🪙が減る側ですが、クイズに正解すると◆ことだまが乗り(コンボ10以上なら+2)、次の回転の当たり率がぐっと上がります ─ 解く速さと正確さがそのまま機械の回りに! 掛け金はスライダーで自由(🪙10〜2,000)。配当: あいこ2倍・3つ揃い6倍・💎15倍・7️⃣50倍。「←」で戻ってもセッションは保持されます(離れている間リールは止まる)"},
   {d:"2026-08-24", t:"⚡ v4.26.0 学習がもっと気軽に・快適に! ①ホームに「サクッと5問だけ」ボタン: すきま時間に5問だけ ─ 終わるとその場で小さなお祝いと今日の進捗が見られます ②設定に「自動で次へ」: 答え合わせのあと1〜2秒で自動的に次の問題へ(オフ/1秒/1.5秒/2秒。学習・サバイバー共通) ③学習ペース管理に「もしものペース試算」スライダー: 目安に届かない日があっても、1日◯問ペースなら目標日までにどこまで習得できるかの見通しが分かります"},
   {d:"2026-08-24", t:"💫 v4.26.0 サバイバーの改善! ①設定に「3択の自動選択」: レベルアップ・宝箱の3択をおまかせで即決できます(HPが減っているときは回復を優先) ②なかま召喚の選択肢が出やすくなりました: まだ1体も召喚していない間は3択に必ず1枠登場します"},
   {d:"2026-08-24", t:"🔧 v4.26.0 不具合の修正! ①サバイバー(荒野含む)で解いた問題数が、学習タブの「今日◯問」にすぐ反映されない表示を修正 ②ログインボーナスの受け取り方を変更: 起動時に画面を灰色にするモーダルをやめ、トーストとホームのバナー(タップで7日カレンダー)でお知らせします ─ iPhoneのホーム画面起動で画面上部が灰色のまま残る不具合の根本対処です(報酬は今までどおり自動で受け取れます)"},
@@ -322,4 +323,5 @@ window.SV_META=SV_META; window.SV_META_COST=SV_META_COST; window.SV_DAILY_MODS=S
 window.SV_DAILY_GOLD=SV_DAILY_GOLD;
 window.SV_ENDLESS=SV_ENDLESS; window.SV_EL_STAGE_IV=SV_EL_STAGE_IV; window.SV_EL_BOSS_IV=SV_EL_BOSS_IV;
 window.SV_EL_SPAWN_MIN=SV_EL_SPAWN_MIN; window.SV_SAT_R=SV_SAT_R;
-window.SLOT_PAY=SLOT_PAY; window.SLOT_BETS=SLOT_BETS; window.SLOT_SYMS=SLOT_SYMS;
+window.SLOT_PAY=SLOT_PAY; window.SLOT_SYMS=SLOT_SYMS; window.SLOT_SPIN_IV=SLOT_SPIN_IV;
+window.SLOT_BET_MIN=SLOT_BET_MIN; window.SLOT_BET_MAX=SLOT_BET_MAX; window.SLOT_BOOST_MAX=SLOT_BOOST_MAX;

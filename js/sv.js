@@ -1277,6 +1277,18 @@ function renderAdv(){
     (er.best? ' ・ ベスト: <b>⏱'+Math.floor(er.best/60)+":"+String(er.best%60).padStart(2,"0")+'</b> ・ 💀'+er.kills : '')+'</div>'+
     '<button class="btn" id="svEndlessBtn" style="margin-top:8px; width:100%">挑戦する</button>'+
     '</div></div>';
+  // ことだまスロット(v4.27.0): ミニゲームの入口(本体はjs/slot.js=可逆設計)
+  h+='<div class="panel svdaily">'+
+    '<div style="font-weight:800">🎰 ことだまスロット <span class="svbeta">ミニゲーム</span> '+helpBtn("hlp-svslot")+'</div>'+
+    helpNote("hlp-svslot", 'クイズを解きながら回すスロット。リールは約3秒ごとに<b>勝手に回り続け</b>、そのたび掛け金🪙を払う。'+
+      '素の回転は少しずつ🪙が減る側だが、<b>正解すると◆ことだまが乗り</b>(コンボ10以上で+2)、'+
+      '次の回転の当たり率が上がる=解く速さと正確さがそのまま機械の回りになる。'+
+      '掛け金はスライダーで自由(🪙10〜2,000・🪙が足りない回転はお休み)。配当: あいこ2倍・3つ揃い6倍・💎15倍・7️⃣50倍。'+
+      '解いた分はふつうの学習として記録される。「←」で戻ってもセッションは保持(離れている間は止まる)')+
+    '<div class="small">回り続けるリールに、正解のことだまを乗せろ'+
+      ((typeof SL!=="undefined" && SL)? ' ・ 回転'+SL.ses.n+'・収支'+(SL.ses.net>=0?"+":"")+fmt(SL.ses.net):'')+'</div>'+
+    '<button class="btn" id="svSlotBtn" style="margin-top:8px; width:100%">'+
+      ((typeof SL!=="undefined" && SL)? '▶ つづける':'あそぶ')+'</button></div>';
   // ステージ一覧: 解放済み=挑戦可・未解放=🔒(前のステージで生還すると解放)
   h+='<div style="font-weight:800; font-size:15px; margin:14px 4px 2px">ステージ</div><div id="svStageList">';
   DUNGEONS.forEach((d,i)=>{
@@ -1306,6 +1318,7 @@ function renderAdv(){
     if(SV && !SV.over) svCleanup();
     svStart(SV_ENDLESS);
   };
+  $("svSlotBtn").onclick=()=>openSlotGame(); // サバイバーのランは保持されたまま(時間停止)
   const rb=$("svResumeBtn");
   if(rb) rb.onclick=()=>{ switchTab("sv"); svRestore(); };
   $("svStageList").querySelectorAll(".svstage[data-i]").forEach(b=>{

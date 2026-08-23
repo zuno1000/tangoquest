@@ -2677,41 +2677,90 @@ function run(){
   });
   t("スロット: 配当表は決定的に検証できる(rnd注入)", ()=>{
     const rq=vals=>{ let i=0; return ()=>vals[Math.min(i++, vals.length-1)]; };
-    const s7=W.slotSpin(100, 0, rq([0]));
+    const s7=W.slotSpin(100, false, rq([0]));
     eq(s7.kind, "seven"); eq(s7.win, 100*W.SLOT_PAY.seven);
     ok(s7.reels.every(x=>x==="7️⃣"), "7️⃣が3つ");
-    const g=W.slotSpin(500, 0, rq([0.005]));
+    const g=W.slotSpin(500, false, rq([0.005]));
     eq(g.kind, "gem"); eq(g.win, 500*W.SLOT_PAY.gem);
-    const pr=W.slotSpin(100, 0, rq([0.1, 0, 0]));
+    const pr=W.slotSpin(100, false, rq([0.1, 0, 0]));
     eq(pr.kind, "pair"); eq(pr.win, 100*W.SLOT_PAY.pair);
     const cnt={}; pr.reels.forEach(x=>cnt[x]=(cnt[x]||0)+1);
     ok(Object.keys(cnt).some(k=>cnt[k]===2), "ちょうど2つ揃う "+JSON.stringify(pr.reels));
-    const lo=W.slotSpin(100, 0, rq([0.9, 0, 0]));
-    eq(lo.kind, "lose"); eq(lo.win, 0);
+    const lo=W.slotSpin(100, false, rq([0.9, 0, 0]));
+    eq(lo.kind, "lose"); eq(lo.win, 0); ok(!lo.boosted);
     eq(new Set(lo.reels).size, 3, "はずれは3つバラバラ");
+    const bp=W.slotSpin(100, true, rq([0.28, 0, 0]));
+    eq(bp.kind, "pair", "素ならはずれのr=0.28が、ことだま入りではペアになる");
+    eq(W.slotSpin(100, false, rq([0.28, 0, 0])).kind, "lose", "同じ乱数でも素でははずれ");
+    ok(bp.boosted, "boostedフラグ");
   });
-  t("スロット: コンボでペアの当たり率だけが上がる(上限+10%)", ()=>{
-    ok(Math.abs(W.slotOdds(0).pair-0.21)<1e-9, "素は21%");
-    ok(Math.abs(W.slotOdds(10).pair-0.26)<1e-9, "10連続で+5%");
-    ok(Math.abs(W.slotOdds(99).pair-0.31)<1e-9, "上限+10%");
-    eq(W.slotOdds(99).seven, W.slotOdds(0).seven, "7️⃣の率はコンボ非依存");
+  t("スロット: 期待値は素0.80/ことだま入り1.10(正解が機械を勝たせる)", ()=>{
+    ok(Math.abs(W.slotEV(false)-0.80)<1e-9, "素=0.80(ゆるい🪙シンク) got="+W.slotEV(false));
+    ok(Math.abs(W.slotEV(true)-1.10)<1e-9, "ことだま入り=1.10 got="+W.slotEV(true));
+    ok(W.slotOdds(true).pair>W.slotOdds(false).pair, "ペア率が上がる");
+    eq(W.slotBoostGain(0), 1, "正解=◆+1");
+    eq(W.slotBoostGain(9), 1);
+    eq(W.slotBoostGain(10), 2, "コンボ10以上=◆+2");
   });
-  t("スロット: 正解フックは掛け金を払って回す(🪙不足・オフでは回らない)", ()=>{
-    const G=W.G, bet=100;
-    const gKeep=G.gold;
-    G.opt.slotBet=bet;
-    G.gold=1000;
-    const n0=W.SLOT_SES.n;
-    const r=W.slotOnCorrect();
-    ok(r && r.reels.length===3, "回った");
-    eq(G.gold, 1000-bet+r.win, "掛け金と配当が精算される");
-    eq(W.SLOT_SES.n, n0+1, "セッション回数が進む");
-    G.gold=bet-1;
-    ok(!W.slotOnCorrect(), "🪙不足では回らない");
-    eq(G.gold, bet-1, "🪙も減らない");
-    G.opt.slotBet=0;
-    ok(!W.slotOnCorrect(), "たたんでいる間は回らない");
-    G.gold=gKeep;
+  t("スロット: 回転は掛け金を払い、ブースト◆を1つずつ消費(🪙不足はお休み)", ()=>{
+    const rq=vals=>{ let i=0; return ()=>vals[Math.min(i++, vals.length-1)]; };
+    const sl=W.slotNewSession(100);
+    eq(sl.bet, 100);
+    const g={gold:1000};
+    sl.boost=2;
+    const r1=W.slotResolveSpin(sl, g, rq([0.9, 0, 0])); // ことだま入りだがはずれ
+    ok(r1.boosted, "◆を消費して回る"); eq(sl.boost, 1);
+    eq(g.gold, 900, "掛け金ぶん減る");
+    const r2=W.slotResolveSpin(sl, g, rq([0]));         // ことだま入りで7️⃣
+    ok(r2.boosted); eq(r2.win, 5000); eq(g.gold, 900-100+5000); eq(sl.boost, 0);
+    const r3=W.slotResolveSpin(sl, g, rq([0.5, 0, 0])); // ◆なし=素回し
+    ok(!r3.boosted, "◆が尽きたら素回し"); eq(r3.kind, "lose");
+    eq(sl.ses.n, 3, "回転数"); eq(sl.ses.b, 2, "◆入り回数");
+    eq(sl.ses.net, -100+4900-100, "収支");
+    g.gold=50;
+    ok(!W.slotResolveSpin(sl, g, rq([0])), "🪙不足は回らない");
+    eq(g.gold, 50, "🪙も減らない"); eq(sl.ses.n, 3, "回転数も進まない");
+  });
+  t("スロット: 掛け金はスライダーで自由(範囲外はクランプ)", ()=>{
+    eq(W.slotNewSession(0).bet, 100, "未設定は既定🪙100");
+    eq(W.slotNewSession(5).bet, W.SLOT_BET_MIN, "下限クランプ");
+    eq(W.slotNewSession(99999).bet, W.SLOT_BET_MAX, "上限クランプ");
+    eq(W.slotNewSession(730).bet, 730, "自由な額");
+    const doc=W.document;
+    ok(doc.getElementById("slBet") && doc.getElementById("slBet").type==="range", "スライダーUI");
+    eq(+doc.getElementById("slBet").min, W.SLOT_BET_MIN);
+    eq(+doc.getElementById("slBet").max, W.SLOT_BET_MAX);
+  });
+  t("スロット: 冒険ハブから入れて、サバイバー式レイアウトでクイズが出る", ()=>{
+    const doc=W.document;
+    W.switchTab("adv");
+    ok(doc.getElementById("svSlotBtn"), "冒険ハブに入口パネル");
+    W.openSlotGame();
+    ok(!doc.getElementById("slotView").classList.contains("hidden"), "スロットビューが開く");
+    ok(doc.getElementById("slWord").textContent.length>0, "出題される");
+    ok(doc.body.classList.contains("svplay"), "プレイ中は下部ナビ非表示(svと同じ)");
+    ok(doc.getElementById("slMachine") && doc.getElementById("slPrompt"), "上=機械/下=クイズ");
+    W.slotCleanup();
+    W.switchTab("home");
+    ok(!doc.body.classList.contains("svplay"), "戻るとナビ復活");
+  });
+  t("スロット: 正解で◆ことだまが乗る(相乗効果)・帳簿は学習と同一", ()=>{
+    const doc=W.document, G=W.G;
+    W.openSlotGame();
+    const sl=W.SL;
+    sl.boost=0;
+    const a0=W.dayRec().a, ans0=G.counters.ans;
+    const en=doc.getElementById("slWord").textContent; // e2jモード: 英語が出る
+    const w=W.WORDS.find(x=>x.en===en);
+    ok(w, "出題語を逆引き");
+    const correct=[...doc.querySelectorAll("#slChoices .choice")].find(b=>b.textContent===w.ja);
+    ok(correct, "正解の選択肢");
+    correct.click();
+    ok(sl.boost>=1, "◆ことだまが乗る(boost="+sl.boost+")");
+    eq(W.dayRec().a, a0+1, "日別記録に計上");
+    eq(G.counters.ans, ans0+1, "累計にも計上(=学習タブと同一の帳簿)");
+    W.slotCleanup();
+    W.switchTab("home");
   });
   t("サバイバー: 3択の自動選択は低HPで回復を優先(純関数)", ()=>{
     const cs=[{id:"pow", name:"a"}, {id:"heal", name:"b"}];

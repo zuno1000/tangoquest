@@ -276,8 +276,6 @@ function answer(chosen, btn){
     else if(drop.rarUp){ toast("🎉 "+w.en+" のカードが★"+drop.rar+"にランクアップ!"); vibe(30); }
     else if(rar>=3) vibe(30);
     // 🎫は毎正解なのでトースト・結果バー表示は出さない(残高はガチャ画面で確認)
-    // 🎰 ことだまスロット(v4.26.0・可逆設計のフック): 正解だけがリールを回す
-    if(typeof slotOnCorrect==="function") slotOnCorrect();
   }
   $("qStats").innerHTML=qStatsHTML(st); // 定着ステップの変化(上がった/戻った)を見せる
   rc.innerHTML='<span class="poschip pos'+w.pos+'">'+POS_LABEL[w.pos]+'</span>'+meta.join(' ');

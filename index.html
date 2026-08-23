@@ -39,9 +39,6 @@
 
 <!-- ============ 学習(クイズ) ============ -->
 <main id="quizView" class="hidden">
-  <!-- 🎰 ことだまスロット(v4.26.0・可逆設計: このブロック+js/slot.js+CSSブロックで完結。
-       既定はチップ1つ=学習UIはほぼ無変更。正解だけがリールを回す) -->
-  <div id="slotBox"></div>
   <div id="promptCard">
     <span id="qBadge">新規</span>
     <span id="qCount"></span>
@@ -138,6 +135,43 @@
     <!-- 次へは常設枠(visibilityで出し入れ)=出題中と確認中で選択肢の位置が動かない -->
     <div class="row" id="svCtrl" style="margin-top:8px">
       <button class="btn primary" style="flex:1; visibility:hidden" id="svNextBtn">次へ ▶</button>
+    </div>
+  </div>
+</main>
+
+<!-- ============ ことだまスロット(ミニゲーム・冒険タブから入る v4.27.0) ============
+     svViewと同じ「上=ゲーム/下=クイズ」構成・svcol=display:contentsでPCは2カラム。
+     可逆設計: このブロック+js/slot.js+CSSブロック+TABS1行+renderAdvの入口パネルで完結 -->
+<main id="slotView" class="hidden">
+  <div class="svcol" id="slColL">
+    <div class="row" id="slHead" style="margin-top:4px; gap:8px; align-items:center">
+      <button class="btn" id="slBack" style="padding:7px 12px">←</button>
+      <div class="grow" style="font-weight:800; font-size:12px; line-height:1.3">🎰 ことだまスロット<br><span class="small" id="slSes"></span></div>
+      <div id="slBoost" class="slboostchip">◆0</div>
+    </div>
+    <div id="slMachine">
+      <div id="slReels">
+        <span class="sreel sspin">❔</span><span class="sreel sspin">❔</span><span class="sreel sspin">❔</span>
+      </div>
+      <div id="slMsg" class="small">リールは回り続ける ─ 正解のことだまを乗せろ</div>
+    </div>
+    <!-- 掛け金はスライダーで自由(🪙10〜2,000) -->
+    <div class="row" id="slBetRow">
+      <span class="small" style="flex:0 0 auto">掛け金</span>
+      <input type="range" id="slBet" class="psim" style="margin-top:0" min="10" max="2000" step="10" value="100">
+      <b id="slBetVal" style="flex:0 0 auto; color:var(--accent2); min-width:64px; text-align:right; font-size:13px">🪙100</b>
+    </div>
+  </div>
+  <div class="svcol" id="slColR">
+    <div id="slPrompt">
+      <span id="slBadge"></span>
+      <span id="slCount"></span>
+      <div id="slWord"></div>
+      <div id="slStats"></div>
+    </div>
+    <div class="choices" id="slChoices"></div>
+    <div class="row" id="slCtrl" style="margin-top:8px">
+      <button class="btn primary" style="flex:1; visibility:hidden" id="slNextBtn">次へ ▶</button>
     </div>
   </div>
 </main>
