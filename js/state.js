@@ -1,7 +1,7 @@
 "use strict";
 /* ================= 状態管理 ================= */
 const KEY="tangoquest_v1";
-const APP_VERSION="4.25.0"; // リリースごとに更新(設定表示・更新確認のリモート版比較に使う)
+const APP_VERSION="4.26.0"; // リリースごとに更新(設定表示・更新確認のリモート版比較に使う)
 
 /* ---- iOSスタンドアロン起動時の灰色帯対策(v4.5.0→v4.13.0で拡張) ----
    インストール直後の初回起動に加え、日をまたいだ最初のコールドスタート
@@ -106,6 +106,10 @@ G.pace.setAt=G.pace.setAt||0; // 目標を設定/解除した時刻(同期はこ
 G.frz=G.frz||0;         // 連続学習フリーズ🧊の所持数(v4.13.0・最大FRZ_MAX)
 G.faces=G.faces||{};    // なかまのカスタムアイコン(charId -> dataURL・v4.13.0)
 G.idle=G.idle||{last:0}; // るすばん探索(放置報酬)の最終精算時刻(v4.13.0)
+/* 学習オプション(v4.26.0): autoNext=答え合わせ後に自動で次へ進むまでのms(0=オフ)/
+   svAuto=サバイバー3択の自動選択/slotBet=ことだまスロットの掛け金🪙(0=たたむ)。
+   同期マージはローカル優先(Object.assign起点)=端末ごとの好みとして振る舞う */
+G.opt=Object.assign({autoNext:0, svAuto:0, slotBet:0}, G.opt||{});
 G.updatedAt=G.updatedAt||0;
 G.resetAt=G.resetAt||0;     // リセット世代印(同期マージで新しい世代が丸ごと勝つ)
 

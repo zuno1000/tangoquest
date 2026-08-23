@@ -687,23 +687,45 @@ function svUpgradeChoices(b, opts){
   const lvOf=id=>(b&&b.taken&&b.taken[id])||0;
   let pool=SV_UPGRADES.filter(u=>!u.max || lvOf(u.id)<u.max);
   if(!opts.rare) pool=pool.filter(u=>!u.rare || Math.random()<0.34); // レアは控えめに顔を出す
+  let satChoices=[];
   if(b && b.sats && b.sats.length<(b.satMax||SV_SAT_MAX)){
     const used=new Set(b.sats.map(s=>s.id));
-    const cand=shuffle(Object.keys(G.chars).filter(id=>byChar[id] && !used.has(id))).slice(0,2);
-    cand.forEach(id=>{
+    const cand=shuffle(Object.keys(G.chars).filter(id=>byChar[id] && !used.has(id))).slice(0,3); // v4.26.0: 候補2→3体
+    satChoices=cand.map(id=>{
       const c=byChar[id];
-      pool.push({id:"sat:"+id, ic:c.face, name:c.name.split(" ").pop()+"を召喚",
-        desc:"なかまが自機を周回して自動攻撃"+(c.sk? "(固有スキル反映)":""), sat:1});
+      return {id:"sat:"+id, ic:c.face, name:c.name.split(" ").pop()+"を召喚",
+        desc:"なかまが自機を周回して自動攻撃"+(c.sk? "(固有スキル反映)":""), sat:1};
     });
+    pool=pool.concat(satChoices);
   }
+  let picked;
   if(opts.rare){
     // 宝箱: レア規則を先頭に積み、足りない分を基本強化で埋める
     const rares=shuffle(pool.filter(u=>u.rare));
     const rest=shuffle(pool.filter(u=>!u.rare));
-    return rares.concat(rest).slice(0,3);
+    picked=rares.concat(rest).slice(0,3);
+  }else picked=shuffle(pool).slice(0,3);
+  /* v4.26.0 実機FB「なかま召喚の選択肢が出にくい」: まだ1体も召喚していない間は
+     3択に必ず1枠を保証し、それ以外でも枠が空いていれば35%で1枠を差し替える。
+     宝箱(レア優先)はレア規則がごちそうなので据え置き */
+  if(!opts.rare && satChoices.length && !picked.some(u=>u.sat) &&
+     (b.sats.length===0 || Math.random()<0.35)){
+    picked[picked.length-1]=satChoices[Math.floor(Math.random()*satChoices.length)];
   }
-  return shuffle(pool).slice(0,3);
+  return picked;
 }
+/* 3択の自動選択(v4.26.0設定・純関数): HPが半分近く減っていれば回復を最優先、
+   それ以外は提示順の先頭(shuffle済み=ランダム。宝箱ではレア規則が先頭に並ぶ順なので
+   レアを自然に拾う) */
+function svAutoPick(b, cs){
+  if(!cs || !cs.length) return null;
+  if(b && b.hp<b.hpMax*0.45){
+    const h=cs.find(c=>c.id==="heal");
+    if(h) return h;
+  }
+  return cs[0];
+}
+
 function svApplyUpgrade(b, id){
   if(id && String(id).indexOf("sat:")===0){ svSummon(b, id.slice(4)); return; }
   b.taken=b.taken||{};
@@ -774,6 +796,7 @@ function svApplyAnswer(w, ok){
 
 /* ---- 画面(svView) ---- */
 var SV=null, svCur=null, svAnswered=false, svLoop=null;
+var svAutoNextT=null; // 「自動で次へ」(v4.26.0設定)のタイマー
 
 function svRec(){ G.sv=G.sv||{clears:{}}; return G.sv; }
 
@@ -819,6 +842,7 @@ function svFrame(){
 /* 後片付け(テスト・退出用): ループを止めてランを破棄する */
 function svCleanup(){
   if(svLoop){ clearInterval(svLoop); svLoop=null; }
+  clearTimeout(svAutoNextT);
   SV=null;
 }
 
@@ -850,9 +874,7 @@ function svRenderQuestion(){
   const st=G.words[w.en], e2j=G.mode==="e2j";
   // 学習タブと同じヘッダ表記: バッジ・「今日 X/Y問」・「これまで/定着」
   $("svBadge").textContent = !st? "新規" : (st[0]>=MASTER_BOX? "覚えた・復習" : "復習");
-  const d=dayRec(), q=paceToday(G);
-  $("svCount").textContent=((G.combo||0)>=3? "⚡"+G.combo+"連続 ・ ":"")+
-    "今日 "+d.a+(q&&!q.done? "/"+q.perDay:"")+"問";
+  $("svCount").textContent=todayCountText(); // 学習タブと同じ共通表記(v4.26.0で共通化)
   $("svStats").innerHTML=qStatsHTML(st);
   $("svWord").textContent = e2j? w.en : w.ja;
   const box=$("svChoices"); box.innerHTML="";
@@ -881,6 +903,7 @@ function svAnswer(chosen, btn){
   $("svStats").innerHTML=qStatsHTML(G.words[w.en]); // 定着ステップの変化を見せる
   $("svPrompt").classList.add("srch"); // 単語タップで辞書へ(学習タブと同じ流儀)
   saveG(); refreshHeader();
+  $("svCount").textContent=todayCountText(); // 解いた分を即時反映(v4.26.0)
   if(ok){
     // 一斉バースト(コンボで威力UP)+◆ジェム(コンボで増)
     const mult=1+0.04*Math.min(Math.max((G.combo||0)-1,0), 15);
@@ -898,12 +921,19 @@ function svAnswer(chosen, btn){
   /* 正解でもミスでも「次へ」必須(v4.22.0実機FB): 自動進行タイマーを廃止。
      v4.23.0: 確認中も時間は流れる ─ 眺めている間も敵は迫る(svFrameが駆動を継続) */
   $("svNextBtn").style.visibility="visible";
+  /* 自動で次へ(v4.26.0設定): 発火時にまだ確認中なら次へ。手動タップは
+     svNext冒頭のclearTimeoutが先取りする(v4.22.0の決定的フローは崩さない) */
+  if(G.opt && G.opt.autoNext){
+    clearTimeout(svAutoNextT);
+    svAutoNextT=setTimeout(()=>{ if(svAnswered && SV && !SV.over) svNext(); }, G.opt.autoNext);
+  }
 }
 
 /* 「次へ」= 予約された3択(レベルアップ・宝箱)を1つずつ消化してから次の問題へ。
    タイマー競合のない決定的フロー(v4.22.0)。✕で見送った予約も、もう一度
    「次へ」を押せば流れが続く */
 function svNext(){
+  clearTimeout(svAutoNextT); // 手動タップと自動進行の二重発火を断つ
   if(!SV) return;
   if(SV.over){ svFinish(); return; }
   if($("overlay").classList.contains("show")) return; // いまのモーダルが閉じてから
@@ -929,6 +959,17 @@ function svRestore(){
 function svOpenUpgrade(title, opts){
   if(!SV || SV.over) return;
   const cs=svUpgradeChoices(SV, opts);
+  /* 自動選択(v4.26.0設定): モーダルを開かずおまかせで即決 → 次の予約・問題へ流れる */
+  if(G.opt && G.opt.svAuto){
+    const c=svAutoPick(SV, cs);
+    if(c){
+      svApplyUpgrade(SV, c.id);
+      renderSVField(null);
+      toast("✨ 自動選択: "+c.name);
+      setTimeout(svNext, 150);
+      return;
+    }
+  }
   // 注釈は?に集約(v4.23.0): 常時出ていた2行の説明を畳んでシンプルに
   openModal('<h3>'+(title||"✨ レベルアップ! Lv"+SV.lv)+' '+helpBtn("hlp-svup")+'</h3>'+
     helpNote("hlp-svup", '言霊のちからを1つ選ぶ(このランの間だけ有効)。✕で閉じると見送り(選び直しはできない)')+

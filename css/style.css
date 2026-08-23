@@ -921,3 +921,46 @@ body.svplay #svView{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
 @media (min-width:1680px) and (pointer:fine){
   body{zoom:1.2}
 }
+
+/* ---- v4.26.0: サクッと5問・ログボバナー・ペース試算・ことだまスロット ---- */
+/* ホームの「サクッと5問」: 学習CTAの控えめな相棒 */
+.quick5{display:block; width:100%; margin-top:10px; text-align:center}
+/* ログインボーナスのバナー(起動モーダル廃止の受け皿。タップで7日カレンダー) */
+.lgbanner{margin-top:12px; padding:11px 14px; font-size:13px; font-weight:700;
+  cursor:pointer; text-align:center;
+  background:linear-gradient(135deg,#FFF3DC,#FFE9C0); color:#7A5510}
+.lgbanner:active{opacity:.85}
+/* ペース試算のスライダー(Soft UIの窪みトラック) */
+.psim{width:100%; margin-top:10px; -webkit-appearance:none; appearance:none; height:14px;
+  border-radius:8px; background:var(--bg2); outline:none;
+  box-shadow:inset 2px 2px 4px var(--shd), inset -2px -2px 4px var(--shl)}
+.psim::-webkit-slider-thumb{-webkit-appearance:none; appearance:none; width:26px; height:26px;
+  border-radius:50%; background:linear-gradient(135deg,var(--accent2),#7B8CFF); cursor:pointer;
+  box-shadow:0 3px 8px rgba(91,108,255,.45)}
+.psim::-moz-range-thumb{width:26px; height:26px; border:none; border-radius:50%;
+  background:var(--accent2); cursor:pointer}
+/* ことだまスロット(学習タブ上部・可逆設計のブロック) */
+#slotBox{flex:0 0 auto}
+.slotrow{text-align:right; padding:0 2px}
+.slotchip{border:none; border-radius:999px; padding:5px 12px; min-height:28px; font-size:12px;
+  font-weight:800; cursor:pointer; background:var(--bg); color:var(--sub);
+  box-shadow:-3px -3px 6px var(--shl), 3px 3px 6px var(--shd)}
+.slotchip:active{opacity:.85}
+.slotpanel{padding:10px 12px; margin-bottom:8px}
+#slotReels{display:flex; align-items:center; gap:8px; margin-top:8px; padding:6px 10px;
+  background:var(--bg2); border-radius:14px; min-height:46px;
+  box-shadow:inset 2px 2px 5px var(--shd), inset -2px -2px 5px var(--shl)}
+#slotReels .sreel{font-size:26px; width:36px; text-align:center; flex:0 0 auto;
+  background:var(--card2); border-radius:10px; padding:2px 0;
+  box-shadow:-2px -2px 4px var(--shl), 2px 2px 4px var(--shd)}
+#slotReels .sreel.sspin{animation:sspinA .18s linear infinite; filter:blur(1.5px)}
+@keyframes sspinA{0%{transform:translateY(-2px)} 50%{transform:translateY(2px)} 100%{transform:translateY(-2px)}}
+#slotMsg{flex:1; min-width:0; text-align:right; font-weight:700; overflow:hidden;
+  text-overflow:ellipsis; white-space:nowrap}
+.slotbets{margin-top:8px; gap:6px}
+.slotbets .sbet{flex:1; padding:8px 4px; min-height:36px; font-size:13px}
+.slotbets .sbet.active{color:#fff; background:linear-gradient(135deg,var(--accent2),#7B8CFF);
+  box-shadow:0 4px 10px rgba(91,108,255,.4)}
+@media (prefers-reduced-motion: reduce){
+  #slotReels .sreel.sspin{animation:none; filter:none}
+}

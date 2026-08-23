@@ -3,7 +3,8 @@
 
 const TABS={
   home:    {view:"homeView",    nav:"navHome",    on:()=>renderHome()},
-  quiz:    {view:"quizView",    nav:"navQuiz",    on:()=>{ refitChoices("#choices .choice"); }},
+  quiz:    {view:"quizView",    nav:"navQuiz",    on:()=>{ refreshQuizCount(); refitChoices("#choices .choice"); }},
+  /* refreshQuizCount: サバイバー(荒野含む)で解いた分の「今日◯問」をタブ切替時に引き直す(v4.26.0修正) */
   party:   {view:"partyView",   nav:"navParty",   on:()=>renderParty()},
   adv:     {view:"advView",     nav:"navAdv",     on:()=>renderAdv()},
   gacha:   {view:"gachaView",   nav:"navGacha",   on:()=>renderGacha()},
@@ -34,6 +35,10 @@ const EVENTS=[
   // {d:"2026-08-03", t:"..."} 形式でバナー以外のイベント告知を書く
 ];
 const NEWS=[
+  {d:"2026-08-24", t:"🎰 v4.26.0 学習画面にミニゲーム「ことだまスロット」が登場! 学習画面上部の「🎰 スロットであそぶ」から掛け金(🪙100/500/2000)を選ぶと、クイズに正解するたびリールが回ります(ミスでは回りません)。連続正解コンボが続くほど当たりやすくなるので、集中して解くほどお得。あいこ2つ=2倍・3つ揃い=6倍・💎=15倍・7️⃣=50倍! 「やめる」でいつでも畳めます"},
+  {d:"2026-08-24", t:"⚡ v4.26.0 学習がもっと気軽に・快適に! ①ホームに「サクッと5問だけ」ボタン: すきま時間に5問だけ ─ 終わるとその場で小さなお祝いと今日の進捗が見られます ②設定に「自動で次へ」: 答え合わせのあと1〜2秒で自動的に次の問題へ(オフ/1秒/1.5秒/2秒。学習・サバイバー共通) ③学習ペース管理に「もしものペース試算」スライダー: 目安に届かない日があっても、1日◯問ペースなら目標日までにどこまで習得できるかの見通しが分かります"},
+  {d:"2026-08-24", t:"💫 v4.26.0 サバイバーの改善! ①設定に「3択の自動選択」: レベルアップ・宝箱の3択をおまかせで即決できます(HPが減っているときは回復を優先) ②なかま召喚の選択肢が出やすくなりました: まだ1体も召喚していない間は3択に必ず1枠登場します"},
+  {d:"2026-08-24", t:"🔧 v4.26.0 不具合の修正! ①サバイバー(荒野含む)で解いた問題数が、学習タブの「今日◯問」にすぐ反映されない表示を修正 ②ログインボーナスの受け取り方を変更: 起動時に画面を灰色にするモーダルをやめ、トーストとホームのバナー(タップで7日カレンダー)でお知らせします ─ iPhoneのホーム画面起動で画面上部が灰色のまま残る不具合の根本対処です(報酬は今までどおり自動で受け取れます)"},
   {d:"2026-08-13", t:"🗺 v4.25.0 冒険が「単語のサバイバー」に一本化! 従来のダンジョン(オート戦闘)と無限回廊は役目を終え、冒険タブを開くとすぐステージ一覧・日替わりチャレンジ・終わりなき荒野が並びます。ステージの解放は「生還」で進み(これまでのダンジョンのクリア状況はそのまま引き継がれます)、初生還は🪙3000・毎日最初の生還に🪙1000。任務・実績もサバイバー仕様になりました(無限回廊の実績は「荒野の最長生存」に交代)。探索中だった無限回廊のぶんの🪙は、次にアプリを開いたとき自動で精算します。るすばん探索の時給は「生還した最高ステージ」で決まります(これまでのダンジョン記録も有効)"},
   {d:"2026-08-13", t:"♾ v4.25.0 強化の上限をぜんぶ開放! ①サバイバーの心得はLv上限なしに(6段目からは費用が1段ごとに×2.5と高額になります。「集中の心得」で開始◆があふれた分は開始時のレベルアップに変わります) ②レベルアップ・宝箱の3択も取得回数の上限を撤廃 ─ 会心も連鎖も絆(なかま枠+1)も何度でも重ねられます。あなただけの最強ビルドをどうぞ(詠唱間隔0.5秒・被弾は最低1ダメージなどの下限だけ残しているので、ゲームは壊れません)"},
   {d:"2026-08-13", t:"🖥 v4.25.0 パソコンの画面を横いっぱいに! 横幅の上限(980px)をなくし、ホーム・編成・ガチャ・冒険はカードや一覧が横に並ぶ広いレイアウトになりました。サバイバーの戦場+クイズの2カラムも画面いっぱいまで広がります(スマホの表示は変わりません)"},
@@ -141,9 +146,15 @@ function renderHome(){
     // 学習ペース管理: 今日の目安メーター/未設定なら設定への導線
     // (キャラパネルと学習CTAの間に置く=v4.7.2でユーザー指定の並び)
     '<div class="panel pacebar" id="homePace" style="margin-top:12px"></div>'+
+    // ログインボーナスのバナー(v4.26.0: 起動モーダル廃止の受け皿。タップで7日カレンダー)
+    (loginBonusBannerNeeded()?
+      '<div class="panel lgbanner" id="homeLogin">🎁 ログインボーナス'+G.login.day+'日目 <b>'+
+        rewardText(LOGIN_BONUS[(G.login.day||1)-1])+'</b> ゲット!<span class="small"> ─ タップでカレンダー</span></div>':'')+
     // 学習CTA
     '<button id="homeStudy" class="studycta shine">📖 学習をはじめる'+
       '<span class="ctasub">今日 '+d.a+'問(正解'+d.c+')</span></button>'+
+    // サクッと5問(v4.26.0): 隙間時間の入口。5問終えると小さなお祝い
+    '<button id="homeQuick" class="btn quick5">⚡ サクッと5問だけ <span class="small" style="font-weight:700">─ すきま時間に</span></button>'+
     // 任務報酬の一括受取(受け取れるものがあるときだけ出す)
     (mn? '<button id="homeClaim" class="claimbtn homeclaim">🎁 任務報酬をすべて受け取る</button>':'')+
     // 同期リマインダー(最終同期3日超+未同期変更ありのときだけ)
@@ -169,6 +180,13 @@ function renderHome(){
     el.onclick=()=>switchTab(el.dataset.go);
   });
   $("homeStudy").onclick=()=>switchTab("quiz");
+  $("homeQuick").onclick=()=>startQuick(5);
+  const lg=$("homeLogin");
+  if(lg) lg.onclick=()=>{
+    try{ localStorage.setItem(LOGIN_SEEN_KEY, todayKey()); }catch(e){}
+    openLoginModal();
+    renderHome(); // バナーを畳む(モーダルは開いたまま=renderHomeはoverlayに触れない)
+  };
   fillPaceEl($("homePace"));
   $("homeDex").onclick=()=>openDex();
   if(mn) $("homeClaim").onclick=()=>{ claimAllCurrent(); renderHome(); };
@@ -304,3 +322,4 @@ window.SV_META=SV_META; window.SV_META_COST=SV_META_COST; window.SV_DAILY_MODS=S
 window.SV_DAILY_GOLD=SV_DAILY_GOLD;
 window.SV_ENDLESS=SV_ENDLESS; window.SV_EL_STAGE_IV=SV_EL_STAGE_IV; window.SV_EL_BOSS_IV=SV_EL_BOSS_IV;
 window.SV_EL_SPAWN_MIN=SV_EL_SPAWN_MIN; window.SV_SAT_R=SV_SAT_R;
+window.SLOT_PAY=SLOT_PAY; window.SLOT_BETS=SLOT_BETS; window.SLOT_SYMS=SLOT_SYMS;

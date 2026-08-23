@@ -39,6 +39,9 @@
 
 <!-- ============ 学習(クイズ) ============ -->
 <main id="quizView" class="hidden">
+  <!-- 🎰 ことだまスロット(v4.26.0・可逆設計: このブロック+js/slot.js+CSSブロックで完結。
+       既定はチップ1つ=学習UIはほぼ無変更。正解だけがリールを回す) -->
+  <div id="slotBox"></div>
   <div id="promptCard">
     <span id="qBadge">新規</span>
     <span id="qCount"></span>
@@ -178,6 +181,7 @@
 <script src="js/missions.js"></script>
 <script src="js/dex.js"></script>
 <script src="js/sv.js"></script>
+<script src="js/slot.js"></script>
 <script src="js/sync.js"></script>
 <script src="js/main.js"></script>
 </body>

@@ -353,6 +353,15 @@ function openSettings(){
     '<button class="btn" id="histBtn" style="margin-top:8px">📊 学習のあゆみ(これまでの記録)</button>'+
     '<h3 style="margin-top:16px">出題モード</h3>'+
     '<button class="btn" id="modeToggle">'+(G.mode==="e2j"?"EN → 日本語":"日本語 → EN")+' (タップで切替)</button>'+
+    // 学習オプション(v4.26.0): 自動で次へ・サバイバー3択の自動選択
+    '<h3 style="margin-top:16px">学習オプション '+helpBtn("hlp-opt")+'</h3>'+
+    helpNote("hlp-opt", '<b>自動で次へ</b>: 答え合わせのあと、「次へ」を押さなくても設定した秒数で自動的に次の問題へ進む'+
+      '(学習タブ・サバイバー共通。「次へ」を押せばすぐ進める。レベルアップの3択などは今までどおり止まる)<br><br>'+
+      '<b>サバイバー3択の自動選択</b>: レベルアップ・宝箱の3択をおまかせで即決する'+
+      '(HPが半分近く減っているときは回復を優先。じっくり選びたい人はオフのまま)')+
+    '<button class="btn" id="autoNextBtn">自動で次へ: '+autoNextLabel(G.opt.autoNext)+' (タップで切替)</button>'+
+    '<div style="height:8px"></div>'+
+    '<button class="btn" id="svAutoBtn">サバイバー3択の自動選択: '+(G.opt.svAuto? "ON":"OFF")+'</button>'+
     // 各項目の注釈は?に集約(v4.23.0・todaybgm方式)
     '<h3 style="margin-top:16px">演出 '+helpBtn("hlp-vibe")+'</h3>'+
     (CAN_VIBRATE
@@ -379,6 +388,14 @@ function openSettings(){
     G.mode=G.mode==="e2j"?"j2e":"e2j"; saveG();
     $("modeToggle").textContent=(G.mode==="e2j"?"EN → 日本語":"日本語 → EN")+" (タップで切替)";
     if(!answered && cur) renderQuestion();
+  };
+  $("autoNextBtn").onclick=()=>{
+    G.opt.autoNext=autoNextCycle(G.opt.autoNext); saveG();
+    $("autoNextBtn").textContent="自動で次へ: "+autoNextLabel(G.opt.autoNext)+" (タップで切替)";
+  };
+  $("svAutoBtn").onclick=()=>{
+    G.opt.svAuto=G.opt.svAuto? 0:1; saveG();
+    $("svAutoBtn").textContent="サバイバー3択の自動選択: "+(G.opt.svAuto? "ON":"OFF");
   };
   const vt=$("vibeToggle");
   if(vt) vt.onclick=()=>{

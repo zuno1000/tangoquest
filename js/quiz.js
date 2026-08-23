@@ -7,6 +7,10 @@ const INTERVALS=[60e3, 10*60e3, 864e5, 3*864e5, 7*864e5, 16*864e5, 35*864e5, 90*
 const MASTER_BOX=5;
 
 let cur=null, answered=false;
+let autoNextT=null; // 「自動で次へ」(v4.26.0設定)のタイマー
+/* サクッと5問(v4.26.0): 隙間時間の小さなセッション。varはテスト(iframe)からの参照用。
+   保存しない=アプリを閉じれば消える一時状態(帳簿はすべて通常の学習計上に乗る) */
+var QUICK={goal:0, done:0, cor:0};
 /* 直近に出した単語(3問)は再出題しない ─ 1問おきの機械的な往復を防ぐ */
 let recentEns=[];
 function noteRecent(en){ recentEns.push(en); if(recentEns.length>3) recentEns.shift(); }
@@ -106,6 +110,45 @@ function qStatsHTML(st){
     ((st[5]||0)>=3? ' <span class="qfire">🔥連続ミス'+st[5]+'(正解で強カード!)</span>':"");
 }
 
+/* 「今日 X/Y問」の共通表記(学習タブ#qCount・サバイバー#svCountで共用)。
+   v4.26.0: qCountの値は出題時に固定されていたため、サバイバー(荒野含む)で解いた分が
+   学習タブへ戻ったとき反映されない不具合があった → タブ切替時にrefreshQuizCountで引き直す */
+function todayCountText(){
+  const d=dayRec(), q=paceToday(G);
+  return ((G.combo||0)>=3? "⚡"+G.combo+"連続 ・ ":"")+
+    "今日 "+d.a+(q&&!q.done? "/"+q.perDay:"")+"問";
+}
+function refreshQuizCount(){
+  const el=$("qCount"); if(!el) return;
+  el.textContent=(QUICK.goal? "⚡"+Math.min(QUICK.done,QUICK.goal)+"/"+QUICK.goal+"問 ・ ":"")+todayCountText();
+}
+
+/* ---- サクッと5問(v4.26.0): 「5問だけならやろう」の背中押し ---- */
+function startQuick(n){
+  QUICK={goal:n||5, done:0, cor:0};
+  switchTab("quiz");
+  refreshQuizCount();
+  toast("⚡ サクッと"+QUICK.goal+"問 ─ 気軽にどうぞ!");
+}
+function openQuickDone(){
+  const d=dayRec(), q=paceToday(G);
+  const g=QUICK.goal, c=QUICK.cor;
+  QUICK={goal:0, done:0, cor:0}; // ✕で閉じても通常学習として続けられる
+  openModal('<h3>⚡ '+g+'問 おつかれさま!</h3>'+
+    '<div class="giftbox">正解 <b style="font-size:18px">'+c+' / '+g+'</b>'+(c>=g? ' ─ 全問正解! 🎉':'')+
+    '<br><span class="small">今日 '+d.a+(q&&!q.done? "/"+q.perDay:"")+'問'+
+    (q&&!q.done&&d.a>=q.perDay? ' ─ 目安達成! 🏅':'')+'</span></div>'+
+    '<div class="row" style="gap:10px">'+
+    '<button class="btn grow" id="quickMore">⚡ もう5問</button>'+
+    '<button class="btn primary grow" id="quickHome">ホームへ</button></div>');
+  $("quickMore").onclick=()=>{ closeModal(); startQuick(5); newQuestion(); };
+  $("quickHome").onclick=()=>{ closeModal(); switchTab("home"); };
+}
+
+/* 「自動で次へ」(v4.26.0)の設定値: 0=オフ→1秒→1.5秒→2秒を巡回 */
+function autoNextCycle(v){ return {0:1000, 1000:1500, 1500:2000, 2000:0}[v||0]||0; }
+function autoNextLabel(v){ return {0:"オフ", 1000:"1秒", 1500:"1.5秒", 2000:"2秒"}[v||0]||"オフ"; }
+
 function jaTokens(s){ return s.split(/[、。・（）()／\/\s～~]+/).filter(t=>t.length>=2); }
 function overlaps(a,b){
   const ta=jaTokens(a.ja), tb=new Set(jaTokens(b.ja));
@@ -143,11 +186,8 @@ function renderQuestion(){
   const st=G.words[w.en];
   $("qBadge").textContent = !st? "新規" : (st[0]>=MASTER_BOX? "覚えた・復習" : "復習");
   $("qBadge").style.color = !st? "var(--accent2)" : (st[0]>=MASTER_BOX? "var(--ok)" : "var(--accent)");
-  const d=dayRec();
-  const q=paceToday(G);
   // 「今日 X/Y問」は右端に固定。連続正解は必要なときだけ左側に付く(連続日数は出さない)
-  $("qCount").textContent=((G.combo||0)>=3? "⚡"+G.combo+"連続 ・ ":"")+
-    "今日 "+d.a+(q&&!q.done? "/"+q.perDay:"")+"問";
+  refreshQuizCount();
   const pw=$("promptWord");
   pw.textContent = e2j? w.en : w.ja;
   pw.className = e2j? "" : "ja";
@@ -164,6 +204,8 @@ function renderQuestion(){
 }
 
 function newQuestion(){
+  clearTimeout(autoNextT); // 手動の「次へ」と自動進行タイマーの二重発火を断つ
+  if(QUICK.goal && QUICK.done>=QUICK.goal){ openQuickDone(); return; } // サクッと5問の完了
   const w=pickWord();
   cur={word:w, choices:buildChoices(w)};
   renderQuestion();
@@ -196,6 +238,7 @@ function answer(chosen, btn){
   track("ans"); if(ok) track("cor");
   paceLog(wasNew, ok); // 学習ペース推定の材料(直近100問)
   noteRecent(w.en);
+  if(QUICK.goal){ QUICK.done++; if(ok) QUICK.cor++; } // サクッと5問の進捗(帳簿は通常と同一)
 
   // 連続正解コンボ(XPボーナス・ドロップ★率UP)と、正解ごとの🎫(v4.6.0: 1問=🎫1)
   let tkGain=0;
@@ -233,6 +276,8 @@ function answer(chosen, btn){
     else if(drop.rarUp){ toast("🎉 "+w.en+" のカードが★"+drop.rar+"にランクアップ!"); vibe(30); }
     else if(rar>=3) vibe(30);
     // 🎫は毎正解なのでトースト・結果バー表示は出さない(残高はガチャ画面で確認)
+    // 🎰 ことだまスロット(v4.26.0・可逆設計のフック): 正解だけがリールを回す
+    if(typeof slotOnCorrect==="function") slotOnCorrect();
   }
   $("qStats").innerHTML=qStatsHTML(st); // 定着ステップの変化(上がった/戻った)を見せる
   rc.innerHTML='<span class="poschip pos'+w.pos+'">'+POS_LABEL[w.pos]+'</span>'+meta.join(' ');
@@ -243,6 +288,13 @@ function answer(chosen, btn){
   if(pq && !pq.done && d.a===pq.perDay){ toast("🎉 今日の目安 "+pq.perDay+"問を達成!"); vibe(40); }
   saveG();
   refreshHeader();
+  refreshQuizCount(); // 解答数・サクッと5問の進捗を即時反映
+  /* 自動で次へ(v4.26.0設定): タイマー発火時にまだ確認中(answered)のときだけ進む。
+     手動の「次へ」はnewQuestion冒頭のclearTimeoutで先取りされる */
+  if(G.opt && G.opt.autoNext){
+    clearTimeout(autoNextT);
+    autoNextT=setTimeout(()=>{ if(answered) newQuestion(); }, G.opt.autoNext);
+  }
 }
 
 $("nextBtn").onclick=()=>newQuestion();

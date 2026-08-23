@@ -68,6 +68,32 @@ function paceRemaining(g, est, days){
   return {seen, mastered, unseen, attempts:Math.ceil(learn+upkeep)};
 }
 
+/* もしものペース試算(v4.26.0): 「1日perDay問 × days日」の解答予算で、目標日までに
+   何語まで習得できるかの見通し。paceRemainingの逆問題を貪欲法で解く ─
+   覚えた単語の維持復習を先に払い、残り予算で「安く覚えられる単語」(=定着が進んでいる
+   単語ほど安い)から順に覚えていく。目安に届かない日が続いても「このペースならここまで」
+   が見える=挫折の予防線。純関数 */
+function paceProjection(g, est, days, perDay){
+  const R_KNOWN=0.96;
+  let mastered=0, budget=days*perDay;
+  const costs=[];
+  for(const en in g.words){
+    const st=g.words[en];
+    if(st[0]>=MASTER_BOX){ mastered++; budget-=upkeepReviews(st[0], days)/est.recall; }
+    else costs.push(expAttempts(MASTER_BOX-st[0], est.recall)+upkeepReviews(MASTER_BOX, days/2)/est.recall);
+  }
+  const seen=mastered+costs.length;
+  const unseenCost=est.knownRate*expAttempts(MASTER_BOX, R_KNOWN)
+    +(1-est.knownRate)*expAttempts(MASTER_BOX, est.recall)
+    +upkeepReviews(MASTER_BOX, days/2)/est.recall;
+  for(let i=WORDS.length-seen;i>0;i--) costs.push(unseenCost);
+  costs.sort((a,b)=>a-b);
+  let add=0;
+  for(const c of costs){ if(budget<c) break; budget-=c; add++; }
+  const m=Math.min(WORDS.length, mastered+add);
+  return {mastered:m, total:WORDS.length, pct:Math.round(100*m/WORDS.length)};
+}
+
 /* 今日の目安(1日あたりの問題数)。目標未設定ならnull */
 function paceQuota(g, now){
   const goal=g.pace && g.pace.goal;
@@ -191,6 +217,15 @@ function openPaceModal(){
       '<button class="btn ppre" data-d="180">半年後</button>'+
       '<button class="btn ppre" data-d="365">1年後</button></div>'+
     '<div class="panel" id="paceCalc" style="margin-top:12px"></div>'+
+    // もしものペース試算(v4.26.0): 目安に届かなくても「このペースならここまで」が見える
+    '<div class="panel" style="margin-top:10px">'+
+      '<div class="row" style="justify-content:space-between"><b style="font-size:13px">🎚 もしものペース試算 '+helpBtn("hlp-sim")+'</b>'+
+      '<b id="simVal" style="color:var(--accent2)">100問/日</b></div>'+
+      helpNote("hlp-sim", '目安どおりに進めない日があっても大丈夫。スライダーで「1日の問題数」を動かすと、'+
+        'そのペースを目標日まで続けたときに習得できる単語数の見通しが出る(いまの正答率と定着の進み具合から推定。'+
+        '覚えた単語の維持復習ぶんも織り込み済み)')+
+      '<input type="range" id="paceSim" class="psim" min="10" max="300" step="10" value="100">'+
+      '<div id="paceSimOut" class="small" style="margin-top:6px; line-height:1.6"></div></div>'+
     '<div class="small" style="margin-top:10px">📊 直近'+logN+'問の分析: '+
       ((est.sampledN||est.sampledR)
         ? 'すでに知っていそうな単語 約'+Math.round(est.knownRate*100)+'%'+
@@ -213,10 +248,22 @@ function openPaceModal(){
       '<div style="font-size:18px; font-weight:800; margin-top:4px">1日 <span style="color:var(--accent2)">'+fmt(per)+'問</span> が目安</div>'+
       (per>300? '<div class="small" style="color:var(--ng); margin-top:4px">⚠️ かなり挑戦的なペース。目標日を延ばす選択も</div>':'');
   };
-  upd();
-  $("goalDate").onchange=upd;
+  // 試算スライダー: 日付・つまみのどちらを動かしても引き直す
+  const simUpd=()=>{
+    const v=$("goalDate").value, out=$("paceSimOut"), per=+$("paceSim").value;
+    $("simVal").textContent=per+"問/日";
+    if(!v || v<=today){ out.innerHTML="目標日を選ぶと試算できる"; return; }
+    const days=Math.max(1, Math.ceil((new Date(v+"T23:59:59").getTime()-Date.now())/864e5));
+    const p=paceProjection(G, est, days, per);
+    out.innerHTML='1日'+per+'問 × '+days+'日 → 目標日までに 約<b style="color:var(--accent2)">'+fmt(p.mastered)+'語('+p.pct+'%)</b>を習得できる見込み'+
+      '<span style="color:var(--sub)">(いま '+fmt(mastered)+'語)</span>';
+  };
+  const upd2=()=>{ upd(); simUpd(); };
+  upd2();
+  $("paceSim").oninput=simUpd;
+  $("goalDate").onchange=upd2;
   $("modal").querySelectorAll(".ppre").forEach(b=>{
-    b.onclick=()=>{ $("goalDate").value=addDays(today, +b.dataset.d); upd(); };
+    b.onclick=()=>{ $("goalDate").value=addDays(today, +b.dataset.d); upd2(); };
   });
   $("goalSave").onclick=()=>{
     const v=$("goalDate").value;

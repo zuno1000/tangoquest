@@ -18,6 +18,11 @@ function grantReward(r){
   if(r.f) G.frz=Math.min(FRZ_MAX, (G.frz||0)+r.f); // フリーズは上限あり(貯め込み防止)
 }
 
+/* v4.26.0: 起動直後にモーダル(灰色オーバーレイ)を開くのをやめた ─ iOSスタンドアロンで
+   ステータスバー領域が灰色のまま残る不具合(長期未解決)の根治。報酬の付与はここで従来どおり
+   行い、お祝いはトースト+ホームのバナー(タップで7日カレンダー)が担う。
+   受け取りの操作は元々なかった(旧モーダルの「受け取る」は閉じるだけ)ため、体験は失われない */
+const LOGIN_SEEN_KEY="tq_lgSeen"; // バナーを畳んだ日(端末ローカル・同期対象外)
 function checkLogin(){
   const k=todayKey();
   const gift=!G.gift10;               // 初回プレゼント(10連分チケット)未受取か
@@ -30,19 +35,31 @@ function checkLogin(){
     G.login.day=(G.login.day%7)+1;
     r=LOGIN_BONUS[G.login.day-1];
     grantReward(r);
+    try{ localStorage.removeItem(LOGIN_SEEN_KEY); }catch(e){} // 新しい日のバナーを出す
   }
   saveG(); refreshHeader();
-  openModal('<h3>🎁 '+(newDay?"ログインボーナス":"プレゼント")+'</h3>'+
-    (gift? '<div class="giftbox">✨ はじめまして記念<br><b style="font-size:18px">🎫10(10連ガチャ分)</b> をプレゼント!</div>':'')+
-    (newDay?
-      '<div class="small">'+G.login.day+'日目の報酬: <b style="color:var(--accent)">'+rewardText(r)+'</b></div>'+
-      '<div class="lgrid">'+LOGIN_BONUS.map((b,i)=>{
-        const day=i+1;
-        const cls=day<G.login.day?" got":(day===G.login.day?" now":"");
-        return '<div class="lday'+cls+'"><div class="ln">'+day+'日目</div><div class="lr">'+rewardText(b)+'</div></div>';
-      }).join("")+'</div>'+
-      '<div class="small" style="margin-top:8px">🧊=連続学習フリーズ: 学習できなかった日を自動で埋めて連続記録を守る(いま '+(G.frz||0)+'/'+FRZ_MAX+'個)</div>' : '')+
-    '<div class="row" style="justify-content:center"><button class="btn primary" style="flex:1" data-close>受け取る</button></div>');
+  toast((gift? "✨ はじめまして記念 🎫10!":"")+
+    (gift&&newDay? " ／ ":"")+
+    (newDay? "🎁 ログインボーナス"+G.login.day+"日目: "+rewardText(r):""));
+  if(!$("homeView").classList.contains("hidden")) renderHome(); // バナーを即時反映
+}
+/* ホームのログボバナーを出すか: 今日ぶんを受け取り済みで、まだ畳んでいないとき */
+function loginBonusBannerNeeded(){
+  try{ return G.login.last===todayKey() && localStorage.getItem(LOGIN_SEEN_KEY)!==todayKey(); }
+  catch(e){ return false; }
+}
+/* 7日カレンダー(旧ログボモーダルの表示部分)。ユーザー操作からだけ開く=起動時の灰色を出さない */
+function openLoginModal(){
+  const r=LOGIN_BONUS[(G.login.day||1)-1];
+  openModal('<h3>🎁 ログインボーナス</h3>'+
+    '<div class="small">'+G.login.day+'日目の報酬: <b style="color:var(--accent)">'+rewardText(r)+'</b>(受け取り済み)</div>'+
+    '<div class="lgrid">'+LOGIN_BONUS.map((b,i)=>{
+      const day=i+1;
+      const cls=day<G.login.day?" got":(day===G.login.day?" now":"");
+      return '<div class="lday'+cls+'"><div class="ln">'+day+'日目</div><div class="lr">'+rewardText(b)+'</div></div>';
+    }).join("")+'</div>'+
+    '<div class="small" style="margin-top:8px">🧊=連続学習フリーズ: 学習できなかった日を自動で埋めて連続記録を守る(いま '+(G.frz||0)+'/'+FRZ_MAX+'個)</div>'+
+    '<div class="row" style="justify-content:center"><button class="btn primary" style="flex:1" data-close>OK</button></div>');
 }
 
 /* ---- 任務定義 ----

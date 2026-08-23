@@ -2611,6 +2611,141 @@ function run(){
     ok(s3.cd<base, "再装填が縮んでいる");
   });
 
+  /* ---- v4.26.0: サクッと5問・ペース試算・スロット・自動化設定・バグ修正 ---- */
+  t("G.optの既定値(自動で次へ/サバイバー自動選択/スロット掛け金)がある", ()=>{
+    const o=W.G.opt;
+    ok(o && typeof o==="object", "G.opt");
+    ok("autoNext" in o && "svAuto" in o && "slotBet" in o, "3キーが初期化される");
+  });
+  t("自動で次へ: 設定値はオフ→1秒→1.5秒→2秒→オフの巡回", ()=>{
+    eq(W.autoNextCycle(0), 1000);
+    eq(W.autoNextCycle(1000), 1500);
+    eq(W.autoNextCycle(1500), 2000);
+    eq(W.autoNextCycle(2000), 0);
+    eq(W.autoNextLabel(0), "オフ");
+    eq(W.autoNextLabel(1500), "1.5秒");
+  });
+  t("今日の進捗はタブ切替で引き直される(サバイバー分の反映=v4.26.0修正)", ()=>{
+    const doc=W.document, d=W.dayRec();
+    const a0=d.a;
+    d.a=a0+77; // サバイバー(荒野)での解答に相当する日別加算
+    W.switchTab("quiz");
+    ok(doc.getElementById("qCount").textContent.indexOf("今日 "+(a0+77))>=0,
+      "qCount="+doc.getElementById("qCount").textContent);
+    d.a=a0;
+    W.switchTab("home");
+  });
+  t("ログインボーナスは起動モーダルを開かない(灰色の根治)+バナー導線", ()=>{
+    const G=W.G, doc=W.document, LS=W.localStorage;
+    LS.removeItem("tq_lgSeen");
+    const yd=new Date(Date.now()-864e5);
+    const yk=yd.getFullYear()+"-"+String(yd.getMonth()+1).padStart(2,"0")+"-"+String(yd.getDate()).padStart(2,"0");
+    G.login={last:yk, day:2};
+    const t0=G.tickets;
+    W.checkLogin();
+    ok(!doc.getElementById("overlay").classList.contains("show"), "起動時にオーバーレイ(灰色)を出さない");
+    eq(G.login.day, 3, "3日目に進む");
+    eq(G.tickets, t0+2, "3日目報酬🎫2は従来どおり自動付与");
+    ok(W.loginBonusBannerNeeded(), "ホームにバナーを出す条件が立つ");
+    W.openLoginModal();
+    ok(doc.getElementById("overlay").classList.contains("show"), "タップでカレンダーが開く");
+    ok(doc.getElementById("modal").innerHTML.indexOf("lgrid")>=0, "7日カレンダー表示");
+    W.closeModal();
+    LS.setItem("tq_lgSeen", W.todayKey());
+    ok(!W.loginBonusBannerNeeded(), "畳んだらその日は出ない");
+    LS.removeItem("tq_lgSeen");
+  });
+  t("サクッと5問: 5問終えると完了モーダル→通常学習へ戻れる", ()=>{
+    const doc=W.document;
+    W.QUICK={goal:5, done:5, cor:4};
+    W.newQuestion();
+    ok(doc.getElementById("overlay").classList.contains("show"), "完了モーダルが開く");
+    ok(doc.getElementById("modal").textContent.indexOf("5問")>=0, "5問の完了表示");
+    eq(W.QUICK.goal, 0, "表示と同時に通常学習へ復帰(✕で閉じても続けられる)");
+    W.closeModal();
+    W.newQuestion();
+    ok(doc.getElementById("promptWord").textContent.length>0, "次の問題が出る");
+  });
+  t("ペース試算: 1日の問題数を増やすほど習得見込みが伸び、全語で頭打ち", ()=>{
+    const est=W.paceEstimates([]);
+    const p1=W.paceProjection(W.G, est, 100, 20);
+    const p2=W.paceProjection(W.G, est, 100, 100);
+    const p3=W.paceProjection(W.G, est, 100, 1e6);
+    ok(p2.mastered>=p1.mastered, "多いほど伸びる("+p1.mastered+"→"+p2.mastered+")");
+    ok(p3.mastered===W.WORDS.length && p3.pct===100, "上限=全語");
+    eq(p1.total, W.WORDS.length);
+  });
+  t("スロット: 配当表は決定的に検証できる(rnd注入)", ()=>{
+    const rq=vals=>{ let i=0; return ()=>vals[Math.min(i++, vals.length-1)]; };
+    const s7=W.slotSpin(100, 0, rq([0]));
+    eq(s7.kind, "seven"); eq(s7.win, 100*W.SLOT_PAY.seven);
+    ok(s7.reels.every(x=>x==="7️⃣"), "7️⃣が3つ");
+    const g=W.slotSpin(500, 0, rq([0.005]));
+    eq(g.kind, "gem"); eq(g.win, 500*W.SLOT_PAY.gem);
+    const pr=W.slotSpin(100, 0, rq([0.1, 0, 0]));
+    eq(pr.kind, "pair"); eq(pr.win, 100*W.SLOT_PAY.pair);
+    const cnt={}; pr.reels.forEach(x=>cnt[x]=(cnt[x]||0)+1);
+    ok(Object.keys(cnt).some(k=>cnt[k]===2), "ちょうど2つ揃う "+JSON.stringify(pr.reels));
+    const lo=W.slotSpin(100, 0, rq([0.9, 0, 0]));
+    eq(lo.kind, "lose"); eq(lo.win, 0);
+    eq(new Set(lo.reels).size, 3, "はずれは3つバラバラ");
+  });
+  t("スロット: コンボでペアの当たり率だけが上がる(上限+10%)", ()=>{
+    ok(Math.abs(W.slotOdds(0).pair-0.21)<1e-9, "素は21%");
+    ok(Math.abs(W.slotOdds(10).pair-0.26)<1e-9, "10連続で+5%");
+    ok(Math.abs(W.slotOdds(99).pair-0.31)<1e-9, "上限+10%");
+    eq(W.slotOdds(99).seven, W.slotOdds(0).seven, "7️⃣の率はコンボ非依存");
+  });
+  t("スロット: 正解フックは掛け金を払って回す(🪙不足・オフでは回らない)", ()=>{
+    const G=W.G, bet=100;
+    const gKeep=G.gold;
+    G.opt.slotBet=bet;
+    G.gold=1000;
+    const n0=W.SLOT_SES.n;
+    const r=W.slotOnCorrect();
+    ok(r && r.reels.length===3, "回った");
+    eq(G.gold, 1000-bet+r.win, "掛け金と配当が精算される");
+    eq(W.SLOT_SES.n, n0+1, "セッション回数が進む");
+    G.gold=bet-1;
+    ok(!W.slotOnCorrect(), "🪙不足では回らない");
+    eq(G.gold, bet-1, "🪙も減らない");
+    G.opt.slotBet=0;
+    ok(!W.slotOnCorrect(), "たたんでいる間は回らない");
+    G.gold=gKeep;
+  });
+  t("サバイバー: 3択の自動選択は低HPで回復を優先(純関数)", ()=>{
+    const cs=[{id:"pow", name:"a"}, {id:"heal", name:"b"}];
+    eq(W.svAutoPick({hp:10, hpMax:100}, cs).id, "heal", "低HPは回復");
+    eq(W.svAutoPick({hp:90, hpMax:100}, cs).id, "pow", "通常は先頭(シャッフル済み)");
+    eq(W.svAutoPick(null, []), null, "候補なしはnull");
+  });
+  t("サバイバー: 自動選択ONは3択モーダルを開かず即取得して流れる", ()=>{
+    const G=W.G, doc=W.document;
+    G.opt.svAuto=1;
+    W.svStart(W.DUNGEONS[0]);
+    const b=W.SV;
+    b.lvups=1;
+    W.svNext();
+    ok(!doc.getElementById("overlay").classList.contains("show"), "モーダルは開かない");
+    eq(b.lvups, 0, "予約が消化される");
+    ok(Object.keys(b.taken||{}).length+Object.keys(b.rules||{}).length+b.sats.length>=1,
+      "強化かなかまを取得している");
+    G.opt.svAuto=0;
+    W.svCleanup();
+    doc.getElementById("svField").innerHTML="";
+    W.switchTab("home");
+  });
+  t("サバイバー: なかま未召喚の間は3択に召喚が必ず並ぶ(v4.26.0)", ()=>{
+    const G=W.G;
+    G.chars.c01=G.chars.c01||{dup:0};
+    const b=W.svNewRun(W.DUNGEONS[0], {hp:1000, dpt:100, catk:30, elems:[]}, 0);
+    eq(b.sats.length, 0, "前提: 未召喚");
+    for(let i=0;i<10;i++)
+      ok(W.svUpgradeChoices(b).some(c=>c.sat), (i+1)+"回目も召喚が並ぶ");
+    W.svApplyUpgrade(b, "sat:c01");
+    ok(b.sats.length===1, "召喚後は保証なし(35%の差し替えのみ)に戻る前提の確認");
+  });
+
   /* ---- 起動状態 ---- */
   t("起動時に問題が出題されている", ()=>{
     ok(W.document.getElementById("promptWord").textContent.length>0);
