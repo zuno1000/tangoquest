@@ -1,7 +1,7 @@
 "use strict";
 /* ================= 状態管理 ================= */
 const KEY="tangoquest_v1";
-const APP_VERSION="4.27.0"; // リリースごとに更新(設定表示・更新確認のリモート版比較に使う)
+const APP_VERSION="4.28.0"; // リリースごとに更新(設定表示・更新確認のリモート版比較に使う)
 
 /* ---- iOSスタンドアロン起動時の灰色帯対策(v4.5.0→v4.13.0で拡張) ----
    インストール直後の初回起動に加え、日をまたいだ最初のコールドスタート
@@ -110,6 +110,9 @@ G.idle=G.idle||{last:0}; // るすばん探索(放置報酬)の最終精算時�
    svAuto=サバイバー3択の自動選択/slotBet=ことだまスロットの掛け金🪙の記憶(0=未設定→既定100)。
    同期マージはローカル優先(Object.assign起点)=端末ごとの好みとして振る舞う */
 G.opt=Object.assign({autoNext:0, svAuto:0, slotBet:0}, G.opt||{});
+/* スロットの永続データ(v4.28.0): meta=スロットの心得(id→Lv)。
+   同期はLvごとmaxマージ・部分リセットでも残す(sync.jsに明示、G.sv.metaと同じ扱い) */
+G.slot=G.slot||{}; G.slot.meta=G.slot.meta||{};
 G.updatedAt=G.updatedAt||0;
 G.resetAt=G.resetAt||0;     // リセット世代印(同期マージで新しい世代が丸ごと勝つ)
 

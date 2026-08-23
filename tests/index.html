@@ -2689,18 +2689,29 @@ function run(){
     const lo=W.slotSpin(100, false, rq([0.9, 0, 0]));
     eq(lo.kind, "lose"); eq(lo.win, 0); ok(!lo.boosted);
     eq(new Set(lo.reels).size, 3, "はずれは3つバラバラ");
-    const bp=W.slotSpin(100, true, rq([0.28, 0, 0]));
-    eq(bp.kind, "pair", "素ならはずれのr=0.28が、ことだま入りではペアになる");
-    eq(W.slotSpin(100, false, rq([0.28, 0, 0])).kind, "lose", "同じ乱数でも素でははずれ");
+    const bp=W.slotSpin(100, true, rq([0.21, 0, 0]));
+    eq(bp.kind, "pair", "素ならはずれのr=0.21が、ことだま入りではペアになる");
+    eq(W.slotSpin(100, false, rq([0.21, 0, 0])).kind, "lose", "同じ乱数でも素でははずれ");
     ok(bp.boosted, "boostedフラグ");
   });
-  t("スロット: 期待値は素0.80/ことだま入り1.10(正解が機械を勝たせる)", ()=>{
-    ok(Math.abs(W.slotEV(false)-0.80)<1e-9, "素=0.80(ゆるい🪙シンク) got="+W.slotEV(false));
-    ok(Math.abs(W.slotEV(true)-1.10)<1e-9, "ことだま入り=1.10 got="+W.slotEV(true));
+  t("スロット: 期待値は素0.90/ことだま入り1.10(正解が機械を勝たせる)", ()=>{
+    ok(Math.abs(W.slotEV(false)-0.90)<1e-6, "素=0.90(ゆるい🪙シンク) got="+W.slotEV(false));
+    ok(Math.abs(W.slotEV(true)-1.10)<1e-6, "ことだま入り=1.10 got="+W.slotEV(true));
     ok(W.slotOdds(true).pair>W.slotOdds(false).pair, "ペア率が上がる");
     eq(W.slotBoostGain(0), 1, "正解=◆+1");
     eq(W.slotBoostGain(9), 1);
     eq(W.slotBoostGain(10), 2, "コンボ10以上=◆+2");
+    eq(W.slotBoostGain(20), 3, "コンボ20以上=◆+3(v4.28.0で段階拡大)");
+  });
+  t("スロット: コンボの相乗効果=ことだま入りの配当が伸びる(+3%/連続・最大×1.6)", ()=>{
+    const rq=vals=>{ let i=0; return ()=>vals[Math.min(i++, vals.length-1)]; };
+    ok(Math.abs(W.slotComboM(0)-1)<1e-9, "コンボ0=等倍");
+    ok(Math.abs(W.slotComboM(10)-1.3)<1e-9, "コンボ10=×1.3");
+    ok(Math.abs(W.slotComboM(99)-1.6)<1e-9, "上限×1.6");
+    const s=W.slotSpin(100, true, rq([0]), {combo:20});
+    eq(s.win, Math.round(100*W.SLOT_PAY.seven*1.6), "7️⃣×コンボ倍率");
+    const s2=W.slotSpin(100, false, rq([0.1, 0, 0]), {combo:20});
+    eq(s2.win, Math.round(100*W.SLOT_PAY.pair), "素回しにはコンボ倍率が乗らない");
   });
   t("スロット: 回転は掛け金を払い、ブースト◆を1つずつ消費(🪙不足はお休み)", ()=>{
     const rq=vals=>{ let i=0; return ()=>vals[Math.min(i++, vals.length-1)]; };
@@ -2712,11 +2723,11 @@ function run(){
     ok(r1.boosted, "◆を消費して回る"); eq(sl.boost, 1);
     eq(g.gold, 900, "掛け金ぶん減る");
     const r2=W.slotResolveSpin(sl, g, rq([0]));         // ことだま入りで7️⃣
-    ok(r2.boosted); eq(r2.win, 5000); eq(g.gold, 900-100+5000); eq(sl.boost, 0);
+    ok(r2.boosted); eq(r2.win, 7700); eq(g.gold, 900-100+7700); eq(sl.boost, 0);
     const r3=W.slotResolveSpin(sl, g, rq([0.5, 0, 0])); // ◆なし=素回し
     ok(!r3.boosted, "◆が尽きたら素回し"); eq(r3.kind, "lose");
     eq(sl.ses.n, 3, "回転数"); eq(sl.ses.b, 2, "◆入り回数");
-    eq(sl.ses.net, -100+4900-100, "収支");
+    eq(sl.ses.net, -100+7600-100, "収支");
     g.gold=50;
     ok(!W.slotResolveSpin(sl, g, rq([0])), "🪙不足は回らない");
     eq(g.gold, 50, "🪙も減らない"); eq(sl.ses.n, 3, "回転数も進まない");
@@ -2730,6 +2741,64 @@ function run(){
     ok(doc.getElementById("slBet") && doc.getElementById("slBet").type==="range", "スライダーUI");
     eq(+doc.getElementById("slBet").min, W.SLOT_BET_MIN);
     eq(+doc.getElementById("slBet").max, W.SLOT_BET_MAX);
+  });
+  t("スロットの心得: 費用は幾何級数(6段目から×2.5)・🪙で修める", ()=>{
+    eq(W.slotMetaCost(0), 300);
+    eq(W.slotMetaCost(4), 15000);
+    eq(W.slotMetaCost(5), 37500, "6段目=×2.5");
+    eq(W.slotMetaCost(6), 93750);
+    const g={gold:1000};
+    const r=W.slotBuyMeta(g, "pay");
+    eq(r.lv, 1); eq(r.cost, 300); eq(g.gold, 700);
+    eq(g.slot.meta.pay, 1);
+    ok(!W.slotBuyMeta({gold:100}, "pay"), "🪙不足は買えない");
+    // 一括: 安い順の貪欲・dryRunは触れない
+    const g2={gold:1000};
+    const est=W.slotBuyMetaAll(g2, true);
+    eq(g2.gold, 1000, "dryRunは🪙に触れない");
+    eq(est.count, 3, "300×3=900で3段(4段目は残100で買えない)");
+    eq(est.spent, 900);
+    W.slotBuyMetaAll(g2);
+    eq(g2.gold, 100);
+  });
+  t("スロットの心得: 効果は「ことだま入り」にだけ効く(素回しの期待値0.90は不変)", ()=>{
+    const rq=vals=>{ let i=0; return ()=>vals[Math.min(i++, vals.length-1)]; };
+    // 配当の心得: ことだま入りの当たり+4%/Lv
+    const s=W.slotSpin(100, true, rq([0]), {meta:{pay:5}});
+    eq(s.win, Math.round(100*W.SLOT_PAY.seven*1.2), "配当Lv5=×1.2");
+    eq(W.slotSpin(100, false, rq([0]), {meta:{pay:5}}).win,
+       Math.round(100*W.SLOT_PAY.seven), "素回しには乗らない");
+    // 幸運の心得: ことだま入りのあいこ率+1.2%/Lv(上限0.6)
+    ok(Math.abs(W.slotOdds(true,{luck:5}).pair-(0.187+0.06))<1e-9, "幸運Lv5");
+    eq(W.slotOdds(true,{luck:999}).pair, 0.6, "あいこ率は0.6で頭打ち");
+    eq(W.slotOdds(false,{luck:5}).pair, W.slotOdds(false).pair, "素回しは不変");
+    // 大当りの心得: ことだま入りの7️⃣💎率+6%/Lv
+    ok(Math.abs(W.slotOdds(true,{jack:10}).seven-0.0025*1.6)<1e-9, "大当りLv10");
+    eq(W.slotOdds(false,{jack:10}).seven, 0.002, "素回しは不変=放置では儲からない");
+    // 守りの心得: ことだま入りのはずれで掛け金の4%/Lv返戻(上限80%)
+    const sl=W.slotNewSession(100); sl.boost=1;
+    const g={gold:1000};
+    const r=W.slotResolveSpin(sl, g, rq([0.9, 0, 0]), {meta:{insure:10}});
+    eq(r.refund, 40, "守りLv10=40%返戻");
+    eq(g.gold, 1000-100+40);
+    const sl2=W.slotNewSession(100); // ◆なしのはずれには返戻なし
+    const g2={gold:1000};
+    ok(!W.slotResolveSpin(sl2, g2, rq([0.9, 0, 0]), {meta:{insure:10}}).refund, "素回しは返戻なし");
+    // 込めの心得: 正解で乗る◆が10%/Lvで+1(Lv10ごとに確定+1)
+    eq(W.slotBoostGain(0, 10, ()=>0.99), 2, "Lv10=確定+1");
+    eq(W.slotBoostGain(0, 5, ()=>0.49), 2, "Lv5=50%で+1(当たり)");
+    eq(W.slotBoostGain(0, 5, ()=>0.51), 1, "Lv5=50%で+1(はずれ)");
+  });
+  t("スロットの心得: 同期はLvごとに多い方・部分リセットでも残る", ()=>{
+    const a={resetAt:0, updatedAt:2, slot:{meta:{pay:2, insure:3}},
+             words:{}, days:{}, inv:{}, chars:{}, dungeons:{}, counters:{}, ach:{}};
+    const b={resetAt:0, updatedAt:1, slot:{meta:{pay:5, luck:1}}};
+    const m=W.mergeData(a, b);
+    eq(m.slot.meta.pay, 5, "多い方");
+    eq(m.slot.meta.insure, 3, "ローカルの段も残る");
+    eq(m.slot.meta.luck, 1, "リモートの新しい系統も入る");
+    const pr=W.partialResetData({slot:{meta:{pay:3}}}, 99);
+    eq(pr.slot.meta.pay, 3, "部分リセットでも心得は残る");
   });
   t("スロット: 冒険ハブから入れて、サバイバー式レイアウトでクイズが出る", ()=>{
     const doc=W.document;

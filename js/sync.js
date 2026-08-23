@@ -175,6 +175,10 @@ function mergeData(a, b){
   // 本日初生還ボーナスの受取日(v4.25.0): dailyDoneと同じ日付文字列マージ=二重取り防止
   const bwd=(b.sv&&b.sv.winDay)||"";
   if(bwd && bwd>(m.sv.winDay||"")) m.sv.winDay=bwd;
+  // スロットの心得(v4.28.0): Lvごとに多い方(サバイバーの心得と同じ扱い)
+  m.slot=m.slot||{}; m.slot.meta=m.slot.meta||{};
+  const bslm=(b.slot&&b.slot.meta)||{};
+  for(const k in bslm) m.slot.meta[k]=Math.max(m.slot.meta[k]||0, bslm[k]||0);
   // 終わりなき荒野の記録: ベスト秒数・キルとも多い方(v4.22.0)
   const bel=(b.sv&&b.sv.endless)||null;
   if(bel || m.sv.endless){
@@ -330,6 +334,7 @@ function partialResetData(g, t){
         dailyDone:(g.sv&&g.sv.dailyDone)||null,
         winDay:(g.sv&&g.sv.winDay)||null,
         endless:(g.sv&&g.sv.endless)||null}, // サバイバーの記録・心得・荒野は冒険の記録として残す
+    slot:{meta:(g.slot&&g.slot.meta)||{}}, // スロットの心得も冒険の記録として残す(v4.28.0)
     daily:g.daily||{}, weekly:g.weekly||{}, counters:g.counters||{}, ach:g.ach||{},
     login:g.login||{last:null,day:0}, gift10:g.gift10||0,
     frz:g.frz||0, faces:g.faces||{}, idle:{last:t},
