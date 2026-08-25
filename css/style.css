@@ -33,7 +33,7 @@ body{
 button{font-family:inherit; color:var(--ink)}
 
 /* Soft UI 影レシピ: 浮き(raised)と窪み(inset) */
-.panel,.ccard,.tile,.charcard,.gres,.gbanner,.hero,
+.panel,.ccard,.charcard,.gres,.gbanner,
 .choice,.wslot.filled,.eqhero{
   box-shadow:-5px -5px 10px var(--shl), 5px 5px 10px var(--shd);
 }
@@ -189,25 +189,32 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
   box-shadow:0 4px 10px rgba(91,108,255,.35)}
 .minibtn:disabled{opacity:.6; box-shadow:none}
 
-/* ---- home ---- */
-.hero{display:flex; align-items:center; gap:14px; cursor:pointer; margin-top:6px}
-.heroface{width:72px; height:72px; border-radius:22px; background:var(--card2);
-  display:flex; align-items:center; justify-content:center; font-size:40px; flex:0 0 auto;
-  box-shadow:inset 3px 3px 6px var(--shd), inset -3px -3px 6px var(--shl)}
+/* ---- home(v4.29.0で刷新: 進捗の確認と学習の開始だけに絞る) ---- */
 .studycta{display:block; width:100%; margin-top:14px; border:none; border-radius:20px; padding:16px;
   font-size:18px; font-weight:800; color:#4A3200; cursor:pointer; text-align:center;
   background:linear-gradient(135deg,#FFB547,#F5A020);
   box-shadow:0 6px 16px rgba(245,160,32,.45)}
 .studycta .ctasub{display:block; font-size:12px; font-weight:700; margin-top:3px; opacity:.72}
 .studycta:active{opacity:.92; transform:scale(.99)}
-.tilegrid{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:14px}
-.tile{background:var(--bg); border-radius:18px; padding:14px 13px; cursor:pointer}
-.tile:active{transform:scale(.98)}
-.tile .tic{font-size:24px}
-.tile .tname{font-size:14px; font-weight:800; margin-top:4px}
-.tile .tsub{font-size:11px; color:var(--sub); margin-top:2px}
-.tile.ltd{box-shadow:-5px -5px 10px var(--shl), 5px 5px 10px var(--shd), 0 0 10px rgba(222,154,14,.35)}
-.tile.claim{box-shadow:-5px -5px 10px var(--shl), 5px 5px 10px var(--shd), 0 0 12px rgba(222,154,14,.5)}
+/* 今日の目安をヒーローに: 数字を大きく・余白を厚く */
+.pacebar.phero{margin-top:6px; padding:16px 18px}
+.pacebar.phero .pacetop{font-size:14px}
+.pacebar.phero .pacetop b{font-size:30px; line-height:1}
+.pacebar.phero .pacetop .ptgt{font-size:14px}
+.pacebar.phero .pbar{height:16px; margin-top:12px}
+.pacebar.phero .pacemsg{font-size:13px; margin-top:9px}
+/* 直近7日のあゆみ(タップで全期間) */
+.weekpanel{margin-top:12px; padding:12px 14px; cursor:pointer}
+.weekchart{display:flex; align-items:flex-end; gap:5px; margin-top:8px}
+.wcol{flex:1; min-width:0; display:flex; flex-direction:column; align-items:center}
+.wbarw{position:relative; width:100%; height:34px; display:flex; align-items:flex-end; justify-content:center}
+.wcol .hbar{width:60%; min-width:8px}
+.wday{font-size:10px; color:var(--sub); margin-top:3px; font-weight:700}
+.wcol.today .wday{color:var(--accent2)}
+/* 任務・図鑑の小さな入口(下部ナビにないもの) */
+.homelinks{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px}
+.homelinks .btn{display:flex; flex-direction:column; align-items:flex-start; gap:2px; padding:12px 14px; text-align:left}
+.homelinks .hlsub{font-size:11px; font-weight:700; color:var(--sub)}
 .homeclaim{display:block; width:100%; margin-top:12px}
 .syncnag{margin-top:12px; padding:11px 14px; font-size:13px; font-weight:700;
   color:var(--accent2); cursor:pointer; text-align:center}
@@ -598,7 +605,7 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
 @media (prefers-reduced-motion: reduce){ .dexprog i{animation:none} }
 
 /* ---- マイクロインタラクション ---- */
-.tile:active,.ccard:active{filter:brightness(1.04)}
+.ccard:active{filter:brightness(1.04)}
 
 /* ---- 学習ペース管理(v4.7.0) ----
    今日の目安メーター: 学習タブ(#paceBar)とホーム(#homePace)で共用。
@@ -668,7 +675,6 @@ header .res span:last-child{overflow:hidden; text-overflow:ellipsis}
 /* ---- v4.13.1: カスタムアイコンのカードアート化 ----
    TCGのイラストのように、カード面では画像を面いっぱいに広げる。
    小さな顔アイコンの場所(既定の1em)とカード面をCSSで出し分ける */
-.heroface .cface{width:100%; height:100%; border-radius:inherit; vertical-align:top}
 .eqhero .ecf .cface{width:54px; height:54px; border-radius:14px; vertical-align:middle}
 .charcard .cface, .dexchar .dface .cface, .gres .gface .cface{
   display:block; width:100%; height:auto; aspect-ratio:1; object-fit:cover;
@@ -684,8 +690,19 @@ header .res span:last-child{overflow:hidden; text-overflow:ellipsis}
 /* 冒険ハブ(v4.25.0: サバイバー一本化)。ステージはリスト(スマホ)/グリッド(PC) */
 .svstage{width:100%; margin-top:8px; text-align:left; display:flex; align-items:center; gap:10px}
 .svstage.locked{opacity:.5}
+.svstage.next{box-shadow:-4px -4px 8px var(--shl), 4px 4px 10px var(--shd), 0 0 0 2px var(--accent2) inset}
 .svstic{font-size:26px; width:32px; text-align:center; flex:0 0 auto}
-.svhub2 .svdaily{margin-top:10px}
+/* v4.29.0: ハブの集約 ─ 次のステージ1枚+あそびかた3種+折りたたみのステージ一覧 */
+.svnext{margin-top:12px; padding:14px 16px}
+.svnextic{font-size:40px; flex:0 0 auto; width:52px; text-align:center}
+.svmodes{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:12px}
+.svmode{display:flex; flex-direction:column; align-items:center; gap:3px; padding:12px 6px 10px; text-align:center; line-height:1.35}
+.svmode .svmic{font-size:28px}
+.svmode b{font-size:13px}
+.svmode .svmsub{font-size:10px; font-weight:700; color:var(--sub); line-height:1.4}
+.svstages{width:100%; margin-top:12px; display:flex; align-items:center; gap:8px; text-align:left}
+.svchev{font-size:11px; color:var(--sub); flex:0 0 auto}
+.metaseg{margin:0 0 10px}
 /* ビュー全体: 縦フレックス(選択肢が下部余白を全部使う) */
 #svView{display:flex; flex-direction:column; overflow:hidden}
 #svHead,#svField,#svMeta,#svPrompt,#svCtrl{flex:0 0 auto}
@@ -798,7 +815,6 @@ header .res span:last-child{overflow:hidden; text-overflow:ellipsis}
 /* 心得(永続強化)の行 */
 .svmeta{align-items:center; gap:10px; margin-top:10px}
 /* 日替わりチャレンジのパネル */
-.svdaily{margin-top:10px; line-height:1.7}
 @media (prefers-reduced-motion: reduce){
   .sve.svch .te{animation:none}
   .svs{transition:none}
@@ -888,16 +904,16 @@ body.svplay #svView{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
   header{grid-column:2; grid-row:1}
   main{grid-column:2; grid-row:2; width:100%; max-width:700px; justify-self:center}
   /* グリッド系ビューは広く(列が自動で増える) */
-  main#homeView{max-width:900px}
+  main#homeView{max-width:640px}
   main#partyView,main#gachaView,main#advView{max-width:1120px}
-  .tilegrid{grid-template-columns:repeat(4,1fr)}
   #cardGrid{grid-template-columns:repeat(auto-fill, minmax(150px,1fr))}
   #charGrid,#pickCharGrid{grid-template-columns:repeat(auto-fill, minmax(160px,1fr))}
   #sentenceRow{grid-template-columns:repeat(auto-fill, minmax(140px,1fr))}
-  /* 冒険ハブ: デイリー/荒野を横並び・ステージ一覧はカードグリッド */
-  .svhub2{display:grid; grid-template-columns:1fr 1fr; gap:12px; align-items:stretch}
+  /* 冒険ハブ: ステージ一覧はカードグリッド */
   #svStageList{display:grid; grid-template-columns:repeat(auto-fill, minmax(330px,1fr)); gap:10px; margin-top:8px}
   #svStageList .svstage{margin-top:0}
+  #svStageList[hidden]{display:none}
+  .svmodes{gap:12px}
   /* サイドバー: 縦ナビ(アイコン+ラベルを横並びの行に) */
   nav{grid-column:1; grid-row:1/3; flex-direction:column; justify-content:flex-start;
     gap:6px; padding:18px 12px;

@@ -2165,6 +2165,57 @@ function run(){
     eq(r.sv.dailyDone, "2026-08-12", "達成日も残る");
     eq(r.sv.winDay, "2026-08-13", "本日初生還の受取日も残る(二重取り防止)");
   });
+  t("ホーム(v4.29.0): 進捗と学習開始に絞る ─ ヒーロー/タイル廃止・目安が最上段・直近7日・任務/図鑑の入口", ()=>{
+    W.renderHome();
+    const hb=W.document.getElementById("homeBox");
+    ok(!hb.querySelector(".hero") && !hb.querySelector(".tilegrid"), "キャラ/戦闘力パネルと冒険/ガチャ/編成タイルは無い");
+    ok(hb.innerHTML.indexOf("戦闘力")<0 && hb.innerHTML.indexOf("📖 Lv")<0, "戦闘力・📖Lv/XPの表示は無い");
+    eq(hb.firstElementChild.id, "homePace", "いちばん上は今日の目安(ヒーロー)");
+    ok(hb.firstElementChild.classList.contains("phero"), "目安は大きい表示");
+    ok(W.document.getElementById("homeStudy") && W.document.getElementById("homeQuick"), "学習をはじめる・サクッと5問");
+    ok(W.document.querySelectorAll("#homeWeek .wcol").length===7, "直近7日のあゆみ(7本)");
+    ok(W.document.querySelector("#homeWeek .wcol.today"), "右端が今日");
+    ok(W.document.getElementById("homeMission") && W.document.getElementById("homeDex"), "任務・図鑑の小さな入口(ナビに無いため)");
+    W.document.getElementById("homeMission").click();
+    ok(!W.document.getElementById("missionView").classList.contains("hidden"), "任務の入口から任務タブへ");
+    W.switchTab("home");
+    W.document.getElementById("homeWeek").click();
+    ok(W.document.querySelector("#modal .histchart"), "7日パネルのタップで学習のあゆみが開く");
+    W.closeModal();
+  });
+  t("冒険ハブ(v4.29.0): 次のステージ1枚+あそびかた3種・ステージ一覧は折りたたみ・心得は1入口(タブ切替)", ()=>{
+    W.renderAdv();
+    const doc=W.document;
+    const nx=doc.getElementById("svNextStage");
+    ok(nx, "次のステージのパネル");
+    eq(+nx.dataset.i, W.svNextStageIdx(), "次のステージ=解放済みで未生還の最初");
+    eq(W.svNextStageIdx(), 0, "まっさらなら最初のステージ");
+    ok(doc.getElementById("svNextBtnGo"), "挑戦ボタン");
+    eq(doc.querySelectorAll(".svmodes .svmode").length, 3, "あそびかたはデイリー/荒野/スロットの3つ");
+    ok(!doc.getElementById("svSlotMetaBtn"), "スロット個別の心得ボタンは無い(1入口に統合)");
+    const list=doc.getElementById("svStageList");
+    ok(list.hidden, "ステージ一覧は既定で閉じている");
+    eq(list.querySelectorAll(".svstage").length, W.DUNGEONS.length, "一覧はDOMに全ステージ");
+    doc.getElementById("svStagesToggle").click();
+    ok(!doc.getElementById("svStageList").hidden, "トグルで開く");
+    ok(doc.querySelector("#svStageList .svstage.next"), "一覧でも次のステージが強調される");
+    doc.getElementById("svStagesToggle").click();
+    ok(doc.getElementById("svStageList").hidden, "もう一度で閉じる");
+    // 心得の統合: サバイバーの心得を開くとタブがあり、スロットへ切り替えられる
+    W.svOpenMeta();
+    ok(doc.querySelector("#modal .metaseg [data-mt=sv].active"), "サバイバー側タブが選択中");
+    doc.querySelector("#modal .metaseg [data-mt=slot]").click();
+    eq(doc.querySelectorAll("#modal [data-slmeta]").length, W.SLOT_META.length, "スロットの心得に切り替わる");
+    ok(doc.querySelector("#modal .metaseg [data-mt=slot].active"), "スロット側タブが選択中");
+    doc.querySelector("#modal .metaseg [data-mt=sv]").click();
+    eq(doc.querySelectorAll("#modal [data-meta]").length, W.SV_META.length, "サバイバーに戻れる");
+    W.closeModal();
+    // 次のステージの解釈: 最初を生還済みにすると2番目が次になる
+    const rec=W.svRec(); const bak=Object.assign({}, rec.clears);
+    rec.clears[W.DUNGEONS[0].id]=1;
+    eq(W.svNextStageIdx(), 1, "1つ生還したら次は2番目");
+    rec.clears=bak; W.renderAdv();
+  });
   t("冒険タブ(v4.25.0): 心得・日替わり・荒野・ステージ一覧がハブに並ぶ", ()=>{
     W.renderAdv();
     ok(W.document.getElementById("svMetaBtn"), "心得ボタン");
@@ -2913,7 +2964,8 @@ async function runAsync(W){
     const pc=txt.slice(txt.indexOf("(min-width:1024px) and (pointer:fine)"));
     ok(pc.indexOf("body{max-width:none")>=0, "bodyの980px上限を撤廃=画面幅いっぱい");
     ok(pc.indexOf("main#partyView,main#gachaView,main#advView{max-width:1120px}")>=0, "グリッド系ビューは広く");
-    ok(pc.indexOf(".tilegrid{grid-template-columns:repeat(4,1fr)}")>=0, "ホームのタイルは4列");
+    ok(pc.indexOf("main#homeView{max-width:640px}")>=0, "ホームは読みやすい幅に絞る(v4.29.0: タイル廃止)");
+    ok(pc.indexOf("#svStageList[hidden]{display:none}")>=0, "折りたたんだステージ一覧はPCのgridでも隠れる(v4.29.0)");
     ok(pc.indexOf("#cardGrid{grid-template-columns:repeat(auto-fill, minmax(150px,1fr))}")>=0, "カード一覧は列が自動で増える");
     ok(pc.indexOf("#svStageList{display:grid")>=0, "冒険のステージ一覧はグリッド");
     ok(pc.indexOf("main#svView{max-width:1520px")>=0, "サバイバー2カラムも広く");

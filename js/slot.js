@@ -324,7 +324,7 @@ function slNext(){
 /* ---- スロットの心得(永続強化)の購入モーダル。svOpenMetaと同じ流儀 ---- */
 function slotOpenMeta(){
   const meta=slotMetaOf(G);
-  let h='<h3>📜 スロットの心得 '+helpBtn("hlp-slmeta")+'</h3>'+
+  let h=metaTabs("slot")+'<h3>📜 スロットの心得 '+helpBtn("hlp-slmeta")+'</h3>'+
     helpNote("hlp-slmeta", '🪙で修めるスロットの永続強化。効果はすべて<b>◆ことだま入りの回転にだけ</b>効く'+
       '(素回しの期待値は変わらない=正解だけがすべての源泉)。'+
       '<b>上限なし</b> ─ 何段でも修められる(6段目からは費用が段ごとに×2.5)。'+
@@ -344,7 +344,7 @@ function slotOpenMeta(){
     h+='<button class="btn primary" id="slMetaAll" style="margin-top:12px; width:100%">'+
       '一括で修める(+'+est.count+'段 ・ 🪙'+fmt(est.spent)+')</button>';
   h+='<div class="small" style="margin-top:10px">所持 🪙'+fmt(G.gold)+'</div>';
-  openModal(h);
+  openModal(h); bindMetaTabs();
   $("modal").querySelectorAll("[data-slmeta]").forEach(btn=>{
     btn.onclick=()=>{
       const r=slotBuyMeta(G, btn.dataset.slmeta);

@@ -36,6 +36,7 @@ const EVENTS=[
   // {d:"2026-08-03", t:"..."} 形式でバナー以外のイベント告知を書く
 ];
 const NEWS=[
+  {d:"2026-08-25", t:"🧹 v4.29.0 ホームと冒険の画面をすっきり整理しました! ①ホーム: キャラクター・戦闘力・経験値の表示と、冒険/ガチャ/編成のボタン(下のタブと重複)を廃止。いちばん上に「今日の目安」を大きく置き、「学習をはじめる」「サクッと5問」がすぐ押せる並びに。新しく「直近7日のあゆみ」(小さなグラフ・金=目安達成・タップで全期間)も追加しました。任務と図鑑は下の小さな入口から ②冒険: 画面に並ぶのは「次のステージ」1枚と、あそびかた3種(📅デイリー・🏜️荒野・🎰スロット)だけに。18ステージの一覧は「すべてのステージ」で開閉できます。📜心得はサバイバー/スロットを1つの入口にまとめ、モーダル上部のタブで切り替えられます(中身・効果は変わりません)"},
   {d:"2026-08-24", t:"💰 v4.28.0 スロットの収支を大改善! ①配当を増額: あいこ2.5倍・3つ揃い8倍・💎20倍・7️⃣は77倍のジャックポットに(素回しの目減りも半分に緩和) ②相乗効果がさらに増えるように: ◆ことだまはコンボ10で+2・コンボ20で+3乗り、ことだま入りの当たりはコンボで配当が伸びます(+3%/連続・最大×1.6) ③📜「スロットの心得」が登場: 🪙で修める永続強化5系統(配当・幸運・大当り・守り・込め)。サバイバーの心得と同じく上限なし(6段目から費用×2.5)で、効果はことだま入りの回転にだけ効きます ─ 正解を続けるほど機械があなたの味方になっていく設計です(スロット画面の📜・冒険ハブの「📜 心得」から)"},
   {d:"2026-08-24", t:"🎰 v4.27.0 ミニゲーム「ことだまスロット」は冒険タブに引っ越して生まれ変わりました! サバイバーと同じ「上=ゲーム/下=クイズ」の画面で、リールは約3秒ごとに勝手に回り続けます(そのたび掛け金🪙を払う)。素の回転は少しずつ🪙が減る側ですが、クイズに正解すると◆ことだまが乗り(コンボ10以上なら+2)、次の回転の当たり率がぐっと上がります ─ 解く速さと正確さがそのまま機械の回りに! 掛け金はスライダーで自由(🪙10〜2,000)。配当: あいこ2倍・3つ揃い6倍・💎15倍・7️⃣50倍。「←」で戻ってもセッションは保持されます(離れている間リールは止まる)"},
   {d:"2026-08-24", t:"⚡ v4.26.0 学習がもっと気軽に・快適に! ①ホームに「サクッと5問だけ」ボタン: すきま時間に5問だけ ─ 終わるとその場で小さなお祝いと今日の進捗が見られます ②設定に「自動で次へ」: 答え合わせのあと1〜2秒で自動的に次の問題へ(オフ/1秒/1.5秒/2秒。学習・サバイバー共通) ③学習ペース管理に「もしものペース試算」スライダー: 目安に届かない日があっても、1日◯問ペースなら目標日までにどこまで習得できるかの見通しが分かります"},
@@ -122,65 +123,63 @@ function newsEvents(){
   return ev.concat(EVENTS);
 }
 function xpNeedFor(lv){ return lv<=1? 0 : Math.ceil(50*Math.pow(lv-1, 1/0.55)); }
+/* ホーム(v4.29.0で刷新): 「学習の進捗を確かめて、すぐ始める」だけの画面にする。
+   廃止: 出撃キャラ/戦闘力/📖Lv・XPのヒーローパネル、冒険/ガチャ/編成のタイル(下部ナビと重複していた)。
+   残す/昇格: 今日の目安(最上段のヒーローに)・学習をはじめる・サクッと5問・直近7日のあゆみ(新設)・
+   ログボ/任務受取/同期の条件付き行・任務と図鑑への小さな入口(ナビにないため) */
 function renderHome(){
-  const P=playerStats();
-  const ch=byChar[G.party.char];
   const d=dayRec();
-  const lv=accountLevel();
-  const cur=xpNeedFor(lv), next=xpNeedFor(lv+1);
-  const pct=Math.min(100, Math.round(100*(G.xp-cur)/Math.max(1, next-cur)));
-  const b=activeBanner();
   const stk=studyStreak();
   const mn=claimableCount();
   const cdx=cardDexStats(), xdx=charDexStats();
+  // 直近7日のあゆみ: 金=その日の目安を達成・点線=目安の高さ(あゆみモーダルと同じ縮尺の縮小版)
+  const wk=paceHistory(G, 7, 0);
+  const wmax=Math.max(1, ...wk.map(x=>Math.max(x.a, x.t)));
+  const WH=34;
+  const wbars=wk.map((x,i)=>{
+    const hit=x.t>0 && x.a>=x.t;
+    const bh=x.a? Math.max(3, Math.round(WH*x.a/wmax)) : 0;
+    return '<div class="wcol'+(i===6?" today":"")+'">'+
+      '<div class="wbarw">'+
+        (x.t? '<i class="htick" style="bottom:'+Math.round(WH*Math.min(x.t,wmax)/wmax)+'px"></i>':'')+
+        '<div class="hbar'+(hit?" hit":"")+'" style="height:'+bh+'px"></div></div>'+
+      '<div class="wday">'+(i===6? "今日" : x.day)+'</div></div>';
+  }).join("");
+  const wsum=wk.reduce((s,x)=>s+x.a, 0);
+  let mastered=0; for(const en in G.words){ if(G.words[en][0]>=MASTER_BOX) mastered++; }
   $("homeBox").innerHTML=
-    // ヒーロー(出撃キャラ)
-    '<div class="panel hero" data-go="party">'+
-      '<div class="heroface">'+(ch?charFace(ch):"🗡️")+'</div>'+
-      '<div class="grow">'+
-        '<div style="font-weight:800; font-size:16px">'+(ch?esc(ch.name):"-")+'</div>'+
-        '<div class="small" style="margin-top:2px">戦闘力 <b style="color:var(--accent); font-size:15px">'+fmt(P.power)+'</b></div>'+
-        '<div class="small" style="margin-top:6px">📖 Lv'+lv+
-          (stk>=2? ' <span style="color:var(--accent); font-weight:800">🔥'+stk+'日連続(XP×'+(+streakXpMult().toFixed(2))+')</span>':'')+
-          (G.frz? ' <span title="連続学習フリーズ">🧊'+G.frz+'</span>':'')+'</div>'+
-        '<div class="mbar" style="margin-top:3px"><i style="width:'+pct+'%"></i></div>'+
-      '</div></div>'+
-    // 学習ペース管理: 今日の目安メーター/未設定なら設定への導線
-    // (キャラパネルと学習CTAの間に置く=v4.7.2でユーザー指定の並び)
-    '<div class="panel pacebar" id="homePace" style="margin-top:12px"></div>'+
+    // 今日の目安(ヒーロー): 未設定なら目標日設定への導線
+    '<div class="panel pacebar phero" id="homePace"></div>'+
+    // 学習CTA(主役)+サクッと5問
+    '<button id="homeStudy" class="studycta shine">📖 学習をはじめる'+
+      '<span class="ctasub">今日 '+d.a+'問(正解'+d.c+')'+(stk>=2? ' ・ 🔥'+stk+'日連続':'')+'</span></button>'+
+    '<button id="homeQuick" class="btn quick5">⚡ サクッと5問だけ <span class="small" style="font-weight:700">─ すきま時間に</span></button>'+
     // ログインボーナスのバナー(v4.26.0: 起動モーダル廃止の受け皿。タップで7日カレンダー)
     (loginBonusBannerNeeded()?
       '<div class="panel lgbanner" id="homeLogin">🎁 ログインボーナス'+G.login.day+'日目 <b>'+
         rewardText(LOGIN_BONUS[(G.login.day||1)-1])+'</b> ゲット!<span class="small"> ─ タップでカレンダー</span></div>':'')+
-    // 学習CTA
-    '<button id="homeStudy" class="studycta shine">📖 学習をはじめる'+
-      '<span class="ctasub">今日 '+d.a+'問(正解'+d.c+')</span></button>'+
-    // サクッと5問(v4.26.0): 隙間時間の入口。5問終えると小さなお祝い
-    '<button id="homeQuick" class="btn quick5">⚡ サクッと5問だけ <span class="small" style="font-weight:700">─ すきま時間に</span></button>'+
     // 任務報酬の一括受取(受け取れるものがあるときだけ出す)
-    (mn? '<button id="homeClaim" class="claimbtn homeclaim">🎁 任務報酬をすべて受け取る</button>':'')+
+    (mn? '<button id="homeClaim" class="claimbtn homeclaim">🎁 任務報酬をすべて受け取る('+mn+'件)</button>':'')+
     // 同期リマインダー(最終同期3日超+未同期変更ありのときだけ)
     (syncReminderNeeded()?
       '<div class="panel syncnag" id="homeSync">📥 最終同期から'+
         Math.floor((Date.now()-lastSyncAt())/864e5)+'日 ─ タップして同期</div>':'')+
-    // ショートカット
-    '<div class="tilegrid">'+
-      '<div class="tile" data-go="adv"><div class="tic">💫</div><div class="tname">冒険</div>'+
-        '<div class="tsub">'+((G.sv&&G.sv.endless&&G.sv.endless.best)
-          ? "🏜️ベスト ⏱"+Math.floor(G.sv.endless.best/60)+":"+String(G.sv.endless.best%60).padStart(2,"0")
-          : "サバイバーへ")+'</div></div>'+
-      '<div class="tile'+(b?" ltd":"")+'" data-go="gacha"><div class="tic">🔮</div><div class="tname">ガチャ</div>'+
-        '<div class="tsub">'+(b? "☄️ 限定開催中!" : "🎫"+fmt(G.tickets))+'</div></div>'+
-      '<div class="tile" data-go="party"><div class="tic">📜</div><div class="tname">編成</div>'+
-        '<div class="tsub">呪文・カード</div></div>'+
-      '<div class="tile'+(mn?" claim":"")+'" data-go="mission"><div class="tic">📜'+(mn?'<span class="dot" style="position:static; display:inline-block; margin-left:4px"></span>':'')+'</div><div class="tname">任務</div>'+
-        '<div class="tsub">'+(mn? '<b style="color:var(--accent)">達成'+mn+'件!</b>' : "デイリー・実績")+'</div></div>'+
-      '<div class="tile" id="homeDex" style="grid-column:1/-1"><div class="tic">📕</div><div class="tname">図鑑</div>'+
-        '<div class="tsub">カード '+cdx.owned+'/'+cdx.total+'種 ・ なかま '+xdx.owned+'/'+xdx.total+'体</div></div>'+
+    // 直近7日のあゆみ(タップで全期間のあゆみ)
+    '<div class="panel weekpanel" id="homeWeek">'+
+      '<div class="pacetop"><span>📊 直近7日 <span class="small" style="font-weight:700">'+fmt(wsum)+'問</span></span>'+
+        '<b style="font-size:13px; color:var(--ink)">'+
+          (stk>=1? '<span style="color:var(--accent)">🔥'+stk+'日連続</span>':'<span class="small">今日から連続記録を</span>')+
+          (G.frz? ' <span class="small" title="連続学習フリーズ">🧊'+G.frz+'</span>':'')+'</b></div>'+
+      '<div class="weekchart">'+wbars+'</div>'+
+      '<div class="pacefoot">覚えた '+fmt(mastered)+' / '+fmt(WORDS.length)+'語 ・ タップで学習のあゆみ ›</div>'+
+    '</div>'+
+    // 任務・図鑑の小さな入口(下部ナビにないもの)
+    '<div class="homelinks">'+
+      '<button class="btn" id="homeMission">📜 任務'+(mn? ' <b style="color:var(--accent)">'+mn+'</b>':'')+
+        '<span class="hlsub">デイリー・実績</span></button>'+
+      '<button class="btn" id="homeDex">📕 図鑑'+
+        '<span class="hlsub">カード'+cdx.owned+'/'+cdx.total+' ・ なかま'+xdx.owned+'/'+xdx.total+'</span></button>'+
     '</div>';
-  $("homeBox").querySelectorAll("[data-go]").forEach(el=>{
-    el.onclick=()=>switchTab(el.dataset.go);
-  });
   $("homeStudy").onclick=()=>switchTab("quiz");
   $("homeQuick").onclick=()=>startQuick(5);
   const lg=$("homeLogin");
@@ -190,6 +189,8 @@ function renderHome(){
     renderHome(); // バナーを畳む(モーダルは開いたまま=renderHomeはoverlayに触れない)
   };
   fillPaceEl($("homePace"));
+  $("homeWeek").onclick=()=>openHistoryModal(0);
+  $("homeMission").onclick=()=>switchTab("mission");
   $("homeDex").onclick=()=>openDex();
   if(mn) $("homeClaim").onclick=()=>{ claimAllCurrent(); renderHome(); };
   const sn=$("homeSync");
