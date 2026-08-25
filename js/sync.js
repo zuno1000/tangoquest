@@ -370,12 +370,21 @@ function openSettings(){
     helpNote("hlp-opt", '<b>自動で次へ</b>: 答え合わせのあと、「次へ」を押さなくても設定した秒数で自動的に次の問題へ進む'+
       '(学習タブ・サバイバー共通。「次へ」を押せばすぐ進める。レベルアップの3択などは今までどおり止まる)<br><br>'+
       '<b>サバイバー3択の自動選択</b>: レベルアップ・宝箱の3択をおまかせで即決する'+
-      '(HPが半分近く減っているときは回復を優先。じっくり選びたい人はオフのまま)')+
+      '(HPが半分近く減っているときは回復を優先。じっくり選びたい人はオフのまま)<br><br>'+
+      '<b>フレーズ: 先に思い出すステップ</b>: 4択の選択肢を最初は伏せて、自力で思い出してから開く。'+
+      '選択肢は「見れば分かる」(再認)で解けてしまい、見ずに言う力(再生)が付きにくい ─ '+
+      'このワンクッションが両者のギャップを埋める(テンポ優先ならオフ)<br><br>'+
+      '<b>フレーズ: 口頭の制限時間</b>: 口頭チェックにカウントダウンを付け、時間切れで自動的に答えが開く。'+
+      '本番で使えるのは「すぐ出てくる」フレーズだけ ─ 想起の速さを鍛える')+
     '<button class="btn" id="modeToggle">出題: '+(G.mode==="e2j"?"EN → 日本語":"日本語 → EN")+' (タップで切替)</button>'+
     '<div style="height:8px"></div>'+
     '<button class="btn" id="autoNextBtn">自動で次へ: '+autoNextLabel(G.opt.autoNext)+' (タップで切替)</button>'+
     '<div style="height:8px"></div>'+
-    '<button class="btn" id="svAutoBtn">サバイバー3択の自動選択: '+(G.opt.svAuto? "ON":"OFF")+'</button>';
+    '<button class="btn" id="svAutoBtn">サバイバー3択の自動選択: '+(G.opt.svAuto? "ON":"OFF")+'</button>'+
+    '<div style="height:8px"></div>'+
+    '<button class="btn" id="preRecallBtn">フレーズ: 先に思い出すステップ: '+(G.opt.preRecall? "ON":"OFF")+'</button>'+
+    '<div style="height:8px"></div>'+
+    '<button class="btn" id="spkSecBtn">フレーズ: 口頭の制限時間: '+spkSecLabel(G.opt.spkSec)+' (タップで切替)</button>';
   const fxInner=(CAN_VIBRATE
     ? '<div class="small" style="margin-bottom:6px">正解やお祝いで端末が振動する '+helpBtn("hlp-vibe")+'</div>'+
       helpNote("hlp-vibe", 'ONにするとテスト振動が鳴る。鳴らない場合は端末のマナーモード/バイブ設定を確認')+
@@ -408,9 +417,10 @@ function openSettings(){
     '<tr><td>🎫 チケット</td><td>'+fmt(G.tickets)+'(限定召喚用・学習で入手)</td></tr>'+
     '<tr><td>🪙 ゴールド</td><td>'+fmt(G.gold)+'(恒常召喚用・冒険で入手)</td></tr>'+
     '</table>'+
-    '<div class="row" style="gap:8px; margin-top:8px">'+
-      '<button class="btn grow" id="histBtn">📊 学習のあゆみ</button>'+
-      '<button class="btn grow" id="paceCfgBtn">🎯 学習ペース管理</button></div>'+
+    '<div class="homelinks" style="margin-top:8px">'+
+      '<button class="btn" id="histBtn">📊 学習のあゆみ</button>'+
+      '<button class="btn" id="paceCfgBtn">🎯 学習ペース管理</button>'+
+      '<button class="btn" id="phrHistBtn">🗣 フレーズのあゆみ</button></div>'+
     foldSec("sfoldLearn", "📖 学習(出題・自動化)", learnInner, false)+
     foldSec("sfoldFx",    "🎨 演出(振動)", fxInner, false)+
     foldSec("sfoldSync",  "📥 端末間同期(Googleドライブ)", syncInner, false)+
@@ -431,6 +441,15 @@ function openSettings(){
     G.opt.svAuto=G.opt.svAuto? 0:1; saveG();
     $("svAutoBtn").textContent="サバイバー3択の自動選択: "+(G.opt.svAuto? "ON":"OFF");
   };
+  $("preRecallBtn").onclick=()=>{
+    G.opt.preRecall=G.opt.preRecall? 0:1; saveG();
+    $("preRecallBtn").textContent="フレーズ: 先に思い出すステップ: "+(G.opt.preRecall? "ON":"OFF");
+  };
+  $("spkSecBtn").onclick=()=>{
+    G.opt.spkSec=spkSecCycle(G.opt.spkSec); saveG();
+    $("spkSecBtn").textContent="フレーズ: 口頭の制限時間: "+spkSecLabel(G.opt.spkSec)+" (タップで切替)";
+  };
+  $("phrHistBtn").onclick=()=>openPhrHistoryModal(0);
   const vt=$("vibeToggle");
   if(vt) vt.onclick=()=>{
     const off=localStorage.getItem("tq_vibe")==="off";

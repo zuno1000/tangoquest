@@ -117,8 +117,10 @@ function openDrillMenu(){
       const d=PHR_DRILLS[k];
       return '<button class="btn drillbtn" data-drill="'+k+'">'+d.icon+' <b>'+d.name+'</b>'+
         '<span class="hlsub">'+d.desc+'</span></button>';
-    }).join(""));
+    }).join("")+
+    '<button class="btn" id="phrHistBtn2" style="margin-top:12px; width:100%">📊 フレーズのあゆみ(これまでの記録)</button>');
   $("modal").querySelectorAll("[data-drill]").forEach(b=>{ b.onclick=()=>startDrill(b.dataset.drill); });
+  $("phrHistBtn2").onclick=()=>openPhrHistoryModal(0);
 }
 function startDrill(kind){
   if(!PHR_DRILLS[kind]) return;
@@ -186,18 +188,22 @@ function phrRenderQuestion(){
   const bl=$("phrBuild");
   bl.classList.remove("hidden"); // 文脈行は出題時から常設(答え合わせでレイアウトが動かない)
   const box=$("choices"); box.innerHTML="";
+  clearInterval(phrSpkT); phrSpkT=null; // 口頭の制限時間タイマーの残りを掃除
   if(phrCur.fmt==="mc"){
     // 核のクローズ4択(v5.1.0): 文は見せて核だけ空欄。選択肢は核チャンク
     box.className="choices";
     bl.innerHTML=phrCtxHTML(p, false);
-    phrCur.choices.forEach(c=>{
+    /* 先に思い出すステップ(v5.3.0実機FB): 4択は再認(見覚えの照合)で解けてしまい、
+       見ずに言う再生とギャップが生まれる。選択肢を開く前に1回、自力想起を必ず挟む
+       (covert retrieval)。テンポ優先の人は設定でオフにできる */
+    if(G.opt.preRecall){
       const b=document.createElement("button");
-      b.className="choice";
-      b.innerHTML=choiceHTML((phrCloze(c)||{key:c.en}).key);
-      b.onclick=()=>phrAnswerMC(c,b);
+      b.className="choice rcbtn";
+      b.id="phrRecallBtn";
+      b.innerHTML='🧠 まず自力で思い出す<span class="rcsub">空欄の英語を(心の中で)言ってから、タップで選択肢</span>';
+      b.onclick=()=>{ if(!phrAnswered) phrShowChoicesMC(); };
       box.appendChild(b);
-    });
-    refitChoices("#choices .choice");
+    }else phrShowChoicesMC();
   }else if(phrCur.fmt==="or"){
     // 並べ替え: チャンクを正しい順にタップ(語順と結びつきの自動化)
     box.className="choices chunks";
@@ -217,17 +223,61 @@ function phrRenderQuestion(){
     b.className="choice spshow";
     b.id="phrSpkShow";
     b.textContent="💬 答えを見る";
-    b.onclick=phrSpeakReveal;
+    b.onclick=()=>phrSpeakReveal(false);
     box.appendChild(b);
+    /* 制限時間(v5.3.0設定・0=オフ): 流暢さ=想起の速さの訓練。カウントダウンして
+       時間切れで自動的に答えを開く(判定は従来どおり自分で) */
+    if(G.opt.spkSec){
+      phrSpkLeft=Math.round(G.opt.spkSec/1000);
+      b.textContent="💬 答えを見る(あと"+phrSpkLeft+"秒)";
+      phrSpkT=setInterval(phrSpkTick, 1000);
+    }
   }
 }
 
-/* 口頭ステージ: 答えを開いてから自己判定。🔊お手本(TTS)は答え合わせ後も押せる(シャドーイング用) */
-function phrSpeakReveal(){
+/* ---- 口頭の制限時間(v5.3.0) ---- */
+let phrSpkT=null, phrSpkLeft=0;
+function spkSecCycle(v){ return {0:5000, 5000:8000, 8000:12000, 12000:0}[v||0]||0; }
+function spkSecLabel(v){ return {0:"オフ", 5000:"5秒", 8000:"8秒", 12000:"12秒"}[v||0]||"オフ"; }
+function phrSpkTick(){
+  const b=$("phrSpkShow");
+  if(!b || phrAnswered){ clearInterval(phrSpkT); phrSpkT=null; return; } // 画面が変わっていたら自壊
+  phrSpkLeft--;
+  if(phrSpkLeft<=0){ clearInterval(phrSpkT); phrSpkT=null; phrSpkTimeUp(); return; }
+  b.textContent="💬 答えを見る(あと"+phrSpkLeft+"秒)";
+}
+function phrSpkTimeUp(){
+  if(phrAnswered || !phrCur || phrCur.fmt!=="sp" || !$("phrSpkShow")) return;
+  phrSpeakReveal(true);
+}
+
+/* クローズ4択の選択肢を開く(v5.3.0: 「先に思い出す」ステップの後、または設定オフなら即時) */
+function phrShowChoicesMC(){
+  const box=$("choices"); box.innerHTML=""; box.className="choices";
+  phrCur.choices.forEach(c=>{
+    const b=document.createElement("button");
+    b.className="choice";
+    b.innerHTML=choiceHTML((phrCloze(c)||{key:c.en}).key);
+    b.onclick=()=>phrAnswerMC(c,b);
+    box.appendChild(b);
+  });
+  refitChoices("#choices .choice");
+}
+
+/* 口頭ステージ: 答えを開いてから自己判定。🔊お手本(TTS)は答え合わせ後も押せる(シャドーイング用)。
+   timedOut=制限時間切れで自動的に開いた(v5.3.0) */
+function phrSpeakReveal(timedOut){
   if(phrAnswered || !phrCur) return;
+  clearInterval(phrSpkT); phrSpkT=null;
   const p=phrCur.p;
   $("phrBuild").innerHTML=phrCtxHTML(p, true);
   const box=$("choices"); box.innerHTML="";
+  if(timedOut){
+    const n=document.createElement("div");
+    n.className="small sptimeup";
+    n.textContent="⏰ 時間切れ ─ 本番なら沈黙。言えていたかで正直に判定しよう";
+    box.appendChild(n);
+  }
   const mk=(id, cls, label, fn)=>{
     const b=document.createElement("button");
     b.className="choice "+cls; b.id=id; b.textContent=label; b.onclick=fn;
@@ -328,6 +378,73 @@ function phrFinish(ok){
     clearTimeout(phrAutoT);
     phrAutoT=setTimeout(()=>{ if(phrAnswered) newQuestion(); }, G.opt.autoNext);
   }
+}
+
+/* ---- フレーズのあゆみ(v5.3.0): 日別グラフ+定着の階段の分布 ----
+   単語の「学習のあゆみ」のフレーズ版(台帳はG.pdays=目安と別カウント)。
+   導線は⚙設定・記録と🎤実戦メニューの2か所 */
+function pdayHistory(g, n, offset){
+  const out=[], base=new Date(), off=offset||0;
+  for(let i=n-1+off;i>=off;i--){
+    const dt=new Date(base.getFullYear(), base.getMonth(), base.getDate()-i);
+    const k=dt.getFullYear()+"-"+String(dt.getMonth()+1).padStart(2,"0")+"-"+String(dt.getDate()).padStart(2,"0");
+    const r=(g.pdays||{})[k]||{};
+    out.push({k, md:(dt.getMonth()+1)+"/"+dt.getDate(), day:dt.getDate(), a:r.a||0, c:r.c||0, m:r.m||0});
+  }
+  return out;
+}
+function openPhrHistoryModal(page){
+  page=+page; if(!isFinite(page) || page<0) page=0; // onclick直結でイベントが渡っても0扱い
+  const h=pdayHistory(G, 14, page*14);
+  const max=Math.max(1, ...h.map(x=>x.a));
+  const H=56;
+  const bars=h.map(x=>{
+    const bh=x.a? Math.max(3, Math.round(H*x.a/max)) : 0;
+    return '<div class="hcol"><div class="hval">'+(x.a||"")+'</div>'+
+      '<div class="hbarw"><div class="hbar" style="height:'+bh+'px"></div></div>'+
+      '<div class="hday">'+x.day+'</div></div>';
+  }).join("");
+  let oldest=null;
+  for(const k in G.pdays){ if((G.pdays[k].a||0)>0 && (!oldest || k<oldest)) oldest=k; }
+  const hasPrev=!!(oldest && oldest<h[0].k);
+  let daysN=0, tot=0, totC=0;
+  for(const k in G.pdays){ const r=G.pdays[k]; if(r.a>0){ daysN++; tot+=r.a; totC+=r.c||0; } }
+  // 定着の階段の分布: どの出題形式の層に何フレーズいるか(=次に何をすれば進むかが見える)
+  let s0=0,s1=0,s2=0,s3=0,s4=0;
+  PHRASES.forEach(p=>{
+    const st=G.phr[p.en];
+    if(!st) s0++;
+    else if(st[0]>=MASTER_BOX) s4++;
+    else if(st[0]>=4) s3++;
+    else if(st[0]>=2) s2++;
+    else s1++;
+  });
+  openModal('<h3>📊 フレーズのあゆみ '+helpBtn("hlp-phist")+'</h3>'+
+    helpNote("hlp-phist", 'フレーズは単語の「今日の目安」とは別カウント(このグラフが専用の記録)。'+
+      '出題は定着の階段と連動する: 🧠クローズ4択(定着0-1)→🧩並べ替え(2-3)→🎙口頭(4)→'+
+      '⭕口頭で言えたら「✓覚えた」(定着5)。忘却曲線・復習間隔は単語と同じ')+
+    '<div class="row histnav" style="gap:8px; margin-top:6px">'+
+      '<button class="btn hnav" id="phrHistPrev"'+(hasPrev?'':' disabled')+'>◀</button>'+
+      '<div class="grow" style="text-align:center; font-weight:800">'+h[0].md+' 〜 '+h[13].md+
+        '<span class="small" style="font-weight:700"> ・ '+fmt(h.reduce((s,x)=>s+x.a,0))+'問</span></div>'+
+      '<button class="btn hnav" id="phrHistNext"'+(page>0?'':' disabled')+'>▶</button></div>'+
+    '<div class="histchart">'+bars+'</div>'+
+    '<div class="small" style="margin-top:6px">バー=その日のフレーズ解答数</div>'+
+    '<table class="stt" style="margin-top:12px">'+
+      '<tr><td>累計解答(全期間)</td><td>'+fmt(tot)+'問(正答率 '+(tot? Math.round(100*totC/tot):0)+'%)</td></tr>'+
+      '<tr><td>学習した日数</td><td>'+daysN+'日</td></tr>'+
+      '<tr><td>覚えたフレーズ</td><td>'+fmt(s4)+' / '+fmt(PHRASES.length)+'</td></tr>'+
+    '</table>'+
+    '<h2 style="margin-top:12px">🪜 定着の階段(いまの分布)</h2>'+
+    '<table class="stt">'+
+      '<tr><td>🧠 クローズ4択(定着0-1)</td><td>'+fmt(s1)+'</td></tr>'+
+      '<tr><td>🧩 並べ替え(定着2-3)</td><td>'+fmt(s2)+'</td></tr>'+
+      '<tr><td>🎙 口頭チェック(定着4)</td><td>'+fmt(s3)+'</td></tr>'+
+      '<tr><td>✓ 覚えた(口頭で言えた)</td><td>'+fmt(s4)+'</td></tr>'+
+      '<tr><td>未学習</td><td>'+fmt(s0)+'</td></tr>'+
+    '</table>');
+  $("phrHistPrev").onclick=()=>{ if(hasPrev) openPhrHistoryModal(page+1); };
+  $("phrHistNext").onclick=()=>{ if(page>0) openPhrHistoryModal(page-1); };
 }
 
 /* ---- 学習対象のセグ切替(単語/フレーズ)。好みはG.opt.qtab(端末ローカル優先マージ) ---- */

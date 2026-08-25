@@ -1,7 +1,7 @@
 "use strict";
 /* ================= 状態管理 ================= */
 const KEY="tangoquest_v1";
-const APP_VERSION="5.2.0"; // リリースごとに更新(設定表示・更新確認のリモート版比較に使う)
+const APP_VERSION="5.3.0"; // リリースごとに更新(設定表示・更新確認のリモート版比較に使う)
 
 /* ---- iOSスタンドアロン起動時の灰色帯対策(v4.5.0→v4.13.0で拡張) ----
    インストール直後の初回起動に加え、日をまたいだ最初のコールドスタート
@@ -109,7 +109,8 @@ G.idle=G.idle||{last:0}; // るすばん探索(放置報酬)の最終精算時�
 /* 学習オプション(v4.26.0): autoNext=答え合わせ後に自動で次へ進むまでのms(0=オフ)/
    svAuto=サバイバー3択の自動選択/slotBet=ことだまスロットの掛け金🪙の記憶(0=未設定→既定100)。
    同期マージはローカル優先(Object.assign起点)=端末ごとの好みとして振る舞う */
-G.opt=Object.assign({autoNext:0, svAuto:0, slotBet:0, qtab:"w"}, G.opt||{}); // qtab: 学習タブの対象(w=単語/p=フレーズ・端末の好み)
+/* qtab=学習タブの対象(w/p)・spkSec=口頭の制限時間ms(0=オフ)・preRecall=4択の前に思い出すステップ(v5.3.0・既定ON) */
+G.opt=Object.assign({autoNext:0, svAuto:0, slotBet:0, qtab:"w", spkSec:0, preRecall:1}, G.opt||{});
 /* スロットの永続データ(v4.28.0): meta=スロットの心得(id→Lv)。
    同期はLvごとmaxマージ・部分リセットでも残す(sync.jsに明示、G.sv.metaと同じ扱い) */
 G.slot=G.slot||{}; G.slot.meta=G.slot.meta||{};
