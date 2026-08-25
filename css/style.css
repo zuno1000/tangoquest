@@ -1091,3 +1091,17 @@ body.svplay #slotView{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
 .myrow{display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--line); line-height:1.5}
 .myrow:last-child{border-bottom:none}
 .myrow .mydel{flex:0 0 auto; padding:8px 10px; min-height:38px}
+
+/* ---- v5.7.0: フレーズ図鑑 ---- */
+.dexsel{width:100%; border:none; border-radius:12px; padding:10px 12px; margin-top:8px;
+  font-family:inherit; font-size:13px; font-weight:700; color:var(--ink); background:var(--bg2);
+  box-shadow:inset 3px 3px 7px var(--shd), inset -3px -3px 7px var(--shl)}
+#dexPhrList{margin-top:4px}
+/* 行はcontent-visibilityで軽量化(図鑑2,582セルと同じ知見) */
+.phrrow{display:flex; gap:8px; align-items:center; padding:9px 2px; border-bottom:1px solid var(--line);
+  cursor:pointer; line-height:1.45; content-visibility:auto; contain-intrinsic-size:auto 58px}
+.phrrow:last-child{border-bottom:none}
+.phrrow .pen{font-size:13px; font-weight:800; word-break:break-word}
+.phrrow.miss .pen{color:var(--sub); font-weight:700; opacity:.85}
+.phrrow .pst{flex:0 0 auto; font-size:11px; font-weight:800}
+.pstm{color:var(--ok)} .pstl{color:var(--accent2)} .pstn{color:var(--sub); font-weight:700}

@@ -3582,6 +3582,48 @@ async function runAsync(W){
     G.myphr=oldMy; G.phr=oldPhr; W.myphrInvalidate(); W.saveG();
   });
 
+  t("図鑑: フレーズの項目(v5.7.0) ─ 一覧・絞り込み・検索・詳細(核ハイライト)・マイは📝", ()=>{
+    const G=W.G, doc=W.document;
+    const oldPhr=G.phr, oldMy=G.myphr;
+    G.phr={}; G.myphr={}; W.myphrInvalidate();
+    W.myphrAdd("That would defeat the purpose.", "それじゃ本末転倒だ", "defeat the purpose");
+    const a=W.PHRASES[0].en, b=W.PHRASES[1].en;
+    G.phr[a]=[5, 0, 9, 0, 1, 0, 0]; // 覚えた
+    G.phr[b]=[2, 0, 3, 1, 0, 0, 0]; // 学習中
+    W.openDex("phr");
+    ok(doc.querySelector('#dexSeg [data-m="phr"]'), "図鑑に「フレーズ」のセグ");
+    eq(doc.querySelectorAll("#dexPhrList .phrrow").length, W.allPhrases().length, "内蔵+マイの全フレーズが並ぶ(未学習も隠さない)");
+    ok(doc.getElementById("dexBody").textContent.indexOf("📝")>=0, "マイフレーズは📝つき");
+    // 習得状態の絞り込み
+    doc.querySelector('#dexPhrLearnSeg [data-l="mas"]').click();
+    eq(doc.querySelectorAll("#dexPhrList .phrrow").length, 1, "✓覚えた=1件");
+    doc.querySelector('#dexPhrLearnSeg [data-l="learn"]').click();
+    eq(doc.querySelectorAll("#dexPhrList .phrrow").length, 1, "学習中=1件");
+    doc.querySelector('#dexPhrLearnSeg [data-l="all"]').click();
+    // カテゴリの絞り込み
+    const sel=doc.getElementById("dexPhrCat");
+    sel.value="vp"; sel.onchange();
+    eq(doc.querySelectorAll("#dexPhrList .phrrow").length, W.PHRASES.filter(p=>p.c==="vp").length, "カテゴリ絞り込み(動詞の型)");
+    sel.value="all"; sel.onchange();
+    // 検索は英語・日本語の両対応
+    const si=doc.getElementById("dexPhrSearch");
+    si.value="defeat"; si.oninput({target:si});
+    eq(doc.querySelectorAll("#dexPhrList .phrrow").length, 1, "英字検索");
+    si.value="本末転倒"; si.oninput({target:si});
+    eq(doc.querySelectorAll("#dexPhrList .phrrow").length, 1, "日本語でも検索できる");
+    // 詳細モーダル(核ハイライト・図鑑へ戻る)
+    doc.querySelector("#dexPhrList .phrrow").click();
+    ok(doc.querySelector("#modal .pkey"), "詳細で核(または型)がハイライト");
+    ok(doc.getElementById("pdDict"), "辞書リンク");
+    doc.getElementById("pdBack").click();
+    ok(doc.querySelector('#dexSeg [data-m="phr"].active'), "◀でフレーズ図鑑へ戻る");
+    // 後片付け(検索・絞り込みを初期状態に戻してから閉じる)
+    const si2=doc.getElementById("dexPhrSearch");
+    si2.value=""; si2.oninput({target:si2});
+    W.closeModal();
+    G.phr=oldPhr; G.myphr=oldMy; W.myphrInvalidate(); W.saveG();
+  });
+
   await ta("repairCaches: キャッシュ内の古い資産を最新の内容に置き換える", async()=>{
     ok("caches" in W, "Cache API");
     const url=new URL("../js/state.js", location.href).href;

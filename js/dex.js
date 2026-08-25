@@ -30,6 +30,7 @@ function charDexStats(){
 }
 
 let dexMode="cards", dexPos="all", dexLearn="all", dexQ="", dexCharSort="dex"; // 図鑑の絞り込み状態
+let dexPhrLearn="all", dexPhrCat="all", dexPhrQ=""; // フレーズ図鑑の絞り込み(v5.7.0)
 
 function dexProgHTML(cur, total){
   return '<div class="dexprog"><i style="width:'+Math.min(100, Math.round(100*cur/Math.max(1,total)))+'%"></i></div>';
@@ -48,9 +49,94 @@ function dexWordMatch(w, pos, learn, q){
   return true;
 }
 
+/* フレーズ図鑑の絞り込み(v5.7.0): カテゴリ×習得状態×検索(英字は小文字化・日本語はそのまま)。純関数 */
+function dexPhrMatch(p, cat, learn, q){
+  if(cat!=="all" && p.c!==cat) return false;
+  if(q && p.en.toLowerCase().indexOf(q)<0 && p.ja.indexOf(q)<0) return false;
+  if(learn!=="all"){
+    const st=G.phr[p.en];
+    if(learn==="mas")   return !!st && st[0]>=MASTER_BOX;
+    if(learn==="learn") return !!st && st[0]<MASTER_BOX;
+    if(learn==="new")   return !st;
+  }
+  return true;
+}
+/* フレーズ詳細(図鑑から)。核のハイライト・型・定着・お手本と辞書 */
+function openPhrDexModal(en){
+  const p=allPhrases().find(x=>x.en===en); if(!p) return;
+  const st=G.phr[p.en];
+  openModal('<h3>'+(p.c==="my"? "📝":"🗣")+' フレーズ詳細</h3>'+
+    '<div class="panel" style="margin-top:8px; font-size:15px; font-weight:700; line-height:1.7">'+phrCtxHTML(p, true)+'</div>'+
+    '<div class="small" style="margin-top:6px">'+esc(p.ja)+'</div>'+
+    '<div style="margin-top:8px"><span class="poschip phrcat">'+(PHR_CATS[p.c]||"")+'</span>'+
+      (p.pt? '<span class="rmeta">🧩 <b class="pkey">'+esc(p.pt)+'</b></span>'
+           : '<span class="rmeta">🔑 <b class="pkey">'+esc(p.k)+'</b></span>')+'</div>'+
+    '<table class="stt" style="margin-top:10px">'+
+      '<tr><td>定着</td><td>'+(st? (st[0]>=MASTER_BOX? "✓覚えた(口頭で言えた)" : st[0]+" / "+MASTER_BOX) : "未学習")+'</td></tr>'+
+      (st? '<tr><td>これまで</td><td>正解 '+st[2]+' ・ ミス '+st[3]+'</td></tr>':'')+
+    '</table>'+
+    '<div class="row" style="margin-top:12px; gap:8px">'+
+    '<button class="btn" style="flex:1" id="pdBack">◀ 図鑑へ</button>'+
+    ("speechSynthesis" in window? '<button class="btn" style="flex:1" id="pdTts">🔊 お手本</button>':'')+
+    '<button class="btn" style="flex:1" id="pdDict">🔍 辞書</button></div>');
+  $("pdBack").onclick=()=>openDex("phr");
+  const t=$("pdTts"); if(t) t.onclick=()=>phrSay(p.en);
+  $("pdDict").onclick=()=>window.open("https://ejje.weblio.jp/content/"+encodeURIComponent(p.k), "_blank", "noopener");
+}
+
 function renderDexBody(){
   const box=$("dexBody"); if(!box) return;
   $("dexSeg").querySelectorAll("button").forEach(b=>b.classList.toggle("active", b.dataset.m===dexMode));
+  if(dexMode==="phr"){
+    /* フレーズ図鑑(v5.7.0): 全フレーズ(内蔵+マイ📝)の一覧と習得状況。
+       カード図鑑と同じ流儀=未学習も隠さず見せる・行はcontent-visibilityで軽量化・クリックは委譲1本 */
+    const list=allPhrases();
+    let pmas=0; list.forEach(p=>{ const st=G.phr[p.en]; if(st && st[0]>=MASTER_BOX) pmas++; });
+    const buildList=()=>{
+      let g="", n=0;
+      list.forEach(p=>{
+        if(!dexPhrMatch(p, dexPhrCat, dexPhrLearn, dexPhrQ)) return;
+        n++;
+        const st=G.phr[p.en], mas=st && st[0]>=MASTER_BOX;
+        g+='<div class="phrrow'+(st? "":" miss")+'" data-en="'+esc(p.en)+'">'+
+          '<div class="grow"><div class="pen">'+(p.c==="my"? "📝 ":"")+esc(p.en)+'</div>'+
+          '<div class="small pja">'+esc(p.ja)+'</div></div>'+
+          '<div class="pst">'+(mas? '<span class="pstm">✓覚えた</span>'
+            : st? '<span class="pstl">定着'+st[0]+'/'+MASTER_BOX+'</span>'
+            : '<span class="pstn">未学習</span>')+'</div></div>';
+      });
+      return {g: g||'<div class="empty">該当するフレーズがない</div>', n};
+    };
+    box.innerHTML=
+      '<div class="small" style="margin-top:8px">フレーズ 全<b style="color:var(--accent2)">'+list.length+'</b>件'+
+        (myphrList().length? '(📝マイ '+myphrList().length+')':'')+' ・ 覚えた <b style="color:var(--ok)">'+pmas+'</b>件</div>'+
+      dexProgHTML(pmas, list.length)+
+      '<input id="dexPhrSearch" class="dexsearch" type="search" autocomplete="off" '+
+        'placeholder="🔍 フレーズを検索(英語・日本語)" value="'+esc(dexPhrQ)+'">'+
+      '<select id="dexPhrCat" class="dexsel"><option value="all">全カテゴリ</option>'+
+        Object.keys(PHR_CATS).map(c=>'<option value="'+c+'"'+(c===dexPhrCat?" selected":"")+'>'+PHR_CATS[c]+'</option>').join("")+'</select>'+
+      '<div class="seg" id="dexPhrLearnSeg">'+[["all","全て"],["mas","✓覚えた"],["learn","学習中"],["new","未学習"]].map(([k,l])=>
+        '<button data-l="'+k+'" class="'+(k===dexPhrLearn?"active":"")+'">'+l+'</button>').join("")+'</div>'+
+      '<div class="small" id="dexPhrCount" style="margin:2px 4px"></div>'+
+      '<div id="dexPhrList"></div>';
+    const upd=()=>{
+      const r=buildList();
+      $("dexPhrList").innerHTML=r.g;
+      $("dexPhrCount").textContent=(dexPhrQ || dexPhrLearn!=="all" || dexPhrCat!=="all")? '該当 '+r.n+'件' : '';
+    };
+    upd();
+    $("dexPhrSearch").oninput=e=>{ dexPhrQ=e.target.value.trim().toLowerCase(); upd(); };
+    $("dexPhrCat").onchange=e=>{ dexPhrCat=(e&&e.target? e.target.value : $("dexPhrCat").value); upd(); };
+    $("dexPhrLearnSeg").querySelectorAll("button").forEach(b=>{
+      const set=()=>{ if(dexPhrLearn!==b.dataset.l){ dexPhrLearn=b.dataset.l; renderDexBody(); } };
+      b.onclick=set; bindTap(b, set);
+    });
+    $("dexPhrList").onclick=e=>{
+      const row=e.target.closest(".phrrow");
+      if(row) openPhrDexModal(row.dataset.en);
+    };
+    return;
+  }
   if(dexMode==="cards"){
     const st=cardDexStats(), m=cardDexMap();
     /* グリッドだけを作る(検索入力のたびに呼ぶ=入力欄を作り直さずフォーカスを保つ) */
@@ -140,6 +226,7 @@ function openDex(mode){
     '<div class="seg" id="dexSeg">'+
       '<button data-m="cards">カード</button>'+
       '<button data-m="chars">なかま</button>'+
+      '<button data-m="phr">フレーズ</button>'+
     '</div>'+
     '<div id="dexBody"></div>');
   $("dexSeg").querySelectorAll("button").forEach(b=>{
