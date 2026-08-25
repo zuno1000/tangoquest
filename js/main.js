@@ -36,6 +36,7 @@ const EVENTS=[
   // {d:"2026-08-03", t:"..."} 形式でバナー以外のイベント告知を書く
 ];
 const NEWS=[
+  {d:"2026-08-25", t:"🎉 v4.31.0 報酬とガチャがパワーアップ! ①「5問ごとのボーナス」誕生: 今日の解答が5問たまるごとに🎫5、回数の上限なし! しかも学習タブ・サクッと5問・サバイバー・スロットのどこで解いても同じだけもらえます(サクッとだけが得、はありません) ②任務に「🎯今日の目安を達成する」が登場: 学習ペース管理の目安をやり切ると🎫25+🪙3,000のドカンと報酬!(目標日を設定すると挑戦できます。デイリー全達成の必須には数えないので未設定でも損はなし) ③ガチャに100連ボタン! 100連は開封演出を省いて、レア度の内訳・NEW!のなかま・突破のまとめを一望できるサマリー表示に ④ガチャ画面の残高行は⚙設定・記録に引っ越しました(🎫🪙の正確な残高はそちらで)"},
   {d:"2026-08-25", t:"🧹 v4.30.0 画面の整理と、うれしい改善をまとめて! ①選択肢の改行を改善: 「取り除く」が「取」と「り」の間で切れるような不自然な折り返しをなくし、意味の切れ目(読点)でだけ改行するようにしました ②ホームの並びを見直し: 上=きろく(今日の目安・直近7日)/中=任務・図鑑/下=はじめるボタン(学習・サクッと5問・報酬受取)に ③⚡サクッと5問に完了ボーナス: 完了するたび🎫3(1日3回まで)! ④学習ペース管理・設定・お知らせの画面もすっきり整理(よく見るものだけを表に、くわしい操作は開いて使う方式に)。ガチャ画面には🎫🪙の正確な残高も出るようになりました"},
   {d:"2026-08-25", t:"🧹 v4.29.0 ホームと冒険の画面をすっきり整理しました! ①ホーム: キャラクター・戦闘力・経験値の表示と、冒険/ガチャ/編成のボタン(下のタブと重複)を廃止。いちばん上に「今日の目安」を大きく置き、「学習をはじめる」「サクッと5問」がすぐ押せる並びに。新しく「直近7日のあゆみ」(小さなグラフ・金=目安達成・タップで全期間)も追加しました。任務と図鑑は下の小さな入口から ②冒険: 画面に並ぶのは「次のステージ」1枚と、あそびかた3種(📅デイリー・🏜️荒野・🎰スロット)だけに。18ステージの一覧は「すべてのステージ」で開閉できます。📜心得はサバイバー/スロットを1つの入口にまとめ、モーダル上部のタブで切り替えられます(中身・効果は変わりません)"},
   {d:"2026-08-24", t:"💰 v4.28.0 スロットの収支を大改善! ①配当を増額: あいこ2.5倍・3つ揃い8倍・💎20倍・7️⃣は77倍のジャックポットに(素回しの目減りも半分に緩和) ②相乗効果がさらに増えるように: ◆ことだまはコンボ10で+2・コンボ20で+3乗り、ことだま入りの当たりはコンボで配当が伸びます(+3%/連続・最大×1.6) ③📜「スロットの心得」が登場: 🪙で修める永続強化5系統(配当・幸運・大当り・守り・込め)。サバイバーの心得と同じく上限なし(6段目から費用×2.5)で、効果はことだま入りの回転にだけ効きます ─ 正解を続けるほど機械があなたの味方になっていく設計です(スロット画面の📜・冒険ハブの「📜 心得」から)"},
@@ -172,8 +173,7 @@ function renderHome(){
     // ── アクション: 学習CTA(主役)+サクッと5問(完了ボーナス🎫があれば案内)
     '<button id="homeStudy" class="studycta shine">📖 学習をはじめる'+
       '<span class="ctasub">今日 '+d.a+'問(正解'+d.c+')'+(stk>=2? ' ・ 🔥'+stk+'日連続':'')+'</span></button>'+
-    '<button id="homeQuick" class="btn quick5">⚡ サクッと5問だけ <span class="small" style="font-weight:700">'+
-      (quickBonusLeft()? '─ 完了で🎫+'+QUICK_BONUS_T : '─ すきま時間に')+'</span></button>'+
+    '<button id="homeQuick" class="btn quick5">⚡ サクッと5問だけ <span class="small" style="font-weight:700">─ 5問ごとに🎫+'+ANS_BONUS_T+'</span></button>'+
     // 任務報酬の一括受取(受け取れるものがあるときだけ出す)
     (mn? '<button id="homeClaim" class="claimbtn homeclaim">🎁 任務報酬をすべて受け取る('+mn+'件)</button>':'')+
     // ログインボーナスのバナー(v4.26.0: 起動モーダル廃止の受け皿。タップで7日カレンダー)
@@ -340,7 +340,7 @@ window.G=G; window.WORDS=WORDS; window.DUNGEONS=DUNGEONS; window.BANNERS=BANNERS
 window.LTD_SLOTS=LTD_SLOTS;
 window.ROOT_DEFS=ROOT_DEFS; window.PREFIX_DEFS=PREFIX_DEFS; window.APP_VERSION=APP_VERSION;
 window.LOGIN_BONUS=LOGIN_BONUS; window.ACH_DEFS=ACH_DEFS;
-window.DAILY_DEFS=DAILY_DEFS; window.WEEKLY_DEFS=WEEKLY_DEFS;
+window.DAILY_DEFS=DAILY_DEFS; window.WEEKLY_DEFS=WEEKLY_DEFS; window.DAILY_CORE=DAILY_CORE;
 window.MASTER_BOX=MASTER_BOX; window.INTERVALS=INTERVALS; window.FRZ_MAX=FRZ_MAX;
 window.SV_STAGE_SEC=SV_STAGE_SEC; window.SV_REACH=SV_REACH; window.SV_TOUCH_CD=SV_TOUCH_CD;
 window.SV_CD=SV_CD; window.SV_UPGRADES=SV_UPGRADES; window.SV_AUTO=SV_AUTO; window.SV_BURST=SV_BURST;

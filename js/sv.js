@@ -770,6 +770,7 @@ function svApplyAnswer(w, ok){
   const preSt=st.slice();
   srsApply(st, ok, now);
   const d=dayRec(); recordDayAnswer(d, wasNew, ok);
+  ansBonus(d); // 5問ごとの🎫ボーナス(v4.31.0・上限なし・学習タブと同じ=入口で損得が出ない)
   let justMastered=false;
   if(ok && st[0]>=MASTER_BOX && !st[4]){ st[4]=1; d.m++; justMastered=true; }
   track("ans"); if(ok) track("cor");
@@ -790,7 +791,7 @@ function svApplyAnswer(w, ok){
     G.combo=0;
   }
   const pq=paceToday(G);
-  if(pq && !pq.done && d.a===pq.perDay){ toast("🎉 今日の目安 "+pq.perDay+"問を達成!"); vibe(40); }
+  if(pq && !pq.done && d.a===pq.perDay){ toast("🎉 今日の目安 "+pq.perDay+"問を達成! 任務でドカンと報酬を受け取ろう"); vibe(40); }
   return {ok, wasNew, justMastered};
 }
 

@@ -210,7 +210,37 @@ function doPull(n, banner){
     track("pull");
   }
   saveG(); refreshHeader(); renderChars();
-  openPackCeremony(results, banner);
+  /* 100連(v4.31.0)は1枚ずつの開封演出を省き、サマリー表示で結果を一望する */
+  if(n>=20) openBulkResult(results, banner);
+  else openPackCeremony(results, banner);
+}
+
+/* ---- 100連のサマリー表示(v4.31.0) ----
+   1枚ずつのフリップは100枚では長すぎる(140ms×100=14秒)ため、
+   「レア度の内訳 → NEW!のカード(フリップ演出はここだけ) → 突破の集計」に簡略化する */
+function openBulkResult(results, banner){
+  const cnt=[0,0,0,0];
+  results.forEach(r=>cnt[r.c.rar-1]++);
+  const news=results.filter(r=>r.isNew);
+  // 重複はキャラごとに「+n」へ集計(順序はレア降順)
+  const dups={};
+  results.forEach(r=>{ if(!r.isNew) dups[r.c.id]=(dups[r.c.id]||0)+1; });
+  const dupRows=Object.keys(dups)
+    .map(id=>({c:byChar[id], n:dups[id]}))
+    .sort((a,b)=>b.c.rar-a.c.rar || b.n-a.n)
+    .map(x=>'<span class="bdup"><span class="'+CHAR_RAR_CLASS[x.c.rar-1]+'">'+CHAR_RAR[x.c.rar-1]+'</span> '+
+      esc(x.c.name)+' <b>突破+'+x.n+'</b></span>').join("");
+  const cntRow=['<span class="rc5">SSR '+cnt[3]+'</span>','<span class="rc3">SR '+cnt[2]+'</span>',
+                '<span class="rc2">R '+cnt[1]+'</span>','<span class="rc1">N '+cnt[0]+'</span>'].join(" ・ ");
+  openModal('<h3>'+(banner? banner.name : "🔮 冒険者召喚")+' ─ '+results.length+'連</h3>'+
+    '<div class="panel bulkcnt" id="bulkResult">'+cntRow+'</div>'+
+    (news.length
+      ? '<h2 style="margin-top:10px">✨ NEW! なかまが'+news.length+'人</h2>'+
+        '<div class="gresult">'+news.map(gresHTML).join("")+'</div>'
+      : '<div class="small" style="margin-top:10px">新しいなかまは出なかった(重ねた突破が力になる)</div>')+
+    (dupRows? '<h2 style="margin-top:10px">🔁 突破</h2><div class="panel bulkdups">'+dupRows+'</div>':'')+
+    '<div class="row" style="margin-top:12px"><button class="btn primary" style="flex:1" data-close>OK</button></div>');
+  if(cnt[3]) vibe([40,60,100]);
 }
 
 /* ---- パック開封セレモニー(ポケポケ参考: スライドで切って開ける) ---- */
@@ -451,21 +481,20 @@ $("charSortSeg").querySelectorAll("button").forEach(b=>{
 function renderGacha(){
   const box=$("gachaBox"); if(!box) return;
   const bs=activeBanners();
-  /* 残高行(v4.30.0): ヘッダーは短縮表記(30万など)なので、引く画面に正確な残高と
-     「どちらの通貨がどちらの召喚か」を1行で示す */
-  let h='<div class="panel gbal">'+
-    '<span>🎫 <b>'+fmt(G.tickets)+'</b><span class="small"> 限定用・学習で</span></span>'+
-    '<span>🪙 <b>'+fmt(G.gold)+'</b><span class="small"> 恒常用・冒険で</span></span></div>';
+  /* v4.31.0: 残高行は廃止(正確な残高は⚙設定・記録で)。100連ボタンを追加
+     (100連は開封演出を省いたサマリー表示=openBulkResult) */
+  let h="";
   bs.forEach((b,i)=>{
     const endT=new Date(b.end+"T23:59:59");
     const remain=Math.max(1, Math.ceil((endT-Date.now())/864e5));
-    h+='<div class="gbanner limited" style="margin-top:12px">'+
+    h+='<div class="gbanner limited"'+(i? ' style="margin-top:12px"':'')+'>'+
       '<div class="ltdtag">期間限定 ─ 残り'+remain+'日</div>'+
       '<div class="gt">'+b.name+'</div>'+
-      '<div class="gs">'+b.desc+(i===0? '<br>🎫はクイズの正解で貯まる(1問=🎫1)':'')+'</div>'+
+      '<div class="gs">'+b.desc+'</div>'+
       '<div class="row" style="justify-content:center; gap:8px; margin-top:12px">'+
       '<button class="btn gold" data-pull="'+i+'|1">1回 🎫1</button>'+
-      '<button class="btn gold" data-pull="'+i+'|10">10回 🎫10</button></div>'+
+      '<button class="btn gold" data-pull="'+i+'|10">10回 🎫10</button>'+
+      '<button class="btn gold" data-pull="'+i+'|100">100連 🎫100</button></div>'+
       '</div>';
   });
   h+='<div class="gbanner" style="margin-top:12px">'+
@@ -473,7 +502,8 @@ function renderGacha(){
     '<div class="gs">冒険や任務で集めた🪙で仲間を召喚しよう</div>'+
     '<div class="row" style="justify-content:center; gap:8px; margin-top:12px">'+
     '<button class="btn gold" data-pull="std|1">1回 🪙1000</button>'+
-    '<button class="btn gold" data-pull="std|10">10回 🪙10000</button></div>'+
+    '<button class="btn gold" data-pull="std|10">10回 🪙10000</button>'+
+    '<button class="btn gold" data-pull="std|100">100連 🪙10万</button></div>'+
     '<div class="grates" id="rateInfo">提供割合・突破について ›</div></div>';
   box.innerHTML=h;
   box.querySelectorAll("[data-pull]").forEach(btn=>{

@@ -2994,28 +2994,58 @@ async function runAsync(W){
     W.newQuestion();
     ok(doc.querySelector("#choices .choice .cseg"), "学習タブの選択肢もかたまり描画");
   });
-  t("サクッと5問: 完了ボーナス🎫3・1日3回まで(v4.30.0・意欲UPの実機FB)", ()=>{
+  t("5問ごとのボーナス🎫5: 上限なし・全入口共通(v4.31.0で完了ボーナスを置き換え)", ()=>{
     const G=W.G, d=W.dayRec();
-    const t0=G.tickets, qk0=d.qk||0;
-    d.qk=0;
-    eq(W.quickBonusLeft(), 3, "今日はあと3回");
-    W.QUICK={goal:5, done:5, cor:5};
-    W.newQuestion(); // 完了モーダル=ボーナス付与
-    eq(G.tickets, t0+W.QUICK_BONUS_T, "完了で🎫+3");
-    eq(d.qk, 1, "完了回数を刻む");
-    ok(W.document.getElementById("modal").textContent.indexOf("完了ボーナス")>=0, "モーダルに明示");
-    W.closeModal();
-    d.qk=3;
-    const t1=G.tickets;
+    const t0=G.tickets, a0=d.a;
+    eq(W.ANS_BONUS_EVERY, 5); eq(W.ANS_BONUS_T, 5, "🎫3→🎫5に増額");
+    d.a=5;
+    eq(W.ansBonus(d), 5, "5の倍数で🎫+5");
+    d.a=6;
+    eq(W.ansBonus(d), 0, "倍数以外は付与なし");
+    d.a=500;
+    eq(W.ansBonus(d), 5, "1日の回数上限なし(何度でもチャレンジできる)");
+    eq(G.tickets, t0+10, "付与は実際に積まれる");
+    ok(!W.quickBonusLeft, "旧・完了ボーナス(1日3回)は撤去");
+    // サバイバー/スロット(svApplyAnswer)でも同じだけもらえる=入口で損得が出ない
+    d.a=9; const t1=G.tickets;
+    const oldWords=JSON.parse(JSON.stringify(G.words[W.WORDS[0].en]||null));
+    W.svApplyAnswer(W.WORDS[0], true); // d.a→10=ボーナス境界
+    eq(G.tickets, t1+1+5, "正解🎫1+5問ボーナス🎫5(学習タブと同レート)");
+    if(oldWords) G.words[W.WORDS[0].en]=oldWords; else delete G.words[W.WORDS[0].en];
+    d.a=a0; G.tickets=t0; W.saveG();
+    // 完了モーダルにもボーナスが明示される
     W.QUICK={goal:5, done:5, cor:5};
     W.newQuestion();
-    eq(G.tickets, t1, "1日3回を超えたらボーナスなし(◆放置農業ならぬ🎫農業の封じ)");
-    eq(d.qk, 4, "回数は数え続ける");
+    ok(W.document.getElementById("modal").textContent.indexOf("5問ごとのボーナス")>=0, "モーダルに明示");
     W.closeModal();
-    d.qk=qk0; G.tickets=t0; W.saveG();
+    d.a=a0; G.tickets=t0; W.saveG(); // svApplyAnswer/ansBonusで動いた分を戻す
     W.newQuestion(); // 後片付け: 通常の出題に戻す
   });
-  t("日別マージ: サクッと完了回数(qk)もmaxマージ=二重ボーナスにならない", ()=>{
+  t("任務: 今日の目安の達成でドカンと報酬(v4.31.0・全達成の必須には数えない)", ()=>{
+    const G=W.G;
+    const oldPace=JSON.parse(JSON.stringify(G.pace));
+    const dm=W.DAILY_DEFS.find(m=>m.id==="dp");
+    ok(dm && dm.bonus, "ボーナス任務として定義");
+    ok((dm.rew.t||0)>=20 && (dm.rew.g||0)>=2000, "報酬はかなり多め(🎫"+dm.rew.t+"+🪙"+dm.rew.g+")");
+    G.pace.goal=W.addDays(W.todayKey(), 120); G.pace.setAt=1; G.pace.qd=null;
+    const q=W.paceToday(G);
+    const r=W.dayRec(), a0=r.a;
+    r.a=q.perDay-1;
+    eq(dm.cur(W.dailyRec()), 0, "目安未達=0");
+    r.a=q.perDay;
+    eq(dm.cur(W.dailyRec()), 1, "目安達成=1");
+    r.a=a0;
+    // 目標未設定なら挑戦できない(が、デイリー全達成の必須ではないので損もしない)
+    G.pace.goal=null; G.pace.qd=null;
+    eq(dm.cur(W.dailyRec()), 0, "目標未設定は0のまま");
+    ok(W.DAILY_CORE.every(m=>m.id!=="dp"), "全達成ボーナスの必須リストに目安任務は入らない");
+    const d2=W.dailyRec(), oldCl=Object.assign({}, d2.cl), oldAll=d2.cl.all;
+    W.DAILY_CORE.forEach(m=>d2.cl[m.id]=1); delete d2.cl.all; delete d2.cl.dp;
+    ok(W.claimableDaily(), "目安任務が未達成でもデイリー全達成ボーナスは受け取れる");
+    d2.cl=oldCl; if(oldAll) d2.cl.all=oldAll;
+    G.pace=oldPace;
+  });
+  t("日別マージ: 旧・サクッと完了回数(qk・v4.30の遺産フィールド)もmaxマージで保持", ()=>{
     const mk=qk=>({resetAt:0, updatedAt:1, words:{}, inv:{}, chars:{}, dungeons:{},
                    days:{"2026-01-01":{a:5,c:4,m:0,qk:qk}}});
     const m=W.mergeData(mk(1), mk(3));
@@ -3069,15 +3099,46 @@ async function runAsync(W){
     W.closeModal();
     W.localStorage.removeItem("tq_newsSeen");
   });
-  t("ガチャ(v4.30.0): 正確な残高行(ヘッダーは短縮表記のため)", ()=>{
+  t("ガチャ(v4.31.0): 100連ボタン・🎫注記と残高行の廃止(残高は設定・記録へ)", ()=>{
+    const doc=W.document;
+    W.renderGacha();
+    ok(!doc.querySelector("#gachaBox .gbal"), "残高行は廃止");
+    ok(doc.getElementById("gachaBox").innerHTML.indexOf("クイズの正解で貯まる")<0, "🎫の稼ぎ方の注記は廃止");
+    ok(doc.querySelector('#gachaBox [data-pull="std|100"]'), "恒常に100連ボタン");
+    ok(doc.querySelector('#gachaBox [data-pull="0|100"]'), "限定にも100連ボタン");
+    // 正確な残高は⚙設定・記録で確認できる
     const G=W.G, t0=G.tickets, g0=G.gold;
     G.tickets=12345; G.gold=678901;
-    W.renderGacha();
-    const bal=W.document.querySelector("#gachaBox .gbal");
-    ok(bal, "残高行がある");
-    ok(bal.textContent.indexOf("12,345")>=0 && bal.textContent.indexOf("678,901")>=0, "🎫🪙とも正確な数字");
-    G.tickets=t0; G.gold=g0;
-    W.renderGacha(); W.saveG();
+    W.openSettings();
+    const mh=doc.getElementById("modal").innerHTML;
+    ok(mh.indexOf("12,345")>=0 && mh.indexOf("678,901")>=0, "設定・記録に🎫🪙の正確な残高");
+    W.closeModal();
+    G.tickets=t0; G.gold=g0; W.saveG();
+  });
+  t("ガチャ100連: 開封演出を省いたサマリー表示(内訳・NEW・突破の集計)", ()=>{
+    const G=W.G, doc=W.document;
+    const g0=G.gold, chars0=JSON.parse(JSON.stringify(G.chars));
+    const pulls0=G.counters.pulls, wp0=W.weeklyRec().pull;
+    G.gold=150000;
+    W.doPull(100, null);
+    eq(G.gold, 50000, "🪙10万を消費");
+    ok(doc.getElementById("bulkResult"), "サマリー表示が開く");
+    ok(!doc.getElementById("pack"), "1枚ずつの開封演出は出さない");
+    const cnt=doc.getElementById("bulkResult").textContent;
+    ok(cnt.indexOf("SSR")>=0 && cnt.indexOf("N ")>=0, "レア度の内訳");
+    const mh=doc.getElementById("modal").innerHTML;
+    ok(mh.indexOf("NEW!")>=0 || mh.indexOf("突破")>=0, "NEWか突破のまとめが出る(100連で両方ゼロはあり得ない)");
+    W.closeModal();
+    // 10連までは従来どおり開封演出
+    G.gold+=10000;
+    W.doPull(10, null);
+    ok(doc.getElementById("pack"), "10連は従来のパック開封");
+    W.closeModal();
+    // 後片付け(通貨・なかま・カウンタを戻す)
+    G.gold=g0; G.chars=chars0;
+    G.counters.pulls=pulls0; W.weeklyRec().pull=wp0;
+    if(!G.chars[G.party.char]) G.party.char=Object.keys(G.chars)[0];
+    W.saveG();
   });
   t("編成(v4.30.0): ダメージの式は開閉に畳む(中身は描画済み)", ()=>{
     const doc=W.document;

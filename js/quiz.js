@@ -124,12 +124,18 @@ function refreshQuizCount(){
 }
 
 /* ---- サクッと5問(v4.26.0): 「5問だけならやろう」の背中押し ---- */
-/* 完了ボーナス(v4.30.0・実機FB「報酬を上げて取り組む意欲を」): 完了ごとに🎫3・1日3回まで。
-   完了回数は日別記録d.qkに残す(同期はa/c等と同じmaxマージ)。🎫は「学習だけが源泉」の
-   限定通貨なので学習ボーナスとして経済の筋が通り、1回の完了に5解答が必要=放置では稼げない。
-   varはテスト(iframe)からの参照用 */
-var QUICK_BONUS_T=3, QUICK_BONUS_N=3;
-function quickBonusLeft(){ return Math.max(0, QUICK_BONUS_N-(dayRec().qk||0)); }
+/* 5問ごとのボーナス(v4.31.0・実機FB): 今日の解答数(d.a)が5の倍数に達するたび🎫5・上限なし。
+   v4.30.0の「サクッと完了ボーナス(🎫3・1日3回)」を置き換え ─
+   ①上限廃止=1日に何度でも気軽にチャレンジできる
+   ②d.aは学習タブ/サクッと/サバイバー/スロットの全入口で共通=「サクッとだけ得」の歪みがない
+   (どこで解いても5問ごとに同じだけもらえる。サクッと5問は入口であって特別レートではない)
+   ③額も🎫3→🎫5に増額。🎫は「学習だけが源泉」の限定通貨=学習ボーナスとして経済の筋が通り、
+   1回の付与に5解答が必要なので放置では稼げない。varはテスト(iframe)からの参照用 */
+var ANS_BONUS_EVERY=5, ANS_BONUS_T=5;
+function ansBonus(d){
+  if(d.a>0 && d.a%ANS_BONUS_EVERY===0){ G.tickets+=ANS_BONUS_T; return ANS_BONUS_T; }
+  return 0;
+}
 function startQuick(n){
   QUICK={goal:n||5, done:0, cor:0};
   switchTab("quiz");
@@ -139,17 +145,13 @@ function startQuick(n){
 function openQuickDone(){
   const d=dayRec(), q=paceToday(G);
   const g=QUICK.goal, c=QUICK.cor;
-  // 完了ボーナス(v4.30.0): 🎫は付与してから回数を刻む(1日QUICK_BONUS_N回まで)
-  const bonus=quickBonusLeft()? QUICK_BONUS_T : 0;
-  d.qk=(d.qk||0)+1;
-  if(bonus){ G.tickets+=bonus; }
-  saveG(); refreshHeader();
   QUICK={goal:0, done:0, cor:0}; // ✕で閉じても通常学習として続けられる
+  /* 5問ボーナスは解答時(ansBonus)に付与済み: 5問のセッションは今日の解答数が
+     5の倍数をちょうど1回またぐ=毎回きっかり🎫+5(ここでは表示だけ) */
   openModal('<h3>⚡ '+g+'問 おつかれさま!</h3>'+
     '<div class="giftbox">正解 <b style="font-size:18px">'+c+' / '+g+'</b>'+(c>=g? ' ─ 全問正解! 🎉':'')+
-    (bonus? '<br><span style="font-weight:800; color:var(--accent2)">🎁 完了ボーナス 🎫+'+bonus+'</span>'+
-      '<span class="small">'+(quickBonusLeft()? '(今日あと'+quickBonusLeft()+'回)':'(今日の分はこれで全部)')+'</span>'
-      : '<br><span class="small">完了ボーナスはまた明日(1日'+QUICK_BONUS_N+'回まで)</span>')+
+    '<br><span style="font-weight:800; color:var(--accent2)">🎁 5問ごとのボーナス 🎫+'+ANS_BONUS_T+' ゲット!</span>'+
+    '<span class="small">(何度でも・どの学習でも5問ごと)</span>'+
     '<br><span class="small">今日 '+d.a+(q&&!q.done? "/"+q.perDay:"")+'問'+
     (q&&!q.done&&d.a>=q.perDay? ' ─ 目安達成! 🏅':'')+'</span></div>'+
     '<div class="row" style="gap:10px">'+
@@ -259,6 +261,7 @@ function answer(chosen, btn){
   const preSt=st.slice(); // ドロップ判定は解答前の状態で
   srsApply(st, ok, now);
   const d=dayRec(); recordDayAnswer(d, wasNew, ok);
+  const bonus5=ansBonus(d); // 5問ごとの🎫ボーナス(v4.31.0・上限なし・全入口共通)
   let justMastered=false;
   if(ok && st[0]>=MASTER_BOX && !st[4]){ st[4]=1; d.m++; justMastered=true; }
   track("ans"); if(ok) track("cor");
@@ -292,24 +295,27 @@ function answer(chosen, btn){
   const rt=rootText(w.en), meta=[];
   if(rt) rt.split("・").forEach((tag,i)=>meta.push('<span class="rmeta">'+(i? '':'🧬 ')+esc(tag)+'</span>'));
   if(isWild(w.en)) meta.push('<span class="rmeta wildm">🐺 野生語 Lv'+memBox(w.en)+'</span>');
+  let bigT=false; // 大事なお祝いのトーストを出したか(5問ボーナスの通知で上書きしない)
   if(ok){
     let rar=dropRarity(preSt);
     if(Math.random()<comboDropBonus()) rar=Math.min(5, rar+1); // コンボ中は★+1のチャンス
     const drop=addCard(w.en, rar);
     // 「覚えた」の瞬間がいちばん大事なお祝い(v4.13.0)。次点でレベルアップ・★アップ
-    if(justMastered){ toast("🏅 "+w.en+" を覚えた! 7日あけても思い出せた"); vibe([30,40,60]); }
-    else if(lvUp){ toast("📖 レベルアップ! Lv"+lvUp+" ─ 全ステータス強化"); vibe(40); }
-    else if(drop.rarUp){ toast("🎉 "+w.en+" のカードが★"+drop.rar+"にランクアップ!"); vibe(30); }
+    if(justMastered){ toast("🏅 "+w.en+" を覚えた! 7日あけても思い出せた"); vibe([30,40,60]); bigT=true; }
+    else if(lvUp){ toast("📖 レベルアップ! Lv"+lvUp+" ─ 全ステータス強化"); vibe(40); bigT=true; }
+    else if(drop.rarUp){ toast("🎉 "+w.en+" のカードが★"+drop.rar+"にランクアップ!"); vibe(30); bigT=true; }
     else if(rar>=3) vibe(30);
-    // 🎫は毎正解なのでトースト・結果バー表示は出さない(残高はガチャ画面で確認)
+    // 🎫は毎正解なのでトースト・結果バー表示は出さない(残高は設定・記録とガチャ画面で確認)
   }
+  // 5問ごとのボーナスの通知(v4.31.0)。より大事なお祝いがあるときは譲る
+  if(bonus5 && !bigT) toast("🎁 5問ごとのボーナス 🎫+"+bonus5);
   $("qStats").innerHTML=qStatsHTML(st); // 定着ステップの変化(上がった/戻った)を見せる
   rc.innerHTML='<span class="poschip pos'+w.pos+'">'+POS_LABEL[w.pos]+'</span>'+meta.join(' ');
   $("resultBar").classList.add("show");
   $("promptCard").classList.add("srch"); // 単語タップで辞書へ(意味の裏取り)
   // 今日の目安にちょうど到達した瞬間だけ祝う(毎問出る表示はノイズ=v4.6.2の知見)
   const pq=paceToday(G);
-  if(pq && !pq.done && d.a===pq.perDay){ toast("🎉 今日の目安 "+pq.perDay+"問を達成!"); vibe(40); }
+  if(pq && !pq.done && d.a===pq.perDay){ toast("🎉 今日の目安 "+pq.perDay+"問を達成! 任務でドカンと報酬を受け取ろう"); vibe(40); }
   saveG();
   refreshHeader();
   refreshQuizCount(); // 解答数・サクッと5問の進捗を即時反映

@@ -66,6 +66,12 @@ function openLoginModal(){
    v4.6.0 通貨の分離: 🎫(限定召喚)は学習系の任務・実績だけが源泉。
    冒険・ガチャ系の🎫報酬はすべて🪙(恒常召喚)へ変換し、額も増やした */
 const DAILY_DEFS=[
+  /* 今日の目安の達成(v4.31.0実機FB): 学習ペース管理の目安をやり切った日の「ドカンと多め」の報酬。
+     目標日を設定していないと挑戦できないため bonus:1=デイリー全達成の必須には数えない
+     (curは引数のdailyRecではなく、日別学習記録と当日固定済みの目安から判定する) */
+  {id:"dp", name:"🎯 今日の目安を達成する(学習ペース管理)", target:1, bonus:1,
+   cur:()=>{ const q=paceToday(G), r=dayRec(); return (q && !q.done && r.a>=q.perDay)? 1:0; },
+   rew:{t:25, g:3000}},
   {id:"da", name:"クイズに20問答える",        target:20, cur:d=>d.a,     rew:{g:150}},
   {id:"dc", name:"クイズで10問正解する",      target:10, cur:d=>d.c,     rew:{t:1}},
   {id:"dc2",name:"クイズで30問正解する",      target:30, cur:d=>d.c,     rew:{t:2}},
@@ -75,6 +81,9 @@ const DAILY_DEFS=[
   {id:"dr", name:"サバイバーに1回挑む",       target:1,  cur:d=>d.run,   rew:{g:300}},
   {id:"dl", name:"サバイバーで1回生還する",   target:1,  cur:d=>d.clear, rew:{g:1000}},
 ];
+/* 全達成ボーナスの必須になる基本デイリー(bonus付きの任務=目安達成は数えない。
+   目標日を設定していない人がデイリーを完走できなくなるのを防ぐ) */
+const DAILY_CORE=DAILY_DEFS.filter(m=>!m.bonus);
 const WEEKLY_DEFS=[
   {id:"wa", name:"クイズに150問答える",       target:150, cur:w=>w.a,     rew:{g:800}},
   {id:"wc", name:"クイズで80問正解する",      target:80,  cur:w=>w.c,     rew:{t:3}},
@@ -128,7 +137,7 @@ function claimableCount(){
   let n=0;
   const d=dailyRec();
   DAILY_DEFS.forEach(m=>{ if(!d.cl[m.id] && m.cur(d)>=m.target) n++; });
-  if(!d.cl.all && DAILY_DEFS.every(m=>d.cl[m.id])) n++;
+  if(!d.cl.all && DAILY_CORE.every(m=>d.cl[m.id])) n++;
   const w=weeklyRec();
   WEEKLY_DEFS.forEach(m=>{ if(!w.cl[m.id] && m.cur(w)>=m.target) n++; });
   if(!w.cl.all && WEEKLY_DEFS.every(m=>w.cl[m.id])) n++;
@@ -166,7 +175,7 @@ function claimAllCurrent(){
   const add=r=>{ got.g+=r.g||0; got.t+=r.t||0; n++; grantReward(r); };
   const d=dailyRec();
   DAILY_DEFS.forEach(m=>{ if(!d.cl[m.id] && m.cur(d)>=m.target){ d.cl[m.id]=1; add(m.rew); } });
-  if(!d.cl.all && DAILY_DEFS.every(m=>d.cl[m.id])){ d.cl.all=1; add({t:1}); }
+  if(!d.cl.all && DAILY_CORE.every(m=>d.cl[m.id])){ d.cl.all=1; add({t:1}); }
   const w=weeklyRec();
   WEEKLY_DEFS.forEach(m=>{ if(!w.cl[m.id] && m.cur(w)>=m.target){ w.cl[m.id]=1; add(m.rew); } });
   if(!w.cl.all && WEEKLY_DEFS.every(m=>w.cl[m.id])){ w.cl.all=1; add({t:3}); }
@@ -183,7 +192,7 @@ function claimAllCurrent(){
 function claimableDaily(){
   const d=dailyRec();
   return DAILY_DEFS.some(m=>!d.cl[m.id] && m.cur(d)>=m.target) ||
-    (!d.cl.all && DAILY_DEFS.every(m=>d.cl[m.id]));
+    (!d.cl.all && DAILY_CORE.every(m=>d.cl[m.id]));
 }
 function claimableWeekly(){
   const w=weeklyRec();
@@ -221,10 +230,9 @@ function renderMissions(){
         toast(rewardText(m.rew)+" を受け取った");
       }));
     });
-    // 全達成ボーナス
-    const all=DAILY_DEFS.every(m=>d.cl[m.id]);
+    // 全達成ボーナス(bonus付きの目安任務は必須に数えない)
     box.appendChild(missionRow("デイリー全達成ボーナス",
-      DAILY_DEFS.filter(m=>d.cl[m.id]).length, DAILY_DEFS.length, {t:1}, !!d.cl.all, ()=>{
+      DAILY_CORE.filter(m=>d.cl[m.id]).length, DAILY_CORE.length, {t:1}, !!d.cl.all, ()=>{
         d.cl.all=1; grantReward({t:1}); saveG(); refreshHeader(); renderMissions(); refreshMissionDot();
         toast("🎫1 を受け取った");
       }));

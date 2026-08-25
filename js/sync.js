@@ -389,6 +389,9 @@ function openSettings(){
     '<tr><td>今日の解答</td><td>'+d.a+'問(正解'+d.c+')</td></tr>'+
     '<tr><td>覚えた単語</td><td>'+mastered+' / '+WORDS.length+'(学習した '+Object.keys(G.words).length+'語)</td></tr>'+
     '<tr><td>連続学習</td><td>'+streak+'日(XP×'+(+streakXpMult().toFixed(2))+' ・ 🧊'+(G.frz||0)+'/'+FRZ_MAX+')</td></tr>'+
+    // 正確な残高(v4.31.0: ヘッダーは短縮表記・ガチャ画面の残高行の移設先)
+    '<tr><td>🎫 チケット</td><td>'+fmt(G.tickets)+'(限定召喚用・学習で入手)</td></tr>'+
+    '<tr><td>🪙 ゴールド</td><td>'+fmt(G.gold)+'(恒常召喚用・冒険で入手)</td></tr>'+
     '</table>'+
     '<div class="row" style="gap:8px; margin-top:8px">'+
       '<button class="btn grow" id="histBtn">📊 学習のあゆみ</button>'+

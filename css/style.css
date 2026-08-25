@@ -342,10 +342,11 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
 }
 
 /* ---- gacha ---- */
-/* 残高行(v4.30.0): ヘッダーは短縮表記のため、引く画面に正確な残高を1行で */
-.gbal{display:flex; justify-content:space-between; align-items:center; gap:8px;
-  margin-top:4px; padding:10px 14px; font-size:14px}
-.gbal b{color:var(--accent2)}
+/* 100連のサマリー表示(v4.31.0): レア度内訳とキャラ別の突破集計 */
+.bulkcnt{margin-top:8px; padding:12px 14px; text-align:center; font-weight:800; font-size:14px}
+.bulkdups{padding:10px 12px; display:flex; flex-wrap:wrap; gap:6px 14px}
+.bulkdups .bdup{font-size:12px; color:var(--sub)}
+.bulkdups .bdup b{color:var(--accent2)}
 .gbanner{background:linear-gradient(135deg,#E4EAFF,#D5DFFB); border-radius:22px;
   padding:18px 16px; text-align:center}
 .gbanner .gt{font-size:17px; font-weight:800; color:var(--ink)}
