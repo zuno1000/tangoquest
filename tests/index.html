@@ -3163,6 +3163,8 @@ async function runAsync(W){
       ok(p.ja && p.k && (p.ty==="s"||p.ty==="c") && W.PHR_CATS[p.c], p.en);
       ok(p.ch.length>=2, "チャンクは2つ以上: "+p.en);
       ok(p.en===p.ch.join(" ") && p.en.indexOf("  ")<0, "en=ch.join(不変キーの導出): "+p.en);
+      // v5.1.0: 核は英文中の連続表現(クローズ空欄の前提。活用語尾はphrClozeが語境界まで広げる)
+      ok(p.en.toLowerCase().indexOf(p.k.toLowerCase())>=0, "核が英文中にある: "+p.en+" / "+p.k);
       cats[p.c]=(cats[p.c]||0)+1;
     });
     for(const c in W.PHR_CATS) ok((cats[c]||0)>=4, "カテゴリ"+c+"は4件以上(4択の誤答枠)="+(cats[c]||0));
@@ -3177,11 +3179,23 @@ async function runAsync(W){
       ok(cs.filter(x=>x.en!==p.en).every(x=>x.c===p.c), "誤答は同カテゴリ(紛らわしい=学習になる)");
     }
   });
-  t("フレーズの出題形式はSRSの階段と連動(box0-1=4択・box2以上=並べ替え)", ()=>{
-    eq(W.phrFormat(null), "mc", "新規=4択");
-    eq(W.phrFormat([1,0,1,0,0,0,0]), "mc", "box1=4択");
+  t("フレーズの出題形式はSRSの階段と連動(box0-1=クローズ4択・box2-3=並べ替え・box4〜=口頭)", ()=>{
+    eq(W.phrFormat(null), "mc", "新規=クローズ4択");
+    eq(W.phrFormat([1,0,1,0,0,0,0]), "mc", "box1=クローズ4択");
     eq(W.phrFormat([2,0,1,0,0,0,0]), "or", "box2から並べ替え");
-    eq(W.phrFormat([5,0,9,0,1,0,0]), "or");
+    eq(W.phrFormat([3,0,2,0,0,0,0]), "or");
+    eq(W.phrFormat([4,0,5,0,0,0,0]), "sp", "box4から口頭自己判定(v5.1.0)");
+    eq(W.phrFormat([5,0,9,0,1,0,0]), "sp", "box5=覚えた は口頭で言えたことを意味する");
+  });
+  t("phrCloze: 核の位置を語境界まで広げて切り出す(seem→seems等の活用対応)", ()=>{
+    const p1=W.PHRASES.find(x=>x.k==="seem"); // It seems to me that …
+    const c1=W.phrCloze(p1);
+    eq(c1.key, "seems", "活用語尾まで空欄が伸びる");
+    eq(c1.pre+c1.key+c1.post, p1.en, "分割は元の文を復元できる");
+    const p2=W.PHRASES.find(x=>x.k==="poses a serious threat");
+    eq(W.phrCloze(p2).key, "poses a serious threat", "連語はそのまま核になる");
+    ok(W.phrCtxHTML(p1,false).indexOf("＿")>=0 && W.phrCtxHTML(p1,false).indexOf("seems")<0, "出題中は核が隠れる");
+    ok(W.phrCtxHTML(p1,true).indexOf("seems")>=0, "答え合わせで核が埋まる(ハイライト)");
   });
   t("フレーズ解答: 目安・あゆみ(G.days)には入れず、🎫/コンボ/任務は単語と共有する", ()=>{
     const G=W.G, doc=W.document;
@@ -3195,8 +3209,10 @@ async function runAsync(W){
     W.phrStart(p);
     eq(doc.getElementById("promptWord").textContent, p.ja, "問題は日本語の意図");
     ok(doc.getElementById("qBadge").textContent.indexOf(W.PHR_CATS[p.c])>=0, "バッジはカテゴリ");
-    const btn=[...doc.querySelectorAll("#choices .choice")].find(b=>b.textContent===p.en);
-    ok(btn, "正解の選択肢がある(csegでもtextContentは原文)");
+    // v5.1.0: 選択肢は核チャンク(文全体ではない=主語の名詞で選べない)
+    const key=W.phrCloze(p).key;
+    const btn=[...doc.querySelectorAll("#choices .choice")].find(b=>b.textContent===key);
+    ok(btn, "正解の核チャンクの選択肢がある(csegでもtextContentは原文)");
     btn.click();
     ok(G.phr[p.en] && G.phr[p.en][2]===1, "SRSはG.phr(単語のG.wordsと別台帳)");
     eq(d.a, 1, "単語の日別(=今日の目安の分母)は動かない");
@@ -3256,6 +3272,59 @@ async function runAsync(W){
     eq(G.opt.qtab, "w", "単語に戻れる");
     ok(["新規","復習","覚えた・復習"].some(s=>doc.getElementById("qBadge").textContent.indexOf(s)>=0), "単語の出題に戻る");
     G.phr=oldPhr; W.saveG();
+  });
+  t("クローズ4択(v5.1.0): 文脈行は出題時から常設・答え合わせは空欄が埋まるだけ(押し上げ根治)", ()=>{
+    const G=W.G, doc=W.document;
+    const oldPhr=G.phr, oldQtab=G.opt.qtab, oldCb=G.combo;
+    const d=W.dayRec(), pd=W.pdayRec(), snap={da:d.a, pa:pd.a, pc:pd.c, t:G.tickets, xp:G.xp};
+    d.a=1; pd.a=0; G.phr={}; G.opt.qtab="p";
+    const p=W.PHRASES.find(x=>x.k==="poses a serious threat");
+    W.phrStart(p);
+    const bl=doc.getElementById("phrBuild");
+    ok(!bl.classList.contains("hidden") && bl.innerHTML.indexOf("＿")>=0, "出題中から文脈行(空欄つき)がある");
+    ok(bl.textContent.indexOf("poses a serious threat")<0, "核は隠れている");
+    ok(bl.textContent.indexOf("Global warming")>=0, "核以外の文は見えている(文脈ごと覚える)");
+    const cs=[...doc.querySelectorAll("#choices .choice")];
+    eq(cs.length, 4, "選択肢は4つ");
+    ok(cs.every(b=>b.textContent.length<p.en.length), "選択肢は核チャンク(文全体ではない=主語の名詞では選べない)");
+    const n0=doc.getElementById("promptCard").children.length;
+    cs.find(b=>b.textContent===W.phrCloze(p).key).click();
+    eq(doc.getElementById("promptCard").children.length, n0, "答え合わせで要素が増えない(青字全文の差し込みは廃止)");
+    ok(bl.textContent===p.en, "空欄が核で埋まって全文になる");
+    ok(!!bl.querySelector(".pkey"), "核だけハイライト");
+    G.phr=oldPhr; G.opt.qtab=oldQtab; G.combo=oldCb;
+    d.a=snap.da; pd.a=snap.pa; pd.c=snap.pc; G.tickets=snap.t; G.xp=snap.xp;
+    W.saveG(); W.newQuestion();
+  });
+  t("口頭自己判定(v5.1.0): 「答えを見る」→⭕言えた だけが「覚えた」への最後の階段を進める", ()=>{
+    const G=W.G, doc=W.document;
+    const oldPhr=G.phr, oldQtab=G.opt.qtab, oldCb=G.combo;
+    const d=W.dayRec(), pd=W.pdayRec(), snap={da:d.a, pa:pd.a, pc:pd.c, pm:pd.m, t:G.tickets, xp:G.xp};
+    d.a=1; pd.a=0; pd.c=0; pd.m=0;
+    G.phr={}; G.opt.qtab="p";
+    const p=W.PHRASES[3];
+    G.phr[p.en]=[4, Date.now()-1000, 4, 0, 0, 0, 0]; // box4+期限到来=口頭ステージ
+    W.phrStart(p);
+    const bl=doc.getElementById("phrBuild");
+    ok(doc.getElementById("phrSpkShow"), "「答えを見る」ボタン");
+    ok(bl.textContent.indexOf(p.en)<0, "答えを見るまで英文は出ない(思い出して声に出す)");
+    doc.getElementById("phrSpkShow").click();
+    ok(bl.textContent===p.en, "答えは常設の文脈行に出る(核ハイライト)");
+    ok(doc.getElementById("phrSpkOk") && doc.getElementById("phrSpkNg"), "⭕言えた/✖まだ の自己判定");
+    doc.getElementById("phrSpkOk").click();
+    eq(G.phr[p.en][0], 5, "⭕でbox5=覚えた(口頭で言えたことが基準)");
+    eq(G.phr[p.en][4], 1); eq(pd.m, 1, "覚えた数に計上");
+    ok(doc.getElementById("phrSpkOk").disabled, "判定は1回だけ");
+    // ✖は不正解=box0へ(lapse半戻りも単語と同じ)
+    G.phr[p.en]=[4, Date.now()-1000, 4, 0, 0, 0, 0];
+    W.phrStart(p);
+    doc.getElementById("phrSpkShow").click();
+    doc.getElementById("phrSpkNg").click();
+    eq(G.phr[p.en][0], 0, "✖は立て直し");
+    eq(G.phr[p.en][7], 2, "半戻り(次の正解でbox2)");
+    G.phr=oldPhr; G.opt.qtab=oldQtab; G.combo=oldCb;
+    d.a=snap.da; pd.a=snap.pa; pd.c=snap.pc; pd.m=snap.pm; G.tickets=snap.t; G.xp=snap.xp;
+    W.saveG(); W.newQuestion();
   });
   t("フレーズの同期: SRSは解答回数が多い方・日別はmax(単語と同じ規則)", ()=>{
     const mk=(st,pa)=>({resetAt:0, updatedAt:1, words:{}, inv:{}, chars:{}, dungeons:{},

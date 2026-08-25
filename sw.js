@@ -1,5 +1,5 @@
 /* TangoQuest service worker — cache-first */
-const CACHE="tangoquest-v68"; // 表示名はLEXICAだがキャッシュ名系統は維持
+const CACHE="tangoquest-v69"; // 表示名はLEXICAだがキャッシュ名系統は維持
 /* Google Fonts専用キャッシュ(v4.23.0・オフライン起動対応):
    フォントCSSとwoff2は一度オンラインで使えば以後オフラインでも書体が出る。
    リリースをまたいで使い回すため、CACHEとは別名にしてactivateで消さない */

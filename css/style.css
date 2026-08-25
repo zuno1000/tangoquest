@@ -1036,9 +1036,19 @@ body.svplay #slotView{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
 /* 切替セグは学習画面の縦空間を圧迫しないようコンパクトに(v4.7.1の知見: 縦積みは選択肢を押し出す) */
 .qseg{margin:2px 0 6px; padding:3px}
 .qseg button{min-height:34px; padding:7px 0}
-/* 並べ替えの組み立て行+答え合わせの全文表示(promptCard内) */
-#phrBuild{margin-top:8px; font-size:15px; line-height:1.5; color:var(--accent2); word-break:break-word}
+/* 文脈行(v5.1.0): 出題時から常設(クローズの空欄/並べ替えの組み立て/口頭の案内)。
+   min-heightで2行ぶんを予約し、答え合わせで空欄が埋まってもレイアウトが動かない。
+   本文は地の色にして、核(.pkey)だけを色で立てる=「何を覚えるべきか」を1点に絞る */
+#phrBuild{margin-top:8px; min-height:46px; font-size:14px; font-weight:700; line-height:1.6;
+  color:var(--ink); word-break:break-word}
 #phrBuild .pbslot{color:var(--sub); font-size:12px; font-weight:700}
+.pkey{color:var(--accent2); font-weight:900}
+.pblank{color:var(--accent2); font-weight:900; letter-spacing:1px}
+/* 口頭ステージ(v5.1.0)のボタン色: 答えを見る/⭕言えた/✖まだ/🔊お手本 */
+.choice.spshow{justify-content:center; text-align:center; color:var(--accent2)}
+.choice.spok{color:var(--ok)}
+.choice.spng{color:var(--ng)}
+.choice.sptts{justify-content:center; text-align:center; font-size:14px; color:var(--sub)}
 /* チャンクのタップボタン: 折り返して並ぶ(縦積みの.choiceとはレイアウトを変える) */
 #choices.chunks{flex-direction:row; flex-wrap:wrap; align-content:flex-start; gap:9px}
 .chunkbtn{flex:0 0 auto; border:none; border-radius:14px; padding:11px 14px; min-height:44px;
