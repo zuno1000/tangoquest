@@ -17,6 +17,7 @@ const PHR_CATS={
   eco:"経済・格差", pol:"政治・国際", mda:"メディア・社会",
   biz:"仕事・会議", sm:"雑談",
   vp:"動詞の型", ims:"無生物主語", // v5.4.0: make/help/force頼みからの卒業(pt=型の一般形つき)
+  my:"マイフレーズ", // v5.6.0: ユーザー登録(データはG.myphr=端末+本人のDriveのみ)
 };
 const PHRASES=[
 /* ---- op: 意見・立場(stem) ---- */

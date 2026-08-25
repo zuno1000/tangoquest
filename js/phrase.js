@@ -43,11 +43,98 @@ function phrCtxHTML(p, revealed){
   return esc(cz.pre)+(revealed? '<b class="pkey">'+esc(cz.key)+'</b>' : blank)+esc(cz.post);
 }
 
+/* ---- マイフレーズ(v5.6.0): 自分専用のフレーズ帳 ----
+   英会話の添削・ネイティブとの対話で「言えなかった」表現を貼り付けるだけで登録できる。
+   自動化: 英文/日本語(2行目)/チャンク分割/核の候補をすべて解析で埋める(手作業は核の確認と日本語だけ)。
+   保存はG.myphr=この端末+本人のDrive非公開領域のみ(静的サイト=他者に共有される経路がない)。
+   学習への統合はallPhrases()の1点: 内蔵PHRASESと同じSRS・出題形式・経済に乗る */
+let MYPHR_CACHE=null;
+function myphrInvalidate(){ MYPHR_CACHE=null; }
+function myphrList(){
+  if(!MYPHR_CACHE){
+    MYPHR_CACHE=Object.keys(G.myphr||{})
+      .filter(en=>G.myphr[en] && !G.myphr[en].del)
+      .map(en=>{ const m=G.myphr[en]; return {en, ja:m.ja, k:m.k, ch:m.ch, c:"my", ty:"c"}; });
+  }
+  return MYPHR_CACHE;
+}
+function allPhrases(){
+  const my=myphrList();
+  return my.length? PHRASES.concat(my) : PHRASES;
+}
+/* 貼り付けテキストから英文と日本語を推定(行ごとに判定・空白は正規化) */
+function myphrParse(text){
+  const lines=String(text||"").split(/\n+/).map(s=>s.trim()).filter(Boolean);
+  let en="", ja="";
+  for(const l of lines){
+    const letters=(l.match(/[A-Za-z]/g)||[]).length;
+    if(!en && letters>=l.length*0.5) en=l.replace(/\s+/g," ").trim();
+    else if(!ja && /[぀-ヿ一-鿿]/.test(l)) ja=l;
+  }
+  return {en, ja};
+}
+/* チャンクの自動分割: カンマの後を優先しつつ1チャンク最大4語。join(" ")===en を保つ */
+function myphrChunks(en){
+  const w=en.split(" ");
+  if(w.length<2) return [en];
+  if(w.length<=4){
+    const h=Math.ceil(w.length/2);
+    return [w.slice(0,h).join(" "), w.slice(h).join(" ")];
+  }
+  const out=[]; let cur=[];
+  w.forEach(t=>{
+    cur.push(t);
+    if(cur.length>=4 || /,$/.test(t)){ out.push(cur.join(" ")); cur=[]; }
+  });
+  if(cur.length){
+    // 1語の尻尾は前のチャンクに吸収(ただし前が4語未満のときだけ=1チャンク最大4語を守る)
+    if(cur.length===1 && out.length && out[out.length-1].split(" ").length<4) out[out.length-1]+=" "+cur[0];
+    else out.push(cur.join(" "));
+  }
+  return out;
+}
+/* 核の候補: ストップワード以外でいちばん長い語(タップで変更できる出発点) */
+const MYPHR_STOP=new Set(("a an the to of in on at for with and or but so if as by from is are was were be been being am "+
+  "it its this that these those i you he she we they me him her them us my your his their our not no dont doesnt didnt cant "+
+  "could would should will shall may might must have has had do does did there here what when where who which how why then "+
+  "than very really just also too only about into over under out up down more most much many some any all both few get got go went make made").split(" "));
+function myphrSuggestKey(en){
+  const w=en.split(" ");
+  let best=-1, bi=0;
+  w.forEach((t,i)=>{
+    const c=t.replace(/[^A-Za-z'-]/g,"");
+    if(!c || MYPHR_STOP.has(c.toLowerCase())) return;
+    if(c.length>best){ best=c.length; bi=i; }
+  });
+  return bi;
+}
+/* 登録の本体(純関数寄り・UIとテストの共用)。kは英文中の連続表現に限る(クローズの前提) */
+function myphrAdd(en, ja, k){
+  en=String(en||"").replace(/\s+/g," ").trim();
+  ja=String(ja||"").trim();
+  k=String(k||"").replace(/^[^A-Za-z'-]+|[^A-Za-z'-]+$/g,"").trim();
+  if(!en || !/[A-Za-z]/.test(en)) return {err:"英文が読み取れない"};
+  if(!ja) return {err:"日本語の意図を一言だけ入れてほしい(思い出す手がかりになる)"};
+  if(byPhr[en]) return {err:"内蔵フレーズに同じ文がある"};
+  if(G.myphr[en] && !G.myphr[en].del) return {err:"すでに登録済み"};
+  if(!k || en.toLowerCase().indexOf(k.toLowerCase())<0){
+    k=en.split(" ")[myphrSuggestKey(en)].replace(/^[^A-Za-z'-]+|[^A-Za-z'-]+$/g,"");
+  }
+  G.myphr[en]={ja, k, ch:myphrChunks(en), at:Date.now()};
+  myphrInvalidate(); saveG();
+  return {en};
+}
+function myphrDelete(en){
+  G.myphr[en]={del:1, at:Date.now()}; // トンボストーン=削除が同期で他端末にも伝播する
+  delete G.phr[en];                    // SRS記録も掃除
+  myphrInvalidate(); saveG();
+}
+
 /* 出題選択(pickWordの縮約版): 期限が来た復習を忘れかけ度順に優先し、新規を確率で混ぜる。
    フレーズには目安がないので新規導入は固定確率(0.25) */
 function pickPhrase(){
   const now=Date.now(); const due=[], unseen=[];
-  for(const p of PHRASES){
+  for(const p of allPhrases()){
     const st=G.phr[p.en];
     if(!st) unseen.push(p);
     else if(st[1]<=now) due.push(p);
@@ -61,7 +148,7 @@ function pickPhrase(){
   }
   if(u.length) return u[Math.floor(Math.random()*u.length)];
   // 期限が来たものがない: 弱い順に先取り復習(先取り正解で階段が上がらないのはsrsApplyが担保)
-  const seen=fresh(PHRASES.filter(p=>G.phr[p.en]));
+  const seen=fresh(allPhrases().filter(p=>G.phr[p.en]));
   seen.sort((a,b)=>(G.phr[a.en][0]-G.phr[b.en][0]) || (G.phr[a.en][1]-G.phr[b.en][1]));
   const pool=seen.slice(0, Math.min(10,seen.length));
   return pool[Math.floor(Math.random()*pool.length)] || PHRASES[0];
@@ -77,10 +164,10 @@ function buildPhrChoices(p){
     if(seen.has(k)) return false;
     seen.add(k); return true;
   };
-  const same=shuffle(PHRASES.filter(x=>x.c===p.c && x.en!==p.en && !overlaps(x,p)));
+  const same=shuffle(allPhrases().filter(x=>x.c===p.c && x.en!==p.en && !overlaps(x,p)));
   const picks=same.filter(uniq).slice(0,3);
   if(picks.length<3){
-    const rest=shuffle(PHRASES.filter(x=>x.c!==p.c && !overlaps(x,p)));
+    const rest=shuffle(allPhrases().filter(x=>x.c!==p.c && !overlaps(x,p)));
     picks.push(...rest.filter(uniq).slice(0, 3-picks.length));
   }
   return shuffle([p, ...picks]);
@@ -111,10 +198,14 @@ const PHR_DRILLS={
   inan:{icon:"🏛", name:"無生物主語で言う",
     desc:"「〜のおかげで/せいで/を見ると」を、モノや経験を主語にして言う(This graph shows…型)。口頭で5連続",
     steps:[1,2,3,4,5].map(n=>({t:"無生物主語 "+n+"/5", f:p=>p.c==="ims"}))},
+  /* v5.6.0: 自分で登録した表現だけの特訓(登録が5件未満なら繰り返しで補う) */
+  mine:{icon:"📝", name:"マイフレーズ特訓",
+    desc:"自分で登録した「言えなかった表現」だけを口頭で5連続。次の英会話までに言えるようにする",
+    steps:[1,2,3,4,5].map(n=>({t:"マイ "+n+"/5", f:p=>p.c==="my"}))},
 };
 function drillPool(step, used){
-  const pool=PHRASES.filter(p=>step.f(p) && !used.has(p.en));
-  return pool.length? pool : PHRASES.filter(step.f); // 使い切ったら再利用(グラフ5連続などの保険)
+  const pool=allPhrases().filter(p=>step.f(p) && !used.has(p.en));
+  return pool.length? pool : allPhrases().filter(step.f); // 使い切ったら再利用(件数が少ないドリルの保険)
 }
 function openDrillMenu(){
   openModal('<h3>🎤 実戦ドリル '+helpBtn("hlp-drill")+'</h3>'+
@@ -128,9 +219,15 @@ function openDrillMenu(){
     '<button class="btn" id="phrHistBtn2" style="margin-top:12px; width:100%">📊 フレーズのあゆみ(これまでの記録)</button>');
   $("modal").querySelectorAll("[data-drill]").forEach(b=>{ b.onclick=()=>startDrill(b.dataset.drill); });
   $("phrHistBtn2").onclick=()=>openPhrHistoryModal(0);
+  // マイフレーズが0件のときは特訓を選べない(➕からの登録を案内)
+  if(!myphrList().length){
+    const b=$("modal").querySelector('[data-drill="mine"]');
+    if(b){ b.disabled=true; b.querySelector(".hlsub").textContent="まだ登録がない ─ 学習タブの➕から「言えなかった表現」を登録しよう"; }
+  }
 }
 function startDrill(kind){
   if(!PHR_DRILLS[kind]) return;
+  if(!allPhrases().some(PHR_DRILLS[kind].steps[0].f)){ toast("対象のフレーズがまだ無い(➕から登録)"); return; }
   closeModal();
   if(quizTarget()!=="p"){ G.opt.qtab="p"; saveG(); phrSyncSeg(); } // ドリルはフレーズ学習の中で走る
   PDRILL={kind, res:[], used:new Set()};
@@ -422,7 +519,7 @@ function openPhrHistoryModal(page){
   for(const k in G.pdays){ const r=G.pdays[k]; if(r.a>0){ daysN++; tot+=r.a; totC+=r.c||0; } }
   // 定着の階段の分布: どの出題形式の層に何フレーズいるか(=次に何をすれば進むかが見える)
   let s0=0,s1=0,s2=0,s3=0,s4=0;
-  PHRASES.forEach(p=>{
+  allPhrases().forEach(p=>{
     const st=G.phr[p.en];
     if(!st) s0++;
     else if(st[0]>=MASTER_BOX) s4++;
@@ -444,7 +541,8 @@ function openPhrHistoryModal(page){
     '<table class="stt" style="margin-top:12px">'+
       '<tr><td>累計解答(全期間)</td><td>'+fmt(tot)+'問(正答率 '+(tot? Math.round(100*totC/tot):0)+'%)</td></tr>'+
       '<tr><td>学習した日数</td><td>'+daysN+'日</td></tr>'+
-      '<tr><td>覚えたフレーズ</td><td>'+fmt(s4)+' / '+fmt(PHRASES.length)+'</td></tr>'+
+      '<tr><td>覚えたフレーズ</td><td>'+fmt(s4)+' / '+fmt(allPhrases().length)+
+        (myphrList().length? '(マイ '+myphrList().length+'件を含む)':'')+'</td></tr>'+
     '</table>'+
     '<h2 style="margin-top:12px">🪜 定着の階段(いまの分布)</h2>'+
     '<table class="stt">'+
@@ -458,6 +556,91 @@ function openPhrHistoryModal(page){
   $("phrHistNext").onclick=()=>{ if(page>0) openPhrHistoryModal(page-1); };
 }
 
+/* ---- マイフレーズの登録UI(v5.6.0) ----
+   貼り付け→自動解析(英文/日本語/チャンク/核)→登録の最短動線。核は単語チップのタップで変更できる
+   (1語目のタップ=その語だけ・範囲外の2語目のタップ=そこまで範囲を広げる) */
+function openMyphrAdd(){
+  openModal('<h3>➕ マイフレーズ登録 '+helpBtn("hlp-my")+'</h3>'+
+    helpNote("hlp-my", '英会話の先生の添削・記事やネイティブとの対話で出会った「言えなかった表現」を、'+
+      '自分専用のフレーズとして登録する。貼り付けると英文・日本語(2行目にあれば)・チャンク分割・'+
+      '核(🔑=覚えたい部分)の候補を自動で読み取る。登録後は内蔵フレーズと同じ復習・出題・報酬に乗る。<br><br>'+
+      '<b>プライバシー</b>: 登録内容は<b>この端末と、同期を使う場合はあなた自身のGoogleドライブの非公開領域にだけ</b>保存される。'+
+      'このアプリはサーバー処理のない静的サイトなので、開発者や他の利用者に内容が送られる経路は存在しない')+
+    '<textarea id="myphrText" class="myta" rows="3" placeholder="英文を貼り付け(2行目に日本語があれば自動で取り込む)"></textarea>'+
+    '<button class="btn" id="myphrPaste" style="margin-top:8px; width:100%">📋 クリップボードから貼り付け</button>'+
+    '<div id="myphrPrev" style="margin-top:10px"></div>'+
+    '<div class="row" style="gap:10px; margin-top:12px">'+
+    '<button class="btn" id="myphrListBtn">📚 登録済み '+myphrList().length+'件</button>'+
+    '<button class="btn primary grow" id="myphrSave" disabled>登録する</button></div>');
+  const ta=$("myphrText");
+  let cur=null; // {en, words[], kf, kt}
+  const kString=()=>{
+    if(!cur) return "";
+    return cur.words.slice(cur.kf, cur.kt+1).join(" ").replace(/^[^A-Za-z'-]+|[^A-Za-z'-]+$/g,"");
+  };
+  const renderPrev=(parsedJa)=>{
+    const box=$("myphrPrev");
+    if(!cur){ box.innerHTML=""; $("myphrSave").disabled=true; return; }
+    const keepJa=($("myphrJa")&&$("myphrJa").value)||parsedJa||"";
+    box.innerHTML=
+      '<div class="small" style="margin-bottom:4px">🔑 核(覚えたい部分)を確認 ─ 単語をタップで変更</div>'+
+      '<div class="mywords">'+cur.words.map((w,i)=>
+        '<button class="wchip'+(i>=cur.kf&&i<=cur.kt?" ksel":"")+'" data-i="'+i+'">'+esc(w)+'</button>').join("")+'</div>'+
+      '<input id="myphrJa" class="pdate" style="margin-top:8px" placeholder="言いたかったこと(日本語で一言・思い出す手がかり)" value="'+esc(keepJa)+'">'+
+      '<div class="small" style="margin-top:6px">チャンク分割(自動): '+myphrChunks(cur.en).map(esc).join(" ⁄ ")+'</div>';
+    box.querySelectorAll(".wchip").forEach(b=>{
+      b.onclick=()=>{
+        const i=+b.dataset.i;
+        if(i<cur.kf) cur.kf=i;            // 範囲より前=そこまで広げる
+        else if(i>cur.kt) cur.kt=i;       // 範囲より後=そこまで広げる
+        else { cur.kf=cur.kt=i; }         // 範囲内=その語だけに絞り直す
+        renderPrev();
+      };
+    });
+    $("myphrSave").disabled=false;
+  };
+  const reparse=()=>{
+    const r=myphrParse(ta.value);
+    if(!r.en){ cur=null; renderPrev(); return; }
+    if(!cur || cur.en!==r.en){
+      const i=myphrSuggestKey(r.en);
+      cur={en:r.en, words:r.en.split(" "), kf:i, kt:i};
+    }
+    renderPrev(r.ja);
+  };
+  ta.oninput=reparse;
+  $("myphrPaste").onclick=()=>{
+    if(!navigator.clipboard || !navigator.clipboard.readText){ toast("この環境では手動で貼り付けてください"); return; }
+    navigator.clipboard.readText().then(t=>{ ta.value=t; reparse(); })
+      .catch(()=>toast("貼り付けが許可されなかった ─ 長押しで貼り付けてください"));
+  };
+  $("myphrListBtn").onclick=openMyphrList;
+  $("myphrSave").onclick=()=>{
+    if(!cur) return;
+    const r=myphrAdd(cur.en, $("myphrJa")&&$("myphrJa").value, kString());
+    if(r.err){ toast(r.err); return; }
+    toast("📝 登録した! フレーズ学習に混ざって出てくる");
+    ta.value=""; cur=null; renderPrev();
+    $("myphrListBtn").textContent="📚 登録済み "+myphrList().length+"件"; // 続けて登録できる
+  };
+}
+function openMyphrList(){
+  const list=myphrList();
+  openModal('<h3>📚 マイフレーズ('+list.length+'件)</h3>'+
+    '<div class="small">この端末(と本人のDrive)にだけ保存 ─ 誰にも共有されない</div>'+
+    (list.length
+      ? '<div class="panel" style="margin-top:8px">'+list.map(p=>
+          '<div class="myrow"><div class="grow"><b style="font-size:13px">'+esc(p.en)+'</b><br>'+
+          '<span class="small">'+esc(p.ja)+' ・ 🔑'+esc(p.k)+'</span></div>'+
+          '<button class="btn mydel" data-en="'+esc(p.en)+'">🗑</button></div>').join("")+'</div>'
+      : '<div class="empty">まだ無い ─ 「言えなかった表現」を貼り付けて登録しよう</div>')+
+    '<div class="row" style="margin-top:12px"><button class="btn primary grow" id="myphrAddBtn">➕ 登録する</button></div>');
+  $("modal").querySelectorAll(".mydel").forEach(b=>{
+    b.onclick=()=>{ myphrDelete(b.dataset.en); toast("削除した(同期で他の端末にも反映)"); openMyphrList(); };
+  });
+  $("myphrAddBtn").onclick=openMyphrAdd;
+}
+
 /* ---- 学習対象のセグ切替(単語/フレーズ)。好みはG.opt.qtab(端末ローカル優先マージ) ---- */
 function phrSyncSeg(){
   const seg=$("quizSeg"); if(!seg) return;
@@ -466,6 +649,7 @@ function phrSyncSeg(){
 $("quizSeg").querySelectorAll("button").forEach(b=>{
   b.onclick=()=>{
     if(b.dataset.q==="dr"){ openDrillMenu(); return; } // 実戦は「入口」(モードではない=v5.2.0)
+    if(b.dataset.q==="add"){ openMyphrAdd(); return; } // ➕マイフレーズ登録も入口(v5.6.0)
     PDRILL=null; // 単語/フレーズへの切替でドリルは中断
     if(quizTarget()===b.dataset.q) return; // 同状態への切替は無視(冪等)
     G.opt.qtab=b.dataset.q; saveG();

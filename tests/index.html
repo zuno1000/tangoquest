@@ -3169,7 +3169,10 @@ async function runAsync(W){
       if(p.c==="vp"||p.c==="ims") ok(p.pt && p.pt.length>0, "ptがある: "+p.en);
       cats[p.c]=(cats[p.c]||0)+1;
     });
-    for(const c in W.PHR_CATS) ok((cats[c]||0)>=4, "カテゴリ"+c+"は4件以上(4択の誤答枠)="+(cats[c]||0));
+    for(const c in W.PHR_CATS){
+      if(c==="my") continue; // マイフレーズはユーザー登録枠=内蔵0件でよい(誤答は全体から補われる)
+      ok((cats[c]||0)>=4, "カテゴリ"+c+"は4件以上(4択の誤答枠)="+(cats[c]||0));
+    }
   });
   t("フレーズ4択: 正解を含む4択で、誤答は同じカテゴリから出る", ()=>{
     const p=W.PHRASES.find(x=>x.c==="env");
@@ -3492,6 +3495,91 @@ async function runAsync(W){
     W.openSettings();
     ok(W.document.getElementById("modal").textContent.indexOf("覚えたフレーズ")>=0, "設定・記録に表示");
     W.closeModal();
+  });
+
+  /* ---- v5.6.0: マイフレーズ(貼り付け自動解析・自分専用フレーズ帳・端末+本人Driveのみ) ---- */
+  t("マイフレーズ解析: 貼り付けから英文・日本語・チャンク・核を自動で読み取る", ()=>{
+    const r=W.myphrParse("It slipped my mind that we had a meeting.\nミーティングのことをすっかり忘れていた");
+    eq(r.en, "It slipped my mind that we had a meeting.", "英文の行を検出");
+    eq(r.ja, "ミーティングのことをすっかり忘れていた", "日本語の行を自動で取り込む");
+    eq(W.myphrParse("日本語だけの行").en, "", "英文がなければ空");
+    eq(W.myphrParse("Too   many    spaces here.").en, "Too many spaces here.", "空白の正規化(記録キーの安定)");
+    const en="It slipped my mind that we had a meeting.";
+    const ch=W.myphrChunks(en);
+    eq(ch.join(" "), en, "チャンクは結合で原文に戻る(並べ替え・キー導出の前提)");
+    ok(ch.length>=2 && ch.every(c=>c.split(" ").length<=4), "2チャンク以上・1チャンク最大4語");
+    eq(en.split(" ")[W.myphrSuggestKey(en)], "slipped", "核の候補はストップワード以外の語");
+  });
+  t("マイフレーズ登録: 内蔵と同じ出題・帳簿に乗る(誤答は内蔵から自動生成=手間ゼロ)", ()=>{
+    const G=W.G, doc=W.document;
+    const oldMy=G.myphr, oldPhr=G.phr, oldQtab=G.opt.qtab, oldPre=G.opt.preRecall, oldCb=G.combo;
+    const d=W.dayRec(), pd=W.pdayRec(), snap={da:d.a, pa:pd.a, pc:pd.c, t:G.tickets, xp:G.xp};
+    G.myphr={}; G.phr={}; W.myphrInvalidate();
+    d.a=1; pd.a=0; G.opt.qtab="p"; G.opt.preRecall=0;
+    const r=W.myphrAdd("It slipped my mind that we had a meeting.", "会議をすっかり忘れてた", "slipped my mind");
+    ok(!r.err, "登録できる");
+    ok(W.myphrAdd("", "x", "y").err, "英文なしは弾く");
+    ok(W.myphrAdd("It slipped my mind that we had a meeting.", "dup", "x").err, "重複は弾く");
+    ok(W.myphrAdd("Better late than never, right?", "内蔵と同じ", "x").err, "内蔵フレーズとの重複も弾く");
+    const item=W.myphrList()[0];
+    eq(item.c, "my"); ok(W.PHR_CATS.my, "カテゴリ「マイフレーズ」");
+    ok(W.allPhrases().some(p=>p.en===item.en), "出題プールに混ざる");
+    W.phrStart(item);
+    eq(doc.getElementById("promptWord").textContent, "会議をすっかり忘れてた", "自分の日本語が問題になる");
+    ok(doc.getElementById("phrBuild").textContent.indexOf("slipped my mind")<0, "核が空欄になる(クローズ)");
+    const cs=[...doc.querySelectorAll("#choices .choice")];
+    eq(cs.length, 4, "誤答は内蔵フレーズから自動生成");
+    cs.find(b=>b.textContent===W.phrCloze(item).key).click();
+    ok(G.phr[item.en] && G.phr[item.en][2]===1, "SRS記録は内蔵と同じ台帳(G.phr)");
+    eq(pd.a, 1, "フレーズの日別に計上");
+    G.myphr=oldMy; G.phr=oldPhr; W.myphrInvalidate();
+    G.opt.qtab=oldQtab; G.opt.preRecall=oldPre; G.combo=oldCb;
+    d.a=snap.da; pd.a=snap.pa; pd.c=snap.pc; G.tickets=snap.t; G.xp=snap.xp;
+    W.saveG(); W.newQuestion();
+  });
+  t("マイフレーズ同期: 項目ごとのLWW・削除も伝播・部分リセットで定義は残る", ()=>{
+    const mk=my=>({resetAt:0, updatedAt:1, words:{}, inv:{}, chars:{}, dungeons:{}, days:{}, myphr:my});
+    const item={ja:"j", k:"k", ch:["A","b."], at:1};
+    const m1=W.mergeData(mk({"A b.":item}), mk({"A b.":{del:1, at:2}}));
+    ok(m1.myphr["A b."].del, "新しい削除が勝つ(トンボストーン=同期で復活しない)");
+    const m2=W.mergeData(mk({"A b.":{del:1, at:1}}), mk({"A b.":{ja:"j2", k:"k", ch:["A","b."], at:3}}));
+    eq(m2.myphr["A b."].ja, "j2", "より新しい登録が勝つ");
+    const pr=W.partialResetData({myphr:{"A b.":item}, sv:{clears:{}}}, 9);
+    ok(pr.myphr && pr.myphr["A b."], "部分リセットでも定義は残る(ユーザーの資産・SRSだけやり直し)");
+    const G=W.G, oldMy=G.myphr;
+    G.myphr={"X y.":{ja:"j", k:"X", ch:["X","y."], at:1}}; W.myphrInvalidate();
+    eq(W.myphrList().length, 1);
+    W.myphrDelete("X y.");
+    eq(W.myphrList().length, 0, "削除で一覧・出題から消える");
+    ok(G.myphr["X y."].del, "トンボストーンが残る");
+    G.myphr=oldMy; W.myphrInvalidate(); W.saveG();
+  });
+  t("マイフレーズUI: ➕→貼り付けで自動解析・一覧と削除・実戦の特訓は0件なら無効", ()=>{
+    const G=W.G, doc=W.document;
+    const oldMy=G.myphr, oldPhr=G.phr;
+    G.myphr={}; G.phr={}; W.myphrInvalidate();
+    W.switchTab("quiz");
+    doc.querySelector('#quizSeg [data-q="add"]').click();
+    ok(doc.getElementById("myphrText") && doc.getElementById("myphrSave").disabled, "登録モーダル(貼り付け前は登録不可)");
+    ok(doc.getElementById("hlp-my"), "プライバシーの説明がある(端末+本人のDriveのみ)");
+    const ta=doc.getElementById("myphrText");
+    ta.value="That would defeat the purpose.\nそれじゃ本末転倒だ";
+    ta.oninput();
+    ok(!doc.getElementById("myphrSave").disabled, "解析できたら登録できる");
+    ok(doc.querySelector("#myphrPrev .wchip.ksel"), "核の候補が自動選択されている");
+    eq(doc.getElementById("myphrJa").value, "それじゃ本末転倒だ", "2行目の日本語を自動で取り込む");
+    doc.getElementById("myphrSave").click();
+    eq(W.myphrList().length, 1, "登録された");
+    W.closeModal();
+    W.openMyphrList();
+    ok(doc.querySelector("#modal .myrow"), "一覧に出る");
+    doc.querySelector("#modal .mydel").click();
+    eq(W.myphrList().length, 0, "🗑で削除できる");
+    W.closeModal();
+    W.openDrillMenu();
+    ok(doc.querySelector('#modal [data-drill="mine"]').disabled, "0件のときマイフレーズ特訓は選べない");
+    W.closeModal();
+    G.myphr=oldMy; G.phr=oldPhr; W.myphrInvalidate(); W.saveG();
   });
 
   await ta("repairCaches: キャッシュ内の古い資産を最新の内容に置き換える", async()=>{

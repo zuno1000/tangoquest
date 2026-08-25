@@ -1076,3 +1076,18 @@ body.svplay #slotView{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
   color:var(--accent2); font-size:15px}
 .choice.rcbtn .rcsub{font-size:11px; font-weight:700; color:var(--sub)}
 .sptimeup{flex:0 0 auto; text-align:center; color:var(--ng); font-weight:700; padding:2px 0}
+
+/* ---- v5.6.0: マイフレーズ(登録UI) ---- */
+.qseg button.qadd{flex:0 0 52px; font-size:15px}
+.myta{width:100%; border:none; border-radius:14px; padding:12px; font-family:inherit;
+  font-size:14px; line-height:1.6; color:var(--ink); background:var(--bg2); resize:vertical;
+  box-shadow:inset 3px 3px 7px var(--shd), inset -3px -3px 7px var(--shl)}
+.myta:focus{outline:2px solid var(--accent2)}
+.mywords{display:flex; flex-wrap:wrap; gap:6px}
+.wchip{border:none; border-radius:10px; padding:7px 9px; font-size:13px; font-weight:700;
+  background:var(--bg); color:var(--sub); cursor:pointer;
+  box-shadow:-3px -3px 6px var(--shl), 3px 3px 6px var(--shd)}
+.wchip.ksel{background:var(--accent2); color:#fff; box-shadow:none}
+.myrow{display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--line); line-height:1.5}
+.myrow:last-child{border-bottom:none}
+.myrow .mydel{flex:0 0 auto; padding:8px 10px; min-height:38px}

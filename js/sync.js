@@ -132,6 +132,12 @@ function mergeData(a, b){
     const x=m.words[en], y=b.words[en];
     if(!x || (y[2]+y[3])>(x[2]+x[3])) m.words[en]=y;
   }
+  // マイフレーズ(v5.6.0): 項目ごとに操作時刻(at)が新しい方=追加も削除(トンボストーン)も伝播する
+  m.myphr=m.myphr||{};
+  for(const en in b.myphr||{}){
+    const x=m.myphr[en], y=b.myphr[en];
+    if(!x || (y.at||0)>(x.at||0)) m.myphr[en]=y;
+  }
   // フレーズSRS(v5.0.0): 単語と同じ「解答回数(正解+ミス)が多い方」
   m.phr=m.phr||{};
   for(const en in b.phr||{}){
@@ -348,6 +354,7 @@ function partialResetData(g, t){
         winDay:(g.sv&&g.sv.winDay)||null,
         endless:(g.sv&&g.sv.endless)||null}, // サバイバーの記録・心得・荒野は冒険の記録として残す
     slot:{meta:(g.slot&&g.slot.meta)||{}}, // スロットの心得も冒険の記録として残す(v4.28.0)
+    myphr:g.myphr||{}, // マイフレーズの定義はユーザーの資産=部分リセットでも残す(SRS記録だけやり直し・v5.6.0)
     daily:g.daily||{}, weekly:g.weekly||{}, counters:g.counters||{}, ach:g.ach||{},
     login:g.login||{last:null,day:0}, gift10:g.gift10||0,
     frz:g.frz||0, faces:g.faces||{}, idle:{last:t},
@@ -411,7 +418,7 @@ function openSettings(){
     '<table class="stt">'+
     '<tr><td>今日の解答</td><td>'+d.a+'問(正解'+d.c+')</td></tr>'+
     '<tr><td>覚えた単語</td><td>'+mastered+' / '+WORDS.length+'(学習した '+Object.keys(G.words).length+'語)</td></tr>'+
-    '<tr><td>覚えたフレーズ</td><td>'+pmas+' / '+PHRASES.length+'(今日 '+pdayRec().a+'問)</td></tr>'+
+    '<tr><td>覚えたフレーズ</td><td>'+pmas+' / '+allPhrases().length+'(今日 '+pdayRec().a+'問)</td></tr>'+
     '<tr><td>連続学習</td><td>'+streak+'日(XP×'+(+streakXpMult().toFixed(2))+' ・ 🧊'+(G.frz||0)+'/'+FRZ_MAX+')</td></tr>'+
     // 正確な残高(v4.31.0: ヘッダーは短縮表記・ガチャ画面の残高行の移設先)
     '<tr><td>🎫 チケット</td><td>'+fmt(G.tickets)+'(限定召喚用・学習で入手)</td></tr>'+
@@ -465,7 +472,7 @@ function openSettings(){
   $("resetLearnBtn").onclick=()=>{
     openModal('<h3>学習記録とカードをリセットする？</h3>'+
       '<div class="small" style="line-height:1.7">消えるもの: 単語・フレーズの学習記録(SRS・学習のあゆみ)・単語カード・かけら・学習ペースの目標。<br>'+
-      '残るもの: なかま(突破・カスタムアイコン)・🪙・🎫・レベル(XP)・冒険(サバイバー)や任務の記録。'+
+      '残るもの: なかま(突破・カスタムアイコン)・🪙・🎫・レベル(XP)・冒険(サバイバー)や任務の記録・マイフレーズの登録内容。'+
       (syncClientId()&&lastSyncAt()? '<br>Drive同期を使っているため、<b>他の端末も次回同期時に同じ状態になる</b>。':'')+
       '<br>この操作は取り消せない。</div>'+
       '<div class="row" style="margin-top:12px; gap:10px">'+
