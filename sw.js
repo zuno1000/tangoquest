@@ -1,5 +1,5 @@
 /* TangoQuest service worker — cache-first */
-const CACHE="tangoquest-v67"; // 表示名はLEXICAだがキャッシュ名系統は維持
+const CACHE="tangoquest-v68"; // 表示名はLEXICAだがキャッシュ名系統は維持
 /* Google Fonts専用キャッシュ(v4.23.0・オフライン起動対応):
    フォントCSSとwoff2は一度オンラインで使えば以後オフラインでも書体が出る。
    リリースをまたいで使い回すため、CACHEとは別名にしてactivateで消さない */
@@ -8,8 +8,8 @@ const FONT_HOSTS=["https://fonts.googleapis.com","https://fonts.gstatic.com"];
 const ASSETS=[
   "./", "index.html", "manifest.json",
   "css/style.css",
-  "js/words.js","js/roots.js","js/util.js","js/state.js","js/cards.js","js/chars.js",
-  "js/battle.js","js/pace.js","js/quiz.js","js/dungeon.js","js/missions.js","js/dex.js","js/sv.js","js/slot.js","js/sync.js","js/main.js",
+  "js/words.js","js/phrases.js","js/roots.js","js/util.js","js/state.js","js/cards.js","js/chars.js",
+  "js/battle.js","js/pace.js","js/quiz.js","js/phrase.js","js/dungeon.js","js/missions.js","js/dex.js","js/sv.js","js/slot.js","js/sync.js","js/main.js",
   "icon-192.png","icon-512.png"
 ];
 /* 資産はHTTPキャッシュ・CDNを迂回して取り込む(cache:no-store+版クエリ)。

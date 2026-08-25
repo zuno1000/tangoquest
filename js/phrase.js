@@ -1,0 +1,196 @@
+"use strict";
+/* ================= フレーズ学習(v5.0.0) =================
+   「日本語は出てくるが英語が出てこない」の解消: 意図(日本語)→英語の産出訓練。
+   可逆設計: js/phrases.js(データ)+このファイル+quizViewのセグ/#phrBuild+CSSブロック+
+   quiz.jsの分岐数行で完結(単語学習のロジックは不変)。
+   ・SRSはsrsApply/INTERVALS/MASTER_BOXを単語と完全共有(台帳だけG.phrに分離)
+   ・経済(🎫/XP/コンボ/任務/5問ボーナス)も共有=どちらで学んでも損得なし
+   ・今日の目安・学習のあゆみ・連続学習には計上しない(別カウント=実機FBの決定。日別はG.pdays)
+   ・出題形式はSRSの階段と連動: box0-1=日→英4択 / box2以上=並べ替え(v5.1で口頭自己判定へ拡張予定) */
+
+let phrCur=null, phrAnswered=false, phrPos=0, phrMiss=0;
+let phrAutoT=null;   // 「自動で次へ」(設定共有)のタイマー
+let phrRecent=[];    // 直近3問の再出題回避(単語側と同じ流儀)
+function phrNoteRecent(en){ phrRecent.push(en); if(phrRecent.length>3) phrRecent.shift(); }
+
+/* 出題形式の階段: 定着が浅いうちは再認(4択)・box2からは産出寄りの並べ替え */
+function phrFormat(st){ return (st && st[0]>=2)? "or" : "mc"; }
+
+/* 出題選択(pickWordの縮約版): 期限が来た復習を忘れかけ度順に優先し、新規を確率で混ぜる。
+   フレーズには目安がないので新規導入は固定確率(0.25) */
+function pickPhrase(){
+  const now=Date.now(); const due=[], unseen=[];
+  for(const p of PHRASES){
+    const st=G.phr[p.en];
+    if(!st) unseen.push(p);
+    else if(st[1]<=now) due.push(p);
+  }
+  const fresh=a=>{ const f=a.filter(p=>!phrRecent.includes(p.en)); return f.length? f : a; };
+  const d=fresh(due), u=fresh(unseen);
+  if(d.length && (u.length===0 || Math.random()>=0.25)){
+    d.sort((a,b)=>reviewUrgency(G.phr[b.en],now)-reviewUrgency(G.phr[a.en],now));
+    const pool=d.slice(0, Math.min(8,d.length));
+    return pool[Math.floor(Math.random()*pool.length)];
+  }
+  if(u.length) return u[Math.floor(Math.random()*u.length)];
+  // 期限が来たものがない: 弱い順に先取り復習(先取り正解で階段が上がらないのはsrsApplyが担保)
+  const seen=fresh(PHRASES.filter(p=>G.phr[p.en]));
+  seen.sort((a,b)=>(G.phr[a.en][0]-G.phr[b.en][0]) || (G.phr[a.en][1]-G.phr[b.en][1]));
+  const pool=seen.slice(0, Math.min(10,seen.length));
+  return pool[Math.floor(Math.random()*pool.length)] || PHRASES[0];
+}
+
+/* 4択の誤答は同じカテゴリから(=紛らわしくて学習になる)。足りなければ全体から補う */
+function buildPhrChoices(p){
+  const same=PHRASES.filter(x=>x.c===p.c && x.en!==p.en && !overlaps(x,p));
+  shuffle(same);
+  const picks=same.slice(0,3);
+  if(picks.length<3){
+    const rest=shuffle(PHRASES.filter(x=>x.c!==p.c && !overlaps(x,p)));
+    picks.push(...rest.slice(0, 3-picks.length));
+  }
+  return shuffle([p, ...picks]);
+}
+
+/* 出題(newQuestionから分岐)。phrStartはテストからの直接起動にも使う */
+function phrNewQuestion(){
+  clearTimeout(phrAutoT);
+  if(QUICK.goal && QUICK.done>=QUICK.goal){ openQuickDone(); return; } // サクッと5問はフレーズでも同じ
+  phrStart(pickPhrase());
+}
+function phrStart(p){
+  const st=G.phr[p.en];
+  phrCur={p, fmt:phrFormat(st), choices:null};
+  if(phrCur.fmt==="mc") phrCur.choices=buildPhrChoices(p);
+  phrRenderQuestion();
+}
+
+function phrRenderQuestion(){
+  phrAnswered=false; phrPos=0; phrMiss=0;
+  $("resultBar").classList.remove("show");
+  $("promptCard").classList.remove("srch");
+  const p=phrCur.p, st=G.phr[p.en];
+  $("qBadge").textContent=(PHR_CATS[p.c]||"フレーズ")+(st? "" : " ・ 新規");
+  $("qBadge").style.color="var(--accent2)";
+  refreshQuizCount();
+  const pw=$("promptWord");
+  pw.textContent=p.ja;
+  pw.className="ja";
+  $("qStats").innerHTML=qStatsHTML(st);
+  const bl=$("phrBuild");
+  const box=$("choices"); box.innerHTML="";
+  if(phrCur.fmt==="mc"){
+    box.className="choices";
+    bl.classList.add("hidden"); bl.innerHTML="";
+    phrCur.choices.forEach(c=>{
+      const b=document.createElement("button");
+      b.className="choice";
+      b.innerHTML=choiceHTML(c.en);
+      b.onclick=()=>phrAnswerMC(c,b);
+      box.appendChild(b);
+    });
+    refitChoices("#choices .choice");
+  }else{
+    // 並べ替え: チャンクを正しい順にタップ(語順と結びつきの自動化)
+    box.className="choices chunks";
+    bl.classList.remove("hidden");
+    bl.innerHTML='<span class="pbslot">💬 チャンクを正しい順にタップ</span>';
+    shuffle(p.ch.slice()).forEach(t=>{
+      const b=document.createElement("button");
+      b.className="chunkbtn";
+      b.textContent=t;
+      b.onclick=()=>phrTapChunk(t,b);
+      box.appendChild(b);
+    });
+  }
+}
+
+/* 並べ替えのタップ: 正しい次のチャンクなら確定、違えばミスとして数える(1ミスでも不正解扱い)。
+   タップは常にどれかが正解なので詰まない=降参ボタン不要 */
+function phrTapChunk(t,b){
+  if(phrAnswered || !phrCur) return;
+  const p=phrCur.p;
+  if(t===p.ch[phrPos]){
+    b.disabled=true; b.classList.add("used");
+    phrPos++;
+    $("phrBuild").innerHTML='<b>'+esc(p.ch.slice(0,phrPos).join(" "))+'</b>'+
+      (phrPos<p.ch.length? ' <span class="pbslot">▁</span>':'');
+    if(phrPos>=p.ch.length) phrFinish(phrMiss===0);
+  }else{
+    phrMiss++;
+    b.classList.add("wrong");
+    setTimeout(()=>b.classList.remove("wrong"), 350);
+  }
+}
+
+function phrAnswerMC(chosen, btn){
+  if(phrAnswered || !phrCur) return;
+  const p=phrCur.p, ok=chosen.en===p.en;
+  document.querySelectorAll("#choices .choice").forEach(b=>{
+    b.disabled=true;
+    if(b.textContent===p.en) b.classList.add("correct"); // csegはtextContentを変えない(v4.30.0)
+    else if(b===btn) b.classList.add("wrong");
+    else b.classList.add("dim");
+  });
+  phrFinish(ok);
+}
+
+/* 帳簿(単語のanswer()と同じ骨格): SRS→フレーズ日別→経済(共有)→結果表示 */
+function phrFinish(ok){
+  phrAnswered=true;
+  const p=phrCur.p, now=Date.now();
+  let st=G.phr[p.en];
+  const wasNew=!st;
+  if(!st) st=G.phr[p.en]=[0,0,0,0,0,0,0];
+  srsApply(st, ok, now);
+  const pd=pdayRec(); pd.a++; if(ok) pd.c++;   // 目安・あゆみとは別台帳(G.pdays)
+  const bonus5=ansBonus();                      // 5問ボーナスは単語+フレーズの合算
+  track("ans"); if(ok) track("cor");            // 任務・実績のクイズ系は共有
+  phrNoteRecent(p.en);
+  if(QUICK.goal){ QUICK.done++; if(ok) QUICK.cor++; }
+  let justMastered=false;
+  if(ok && st[0]>=MASTER_BOX && !st[4]){ st[4]=1; pd.m++; justMastered=true; }
+  let bigT=false;
+  if(ok){
+    G.combo=(G.combo||0)+1;
+    G.tickets+=corTicketGain();
+    const l0=accountLevel();
+    G.xp+=Math.round((10+(justMastered?40:0))*streakXpMult()*comboXpMult()*abilityXpMult());
+    const l1=accountLevel();
+    if(justMastered){ toast("🏅 フレーズを覚えた! 7日あけても出てきた"); vibe([30,40,60]); bigT=true; }
+    else if(l1>l0){ toast("📖 レベルアップ! Lv"+l1+" ─ 全ステータス強化"); vibe(40); bigT=true; }
+  }else{
+    G.combo=0;
+  }
+  if(bonus5 && !bigT) toast("🎁 5問ごとのボーナス 🎫+"+bonus5);
+  // 全文を見せる(4択でも並べ替え完了後でも同じ場所=答え合わせの定位置)
+  const bl=$("phrBuild");
+  bl.classList.remove("hidden");
+  bl.innerHTML='<b>'+esc(p.en)+'</b>';
+  $("qStats").innerHTML=qStatsHTML(st);
+  $("resultCard").innerHTML='<span class="poschip phrcat">'+(PHR_CATS[p.c]||"")+'</span>'+
+    '<span class="rmeta">🔑 '+esc(p.k)+'</span>'+
+    '<span class="rmeta">'+(p.ty==="s"? "🧩 型":"🔗 連語")+'</span>';
+  $("resultBar").classList.add("show");
+  $("promptCard").classList.add("srch"); // タップで核の語を辞書へ(quiz.js側で分岐)
+  saveG(); refreshHeader(); refreshQuizCount();
+  if(G.opt && G.opt.autoNext){
+    clearTimeout(phrAutoT);
+    phrAutoT=setTimeout(()=>{ if(phrAnswered) newQuestion(); }, G.opt.autoNext);
+  }
+}
+
+/* ---- 学習対象のセグ切替(単語/フレーズ)。好みはG.opt.qtab(端末ローカル優先マージ) ---- */
+function phrSyncSeg(){
+  const seg=$("quizSeg"); if(!seg) return;
+  seg.querySelectorAll("button").forEach(x=>x.classList.toggle("active", x.dataset.q===quizTarget()));
+}
+$("quizSeg").querySelectorAll("button").forEach(b=>{
+  b.onclick=()=>{
+    if(quizTarget()===b.dataset.q) return; // 同状態への切替は無視(冪等)
+    G.opt.qtab=b.dataset.q; saveG();
+    phrSyncSeg();
+    newQuestion();
+  };
+});
+phrSyncSeg(); // 起動時に保存済みの好みをセグへ反映

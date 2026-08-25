@@ -39,11 +39,18 @@
 
 <!-- ============ 学習(クイズ) ============ -->
 <main id="quizView" class="hidden">
+  <!-- 学習対象の切替(v5.0.0): 単語=従来のSRSクイズ/フレーズ=意図→英語の産出訓練 -->
+  <div class="seg qseg" id="quizSeg">
+    <button data-q="w" class="active">単語</button>
+    <button data-q="p">フレーズ</button>
+  </div>
   <div id="promptCard">
     <span id="qBadge">新規</span>
     <span id="qCount"></span>
     <div id="promptWord"></div>
     <div id="qStats"></div>
+    <!-- フレーズの並べ替えの組み立て行+答え合わせの全文表示(単語モードでは隠す) -->
+    <div id="phrBuild" class="hidden"></div>
   </div>
   <div class="choices" id="choices"></div>
   <div id="resultBar">
@@ -207,6 +214,7 @@
 <div id="toast"></div>
 
 <script src="js/words.js"></script>
+<script src="js/phrases.js"></script>
 <script src="js/roots.js"></script>
 <script src="js/util.js"></script>
 <script src="js/state.js"></script>
@@ -215,6 +223,7 @@
 <script src="js/battle.js"></script>
 <script src="js/pace.js"></script>
 <script src="js/quiz.js"></script>
+<script src="js/phrase.js"></script>
 <script src="js/dungeon.js"></script>
 <script src="js/missions.js"></script>
 <script src="js/dex.js"></script>

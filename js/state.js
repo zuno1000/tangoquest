@@ -1,7 +1,7 @@
 "use strict";
 /* ================= 状態管理 ================= */
 const KEY="tangoquest_v1";
-const APP_VERSION="4.31.0"; // リリースごとに更新(設定表示・更新確認のリモート版比較に使う)
+const APP_VERSION="5.0.0"; // リリースごとに更新(設定表示・更新確認のリモート版比較に使う)
 
 /* ---- iOSスタンドアロン起動時の灰色帯対策(v4.5.0→v4.13.0で拡張) ----
    インストール直後の初回起動に加え、日をまたいだ最初のコールドスタート
@@ -109,10 +109,15 @@ G.idle=G.idle||{last:0}; // るすばん探索(放置報酬)の最終精算時�
 /* 学習オプション(v4.26.0): autoNext=答え合わせ後に自動で次へ進むまでのms(0=オフ)/
    svAuto=サバイバー3択の自動選択/slotBet=ことだまスロットの掛け金🪙の記憶(0=未設定→既定100)。
    同期マージはローカル優先(Object.assign起点)=端末ごとの好みとして振る舞う */
-G.opt=Object.assign({autoNext:0, svAuto:0, slotBet:0}, G.opt||{});
+G.opt=Object.assign({autoNext:0, svAuto:0, slotBet:0, qtab:"w"}, G.opt||{}); // qtab: 学習タブの対象(w=単語/p=フレーズ・端末の好み)
 /* スロットの永続データ(v4.28.0): meta=スロットの心得(id→Lv)。
    同期はLvごとmaxマージ・部分リセットでも残す(sync.jsに明示、G.sv.metaと同じ扱い) */
 G.slot=G.slot||{}; G.slot.meta=G.slot.meta||{};
+/* フレーズ学習(v5.0.0): phr=SRS記録(en→st配列・G.wordsと同形式・同期も同規則)/
+   pdays=フレーズの日別記録 ─ 単語の「今日の目安」「学習のあゆみ」とは別カウント(実機FBの決定)。
+   任務・🎫・XP・5問ボーナスの経済は単語と共有する(帳簿の分離は目安・あゆみ系だけ) */
+G.phr=G.phr||{};
+G.pdays=G.pdays||{};
 G.updatedAt=G.updatedAt||0;
 G.resetAt=G.resetAt||0;     // リセット世代印(同期マージで新しい世代が丸ごと勝つ)
 
@@ -134,6 +139,7 @@ function weekKey(){
   return "w"+mon.getFullYear()+"-"+String(mon.getMonth()+1).padStart(2,"0")+"-"+String(mon.getDate()).padStart(2,"0");
 }
 function dayRec(){ const k=todayKey(); if(!G.days[k]) G.days[k]={a:0,c:0,m:0}; return G.days[k]; }
+function pdayRec(){ const k=todayKey(); if(!G.pdays[k]) G.pdays[k]={a:0,c:0,m:0}; return G.pdays[k]; } // フレーズの日別(v5.0.0)
 function dailyRec(){ const k=todayKey(); if(!G.daily[k]) G.daily[k]={a:0,c:0,card:0,merge:0,run:0,clear:0,cl:{}}; return G.daily[k]; }
 function weeklyRec(){ const k=weekKey(); if(!G.weekly[k]) G.weekly[k]={a:0,c:0,merge:0,clear:0,pull:0,cl:{}}; return G.weekly[k]; }
 

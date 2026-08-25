@@ -770,7 +770,7 @@ function svApplyAnswer(w, ok){
   const preSt=st.slice();
   srsApply(st, ok, now);
   const d=dayRec(); recordDayAnswer(d, wasNew, ok);
-  ansBonus(d); // 5問ごとの🎫ボーナス(v4.31.0・上限なし・学習タブと同じ=入口で損得が出ない)
+  ansBonus(); // 5問ごとの🎫ボーナス(v4.31.0・上限なし・学習タブと同じ=入口で損得が出ない)
   let justMastered=false;
   if(ok && st[0]>=MASTER_BOX && !st[4]){ st[4]=1; d.m++; justMastered=true; }
   track("ans"); if(ok) track("cor");

@@ -120,7 +120,10 @@ function todayCountText(){
 }
 function refreshQuizCount(){
   const el=$("qCount"); if(!el) return;
-  el.textContent=(QUICK.goal? "⚡"+Math.min(QUICK.done,QUICK.goal)+"/"+QUICK.goal+"問 ・ ":"")+todayCountText();
+  const quick=(QUICK.goal? "⚡"+Math.min(QUICK.done,QUICK.goal)+"/"+QUICK.goal+"問 ・ ":"");
+  // フレーズは目安と別カウント(v5.0.0): 目安なしの「今日◯問」だけを出す
+  if(quizTarget()==="p"){ el.textContent=quick+"フレーズ 今日 "+pdayRec().a+"問"; return; }
+  el.textContent=quick+todayCountText();
 }
 
 /* ---- サクッと5問(v4.26.0): 「5問だけならやろう」の背中押し ---- */
@@ -132,10 +135,16 @@ function refreshQuizCount(){
    ③額も🎫3→🎫5に増額。🎫は「学習だけが源泉」の限定通貨=学習ボーナスとして経済の筋が通り、
    1回の付与に5解答が必要なので放置では稼げない。varはテスト(iframe)からの参照用 */
 var ANS_BONUS_EVERY=5, ANS_BONUS_T=5;
-function ansBonus(d){
-  if(d.a>0 && d.a%ANS_BONUS_EVERY===0){ G.tickets+=ANS_BONUS_T; return ANS_BONUS_T; }
+/* v5.0.0: 単語(d.a)+フレーズ(pdays)の合算で判定 ─ 目安は別カウントでも、
+   5問ボーナスまで分けるとフレーズ学習だけ損になるため。どちらの解答も合計を1ずつ進めるので
+   5の倍数の境界はちょうど1回ずつ踏む */
+function ansBonus(){
+  const t=dayRec().a + pdayRec().a;
+  if(t>0 && t%ANS_BONUS_EVERY===0){ G.tickets+=ANS_BONUS_T; return ANS_BONUS_T; }
   return 0;
 }
+/* 学習タブの対象(w=単語/p=フレーズ)。セグ(quizSeg)とG.opt.qtabが好みを持つ */
+function quizTarget(){ return (G.opt && G.opt.qtab==="p")? "p" : "w"; }
 function startQuick(n){
   QUICK={goal:n||5, done:0, cor:0};
   switchTab("quiz");
@@ -152,8 +161,10 @@ function openQuickDone(){
     '<div class="giftbox">正解 <b style="font-size:18px">'+c+' / '+g+'</b>'+(c>=g? ' ─ 全問正解! 🎉':'')+
     '<br><span style="font-weight:800; color:var(--accent2)">🎁 5問ごとのボーナス 🎫+'+ANS_BONUS_T+' ゲット!</span>'+
     '<span class="small">(何度でも・どの学習でも5問ごと)</span>'+
-    '<br><span class="small">今日 '+d.a+(q&&!q.done? "/"+q.perDay:"")+'問'+
-    (q&&!q.done&&d.a>=q.perDay? ' ─ 目安達成! 🏅':'')+'</span></div>'+
+    '<br><span class="small">'+(quizTarget()==="p"
+      ? 'フレーズ 今日 '+pdayRec().a+'問'   // フレーズは目安と別カウント(v5.0.0)
+      : '今日 '+d.a+(q&&!q.done? "/"+q.perDay:"")+'問'+
+        (q&&!q.done&&d.a>=q.perDay? ' ─ 目安達成! 🏅':''))+'</span></div>'+
     '<div class="row" style="gap:10px">'+
     '<button class="btn grow" id="quickMore">⚡ もう5問</button>'+
     '<button class="btn primary grow" id="quickHome">ホームへ</button></div>');
@@ -210,6 +221,10 @@ function renderQuestion(){
   answered=false;
   $("resultBar").classList.remove("show");
   $("promptCard").classList.remove("srch"); // 辞書リンクは正誤確認中だけ
+  // フレーズ学習(v5.0.0)の描画残りを片づける(並べ替えの組み立て行とチャンク用レイアウト)
+  const pb=$("phrBuild");
+  if(pb){ pb.classList.add("hidden"); pb.innerHTML=""; }
+  $("choices").className="choices";
   const w=cur.word, e2j=G.mode==="e2j";
   const st=G.words[w.en];
   $("qBadge").textContent = !st? "新規" : (st[0]>=MASTER_BOX? "覚えた・復習" : "復習");
@@ -233,6 +248,7 @@ function renderQuestion(){
 
 function newQuestion(){
   clearTimeout(autoNextT); // 手動の「次へ」と自動進行タイマーの二重発火を断つ
+  if(quizTarget()==="p"){ phrNewQuestion(); return; } // フレーズ学習(v5.0.0・phrase.jsが後から定義)
   if(QUICK.goal && QUICK.done>=QUICK.goal){ openQuickDone(); return; } // サクッと5問の完了
   const w=pickWord();
   cur={word:w, choices:buildChoices(w)};
@@ -261,7 +277,7 @@ function answer(chosen, btn){
   const preSt=st.slice(); // ドロップ判定は解答前の状態で
   srsApply(st, ok, now);
   const d=dayRec(); recordDayAnswer(d, wasNew, ok);
-  const bonus5=ansBonus(d); // 5問ごとの🎫ボーナス(v4.31.0・上限なし・全入口共通)
+  const bonus5=ansBonus(); // 5問ごとの🎫ボーナス(v4.31.0・上限なし・全入口共通/v5.0.0からフレーズと合算)
   let justMastered=false;
   if(ok && st[0]>=MASTER_BOX && !st[4]){ st[4]=1; d.m++; justMastered=true; }
   track("ans"); if(ok) track("cor");
@@ -332,6 +348,12 @@ $("nextBtn").onclick=()=>newQuestion();
 /* 正誤確認中は上部の単語カードのタップで辞書(Weblio)を開き、意味を自分で確かめられる。
    出題中は誤タップ防止のため無効(srchクラスで見た目も切り替え) */
 $("promptCard").onclick=()=>{
+  // フレーズ学習中は核の語(🔑)を辞書へ(v5.0.0)
+  if(quizTarget()==="p"){
+    if(!phrAnswered || !phrCur) return;
+    window.open("https://ejje.weblio.jp/content/"+encodeURIComponent(phrCur.p.k), "_blank", "noopener");
+    return;
+  }
   if(!answered || !cur) return;
   window.open("https://ejje.weblio.jp/content/"+encodeURIComponent(cur.word.en), "_blank", "noopener");
 };

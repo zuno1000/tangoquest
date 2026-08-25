@@ -132,6 +132,19 @@ function mergeData(a, b){
     const x=m.words[en], y=b.words[en];
     if(!x || (y[2]+y[3])>(x[2]+x[3])) m.words[en]=y;
   }
+  // フレーズSRS(v5.0.0): 単語と同じ「解答回数(正解+ミス)が多い方」
+  m.phr=m.phr||{};
+  for(const en in b.phr||{}){
+    const x=m.phr[en], y=b.phr[en];
+    if(!x || (y[2]+y[3])>(x[2]+x[3])) m.phr[en]=y;
+  }
+  // フレーズの日別記録(v5.0.0): daysと同じ日ごとmax
+  m.pdays=m.pdays||{};
+  for(const k in b.pdays||{}){
+    const x=m.pdays[k], y=b.pdays[k];
+    if(!x) m.pdays[k]=y;
+    else ["a","c","m"].forEach(f=>{ x[f]=Math.max(x[f]||0, y[f]||0); });
+  }
   // 日別学習記録: 日ごとに大きい方(fz=フリーズが守った日も「守られた」側を保持)
   for(const k in b.days||{}){
     const x=m.days[k], y=b.days[k];
@@ -351,6 +364,7 @@ function openSettings(){
   const d=dayRec();
   const streak=studyStreak();
   let mastered=0; for(const en in G.words){ if(G.words[en][0]>=MASTER_BOX) mastered++; }
+  let pmas=0; for(const en in G.phr){ if(G.phr[en][0]>=MASTER_BOX) pmas++; } // フレーズ(v5.0.0)
   const learnInner=
     '<div class="small" style="margin-bottom:6px">出題と自動化のしくみ '+helpBtn("hlp-opt")+'</div>'+
     helpNote("hlp-opt", '<b>自動で次へ</b>: 答え合わせのあと、「次へ」を押さなくても設定した秒数で自動的に次の問題へ進む'+
@@ -388,6 +402,7 @@ function openSettings(){
     '<table class="stt">'+
     '<tr><td>今日の解答</td><td>'+d.a+'問(正解'+d.c+')</td></tr>'+
     '<tr><td>覚えた単語</td><td>'+mastered+' / '+WORDS.length+'(学習した '+Object.keys(G.words).length+'語)</td></tr>'+
+    '<tr><td>覚えたフレーズ</td><td>'+pmas+' / '+PHRASES.length+'(今日 '+pdayRec().a+'問)</td></tr>'+
     '<tr><td>連続学習</td><td>'+streak+'日(XP×'+(+streakXpMult().toFixed(2))+' ・ 🧊'+(G.frz||0)+'/'+FRZ_MAX+')</td></tr>'+
     // 正確な残高(v4.31.0: ヘッダーは短縮表記・ガチャ画面の残高行の移設先)
     '<tr><td>🎫 チケット</td><td>'+fmt(G.tickets)+'(限定召喚用・学習で入手)</td></tr>'+
@@ -430,7 +445,7 @@ function openSettings(){
   $("updateBtn").onclick=appUpdate;
   $("resetLearnBtn").onclick=()=>{
     openModal('<h3>学習記録とカードをリセットする？</h3>'+
-      '<div class="small" style="line-height:1.7">消えるもの: 単語の学習記録(SRS・学習のあゆみ)・単語カード・かけら・学習ペースの目標。<br>'+
+      '<div class="small" style="line-height:1.7">消えるもの: 単語・フレーズの学習記録(SRS・学習のあゆみ)・単語カード・かけら・学習ペースの目標。<br>'+
       '残るもの: なかま(突破・カスタムアイコン)・🪙・🎫・レベル(XP)・冒険(サバイバー)や任務の記録。'+
       (syncClientId()&&lastSyncAt()? '<br>Drive同期を使っているため、<b>他の端末も次回同期時に同じ状態になる</b>。':'')+
       '<br>この操作は取り消せない。</div>'+

@@ -1031,3 +1031,20 @@ body.svplay #slotView{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
   .sreel.sspin{animation:none; filter:none}
   #slMachine.slwin{animation:none}
 }
+
+/* ---- フレーズ学習(v5.0.0・可逆設計のCSSブロック) ---- */
+/* 切替セグは学習画面の縦空間を圧迫しないようコンパクトに(v4.7.1の知見: 縦積みは選択肢を押し出す) */
+.qseg{margin:2px 0 6px; padding:3px}
+.qseg button{min-height:34px; padding:7px 0}
+/* 並べ替えの組み立て行+答え合わせの全文表示(promptCard内) */
+#phrBuild{margin-top:8px; font-size:15px; line-height:1.5; color:var(--accent2); word-break:break-word}
+#phrBuild .pbslot{color:var(--sub); font-size:12px; font-weight:700}
+/* チャンクのタップボタン: 折り返して並ぶ(縦積みの.choiceとはレイアウトを変える) */
+#choices.chunks{flex-direction:row; flex-wrap:wrap; align-content:flex-start; gap:9px}
+.chunkbtn{flex:0 0 auto; border:none; border-radius:14px; padding:11px 14px; min-height:44px;
+  font-size:15px; font-weight:700; background:var(--bg); color:var(--ink); cursor:pointer;
+  box-shadow:-4px -4px 8px var(--shl), 4px 4px 8px var(--shd)}
+.chunkbtn:active{transform:scale(.97)}
+.chunkbtn.used{opacity:.22; box-shadow:none}
+.chunkbtn.wrong{background:#FDE3E6; color:var(--ng); box-shadow:none}
+.poschip.phrcat{color:var(--accent2)}

@@ -2994,31 +2994,33 @@ async function runAsync(W){
     W.newQuestion();
     ok(doc.querySelector("#choices .choice .cseg"), "学習タブの選択肢もかたまり描画");
   });
-  t("5問ごとのボーナス🎫5: 上限なし・全入口共通(v4.31.0で完了ボーナスを置き換え)", ()=>{
-    const G=W.G, d=W.dayRec();
-    const t0=G.tickets, a0=d.a;
+  t("5問ごとのボーナス🎫5: 上限なし・全入口共通(v4.31.0)・単語+フレーズの合算(v5.0.0)", ()=>{
+    const G=W.G, d=W.dayRec(), pd=W.pdayRec();
+    const t0=G.tickets, a0=d.a, pa0=pd.a;
     eq(W.ANS_BONUS_EVERY, 5); eq(W.ANS_BONUS_T, 5, "🎫3→🎫5に増額");
-    d.a=5;
-    eq(W.ansBonus(d), 5, "5の倍数で🎫+5");
+    pd.a=0; d.a=5;
+    eq(W.ansBonus(), 5, "5の倍数で🎫+5");
     d.a=6;
-    eq(W.ansBonus(d), 0, "倍数以外は付与なし");
+    eq(W.ansBonus(), 0, "倍数以外は付与なし");
     d.a=500;
-    eq(W.ansBonus(d), 5, "1日の回数上限なし(何度でもチャレンジできる)");
-    eq(G.tickets, t0+10, "付与は実際に積まれる");
+    eq(W.ansBonus(), 5, "1日の回数上限なし(何度でもチャレンジできる)");
+    d.a=3; pd.a=2;
+    eq(W.ansBonus(), 5, "単語3+フレーズ2=合計5でも付与(フレーズだけ損しない)");
+    eq(G.tickets, t0+15, "付与は実際に積まれる");
     ok(!W.quickBonusLeft, "旧・完了ボーナス(1日3回)は撤去");
     // サバイバー/スロット(svApplyAnswer)でも同じだけもらえる=入口で損得が出ない
-    d.a=9; const t1=G.tickets;
+    d.a=9; pd.a=0; const t1=G.tickets;
     const oldWords=JSON.parse(JSON.stringify(G.words[W.WORDS[0].en]||null));
     W.svApplyAnswer(W.WORDS[0], true); // d.a→10=ボーナス境界
     eq(G.tickets, t1+1+5, "正解🎫1+5問ボーナス🎫5(学習タブと同レート)");
     if(oldWords) G.words[W.WORDS[0].en]=oldWords; else delete G.words[W.WORDS[0].en];
-    d.a=a0; G.tickets=t0; W.saveG();
+    d.a=a0; pd.a=pa0; G.tickets=t0; W.saveG();
     // 完了モーダルにもボーナスが明示される
     W.QUICK={goal:5, done:5, cor:5};
     W.newQuestion();
     ok(W.document.getElementById("modal").textContent.indexOf("5問ごとのボーナス")>=0, "モーダルに明示");
     W.closeModal();
-    d.a=a0; G.tickets=t0; W.saveG(); // svApplyAnswer/ansBonusで動いた分を戻す
+    d.a=a0; pd.a=pa0; G.tickets=t0; W.saveG(); // svApplyAnswer/ansBonusで動いた分を戻す
     W.newQuestion(); // 後片付け: 通常の出題に戻す
   });
   t("任務: 今日の目安の達成でドカンと報酬(v4.31.0・全達成の必須には数えない)", ()=>{
@@ -3149,6 +3151,122 @@ async function runAsync(W){
     ok(!doc.getElementById("formulaWrap").hidden, "タップで開く");
     doc.getElementById("formulaToggle").click();
     ok(doc.getElementById("formulaWrap").hidden, "もう一度で閉じる");
+  });
+
+  /* ---- v5.0.0: フレーズ学習(単語/フレーズ切替・日→英4択・並べ替え・帳簿分離/経済共有) ---- */
+  t("フレーズデータ: 290件規模・キー一意・全件にカテゴリ/意図/核/チャンクが揃う", ()=>{
+    ok(W.PHRASES.length>=280, "件数="+W.PHRASES.length);
+    const ens=new Set(W.PHRASES.map(p=>p.en));
+    eq(ens.size, W.PHRASES.length, "en(SRSキー)は一意");
+    const cats={};
+    W.PHRASES.forEach(p=>{
+      ok(p.ja && p.k && (p.ty==="s"||p.ty==="c") && W.PHR_CATS[p.c], p.en);
+      ok(p.ch.length>=2, "チャンクは2つ以上: "+p.en);
+      ok(p.en===p.ch.join(" ") && p.en.indexOf("  ")<0, "en=ch.join(不変キーの導出): "+p.en);
+      cats[p.c]=(cats[p.c]||0)+1;
+    });
+    for(const c in W.PHR_CATS) ok((cats[c]||0)>=4, "カテゴリ"+c+"は4件以上(4択の誤答枠)="+(cats[c]||0));
+  });
+  t("フレーズ4択: 正解を含む4択で、誤答は同じカテゴリから出る", ()=>{
+    const p=W.PHRASES.find(x=>x.c==="env");
+    for(let i=0;i<10;i++){
+      const cs=W.buildPhrChoices(p);
+      eq(cs.length, 4, "4択");
+      ok(cs.some(x=>x.en===p.en), "正解を含む");
+      eq(new Set(cs.map(x=>x.en)).size, 4, "重複なし");
+      ok(cs.filter(x=>x.en!==p.en).every(x=>x.c===p.c), "誤答は同カテゴリ(紛らわしい=学習になる)");
+    }
+  });
+  t("フレーズの出題形式はSRSの階段と連動(box0-1=4択・box2以上=並べ替え)", ()=>{
+    eq(W.phrFormat(null), "mc", "新規=4択");
+    eq(W.phrFormat([1,0,1,0,0,0,0]), "mc", "box1=4択");
+    eq(W.phrFormat([2,0,1,0,0,0,0]), "or", "box2から並べ替え");
+    eq(W.phrFormat([5,0,9,0,1,0,0]), "or");
+  });
+  t("フレーズ解答: 目安・あゆみ(G.days)には入れず、🎫/コンボ/任務は単語と共有する", ()=>{
+    const G=W.G, doc=W.document;
+    const oldPhr=G.phr, oldQtab=G.opt.qtab;
+    const d=W.dayRec(), pd=W.pdayRec(), dl=W.dailyRec();
+    const snap={t:G.tickets, xp:G.xp, cb:G.combo, da:d.a, pa:pd.a, pc:pd.c,
+                ans:G.counters.ans, cor:G.counters.cor, dla:dl.a, dlc:dl.c};
+    G.phr={}; G.opt.qtab="p";
+    d.a=1; pd.a=0; pd.c=0; // 合計2で終わる=5問ボーナスを踏まない
+    const p=W.PHRASES[0];
+    W.phrStart(p);
+    eq(doc.getElementById("promptWord").textContent, p.ja, "問題は日本語の意図");
+    ok(doc.getElementById("qBadge").textContent.indexOf(W.PHR_CATS[p.c])>=0, "バッジはカテゴリ");
+    const btn=[...doc.querySelectorAll("#choices .choice")].find(b=>b.textContent===p.en);
+    ok(btn, "正解の選択肢がある(csegでもtextContentは原文)");
+    btn.click();
+    ok(G.phr[p.en] && G.phr[p.en][2]===1, "SRSはG.phr(単語のG.wordsと別台帳)");
+    eq(d.a, 1, "単語の日別(=今日の目安の分母)は動かない");
+    eq(pd.a, 1, "フレーズの日別(G.pdays)に計上");
+    eq(pd.c, 1);
+    eq(G.tickets, snap.t+1, "正解🎫1は共有");
+    eq(G.combo, snap.cb+1, "コンボも共有");
+    eq(dl.a, snap.dla+1, "任務のクイズ系(dailyRec)も共有");
+    ok(G.xp>snap.xp, "XPも入る");
+    ok(doc.getElementById("phrBuild").textContent.indexOf(p.en)>=0, "答え合わせで全文を見せる");
+    ok(doc.getElementById("resultCard").innerHTML.indexOf(W.esc(p.k))>=0, "核の語(🔑)を出す");
+    // 後片付け
+    G.phr=oldPhr; G.opt.qtab=oldQtab;
+    G.tickets=snap.t; G.xp=snap.xp; G.combo=snap.cb; d.a=snap.da; pd.a=snap.pa; pd.c=snap.pc;
+    G.counters.ans=snap.ans; G.counters.cor=snap.cor; dl.a=snap.dla; dl.c=snap.dlc;
+    W.saveG(); W.newQuestion();
+  });
+  t("フレーズ並べ替え: 正しい順のタップで正解・誤タップが1つでもあれば不正解として復習に回る", ()=>{
+    const G=W.G, doc=W.document;
+    const oldPhr=G.phr, oldQtab=G.opt.qtab, oldCb=G.combo;
+    const pd=W.pdayRec(), snap={a:pd.a, c:pd.c, t:G.tickets, xp:G.xp};
+    const d=W.dayRec(), da0=d.a; d.a=1; pd.a=0; // 5問ボーナスの境界を踏まない
+    G.phr={}; G.opt.qtab="p";
+    const p=W.PHRASES.find(x=>x.ch.length>=3);
+    // box2+期限到来=並べ替え+正解で階段が上がる状態
+    G.phr[p.en]=[2, Date.now()-1000, 1, 0, 0, 0, 0];
+    W.phrStart(p);
+    const btns=()=>[...doc.querySelectorAll("#choices .chunkbtn")];
+    eq(btns().length, p.ch.length, "チャンクの数だけボタン");
+    p.ch.forEach(t=>btns().find(b=>!b.disabled && b.textContent===t).click());
+    eq(G.phr[p.en][0], 3, "全チャンク正順=正解でbox2→3");
+    ok(doc.getElementById("resultBar").classList.contains("show"), "答え合わせ表示");
+    // 誤タップあり=完走しても不正解(box0へ)
+    G.phr[p.en]=[2, Date.now()-1000, 2, 0, 0, 0, 0];
+    W.phrStart(p);
+    const wrongFirst=btns().find(b=>b.textContent!==p.ch[0]);
+    wrongFirst.click(); // 誤タップ(確定しない・ミスに数える)
+    ok(!wrongFirst.disabled, "誤タップは確定しない(詰まない)");
+    p.ch.forEach(t=>btns().find(b=>!b.disabled && b.textContent===t).click());
+    eq(G.phr[p.en][0], 0, "ミスありは不正解扱い=box0から立て直し");
+    eq(G.phr[p.en][3], 1, "ミス回数を数える");
+    // 後片付け
+    G.phr=oldPhr; G.opt.qtab=oldQtab; G.combo=oldCb;
+    d.a=da0; pd.a=snap.a; pd.c=snap.c; G.tickets=snap.t; G.xp=snap.xp;
+    W.saveG(); W.newQuestion();
+  });
+  t("学習タブのセグ切替: 単語/フレーズが行き来でき、好みはG.opt.qtabに残る", ()=>{
+    const G=W.G, doc=W.document;
+    const oldPhr=G.phr; G.phr={};
+    W.switchTab("quiz");
+    ok(doc.getElementById("quizSeg"), "セグがある");
+    doc.querySelector('#quizSeg [data-q="p"]').click();
+    eq(G.opt.qtab, "p", "好みが保存される(端末ローカル優先マージのG.opt)");
+    ok(doc.getElementById("promptWord").className.indexOf("ja")>=0, "フレーズは日本語の意図が問題");
+    ok(doc.querySelectorAll("#choices .choice").length===4, "新規=日→英4択");
+    doc.querySelector('#quizSeg [data-q="w"]').click();
+    eq(G.opt.qtab, "w", "単語に戻れる");
+    ok(["新規","復習","覚えた・復習"].some(s=>doc.getElementById("qBadge").textContent.indexOf(s)>=0), "単語の出題に戻る");
+    G.phr=oldPhr; W.saveG();
+  });
+  t("フレーズの同期: SRSは解答回数が多い方・日別はmax(単語と同じ規則)", ()=>{
+    const mk=(st,pa)=>({resetAt:0, updatedAt:1, words:{}, inv:{}, chars:{}, dungeons:{},
+      days:{}, phr:{"Test phrase.":st}, pdays:{"2026-01-01":{a:pa,c:1,m:0}}});
+    const m=W.mergeData(mk([1,0,2,1,0,0,0],3), mk([3,0,5,2,0,0,0],7));
+    eq(m.phr["Test phrase."][0], 3, "解答回数が多い方のSRSが勝つ");
+    eq(m.pdays["2026-01-01"].a, 7, "日別はmaxマージ");
+    // 設定・記録にフレーズの行がある
+    W.openSettings();
+    ok(W.document.getElementById("modal").textContent.indexOf("覚えたフレーズ")>=0, "設定・記録に表示");
+    W.closeModal();
   });
 
   await ta("repairCaches: キャッシュ内の古い資産を最新の内容に置き換える", async()=>{
