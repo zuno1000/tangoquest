@@ -2172,6 +2172,11 @@ function run(){
     ok(hb.innerHTML.indexOf("戦闘力")<0 && hb.innerHTML.indexOf("📖 Lv")<0, "戦闘力・📖Lv/XPの表示は無い");
     eq(hb.firstElementChild.id, "homePace", "いちばん上は今日の目安(ヒーロー)");
     ok(hb.firstElementChild.classList.contains("phero"), "目安は大きい表示");
+    // v4.30.0の並び替え(実機FB): 上=記録(目安→直近7日)・中=任務/図鑑・下=アクション
+    eq(hb.children[1].id, "homeWeek", "記録はまとめて上(目安の直後に直近7日)");
+    ok(hb.children[2].classList.contains("homelinks"), "中段は任務・図鑑の入口");
+    eq(hb.children[3].id, "homeStudy", "学習をはじめるは任務・図鑑の下");
+    eq(hb.children[4].id, "homeQuick", "サクッと5問はその下(報酬受取・ログボ・同期の条件行も下のグループ)");
     ok(W.document.getElementById("homeStudy") && W.document.getElementById("homeQuick"), "学習をはじめる・サクッと5問");
     ok(W.document.querySelectorAll("#homeWeek .wcol").length===7, "直近7日のあゆみ(7本)");
     ok(W.document.querySelector("#homeWeek .wcol.today"), "右端が今日");
@@ -2970,6 +2975,121 @@ async function runAsync(W){
     ok(pc.indexOf("#svStageList{display:grid")>=0, "冒険のステージ一覧はグリッド");
     ok(pc.indexOf("main#svView{max-width:1520px")>=0, "サバイバー2カラムも広く");
   });
+  /* ---- v4.30.0: 選択肢の改行・ホーム並び替え・サクッとボーナス・UI集約(ペース/設定/お知らせ/ガチャ/編成) ---- */
+  t("選択肢: 訳語は読点ごとの「かたまり」で折り返す(choiceHTML・pounceの実機FB)", ()=>{
+    const doc=W.document;
+    const html=W.choiceHTML("（問題・必要性を）取り除く、不要にする");
+    const d=doc.createElement("div"); d.innerHTML=html;
+    eq(d.querySelectorAll(".cseg").length, 2, "読点で2かたまり");
+    eq(d.textContent, "（問題・必要性を）取り除く、不要にする", "textContentは原文のまま(answerの正誤判定に影響しない)");
+    const b=doc.createElement("button"); b.className="choice"; b.innerHTML=html;
+    doc.body.appendChild(b);
+    eq(W.getComputedStyle(b.querySelector(".cseg")).display, "inline-block", "かたまりの中では折り返さない");
+    const cs=W.getComputedStyle(b);
+    ok(String(cs.textWrapStyle||cs.textWrap||"").indexOf("balance")<0,
+       "text-wrap:balanceは廃止(「取|り」など語中の早い改行の原因だった)");
+    b.remove();
+    eq(W.choiceHTML("港"), '<span class="ctxt"><span class="cseg">港</span></span>', "区切りのない短語は1かたまり");
+    // 実際の出題でもかたまりで描かれ、正誤判定(textContent比較)が通る
+    W.newQuestion();
+    ok(doc.querySelector("#choices .choice .cseg"), "学習タブの選択肢もかたまり描画");
+  });
+  t("サクッと5問: 完了ボーナス🎫3・1日3回まで(v4.30.0・意欲UPの実機FB)", ()=>{
+    const G=W.G, d=W.dayRec();
+    const t0=G.tickets, qk0=d.qk||0;
+    d.qk=0;
+    eq(W.quickBonusLeft(), 3, "今日はあと3回");
+    W.QUICK={goal:5, done:5, cor:5};
+    W.newQuestion(); // 完了モーダル=ボーナス付与
+    eq(G.tickets, t0+W.QUICK_BONUS_T, "完了で🎫+3");
+    eq(d.qk, 1, "完了回数を刻む");
+    ok(W.document.getElementById("modal").textContent.indexOf("完了ボーナス")>=0, "モーダルに明示");
+    W.closeModal();
+    d.qk=3;
+    const t1=G.tickets;
+    W.QUICK={goal:5, done:5, cor:5};
+    W.newQuestion();
+    eq(G.tickets, t1, "1日3回を超えたらボーナスなし(◆放置農業ならぬ🎫農業の封じ)");
+    eq(d.qk, 4, "回数は数え続ける");
+    W.closeModal();
+    d.qk=qk0; G.tickets=t0; W.saveG();
+    W.newQuestion(); // 後片付け: 通常の出題に戻す
+  });
+  t("日別マージ: サクッと完了回数(qk)もmaxマージ=二重ボーナスにならない", ()=>{
+    const mk=qk=>({resetAt:0, updatedAt:1, words:{}, inv:{}, chars:{}, dungeons:{},
+                   days:{"2026-01-01":{a:5,c:4,m:0,qk:qk}}});
+    const m=W.mergeData(mk(1), mk(3));
+    eq(m.days["2026-01-01"].qk, 3, "多い方が残る");
+  });
+  t("学習ペース管理(v4.30.0): 主役は1日の目安・変更/試算は開閉(中身はDOMに常在)", ()=>{
+    const G=W.G, doc=W.document;
+    const oldPace=JSON.parse(JSON.stringify(G.pace));
+    G.pace.goal=W.addDays(W.todayKey(), 30); G.pace.setAt=1; G.pace.qd=null;
+    W.openPaceModal();
+    ok(doc.getElementById("modal").textContent.indexOf("1日の目安")>=0, "目安がヒーロー");
+    ok(doc.getElementById("pfoldGoal").hidden && doc.getElementById("pfoldSim").hidden,
+       "目標ありなら「変更」「試算」は畳まれている");
+    ok(doc.getElementById("goalDate") && doc.getElementById("goalSave") &&
+       doc.getElementById("paceSim") && doc.getElementById("paceSimOut"), "中身はDOMに常在(開閉しても機能は同じ)");
+    doc.querySelector('[data-fold="pfoldGoal"]').click();
+    ok(!doc.getElementById("pfoldGoal").hidden, "タップで開く");
+    W.closeModal();
+    G.pace.goal=null; G.pace.qd=null;
+    W.openPaceModal();
+    ok(!doc.getElementById("pfoldGoal").hidden, "未設定なら目標日の設定が開いている(=そのときの主役)");
+    W.closeModal();
+    G.pace=oldPace;
+  });
+  t("設定(v4.30.0): 分類の開閉に畳んでも既存の設定ボタンはDOMに常在", ()=>{
+    const doc=W.document;
+    W.openSettings();
+    ["sfoldLearn","sfoldFx","sfoldSync","sfoldUpd","sfoldReset"].forEach(id=>{
+      const n=doc.getElementById(id);
+      ok(n && n.hidden, id+"は畳まれている");
+    });
+    ok(doc.getElementById("modeToggle") && doc.getElementById("autoNextBtn") && doc.getElementById("svAutoBtn"), "学習(出題・自動化)");
+    ok(doc.getElementById("updateBtn") && doc.getElementById("resetLearnBtn") && doc.getElementById("resetBtn"), "更新・リセット");
+    ok(doc.getElementById("histBtn") && doc.getElementById("paceCfgBtn"), "あゆみ・学習ペース管理の入口は常時見える");
+    doc.querySelector('[data-fold="sfoldLearn"]').click();
+    ok(!doc.getElementById("sfoldLearn").hidden, "タップで開く");
+    W.closeModal();
+  });
+  t("お知らせ(v4.30.0): タブでイベント/アップデート切替・過去分は開閉", ()=>{
+    const doc=W.document;
+    W.openNews();
+    ok(doc.getElementById("newsSeg"), "先頭にタブ(心得のmetaTabsと同じ型)");
+    ok(doc.getElementById("newsEv") && doc.getElementById("newsUp"), "両方の中身がDOMにある");
+    ok(!doc.getElementById("newsEv").hidden && doc.getElementById("newsUp").hidden, "イベント開催中はイベントから");
+    doc.querySelector('#newsSeg [data-nt="up"]').click();
+    ok(doc.getElementById("newsEv").hidden && !doc.getElementById("newsUp").hidden, "タブで切替");
+    const old=doc.getElementById("newsOld");
+    ok(old && old.hidden, "過去のアップデートは畳まれている");
+    eq(doc.querySelectorAll("#newsUp .newsrow").length, W.newsCount()-W.newsEvents().length,
+       "直近+過去でアップデート全件がDOMにある");
+    W.closeModal();
+    W.localStorage.removeItem("tq_newsSeen");
+  });
+  t("ガチャ(v4.30.0): 正確な残高行(ヘッダーは短縮表記のため)", ()=>{
+    const G=W.G, t0=G.tickets, g0=G.gold;
+    G.tickets=12345; G.gold=678901;
+    W.renderGacha();
+    const bal=W.document.querySelector("#gachaBox .gbal");
+    ok(bal, "残高行がある");
+    ok(bal.textContent.indexOf("12,345")>=0 && bal.textContent.indexOf("678,901")>=0, "🎫🪙とも正確な数字");
+    G.tickets=t0; G.gold=g0;
+    W.renderGacha(); W.saveG();
+  });
+  t("編成(v4.30.0): ダメージの式は開閉に畳む(中身は描画済み)", ()=>{
+    const doc=W.document;
+    ok(doc.getElementById("formulaWrap").hidden, "既定は閉");
+    W.renderEqSlots();
+    ok(doc.getElementById("formulaBox").innerHTML.length>0, "畳まれていても中身は描画済み");
+    doc.getElementById("formulaToggle").click();
+    ok(!doc.getElementById("formulaWrap").hidden, "タップで開く");
+    doc.getElementById("formulaToggle").click();
+    ok(doc.getElementById("formulaWrap").hidden, "もう一度で閉じる");
+  });
+
   await ta("repairCaches: キャッシュ内の古い資産を最新の内容に置き換える", async()=>{
     ok("caches" in W, "Cache API");
     const url=new URL("../js/state.js", location.href).href;

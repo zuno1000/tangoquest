@@ -881,7 +881,7 @@ function svRenderQuestion(){
   svCur.choices.forEach(c=>{
     const b=document.createElement("button");
     b.className="choice";
-    b.textContent = e2j? c.ja : c.en;
+    b.innerHTML=choiceHTML(e2j? c.ja : c.en); // かたまり単位の折り返し(v4.30.0・quiz.jsと共通)
     b.onclick=()=>svAnswer(c, b);
     box.appendChild(b);
   });

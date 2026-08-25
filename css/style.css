@@ -342,6 +342,10 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
 }
 
 /* ---- gacha ---- */
+/* 残高行(v4.30.0): ヘッダーは短縮表記のため、引く画面に正確な残高を1行で */
+.gbal{display:flex; justify-content:space-between; align-items:center; gap:8px;
+  margin-top:4px; padding:10px 14px; font-size:14px}
+.gbal b{color:var(--accent2)}
 .gbanner{background:linear-gradient(135deg,#E4EAFF,#D5DFFB); border-radius:22px;
   padding:18px 16px; text-align:center}
 .gbanner .gt{font-size:17px; font-weight:800; color:var(--ink)}
@@ -877,11 +881,18 @@ body.svplay #svView{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
 .help-note{margin:6px 0 8px; padding:10px 12px; border-radius:12px; background:var(--bg2);
   font-size:12px; color:var(--sub); line-height:1.7; word-break:auto-phrase;
   box-shadow:inset 2px 2px 5px var(--shd), inset -2px -2px 5px var(--shl)}
+/* ---- 開閉セクション(v4.30.0・UI集約の共通部品: foldSec) ---- */
+.btn.fold{display:flex; width:100%; align-items:center; gap:8px; margin-top:10px; font-size:13px}
+.btn.fold .fchev{flex:0 0 auto; color:var(--sub); font-size:11px}
+.foldbody{padding:2px 0 0}
 /* 長い訳語の選択肢: JSが1行に収まるまで文字を縮める(fitChoiceFont)。
    .fitmeasureは計測用の一時クラス(nowrapでの必要幅をscrollWidthから読む)。
-   それでも収まらない長文はtext-wrap:balanceが2行をほぼ等分し、
-   「文末の1文字だけ2行目に落ちる」不格好な折返しを防ぐ(非対応ブラウザは従来どおり) */
-.choice{text-wrap:balance}
+   それでも収まらない長文は「かたまり」(choiceHTML: 読点ごとのinline-block)の境界でだけ
+   折り返す ─ 旧text-wrap:balanceは2行を均等に割ろうとして「取り除く」の語中(取|り)など
+   不自然な位置で早めに改行していたため撤去(v4.30.0・pounceの実機FB)。
+   かたまりが行より長い緊急時だけ内部で折れる(break-wordが受け皿) */
+.choice .ctxt{min-width:0}
+.choice .cseg{display:inline-block; max-width:100%}
 .choice.fitmeasure{white-space:nowrap}
 
 /* ---- v4.24.0: PCデスクトップレイアウト(todaybgm v1.2.0と同じ流儀) ----

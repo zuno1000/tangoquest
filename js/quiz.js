@@ -124,6 +124,12 @@ function refreshQuizCount(){
 }
 
 /* ---- サクッと5問(v4.26.0): 「5問だけならやろう」の背中押し ---- */
+/* 完了ボーナス(v4.30.0・実機FB「報酬を上げて取り組む意欲を」): 完了ごとに🎫3・1日3回まで。
+   完了回数は日別記録d.qkに残す(同期はa/c等と同じmaxマージ)。🎫は「学習だけが源泉」の
+   限定通貨なので学習ボーナスとして経済の筋が通り、1回の完了に5解答が必要=放置では稼げない。
+   varはテスト(iframe)からの参照用 */
+var QUICK_BONUS_T=3, QUICK_BONUS_N=3;
+function quickBonusLeft(){ return Math.max(0, QUICK_BONUS_N-(dayRec().qk||0)); }
 function startQuick(n){
   QUICK={goal:n||5, done:0, cor:0};
   switchTab("quiz");
@@ -133,9 +139,17 @@ function startQuick(n){
 function openQuickDone(){
   const d=dayRec(), q=paceToday(G);
   const g=QUICK.goal, c=QUICK.cor;
+  // 完了ボーナス(v4.30.0): 🎫は付与してから回数を刻む(1日QUICK_BONUS_N回まで)
+  const bonus=quickBonusLeft()? QUICK_BONUS_T : 0;
+  d.qk=(d.qk||0)+1;
+  if(bonus){ G.tickets+=bonus; }
+  saveG(); refreshHeader();
   QUICK={goal:0, done:0, cor:0}; // ✕で閉じても通常学習として続けられる
   openModal('<h3>⚡ '+g+'問 おつかれさま!</h3>'+
     '<div class="giftbox">正解 <b style="font-size:18px">'+c+' / '+g+'</b>'+(c>=g? ' ─ 全問正解! 🎉':'')+
+    (bonus? '<br><span style="font-weight:800; color:var(--accent2)">🎁 完了ボーナス 🎫+'+bonus+'</span>'+
+      '<span class="small">'+(quickBonusLeft()? '(今日あと'+quickBonusLeft()+'回)':'(今日の分はこれで全部)')+'</span>'
+      : '<br><span class="small">完了ボーナスはまた明日(1日'+QUICK_BONUS_N+'回まで)</span>')+
     '<br><span class="small">今日 '+d.a+(q&&!q.done? "/"+q.perDay:"")+'問'+
     (q&&!q.done&&d.a>=q.perDay? ' ─ 目安達成! 🏅':'')+'</span></div>'+
     '<div class="row" style="gap:10px">'+
@@ -164,7 +178,8 @@ function buildChoices(word){
 /* 長い訳語の選択肢は1行に収まるまで文字をわずかに縮める(最小13px・v4.23.0)。
    harbor「（感情を）心に抱く、（犯人を）かくまう」等は17pxだと折り返して
    文末の1文字だけが2行目に落ちていた(実機FB)。最小まで縮めても収まらない長文だけ
-   2行を許し、CSSのtext-wrap:balanceが2行をほぼ等分して端の1文字落ちを防ぐ */
+   2行を許し、折り返し位置はchoiceHTMLの「かたまり」境界(読点)が決める
+   (旧text-wrap:balanceは語中の早い改行の原因だったためv4.30.0で撤去) */
 function fitChoiceFont(b){
   b.style.fontSize="";
   if(!b.clientWidth) return; // 非表示タブでは測れない(表示時にrefitChoicesが再実行)
@@ -177,6 +192,17 @@ function fitChoiceFont(b){
   b.classList.remove("fitmeasure");
 }
 function refitChoices(sel){ document.querySelectorAll(sel).forEach(fitChoiceFont); }
+
+/* 選択肢の訳語は読点(、)・全文区切り(。／)ごとにinline-blockの「かたまり」にする(v4.30.0)。
+   text-wrap:balanceは2行を均等に割ろうとして「取り除く」の語中(取|り)など、右に余白が
+   あっても不自然な位置で早めに折り返していた(pounceの実機FB)→ balanceを廃止し、
+   折り返しは、かたまりの境界(=意味の切れ目)でだけ起きるようにする。
+   文字は一切変えないのでtextContentは原文のまま=answerの正誤判定(textContent比較)に影響しない。
+   .choiceはflexなので、かたまり全体を1つの.ctxtに包んで単一のflexアイテムに保つ */
+function choiceHTML(t){
+  const seg=String(t).match(/[^、。／]*[、。／]|[^、。／]+/g)||[String(t)];
+  return '<span class="ctxt">'+seg.map(s=>'<span class="cseg">'+esc(s)+'</span>').join("")+'</span>';
+}
 
 function renderQuestion(){
   answered=false;
@@ -196,7 +222,7 @@ function renderQuestion(){
   cur.choices.forEach(c=>{
     const b=document.createElement("button");
     b.className="choice";
-    b.textContent = e2j? c.ja : c.en;
+    b.innerHTML=choiceHTML(e2j? c.ja : c.en); // かたまり単位の折り返し(textContentは原文のまま)
     b.onclick=()=>answer(c,b);
     box.appendChild(b);
   });

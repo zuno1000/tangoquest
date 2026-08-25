@@ -195,37 +195,62 @@ function fillPaceEl(el){
   el.onclick=openPaceModal;
 }
 
-/* ---- UI: 目標設定モーダル ---- */
+/* ---- UI: 目標設定モーダル ----
+   v4.30.0で刷新(実機FB「シンプルかつわかりやすく」): 主役は「1日の目安」1枚だけ。
+   目標日の変更・もしもの試算は開閉セクション(foldSec)へ畳む(中身は常にDOM=テスト互換)。
+   目標未設定のときだけ「目標日を決める」を開いた状態にする(=そのときの主役) */
 function openPaceModal(){
   const est=paceEstimates((G.pace&&G.pace.log)||[]);
   const logN=((G.pace&&G.pace.log)||[]).length;
   let mastered=0; for(const en in G.words){ if(G.words[en][0]>=MASTER_BOX) mastered++; }
   const total=WORDS.length, pct=Math.round(100*mastered/total);
   const today=todayKey();
-  const cur=(G.pace&&G.pace.goal)||addDays(today,180);
-  // 説明は?に集約(v4.23.0)
-  openModal('<h3>🎯 学習ペース管理 '+helpBtn("hlp-pace")+'</h3>'+
-    helpNote("hlp-pace", '目標日を決めると、全'+fmt(total)+'語を覚え切るのに必要な「1日の問題数」を毎日逆算して案内する。'+
-      '目安は直近100問の分析(既知語率・復習の正答率)から見積もり、学習を進めるほど自動で更新される')+
-    '<div class="panel" style="margin-top:10px">'+
-      '<div class="row"><div class="grow small">覚えた単語</div><b>'+fmt(mastered)+' / '+fmt(total)+'語</b></div>'+
-      '<div class="mbar" style="margin-top:6px"><i style="width:'+pct+'%"></i></div></div>'+
-    '<h3 style="margin-top:14px">いつまでに覚える?</h3>'+
+  const goal=(G.pace&&G.pace.goal)||null;
+  const cur=goal||addDays(today,180);
+  const q=goal? paceToday(G) : null;
+  // 覚えた単語の進捗(ヒーローの中に置く共通部品)
+  const masteredRow=
+    '<div class="row" style="margin-top:8px"><div class="grow small">覚えた単語</div>'+
+      '<b style="font-size:13px">'+fmt(mastered)+' / '+fmt(total)+'語</b></div>'+
+    '<div class="mbar" style="margin-top:6px"><i style="width:'+pct+'%"></i></div>';
+  // ヒーロー: 目標あり=1日の目安を大きく/制覇=お祝い/未設定=何をする画面かの1行
+  const hero = q && q.done
+    ? '<div class="panel" style="margin-top:10px"><div style="font-weight:800">🏆 全'+fmt(total)+'語 制覇! 🎊</div>'+
+      '<div class="small" style="margin-top:4px">おめでとう! 復習を続けて記憶を守ろう</div>'+masteredRow+'</div>'
+    : q
+    ? '<div class="panel" style="margin-top:10px">'+
+      '<div class="row" style="align-items:center"><div class="grow" style="font-weight:800">🎯 1日の目安</div>'+
+        '<b style="font-size:30px; line-height:1; color:var(--accent2)">'+fmt(q.perDay)+'<span style="font-size:14px; color:var(--sub)"> 問</span></b></div>'+
+      '<div class="small" style="margin-top:5px">'+(q.expired
+        ? '⚠️ 目標日('+q.goal.replace(/-/g,"/")+')を過ぎている ─ 下の「目標日を変更」で立て直そう'
+        : '目標 '+q.goal.replace(/-/g,"/")+' まで残り'+q.daysLeft+'日')+'</div>'+masteredRow+'</div>'
+    : '<div class="panel" style="margin-top:10px"><div style="font-weight:800">🎯 目標日を決めよう</div>'+
+      '<div class="small" style="margin-top:4px">「いつまでに全部覚えるか」を決めると、1日の目安を毎日逆算して案内する</div>'+
+      masteredRow+'</div>';
+  // 目標日の変更(未設定のときだけ開いておく)
+  const goalInner=
     '<input type="date" id="goalDate" class="pdate" min="'+addDays(today,1)+'" value="'+cur+'">'+
     '<div class="row" style="gap:8px; margin-top:8px">'+
       '<button class="btn ppre" data-d="90">3ヶ月後</button>'+
       '<button class="btn ppre" data-d="180">半年後</button>'+
       '<button class="btn ppre" data-d="365">1年後</button></div>'+
-    '<div class="panel" id="paceCalc" style="margin-top:12px"></div>'+
-    // もしものペース試算(v4.26.0): 目安に届かなくても「このペースならここまで」が見える
-    '<div class="panel" style="margin-top:10px">'+
-      '<div class="row" style="justify-content:space-between"><b style="font-size:13px">🎚 もしものペース試算 '+helpBtn("hlp-sim")+'</b>'+
+    '<div class="panel" id="paceCalc" style="margin-top:10px"></div>'+
+    '<div class="row" style="gap:10px; margin-top:10px">'+
+      (goal? '<button class="btn" id="goalClear">目標を解除</button>':'')+
+      '<button class="btn primary grow" id="goalSave">この目標で進める</button></div>';
+  // もしものペース試算(v4.26.0): 目安に届かなくても「このペースならここまで」が見える
+  const simInner=
+    '<div class="small">目安どおりに進めない日があっても大丈夫。このペースを目標日まで続けたときの見通し(維持復習も織り込み済み)</div>'+
+    '<div class="row" style="justify-content:space-between; margin-top:6px"><span class="small">1日の問題数</span>'+
       '<b id="simVal" style="color:var(--accent2)">100問/日</b></div>'+
-      helpNote("hlp-sim", '目安どおりに進めない日があっても大丈夫。スライダーで「1日の問題数」を動かすと、'+
-        'そのペースを目標日まで続けたときに習得できる単語数の見通しが出る(いまの正答率と定着の進み具合から推定。'+
-        '覚えた単語の維持復習ぶんも織り込み済み)')+
-      '<input type="range" id="paceSim" class="psim" min="10" max="300" step="10" value="100">'+
-      '<div id="paceSimOut" class="small" style="margin-top:6px; line-height:1.6"></div></div>'+
+    '<input type="range" id="paceSim" class="psim" min="10" max="300" step="10" value="100">'+
+    '<div id="paceSimOut" class="small" style="margin-top:6px; line-height:1.6"></div>';
+  openModal('<h3>🎯 学習ペース管理 '+helpBtn("hlp-pace")+'</h3>'+
+    helpNote("hlp-pace", '目標日を決めると、全'+fmt(total)+'語を覚え切るのに必要な「1日の問題数」を毎日逆算して案内する。'+
+      '目安は直近100問の分析(既知語率・復習の正答率)から見積もり、学習を進めるほど自動で更新される')+
+    hero+
+    foldSec("pfoldGoal", "📅 目標日を"+(goal? "変更":"決める"), goalInner, !goal)+
+    foldSec("pfoldSim", "🎚 もしものペース試算", simInner, false)+
     '<div class="small" style="margin-top:10px">📊 直近'+logN+'問の分析: '+
       ((est.sampledN||est.sampledR)
         ? 'すでに知っていそうな単語 約'+Math.round(est.knownRate*100)+'%'+
@@ -233,10 +258,7 @@ function openPaceModal(){
           ' ・ 復習の正答率 '+Math.round(est.recall*100)+'%'+
             (est.sampledR? '':'(標準値: 直近に復習の出題が少ない)')
         : 'まだ分析中(新規・復習をそれぞれ8問以上解くと精度が上がる。いまは標準値で計算)')+'</div>'+
-    '<button class="btn" id="paceHist" style="margin-top:12px">📊 学習のあゆみ(これまでの記録)</button>'+
-    '<div class="row" style="gap:10px; margin-top:12px">'+
-      ((G.pace&&G.pace.goal)? '<button class="btn" id="goalClear">目標を解除</button>':'')+
-      '<button class="btn primary grow" id="goalSave">この目標で進める</button></div>');
+    '<button class="btn" id="paceHist" style="margin-top:12px">📊 学習のあゆみ(これまでの記録)</button>');
   $("paceHist").onclick=openHistoryModal;
   const upd=()=>{
     const v=$("goalDate").value, box=$("paceCalc");

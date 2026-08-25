@@ -70,8 +70,11 @@
     <div id="eqChars"></div>
     <h2 style="margin:10px 4px 6px">📜 呪文 <span class="small" id="slotInfo"></span></h2>
     <div id="sentenceRow"></div>
-    <div class="panel" id="formulaBox" style="margin-top:10px"></div>
     <div class="small" id="eqSets" style="margin-top:8px"></div>
+    <!-- ダメージの式は開閉に畳む(v4.30.0のUI集約。開閉はutil.jsのdata-fold委譲ハンドラ) -->
+    <button class="btn fold" data-fold="formulaWrap" aria-expanded="false" id="formulaToggle">
+      <span class="grow" style="text-align:left">🧮 ダメージの式(しくみをくわしく)</span><span class="fchev">▼</span></button>
+    <div class="foldbody" id="formulaWrap" hidden><div class="panel" id="formulaBox" style="margin-top:6px"></div></div>
   </div>
   <div id="pCards" class="hidden">
     <div class="row">

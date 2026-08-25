@@ -451,11 +451,15 @@ $("charSortSeg").querySelectorAll("button").forEach(b=>{
 function renderGacha(){
   const box=$("gachaBox"); if(!box) return;
   const bs=activeBanners();
-  let h="";
+  /* 残高行(v4.30.0): ヘッダーは短縮表記(30万など)なので、引く画面に正確な残高と
+     「どちらの通貨がどちらの召喚か」を1行で示す */
+  let h='<div class="panel gbal">'+
+    '<span>🎫 <b>'+fmt(G.tickets)+'</b><span class="small"> 限定用・学習で</span></span>'+
+    '<span>🪙 <b>'+fmt(G.gold)+'</b><span class="small"> 恒常用・冒険で</span></span></div>';
   bs.forEach((b,i)=>{
     const endT=new Date(b.end+"T23:59:59");
     const remain=Math.max(1, Math.ceil((endT-Date.now())/864e5));
-    h+='<div class="gbanner limited"'+(i? ' style="margin-top:12px"':'')+'>'+
+    h+='<div class="gbanner limited" style="margin-top:12px">'+
       '<div class="ltdtag">期間限定 ─ 残り'+remain+'日</div>'+
       '<div class="gt">'+b.name+'</div>'+
       '<div class="gs">'+b.desc+(i===0? '<br>🎫はクイズの正解で貯まる(1問=🎫1)':'')+'</div>'+

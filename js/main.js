@@ -36,6 +36,7 @@ const EVENTS=[
   // {d:"2026-08-03", t:"..."} 形式でバナー以外のイベント告知を書く
 ];
 const NEWS=[
+  {d:"2026-08-25", t:"🧹 v4.30.0 画面の整理と、うれしい改善をまとめて! ①選択肢の改行を改善: 「取り除く」が「取」と「り」の間で切れるような不自然な折り返しをなくし、意味の切れ目(読点)でだけ改行するようにしました ②ホームの並びを見直し: 上=きろく(今日の目安・直近7日)/中=任務・図鑑/下=はじめるボタン(学習・サクッと5問・報酬受取)に ③⚡サクッと5問に完了ボーナス: 完了するたび🎫3(1日3回まで)! ④学習ペース管理・設定・お知らせの画面もすっきり整理(よく見るものだけを表に、くわしい操作は開いて使う方式に)。ガチャ画面には🎫🪙の正確な残高も出るようになりました"},
   {d:"2026-08-25", t:"🧹 v4.29.0 ホームと冒険の画面をすっきり整理しました! ①ホーム: キャラクター・戦闘力・経験値の表示と、冒険/ガチャ/編成のボタン(下のタブと重複)を廃止。いちばん上に「今日の目安」を大きく置き、「学習をはじめる」「サクッと5問」がすぐ押せる並びに。新しく「直近7日のあゆみ」(小さなグラフ・金=目安達成・タップで全期間)も追加しました。任務と図鑑は下の小さな入口から ②冒険: 画面に並ぶのは「次のステージ」1枚と、あそびかた3種(📅デイリー・🏜️荒野・🎰スロット)だけに。18ステージの一覧は「すべてのステージ」で開閉できます。📜心得はサバイバー/スロットを1つの入口にまとめ、モーダル上部のタブで切り替えられます(中身・効果は変わりません)"},
   {d:"2026-08-24", t:"💰 v4.28.0 スロットの収支を大改善! ①配当を増額: あいこ2.5倍・3つ揃い8倍・💎20倍・7️⃣は77倍のジャックポットに(素回しの目減りも半分に緩和) ②相乗効果がさらに増えるように: ◆ことだまはコンボ10で+2・コンボ20で+3乗り、ことだま入りの当たりはコンボで配当が伸びます(+3%/連続・最大×1.6) ③📜「スロットの心得」が登場: 🪙で修める永続強化5系統(配当・幸運・大当り・守り・込め)。サバイバーの心得と同じく上限なし(6段目から費用×2.5)で、効果はことだま入りの回転にだけ効きます ─ 正解を続けるほど機械があなたの味方になっていく設計です(スロット画面の📜・冒険ハブの「📜 心得」から)"},
   {d:"2026-08-24", t:"🎰 v4.27.0 ミニゲーム「ことだまスロット」は冒険タブに引っ越して生まれ変わりました! サバイバーと同じ「上=ゲーム/下=クイズ」の画面で、リールは約3秒ごとに勝手に回り続けます(そのたび掛け金🪙を払う)。素の回転は少しずつ🪙が減る側ですが、クイズに正解すると◆ことだまが乗り(コンボ10以上なら+2)、次の回転の当たり率がぐっと上がります ─ 解く速さと正確さがそのまま機械の回りに! 掛け金はスライダーで自由(🪙10〜2,000)。配当: あいこ2倍・3つ揃い6倍・💎15倍・7️⃣50倍。「←」で戻ってもセッションは保持されます(離れている間リールは止まる)"},
@@ -123,10 +124,10 @@ function newsEvents(){
   return ev.concat(EVENTS);
 }
 function xpNeedFor(lv){ return lv<=1? 0 : Math.ceil(50*Math.pow(lv-1, 1/0.55)); }
-/* ホーム(v4.29.0で刷新): 「学習の進捗を確かめて、すぐ始める」だけの画面にする。
+/* ホーム(v4.29.0で刷新→v4.30.0で並び替え): 「学習の進捗を確かめて、すぐ始める」だけの画面にする。
    廃止: 出撃キャラ/戦闘力/📖Lv・XPのヒーローパネル、冒険/ガチャ/編成のタイル(下部ナビと重複していた)。
-   残す/昇格: 今日の目安(最上段のヒーローに)・学習をはじめる・サクッと5問・直近7日のあゆみ(新設)・
-   ログボ/任務受取/同期の条件付き行・任務と図鑑への小さな入口(ナビにないため) */
+   構成(v4.30.0実機FB): 上=記録(今日の目安+直近7日)/中=任務・図鑑の入口/
+   下=アクション(学習をはじめる・サクッと5問・報酬受取・ログボ/同期の条件行) */
 function renderHome(){
   const d=dayRec();
   const stk=studyStreak();
@@ -147,24 +148,12 @@ function renderHome(){
   }).join("");
   const wsum=wk.reduce((s,x)=>s+x.a, 0);
   let mastered=0; for(const en in G.words){ if(G.words[en][0]>=MASTER_BOX) mastered++; }
+  /* 並び(v4.30.0実機FB): ①記録はまとめて上(今日の目安の直後に直近7日)
+     ②行き先の入口(任務・図鑑)を挟んで ③アクション(学習をはじめる/サクッと5問/報酬受取)は下=
+     親指の届く位置。ログボ/同期の条件行も「受け取る・やる」側なので下のグループに置く */
   $("homeBox").innerHTML=
-    // 今日の目安(ヒーロー): 未設定なら目標日設定への導線
+    // ── 記録: 今日の目安(ヒーロー)+直近7日のあゆみ(タップで全期間)
     '<div class="panel pacebar phero" id="homePace"></div>'+
-    // 学習CTA(主役)+サクッと5問
-    '<button id="homeStudy" class="studycta shine">📖 学習をはじめる'+
-      '<span class="ctasub">今日 '+d.a+'問(正解'+d.c+')'+(stk>=2? ' ・ 🔥'+stk+'日連続':'')+'</span></button>'+
-    '<button id="homeQuick" class="btn quick5">⚡ サクッと5問だけ <span class="small" style="font-weight:700">─ すきま時間に</span></button>'+
-    // ログインボーナスのバナー(v4.26.0: 起動モーダル廃止の受け皿。タップで7日カレンダー)
-    (loginBonusBannerNeeded()?
-      '<div class="panel lgbanner" id="homeLogin">🎁 ログインボーナス'+G.login.day+'日目 <b>'+
-        rewardText(LOGIN_BONUS[(G.login.day||1)-1])+'</b> ゲット!<span class="small"> ─ タップでカレンダー</span></div>':'')+
-    // 任務報酬の一括受取(受け取れるものがあるときだけ出す)
-    (mn? '<button id="homeClaim" class="claimbtn homeclaim">🎁 任務報酬をすべて受け取る('+mn+'件)</button>':'')+
-    // 同期リマインダー(最終同期3日超+未同期変更ありのときだけ)
-    (syncReminderNeeded()?
-      '<div class="panel syncnag" id="homeSync">📥 最終同期から'+
-        Math.floor((Date.now()-lastSyncAt())/864e5)+'日 ─ タップして同期</div>':'')+
-    // 直近7日のあゆみ(タップで全期間のあゆみ)
     '<div class="panel weekpanel" id="homeWeek">'+
       '<div class="pacetop"><span>📊 直近7日 <span class="small" style="font-weight:700">'+fmt(wsum)+'問</span></span>'+
         '<b style="font-size:13px; color:var(--ink)">'+
@@ -173,13 +162,28 @@ function renderHome(){
       '<div class="weekchart">'+wbars+'</div>'+
       '<div class="pacefoot">覚えた '+fmt(mastered)+' / '+fmt(WORDS.length)+'語 ・ タップで学習のあゆみ ›</div>'+
     '</div>'+
-    // 任務・図鑑の小さな入口(下部ナビにないもの)
+    // ── 入口: 任務・図鑑(下部ナビにないもの)
     '<div class="homelinks">'+
       '<button class="btn" id="homeMission">📜 任務'+(mn? ' <b style="color:var(--accent)">'+mn+'</b>':'')+
         '<span class="hlsub">デイリー・実績</span></button>'+
       '<button class="btn" id="homeDex">📕 図鑑'+
         '<span class="hlsub">カード'+cdx.owned+'/'+cdx.total+' ・ なかま'+xdx.owned+'/'+xdx.total+'</span></button>'+
-    '</div>';
+    '</div>'+
+    // ── アクション: 学習CTA(主役)+サクッと5問(完了ボーナス🎫があれば案内)
+    '<button id="homeStudy" class="studycta shine">📖 学習をはじめる'+
+      '<span class="ctasub">今日 '+d.a+'問(正解'+d.c+')'+(stk>=2? ' ・ 🔥'+stk+'日連続':'')+'</span></button>'+
+    '<button id="homeQuick" class="btn quick5">⚡ サクッと5問だけ <span class="small" style="font-weight:700">'+
+      (quickBonusLeft()? '─ 完了で🎫+'+QUICK_BONUS_T : '─ すきま時間に')+'</span></button>'+
+    // 任務報酬の一括受取(受け取れるものがあるときだけ出す)
+    (mn? '<button id="homeClaim" class="claimbtn homeclaim">🎁 任務報酬をすべて受け取る('+mn+'件)</button>':'')+
+    // ログインボーナスのバナー(v4.26.0: 起動モーダル廃止の受け皿。タップで7日カレンダー)
+    (loginBonusBannerNeeded()?
+      '<div class="panel lgbanner" id="homeLogin">🎁 ログインボーナス'+G.login.day+'日目 <b>'+
+        rewardText(LOGIN_BONUS[(G.login.day||1)-1])+'</b> ゲット!<span class="small"> ─ タップでカレンダー</span></div>':'')+
+    // 同期リマインダー(最終同期3日超+未同期変更ありのときだけ)
+    (syncReminderNeeded()?
+      '<div class="panel syncnag" id="homeSync">📥 最終同期から'+
+        Math.floor((Date.now()-lastSyncAt())/864e5)+'日 ─ タップして同期</div>':'');
   $("homeStudy").onclick=()=>switchTab("quiz");
   $("homeQuick").onclick=()=>startQuick(5);
   const lg=$("homeLogin");
@@ -234,13 +238,35 @@ function newsRows(list){
     '<div class="newsrow"><span class="small" style="flex:0 0 auto">'+n.d.slice(5)+'</span>'+
     '<span style="font-size:13px">'+n.t+'</span></div>').join("");
 }
+/* v4.30.0で刷新(実機FB「シンプルかつわかりやすく」): イベント/アップデートを
+   モーダル先頭のタブ(心得のmetaTabsと同じ型)で切替。アップデートは直近だけ見せ、
+   過去分は開閉(foldSec)へ。両方の中身は常にDOM=既読カウント・テストは従来どおり */
+const NEWS_RECENT=6;
 function openNews(){
   try{ localStorage.setItem(NEWS_SEEN_KEY, String(newsCount())); }catch(e){}
   refreshBellDot();
   const ev=newsEvents();
+  const tab=ev.length? "ev":"up"; // イベントが無いときはアップデートを開く
   openModal('<h3>🔔 お知らせ</h3>'+
-    (ev.length? '<h2 style="margin-top:4px">📅 イベント</h2><div class="panel evpanel">'+newsRows(ev)+'</div>':'')+
-    '<h2>🔧 アップデート</h2><div class="panel">'+newsRows(NEWS)+'</div>');
+    '<div class="seg metaseg" id="newsSeg">'+
+      '<button data-nt="ev"'+(tab==="ev"?' class="active"':'')+'>📅 イベント</button>'+
+      '<button data-nt="up"'+(tab==="up"?' class="active"':'')+'>🔧 アップデート</button></div>'+
+    '<div id="newsEv"'+(tab==="ev"?'':' hidden')+'>'+
+      (ev.length? '<div class="panel evpanel">'+newsRows(ev)+'</div>'
+                : '<div class="empty">いま開催中のイベントはない</div>')+'</div>'+
+    '<div id="newsUp"'+(tab==="up"?'':' hidden')+'>'+
+      '<div class="panel">'+newsRows(NEWS.slice(0, NEWS_RECENT))+'</div>'+
+      (NEWS.length>NEWS_RECENT
+        ? foldSec("newsOld", "🗂 過去のアップデート("+(NEWS.length-NEWS_RECENT)+"件)",
+            '<div class="panel">'+newsRows(NEWS.slice(NEWS_RECENT))+'</div>', false)
+        : '')+'</div>');
+  $("newsSeg").querySelectorAll("[data-nt]").forEach(b=>{
+    b.onclick=()=>{
+      $("newsSeg").querySelectorAll("button").forEach(x=>x.classList.toggle("active", x===b));
+      $("newsEv").hidden=b.dataset.nt!=="ev";
+      $("newsUp").hidden=b.dataset.nt!=="up";
+    };
+  });
 }
 $("bellBtn").onclick=openNews;
 

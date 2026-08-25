@@ -136,7 +136,7 @@ function mergeData(a, b){
   for(const k in b.days||{}){
     const x=m.days[k], y=b.days[k];
     if(!x) m.days[k]=y;
-    else ["a","c","m","n","t","na","nc","ra","rc","fz"].forEach(f=>{
+    else ["a","c","m","n","t","na","nc","ra","rc","fz","qk"].forEach(f=>{ // qk=サクッと完了回数(v4.30.0)
       x[f]=Math.max(x[f]||0, y[f]||0);
     });
   }
@@ -342,53 +342,64 @@ function partialResetData(g, t){
     pace:{goal:null, setAt:t, log:[]}};
 }
 
-/* ================= 設定モーダル ================= */
+/* ================= 設定モーダル =================
+   v4.30.0で分類・開閉化(実機FB「シンプルかつわかりやすく」): 常時見えるのは
+   「記録のサマリ+あゆみ/学習ペース管理の入口」だけ。設定項目は
+   📖学習/🎨演出/📥同期/🔄更新/🗑リセットの開閉セクション(foldSec)に分類して畳む。
+   中身は常にDOMに置く=既存のボタンID・テストは全部そのまま生きる */
 function openSettings(){
   const d=dayRec();
   const streak=studyStreak();
   let mastered=0; for(const en in G.words){ if(G.words[en][0]>=MASTER_BOX) mastered++; }
-  openModal('<h3>⚙ 設定・記録</h3>'+
-    '<table class="stt">'+
-    '<tr><td>今日の解答</td><td>'+d.a+'問(正解'+d.c+')</td></tr>'+
-    '<tr><td>覚えた単語</td><td>'+mastered+' / '+WORDS.length+'</td></tr>'+
-    '<tr><td>学習した単語</td><td>'+Object.keys(G.words).length+'</td></tr>'+
-    '<tr><td>連続学習日数</td><td>'+streak+'日(XPボーナス ×'+(+streakXpMult().toFixed(2))+')</td></tr>'+
-    '<tr><td>連続学習フリーズ</td><td>🧊'+(G.frz||0)+' / '+FRZ_MAX+'(休んだ日を自動でカバー)</td></tr>'+
-    '</table>'+
-    '<button class="btn" id="histBtn" style="margin-top:8px">📊 学習のあゆみ(これまでの記録)</button>'+
-    '<h3 style="margin-top:16px">出題モード</h3>'+
-    '<button class="btn" id="modeToggle">'+(G.mode==="e2j"?"EN → 日本語":"日本語 → EN")+' (タップで切替)</button>'+
-    // 学習オプション(v4.26.0): 自動で次へ・サバイバー3択の自動選択
-    '<h3 style="margin-top:16px">学習オプション '+helpBtn("hlp-opt")+'</h3>'+
+  const learnInner=
+    '<div class="small" style="margin-bottom:6px">出題と自動化のしくみ '+helpBtn("hlp-opt")+'</div>'+
     helpNote("hlp-opt", '<b>自動で次へ</b>: 答え合わせのあと、「次へ」を押さなくても設定した秒数で自動的に次の問題へ進む'+
       '(学習タブ・サバイバー共通。「次へ」を押せばすぐ進める。レベルアップの3択などは今までどおり止まる)<br><br>'+
       '<b>サバイバー3択の自動選択</b>: レベルアップ・宝箱の3択をおまかせで即決する'+
       '(HPが半分近く減っているときは回復を優先。じっくり選びたい人はオフのまま)')+
+    '<button class="btn" id="modeToggle">出題: '+(G.mode==="e2j"?"EN → 日本語":"日本語 → EN")+' (タップで切替)</button>'+
+    '<div style="height:8px"></div>'+
     '<button class="btn" id="autoNextBtn">自動で次へ: '+autoNextLabel(G.opt.autoNext)+' (タップで切替)</button>'+
     '<div style="height:8px"></div>'+
-    '<button class="btn" id="svAutoBtn">サバイバー3択の自動選択: '+(G.opt.svAuto? "ON":"OFF")+'</button>'+
-    // 各項目の注釈は?に集約(v4.23.0・todaybgm方式)
-    '<h3 style="margin-top:16px">演出 '+helpBtn("hlp-vibe")+'</h3>'+
-    (CAN_VIBRATE
-      ? helpNote("hlp-vibe", 'ONにするとテスト振動が鳴る。鳴らない場合は端末のマナーモード/バイブ設定を確認')+
-        '<button class="btn" id="vibeToggle">振動: '+(localStorage.getItem("tq_vibe")==="off"?"OFF":"ON")+'</button>'
-      : helpNote("hlp-vibe", 'iPhone・iPad・PCのブラウザは振動APIに対応していない(Android Chrome等で使える)')+
-        '<button class="btn" disabled>振動: この端末は非対応</button>')+
-    '<h3 style="margin-top:16px">端末間同期(Googleドライブ) '+helpBtn("hlp-sync")+'</h3>'+
-    (syncClientId()
-      ? helpNote("hlp-sync", 'あなた自身のGoogleドライブ(アプリ専用領域)に保存。進捗を失わない方向でマージされる')+
-        '<div class="small">最終同期: '+(lastSyncAt()? fmtSyncTime(lastSyncAt()) : 'この端末ではまだ同期していない')+'</div>'+
-        '<button class="btn primary" id="syncBtn" style="margin-top:8px">今すぐ同期</button>'
-      : helpNote("hlp-sync", '未設定。GCPでOAuthクライアントIDを発行し js/sync.js に設定すると使える(README参照)。データは端末内に保存されている'))+
-    '<h3 style="margin-top:16px">アプリの更新 '+helpBtn("hlp-upd")+'</h3>'+
+    '<button class="btn" id="svAutoBtn">サバイバー3択の自動選択: '+(G.opt.svAuto? "ON":"OFF")+'</button>';
+  const fxInner=(CAN_VIBRATE
+    ? '<div class="small" style="margin-bottom:6px">正解やお祝いで端末が振動する '+helpBtn("hlp-vibe")+'</div>'+
+      helpNote("hlp-vibe", 'ONにするとテスト振動が鳴る。鳴らない場合は端末のマナーモード/バイブ設定を確認')+
+      '<button class="btn" id="vibeToggle">振動: '+(localStorage.getItem("tq_vibe")==="off"?"OFF":"ON")+'</button>'
+    : '<button class="btn" disabled>振動: この端末は非対応</button>'+
+      '<div class="small" style="margin-top:6px">iPhone・iPad・PCのブラウザは振動APIに対応していない(Android Chrome等で使える)</div>');
+  const syncInner=(syncClientId()
+    ? '<div class="small" style="margin-bottom:6px">最終同期: '+(lastSyncAt()? fmtSyncTime(lastSyncAt()) : 'この端末ではまだ同期していない')+' '+helpBtn("hlp-sync")+'</div>'+
+      helpNote("hlp-sync", 'あなた自身のGoogleドライブ(アプリ専用領域)に保存。進捗を失わない方向でマージされる')+
+      '<button class="btn primary" id="syncBtn">今すぐ同期</button>'
+    : '<div class="small">未設定 '+helpBtn("hlp-sync")+'</div>'+
+      helpNote("hlp-sync", '未設定。GCPでOAuthクライアントIDを発行し js/sync.js に設定すると使える(README参照)。データは端末内に保存されている'));
+  const updInner=
+    '<div class="small" style="margin-bottom:6px">最新版への更新 '+helpBtn("hlp-upd")+'</div>'+
     helpNote("hlp-upd", 'ホーム画面から起動している場合(iOS等)もこのボタンで最新版に更新できる。学習データ・同期は消えない')+
-    '<button class="btn" id="updateBtn">アップデートを確認</button>'+
-    '<h3 style="margin-top:16px">データ '+helpBtn("hlp-reset")+'</h3>'+
+    '<button class="btn" id="updateBtn">アップデートを確認</button>';
+  const resetInner=
+    '<div class="small" style="margin-bottom:6px">やり直したいときに '+helpBtn("hlp-reset")+'</div>'+
     helpNote("hlp-reset", '「学習記録とカードだけリセット」はなかま・通貨・レベル・冒険の記録を残して単語の学習をやり直す。どちらも確認画面が出る')+
     '<button class="btn" id="resetLearnBtn">学習記録とカードだけリセット</button>'+
     '<div style="height:10px"></div>'+
-    '<button class="btn danger" id="resetBtn">データをすべてリセット</button>'+
+    '<button class="btn danger" id="resetBtn">データをすべてリセット</button>';
+  openModal('<h3>⚙ 設定・記録</h3>'+
+    '<table class="stt">'+
+    '<tr><td>今日の解答</td><td>'+d.a+'問(正解'+d.c+')</td></tr>'+
+    '<tr><td>覚えた単語</td><td>'+mastered+' / '+WORDS.length+'(学習した '+Object.keys(G.words).length+'語)</td></tr>'+
+    '<tr><td>連続学習</td><td>'+streak+'日(XP×'+(+streakXpMult().toFixed(2))+' ・ 🧊'+(G.frz||0)+'/'+FRZ_MAX+')</td></tr>'+
+    '</table>'+
+    '<div class="row" style="gap:8px; margin-top:8px">'+
+      '<button class="btn grow" id="histBtn">📊 学習のあゆみ</button>'+
+      '<button class="btn grow" id="paceCfgBtn">🎯 学習ペース管理</button></div>'+
+    foldSec("sfoldLearn", "📖 学習(出題・自動化)", learnInner, false)+
+    foldSec("sfoldFx",    "🎨 演出(振動)", fxInner, false)+
+    foldSec("sfoldSync",  "📥 端末間同期(Googleドライブ)", syncInner, false)+
+    foldSec("sfoldUpd",   "🔄 アプリの更新", updInner, false)+
+    foldSec("sfoldReset", "🗑 データのリセット", resetInner, false)+
     '<div class="small" style="margin-top:14px">LEXICA(レキシカ) v'+APP_VERSION+' ─ 英単語×ローグライクRPG<br>単語データ: 英検1級レベル '+WORDS.length+'語(<a href="https://github.com/zuno1000/tango" target="_blank" rel="noopener" style="color:var(--accent2)">tango</a> 由来)</div>');
+  $("paceCfgBtn").onclick=openPaceModal;
   $("modeToggle").onclick=()=>{
     G.mode=G.mode==="e2j"?"j2e":"e2j"; saveG();
     $("modeToggle").textContent=(G.mode==="e2j"?"EN → 日本語":"日本語 → EN")+" (タップで切替)";

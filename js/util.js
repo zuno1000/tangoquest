@@ -55,6 +55,26 @@ document.addEventListener("click", e=>{
   b.setAttribute("aria-expanded", n.hidden? "false":"true");
 });
 
+/* ---- 開閉セクション(v4.30.0・UI集約の共通部品) ----
+   「画面に並ぶ要素は主役1つ+少数の入口、詳細は開閉へ」(v4.29.0方針)をモーダル内でも
+   使えるようにした部品。中身は常にDOMに置き(テスト互換=svStageListと同じ流儀)、
+   hidden属性で畳む。ハンドラはhelp-btnと同じくdocumentに1本だけ委譲 */
+function foldSec(id, label, inner, open){
+  return '<button class="btn fold" data-fold="'+id+'" aria-expanded="'+(open?"true":"false")+'">'+
+    '<span class="grow" style="text-align:left">'+label+'</span>'+
+    '<span class="fchev">'+(open?"▲":"▼")+'</span></button>'+
+    '<div class="foldbody" id="'+id+'"'+(open?'':' hidden')+'>'+inner+'</div>';
+}
+document.addEventListener("click", e=>{
+  const b=e.target && e.target.closest && e.target.closest("[data-fold]");
+  if(!b) return;
+  const n=document.getElementById(b.dataset.fold);
+  if(!n) return;
+  n.hidden=!n.hidden;
+  b.setAttribute("aria-expanded", n.hidden? "false":"true");
+  const ch=b.querySelector(".fchev"); if(ch) ch.textContent=n.hidden? "▼":"▲";
+});
+
 /* ---- modal ---- */
 function openModal(html){
   const m=$("modal");
