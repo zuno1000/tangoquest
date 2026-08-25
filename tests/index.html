@@ -3154,8 +3154,8 @@ async function runAsync(W){
   });
 
   /* ---- v5.0.0: フレーズ学習(単語/フレーズ切替・日→英4択・並べ替え・帳簿分離/経済共有) ---- */
-  t("フレーズデータ: 330件規模・キー一意・全件にカテゴリ/意図/核/チャンクが揃う", ()=>{
-    ok(W.PHRASES.length>=330, "件数="+W.PHRASES.length);
+  t("フレーズデータ: 380件規模・キー一意・全件にカテゴリ/意図/核/チャンクが揃う", ()=>{
+    ok(W.PHRASES.length>=380, "件数="+W.PHRASES.length);
     const ens=new Set(W.PHRASES.map(p=>p.en));
     eq(ens.size, W.PHRASES.length, "en(SRSキー)は一意");
     const cats={};
@@ -3342,8 +3342,8 @@ async function runAsync(W){
     const d=W.dayRec(), pd=W.pdayRec(), snap={da:d.a, pa:pd.a, pc:pd.c, t:G.tickets, xp:G.xp};
     d.a=1; pd.a=0; G.phr={}; G.opt.qtab="p"; G.opt.preRecall=0;
     // カテゴリの成立
-    ok(W.PHRASES.filter(x=>x.c==="vp").length>=20, "動詞の型は20件以上");
-    ok(W.PHRASES.filter(x=>x.c==="ims").length>=12, "無生物主語は12件以上");
+    ok(W.PHRASES.filter(x=>x.c==="vp").length>=50, "動詞の型は50件以上(v5.5.0拡充)");
+    ok(W.PHRASES.filter(x=>x.c==="ims").length>=30, "無生物主語は30件以上(v5.5.0拡充)");
     // クローズで解くと結果バーに型の一般形
     const p=W.PHRASES.find(x=>x.k==="enabled her to");
     W.phrStart(p);
