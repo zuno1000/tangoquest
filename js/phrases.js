@@ -16,6 +16,7 @@ const PHR_CATS={
   env:"環境", edu:"教育", tec:"テクノロジー", med:"医療・高齢化",
   eco:"経済・格差", pol:"政治・国際", mda:"メディア・社会",
   biz:"仕事・会議", sm:"雑談",
+  vp:"動詞の型", ims:"無生物主語", // v5.4.0: make/help/force頼みからの卒業(pt=型の一般形つき)
 };
 const PHRASES=[
 /* ---- op: 意見・立場(stem) ---- */
@@ -324,6 +325,57 @@ const PHRASES=[
 {c:"sm",ty:"s",k:"grab a bite",ja:"会議の前に軽く食べようよ",ch:["Let's grab a bite","before the meeting."]},
 {c:"sm",ty:"s",k:"tight",ja:"今週は予定がかなり詰まってるんだ",ch:["My schedule is pretty tight","this week."]},
 {c:"sm",ty:"s",k:"better late",ja:"遅くてもやらないよりマシでしょ?",ch:["Better late","than never, right?"]},
+/* ---- vp: 動詞の型(v5.4.0・実機FB「make/help/forceばかりで子供っぽくなる」への回答) ----
+   正確な動詞は「動詞+目的語+前置詞/補語」が1セット(項構造)。ptにその一般形を持たせ、
+   答え合わせで「型」として見せる=1文の暗記が型の獲得になる。jaは「〜させる/おかげで/せいで」と
+   直訳したくなる意図で書く(そこでmakeに逃げず正確な動詞を取り出す訓練) */
+{c:"vp",ty:"c",k:"enabled her to",pt:"enable 人 to do(〜のおかげで…できる)",ja:"奨学金のおかげで彼女は留学できた",ch:["The scholarship","enabled her to","study abroad."]},
+{c:"vp",ty:"c",k:"prevented us from going",pt:"prevent 人 from -ing(〜のせいで…できない)",ja:"大雨のせいで私たちは外出できなかった",ch:["The heavy rain","prevented us from","going out."]},
+{c:"vp",ty:"c",k:"encouraged me to",pt:"encourage 人 to do(背中を押す)",ja:"彼の助言に背中を押されて挑戦した",ch:["His advice","encouraged me to","take on the challenge."]},
+{c:"vp",ty:"c",k:"discourage young people from buying",pt:"discourage 人 from -ing(〜する気をなくさせる)",ja:"価格の高さが若者を車の購入から遠ざけている",ch:["High prices discourage","young people from","buying cars."]},
+{c:"vp",ty:"c",k:"allows users to",pt:"allow 人 to do(〜で…できるようになる)",ja:"そのアプリで支出を記録できる",ch:["The app","allows users to","track their spending."]},
+{c:"vp",ty:"c",k:"provides refugees with",pt:"provide 人 with 物(人に物を提供する)",ja:"政府は難民に食料と住まいを提供している",ch:["The government","provides refugees with","food and shelter."]},
+{c:"vp",ty:"c",k:"cause employees to",pt:"cause 人 to do(〜を引き起こす)",ja:"ストレスは社員の燃え尽きを引き起こしうる",ch:["Stress can","cause employees to","burn out."]},
+{c:"vp",ty:"c",k:"led the minister to",pt:"lead 人 to do(〜に追い込む・つながる)",ja:"そのスキャンダルで大臣は辞任に追い込まれた",ch:["The scandal","led the minister to","resign."]},
+{c:"vp",ty:"c",k:"resulted in",pt:"result in 名詞(〜という結果を招く)",ja:"計画の甘さが大損失を招いた",ch:["Poor planning","resulted in","a huge loss."]},
+{c:"vp",ty:"c",k:"contributed to",pt:"contribute to 名詞(〜に貢献する)",ja:"ボランティアがイベントの成功に貢献した",ch:["Volunteers","contributed to","the success of the event."]},
+{c:"vp",ty:"c",k:"reminds me of",pt:"remind 人 of 名詞(〜を思い出させる)",ja:"この写真を見ると学生時代を思い出す",ch:["This photo","reminds me of","my school days."]},
+{c:"vp",ty:"c",k:"convinced her boss to",pt:"convince 人 to do(説得して〜させる)",ja:"彼女は上司を説得して計画を変えさせた",ch:["She convinced","her boss to","change the plan."]},
+{c:"vp",ty:"c",k:"urged the government to",pt:"urge 人 to do(強く求める)",ja:"彼らは政府に対応を強く求めた",ch:["They urged","the government to","take action."]},
+{c:"vp",ty:"c",k:"equips students with",pt:"equip 人 with 物(身につけさせる)",ja:"その講座は実践的スキルを身につけさせてくれる",ch:["The course","equips students with","practical skills."]},
+{c:"vp",ty:"c",k:"requires companies to",pt:"require 人 to do(義務づける)",ja:"新しい法律は企業にデータ開示を義務づけている",ch:["The new law","requires companies to","disclose the data."]},
+{c:"vp",ty:"c",k:"kept me from concentrating",pt:"keep 人 from -ing(〜のせいで…できない)",ja:"騒音のせいで集中できなかった",ch:["The noise","kept me from","concentrating."]},
+{c:"vp",ty:"c",k:"exposes you to",pt:"expose 人 to 名詞(〜に触れさせる)",ja:"幅広い読書は新しい考えに触れさせてくれる",ch:["Reading widely","exposes you to","new ideas."]},
+{c:"vp",ty:"c",k:"aims to",pt:"aim to do(〜を目指す)",ja:"その事業は食品ロス削減を目指している",ch:["The program","aims to","reduce food waste."]},
+{c:"vp",ty:"c",k:"banned employees from using",pt:"ban 人 from -ing(禁じる)",ja:"会社は社員にそのアプリの使用を禁じた",ch:["The company banned","employees from","using the app."]},
+{c:"vp",ty:"c",k:"inspired many girls to",pt:"inspire 人 to do(〜する気にさせる)",ja:"彼女の成功が多くの少女を理系に向かわせた",ch:["Her success","inspired many girls to","study science."]},
+{c:"vp",ty:"c",k:"compares Japan with",pt:"compare A with B(比べる)",ja:"この図は日本を他国と比べている",ch:["The chart","compares Japan with","other countries."]},
+{c:"vp",ty:"c",k:"attribute my progress to",pt:"attribute A to B(Aの原因はBだと考える)",ja:"上達したのは毎日の練習のおかげだと思う",ch:["I attribute","my progress to","daily practice."]},
+{c:"vp",ty:"c",k:"offers guests",pt:"offer 人 物(人に物を出す)",ja:"そのホテルは宿泊客に無料の朝食を出す",ch:["The hotel","offers guests","a free breakfast."]},
+{c:"vp",ty:"c",k:"applies to",pt:"apply to 名詞(〜に当てはまる)",ja:"その規則は全員に当てはまる",ch:["The rule","applies to","all members."]},
+{c:"vp",ty:"c",k:"deals with",pt:"deal with 名詞(〜を扱う・に対処する)",ja:"そのセミナーは職場のコミュニケーションを扱う",ch:["The seminar","deals with","workplace communication."]},
+{c:"vp",ty:"c",k:"succeeded in cutting",pt:"succeed in -ing(〜に成功する)",ja:"チームはコスト半減に成功した",ch:["The team","succeeded in","cutting costs by half."]},
+{c:"vp",ty:"c",k:"benefited a lot from",pt:"benefit from 名詞(〜の恩恵を受ける)",ja:"彼女のフィードバックには大いに助けられた",ch:["I benefited","a lot from","her feedback."]},
+{c:"vp",ty:"c",k:"turned beginners into",pt:"turn A into B(AをBに変える)",ja:"その研修は初心者を自信ある話し手に変えた",ch:["The workshop","turned beginners into","confident speakers."]},
+/* ---- ims: 無生物主語(v5.4.0) ----
+   「〜のおかげで/せいで/を見ると」を、モノ・経験・数字を主語にして言う=添削後の英語の型。
+   日本語は無生物主語を避けるため意識的に訓練しないと出てこない */
+{c:"ims",ty:"c",k:"shows",pt:"モノ show 事(グラフが〜を示す)",ja:"このグラフから物価の急上昇が分かる",ch:["This graph shows","a sharp rise","in prices."]},
+{c:"ims",ty:"c",k:"suggests that",pt:"モノ suggest that(データが示唆する)",ja:"データを見ると政策は機能していそうだ",ch:["The data suggests that","the policy is working."]},
+{c:"ims",ty:"c",k:"taught me",pt:"経験 teach 人 事(〜で学んだ)",ja:"海外生活で家族の大切さを学んだ",ch:["Living abroad","taught me","the value of family."]},
+{c:"ims",ty:"c",k:"cost us",pt:"モノ cost 人 物(〜のせいで失った)",ja:"その遅れで私たちは契約を失った",ch:["The delay","cost us","the contract."]},
+{c:"ims",ty:"c",k:"will take you to",pt:"モノ take 人 to 場所(〜すれば着く)",ja:"10分歩けば駅に着く",ch:["A ten-minute walk","will take you to","the station."]},
+{c:"ims",ty:"c",k:"brought you to",pt:"モノ bring 人 to(来た理由を聞く)",ja:"どうして日本に来たんですか(自然な聞き方)",ch:["What brought you","to Japan?"]},
+{c:"ims",ty:"c",k:"reveals",pt:"モノ reveal 事(よく見ると分かる)",ja:"よく見るといくつか問題が見えてくる",ch:["A closer look","reveals","some problems."]},
+{c:"ims",ty:"c",k:"will save you",pt:"モノ save 人 時間/手間(〜すれば省ける)",ja:"5分調べれば何時間もの作業を節約できる",ch:["Five minutes of research","will save you","hours of work."]},
+{c:"ims",ty:"c",k:"woke me up",pt:"モノ wake 人 up(〜で目が覚めた)",ja:"コーヒーの香りで目が覚めた",ch:["The smell of coffee","woke me up."]},
+{c:"ims",ty:"c",k:"left me no time to",pt:"モノ leave 人 no time to do(〜のせいで時間がない)",ja:"予定が詰まっていて運動する時間がなかった",ch:["The heavy schedule","left me no time to","exercise."]},
+{c:"ims",ty:"c",k:"points to",pt:"モノ point to 名詞(〜を指し示す)",ja:"証拠は別の結論を指し示している",ch:["The evidence","points to","a different conclusion."]},
+{c:"ims",ty:"c",k:"gave me a new perspective",pt:"経験 give 人 視点/機会(〜で得た)",ja:"この経験で新しい視点を得た",ch:["This experience","gave me","a new perspective."]},
+{c:"ims",ty:"c",k:"tell a different story",pt:"モノ tell a story(実態を物語る)",ja:"数字は別の実態を物語っている",ch:["The figures","tell a different story."]},
+{c:"ims",ty:"c",k:"gives everyone access to",pt:"モノ give 人 access to(〜で使えるようになる)",ja:"ネットのおかげで誰もが情報にアクセスできる",ch:["The Internet","gives everyone access to","information."]},
+{c:"ims",ty:"c",k:"told me",pt:"モノ tell 人 that(見て分かった)",ja:"顔を見た瞬間、何かあったと分かった",ch:["One look at his face","told me","something was wrong."]},
+{c:"ims",ty:"c",k:"keeps your memory fresh",pt:"モノ keep O C(〜に保つ)",ja:"定期的な復習が記憶を新鮮に保つ",ch:["Regular review","keeps your memory fresh."]},
 ];
 /* en(SRS記録のキー)はチャンクから導出する ─ 「保存せず導出」+表記と並べ替えの正解が常に一致 */
 PHRASES.forEach(p=>{ p.en=p.ch.join(" "); });

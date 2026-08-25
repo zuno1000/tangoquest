@@ -104,6 +104,13 @@ const PHR_DRILLS={
   graph:{icon:"📈", name:"グラフ・数値の描写",
     desc:"増えた・減った・横ばい・◯割を占める…を口頭で5連続。スピーチやIELTSの数値描写を反射にする",
     steps:[1,2,3,4,5].map(n=>({t:"描写 "+n+"/5", f:p=>p.c==="num"}))},
+  /* v5.4.0(実機FB「make/help/forceばかりで子供っぽい」): 添削後の英語の2大パターンを集中練習 */
+  verb:{icon:"🔁", name:"大人の動詞に言い換え",
+    desc:"make・help・forceに頼らず、enable/prevent/provide…の「動詞の型」で言う。口頭で5連続",
+    steps:[1,2,3,4,5].map(n=>({t:"動詞の型 "+n+"/5", f:p=>p.c==="vp"}))},
+  inan:{icon:"🏛", name:"無生物主語で言う",
+    desc:"「〜のおかげで/せいで/を見ると」を、モノや経験を主語にして言う(This graph shows…型)。口頭で5連続",
+    steps:[1,2,3,4,5].map(n=>({t:"無生物主語 "+n+"/5", f:p=>p.c==="ims"}))},
 };
 function drillPool(step, used){
   const pool=PHRASES.filter(p=>step.f(p) && !used.has(p.en));
@@ -368,9 +375,13 @@ function phrFinish(ok){
      v5.0の「青字の全文を後から差し込む」は廃止 ─ 要素が増えないのでレイアウトが動かない */
   $("phrBuild").innerHTML=phrCtxHTML(p, true);
   $("qStats").innerHTML=qStatsHTML(st);
+  /* pt(型の一般形・v5.4.0)があれば核の代わりに型を見せる: 1文の暗記を
+     「enable 人 to do」のような使い回せる型の獲得につなげる */
   $("resultCard").innerHTML='<span class="poschip phrcat">'+(PHR_CATS[p.c]||"")+'</span>'+
-    '<span class="rmeta">🔑 <b class="pkey">'+esc(p.k)+'</b></span>'+
-    '<span class="rmeta small"> '+(p.ty==="s"? "🧩 型":"🔗 連語")+' ・ 単語タップで辞書</span>';
+    (p.pt
+      ? '<span class="rmeta">🧩 <b class="pkey">'+esc(p.pt)+'</b></span>'
+      : '<span class="rmeta">🔑 <b class="pkey">'+esc(p.k)+'</b></span>'+
+        '<span class="rmeta small"> '+(p.ty==="s"? "🧩 型":"🔗 連語")+' ・ 単語タップで辞書</span>');
   $("resultBar").classList.add("show");
   $("promptCard").classList.add("srch"); // タップで核の語を辞書へ(quiz.js側で分岐)
   saveG(); refreshHeader(); refreshQuizCount();

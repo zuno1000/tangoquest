@@ -3154,8 +3154,8 @@ async function runAsync(W){
   });
 
   /* ---- v5.0.0: フレーズ学習(単語/フレーズ切替・日→英4択・並べ替え・帳簿分離/経済共有) ---- */
-  t("フレーズデータ: 290件規模・キー一意・全件にカテゴリ/意図/核/チャンクが揃う", ()=>{
-    ok(W.PHRASES.length>=280, "件数="+W.PHRASES.length);
+  t("フレーズデータ: 330件規模・キー一意・全件にカテゴリ/意図/核/チャンクが揃う", ()=>{
+    ok(W.PHRASES.length>=330, "件数="+W.PHRASES.length);
     const ens=new Set(W.PHRASES.map(p=>p.en));
     eq(ens.size, W.PHRASES.length, "en(SRSキー)は一意");
     const cats={};
@@ -3165,6 +3165,8 @@ async function runAsync(W){
       ok(p.en===p.ch.join(" ") && p.en.indexOf("  ")<0, "en=ch.join(不変キーの導出): "+p.en);
       // v5.1.0: 核は英文中の連続表現(クローズ空欄の前提。活用語尾はphrClozeが語境界まで広げる)
       ok(p.en.toLowerCase().indexOf(p.k.toLowerCase())>=0, "核が英文中にある: "+p.en+" / "+p.k);
+      // v5.4.0: 動詞の型・無生物主語は「型の一般形(pt)」を必ず持つ(答え合わせで型を見せる)
+      if(p.c==="vp"||p.c==="ims") ok(p.pt && p.pt.length>0, "ptがある: "+p.en);
       cats[p.c]=(cats[p.c]||0)+1;
     });
     for(const c in W.PHR_CATS) ok((cats[c]||0)>=4, "カテゴリ"+c+"は4件以上(4択の誤答枠)="+(cats[c]||0));
@@ -3331,6 +3333,35 @@ async function runAsync(W){
     ok(doc.getElementById("phrSpkOk") && !doc.querySelector("#choices .sptimeup"), "手動なら注意書きなし");
     doc.getElementById("phrSpkOk").click();
     G.phr=oldPhr; G.opt.qtab=oldQtab; G.opt.spkSec=oldSec; G.combo=oldCb;
+    d.a=snap.da; pd.a=snap.pa; pd.c=snap.pc; G.tickets=snap.t; G.xp=snap.xp;
+    W.saveG(); W.newQuestion();
+  });
+  t("動詞の型・無生物主語(v5.4.0): 答え合わせに使い回せる「型の一般形」が出る・専用ドリル2本", ()=>{
+    const G=W.G, doc=W.document;
+    const oldPhr=G.phr, oldQtab=G.opt.qtab, oldPre=G.opt.preRecall, oldCb=G.combo;
+    const d=W.dayRec(), pd=W.pdayRec(), snap={da:d.a, pa:pd.a, pc:pd.c, t:G.tickets, xp:G.xp};
+    d.a=1; pd.a=0; G.phr={}; G.opt.qtab="p"; G.opt.preRecall=0;
+    // カテゴリの成立
+    ok(W.PHRASES.filter(x=>x.c==="vp").length>=20, "動詞の型は20件以上");
+    ok(W.PHRASES.filter(x=>x.c==="ims").length>=12, "無生物主語は12件以上");
+    // クローズで解くと結果バーに型の一般形
+    const p=W.PHRASES.find(x=>x.k==="enabled her to");
+    W.phrStart(p);
+    ok(doc.getElementById("phrBuild").textContent.indexOf("enabled her to")<0, "型の部分が空欄になる");
+    const cs=[...doc.querySelectorAll("#choices .choice")];
+    ok(cs.filter(b=>b.textContent!==W.phrCloze(p).key).every(b=>{
+      const q=W.PHRASES.find(x=>(W.phrCloze(x)||{}).key===b.textContent && x.c==="vp");
+      return !!q;
+    }), "誤答も動詞の型どうし=どの動詞+前置詞かを問う");
+    cs.find(b=>b.textContent===W.phrCloze(p).key).click();
+    ok(doc.getElementById("resultCard").textContent.indexOf("enable 人 to do")>=0, "🧩型の一般形が出る");
+    // 実戦ドリルに2本追加
+    W.PHR_DRILLS.verb.steps.forEach(s=>ok(W.PHRASES.filter(s.f).length>=5, "動詞の型ドリルのプール"));
+    W.PHR_DRILLS.inan.steps.forEach(s=>ok(W.PHRASES.filter(s.f).length>=5, "無生物主語ドリルのプール"));
+    W.openDrillMenu();
+    ok(doc.querySelector('#modal [data-drill="verb"]') && doc.querySelector('#modal [data-drill="inan"]'), "メニューに2本追加(計4本)");
+    W.closeModal();
+    G.phr=oldPhr; G.opt.qtab=oldQtab; G.opt.preRecall=oldPre; G.combo=oldCb;
     d.a=snap.da; pd.a=snap.pa; pd.c=snap.pc; G.tickets=snap.t; G.xp=snap.xp;
     W.saveG(); W.newQuestion();
   });
