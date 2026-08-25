@@ -3208,7 +3208,10 @@ async function runAsync(W){
     const p=W.PHRASES[0];
     W.phrStart(p);
     eq(doc.getElementById("promptWord").textContent, p.ja, "問題は日本語の意図");
-    ok(doc.getElementById("qBadge").textContent.indexOf(W.PHR_CATS[p.c])>=0, "バッジはカテゴリ");
+    // v5.2.0: バッジは定着状態だけ(分類名は長く日本語と重なっていた=実機FB。分類は答え合わせに)
+    ok(doc.getElementById("qBadge").textContent.indexOf("新規")>=0 &&
+       doc.getElementById("qBadge").textContent.indexOf(W.PHR_CATS[p.c])<0, "バッジは新規/復習だけ");
+    ok(doc.getElementById("promptCard").classList.contains("phr"), "フレーズは上詰めカード(重なり対策)");
     // v5.1.0: 選択肢は核チャンク(文全体ではない=主語の名詞で選べない)
     const key=W.phrCloze(p).key;
     const btn=[...doc.querySelectorAll("#choices .choice")].find(b=>b.textContent===key);
@@ -3271,7 +3274,42 @@ async function runAsync(W){
     doc.querySelector('#quizSeg [data-q="w"]').click();
     eq(G.opt.qtab, "w", "単語に戻れる");
     ok(["新規","復習","覚えた・復習"].some(s=>doc.getElementById("qBadge").textContent.indexOf(s)>=0), "単語の出題に戻る");
+    ok(!doc.getElementById("promptCard").classList.contains("phr"), "単語に戻るとカードは従来の中央寄せ(v5.2.0)");
     G.phr=oldPhr; W.saveG();
+  });
+  t("実戦ドリル(v5.2.0): PREP=主張→理由→例→結論を口頭で・完了モーダル・帳簿は通常フレーズ扱い", ()=>{
+    const G=W.G, doc=W.document;
+    const oldPhr=JSON.parse(JSON.stringify(G.phr)), oldQtab=G.opt.qtab, oldCb=G.combo;
+    const d=W.dayRec(), pd=W.pdayRec();
+    const snap={da:d.a, pa:pd.a, pc:pd.c, t:G.tickets, xp:G.xp};
+    d.a=1; pd.a=0; pd.c=0;
+    // プールの成立(データを差し替えても壊れないようテストで固定)
+    W.PHR_DRILLS.prep.steps.forEach(s=>ok(W.PHRASES.filter(s.f).length>=3, s.t+"のプールが3件以上"));
+    ok(W.PHRASES.filter(W.PHR_DRILLS.graph.steps[0].f).length>=10, "グラフ描写のプール");
+    // セグの「実戦」はモードではなく入口=メニューが開く
+    W.switchTab("quiz");
+    doc.querySelector('#quizSeg [data-q="dr"]').click();
+    ok(doc.querySelector('#modal [data-drill="prep"]') && doc.querySelector('#modal [data-drill="graph"]'), "メニューに2本のドリル");
+    doc.querySelector('#modal [data-drill="prep"]').click();
+    // 4ステップを⭕で完走(定着0でも口頭形式で出る)
+    const labels=[];
+    for(let i=0;i<4;i++){
+      ok(doc.getElementById("phrSpkShow"), (i+1)+"問目は口頭形式");
+      labels.push(doc.getElementById("qBadge").textContent);
+      doc.getElementById("phrSpkShow").click();
+      doc.getElementById("phrSpkOk").click();
+      W.newQuestion();
+    }
+    ok(labels[0].indexOf("主張")>=0 && labels[1].indexOf("理由")>=0 &&
+       labels[2].indexOf("例")>=0 && labels[3].indexOf("結論")>=0, "PREPの順: "+labels.join(" > "));
+    ok(doc.getElementById("overlay").classList.contains("show") &&
+       doc.getElementById("modal").textContent.indexOf("完了")>=0, "完了モーダル");
+    ok(doc.getElementById("modal").textContent.indexOf("4 / 4")>=0, "⭕4/4");
+    eq(pd.a, 4, "4問ぶん通常のフレーズ学習として記録(SRS・経済も共通)");
+    W.closeModal();
+    G.phr=oldPhr; G.opt.qtab=oldQtab; G.combo=oldCb;
+    d.a=snap.da; pd.a=snap.pa; pd.c=snap.pc; G.tickets=snap.t; G.xp=snap.xp;
+    W.saveG(); W.newQuestion();
   });
   t("クローズ4択(v5.1.0): 文脈行は出題時から常設・答え合わせは空欄が埋まるだけ(押し上げ根治)", ()=>{
     const G=W.G, doc=W.document;

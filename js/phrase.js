@@ -86,15 +86,81 @@ function buildPhrChoices(p){
   return shuffle([p, ...picks]);
 }
 
-/* 出題(newQuestionから分岐)。phrStartはテストからの直接起動にも使う */
+/* ---- 実戦ドリル(v5.2.0): 英検1級二次の実戦形 ----
+   どの定着段階でも「意図→口頭」で出す連続セッション。帳簿は通常のフレーズ学習と完全に同一
+   (SRS・🎫・任務・5問ボーナス)=練習した分がそのまま正史の学習記録になる。
+   ・PREP: 主張→理由→例→結論のstemを1つずつ声に出す=2分スピーチの骨組みを体で覚える
+   ・グラフ描写: 数値・傾向カテゴリを5連続=増減・横ばい・割合の言い回しを反射にする */
+let PDRILL=null; // {kind, res:[ok...], used:Set}
+const PHR_DRILLS={
+  prep:{icon:"🎤", name:"2分スピーチの組み立て",
+    desc:"主張→理由→例→結論(PREP型)の順に、意図だけを見て声に出す。スピーチ1本ぶんの流れの練習",
+    steps:[
+      {t:"① 主張", f:p=>p.c==="op"},
+      {t:"② 理由", f:p=>p.c==="rs" && /理由|原因/.test(p.ja)},
+      {t:"③ 例",   f:p=>p.c==="rs" && /例/.test(p.ja)},
+      {t:"④ 結論", f:p=>p.c==="str" && /まとめ|結論|締め|以上/.test(p.ja)},
+    ]},
+  graph:{icon:"📈", name:"グラフ・数値の描写",
+    desc:"増えた・減った・横ばい・◯割を占める…を口頭で5連続。スピーチやIELTSの数値描写を反射にする",
+    steps:[1,2,3,4,5].map(n=>({t:"描写 "+n+"/5", f:p=>p.c==="num"}))},
+};
+function drillPool(step, used){
+  const pool=PHRASES.filter(p=>step.f(p) && !used.has(p.en));
+  return pool.length? pool : PHRASES.filter(step.f); // 使い切ったら再利用(グラフ5連続などの保険)
+}
+function openDrillMenu(){
+  openModal('<h3>🎤 実戦ドリル '+helpBtn("hlp-drill")+'</h3>'+
+    helpNote("hlp-drill", '定着段階に関わらず「意図だけを見て声に出す」実戦形式の連続セッション。'+
+      '解いた分はふつうのフレーズ学習として記録される(復習スケジュール・🎫・任務すべて共通)')+
+    Object.keys(PHR_DRILLS).map(k=>{
+      const d=PHR_DRILLS[k];
+      return '<button class="btn drillbtn" data-drill="'+k+'">'+d.icon+' <b>'+d.name+'</b>'+
+        '<span class="hlsub">'+d.desc+'</span></button>';
+    }).join(""));
+  $("modal").querySelectorAll("[data-drill]").forEach(b=>{ b.onclick=()=>startDrill(b.dataset.drill); });
+}
+function startDrill(kind){
+  if(!PHR_DRILLS[kind]) return;
+  closeModal();
+  if(quizTarget()!=="p"){ G.opt.qtab="p"; saveG(); phrSyncSeg(); } // ドリルはフレーズ学習の中で走る
+  PDRILL={kind, res:[], used:new Set()};
+  phrNewQuestion();
+}
+function openDrillDone(){
+  const d=PHR_DRILLS[PDRILL.kind], kind=PDRILL.kind;
+  const okN=PDRILL.res.filter(Boolean).length, n=d.steps.length;
+  PDRILL=null;
+  openModal('<h3>'+d.icon+' '+d.name+' ─ 完了!</h3>'+
+    '<div class="giftbox">⭕ 言えた <b style="font-size:18px">'+okN+' / '+n+'</b>'+(okN>=n? ' ─ 完璧! 🎉':'')+
+    '<br><span class="small">'+(kind==="prep"
+      ? 'この流れ(主張→理由→例→結論)がそのまま2分スピーチの骨組みになる'
+      : '数値の言い回しは、考えずに口から出るまで繰り返すのがコツ')+'</span></div>'+
+    '<div class="row" style="gap:10px">'+
+    '<button class="btn grow" id="drillAgain">'+d.icon+' もう1本</button>'+
+    '<button class="btn primary grow" id="drillEnd">フレーズ学習へ</button></div>');
+  $("drillAgain").onclick=()=>startDrill(kind);
+  $("drillEnd").onclick=()=>{ closeModal(); newQuestion(); };
+}
+
+/* 出題(newQuestionから分岐)。phrStartはテスト・ドリルからの直接起動にも使う(fmtで形式を強制できる) */
 function phrNewQuestion(){
   clearTimeout(phrAutoT);
+  if(PDRILL){
+    const d=PHR_DRILLS[PDRILL.kind];
+    if(PDRILL.res.length>=d.steps.length){ openDrillDone(); return; }
+    const pool=drillPool(d.steps[PDRILL.res.length], PDRILL.used);
+    const p=pool[Math.floor(Math.random()*pool.length)];
+    PDRILL.used.add(p.en);
+    phrStart(p, "sp"); // 実戦=常に口頭
+    return;
+  }
   if(QUICK.goal && QUICK.done>=QUICK.goal){ openQuickDone(); return; } // サクッと5問はフレーズでも同じ
   phrStart(pickPhrase());
 }
-function phrStart(p){
+function phrStart(p, fmt){
   const st=G.phr[p.en];
-  phrCur={p, fmt:phrFormat(st), choices:null};
+  phrCur={p, fmt:fmt||phrFormat(st), choices:null};
   if(phrCur.fmt==="mc") phrCur.choices=buildPhrChoices(p);
   phrRenderQuestion();
 }
@@ -102,9 +168,15 @@ function phrStart(p){
 function phrRenderQuestion(){
   phrAnswered=false; phrPos=0; phrMiss=0;
   $("resultBar").classList.remove("show");
-  $("promptCard").classList.remove("srch");
+  const pc=$("promptCard");
+  pc.classList.remove("srch");
+  pc.classList.add("phr"); // フレーズ用レイアウト(上詰め+バッジ行の余白確保=v5.2.0の重なり対策)
   const p=phrCur.p, st=G.phr[p.en];
-  $("qBadge").textContent=(PHR_CATS[p.c]||"フレーズ")+(st? "" : " ・ 新規");
+  /* バッジは定着状態だけ(v5.2.0実機FB: 分類名は長く、複数行の日本語と重なっていた。
+     分類は答え合わせの結果バーで見せる)。実戦ドリル中はステップ名(①主張 等)を出す */
+  $("qBadge").textContent = PDRILL
+    ? PHR_DRILLS[PDRILL.kind].steps[PDRILL.res.length].t
+    : (!st? "新規" : (st[0]>=MASTER_BOX? "覚えた・復習" : "復習"));
   $("qBadge").style.color="var(--accent2)";
   refreshQuizCount();
   const pw=$("promptWord");
@@ -225,6 +297,7 @@ function phrFinish(ok){
   const bonus5=ansBonus();                      // 5問ボーナスは単語+フレーズの合算
   track("ans"); if(ok) track("cor");            // 任務・実績のクイズ系は共有
   phrNoteRecent(p.en);
+  if(PDRILL) PDRILL.res.push(ok); // 実戦ドリルの進行(v5.2.0)
   if(QUICK.goal){ QUICK.done++; if(ok) QUICK.cor++; }
   let justMastered=false;
   if(ok && st[0]>=MASTER_BOX && !st[4]){ st[4]=1; pd.m++; justMastered=true; }
@@ -264,6 +337,8 @@ function phrSyncSeg(){
 }
 $("quizSeg").querySelectorAll("button").forEach(b=>{
   b.onclick=()=>{
+    if(b.dataset.q==="dr"){ openDrillMenu(); return; } // 実戦は「入口」(モードではない=v5.2.0)
+    PDRILL=null; // 単語/フレーズへの切替でドリルは中断
     if(quizTarget()===b.dataset.q) return; // 同状態への切替は無視(冪等)
     G.opt.qtab=b.dataset.q; saveG();
     phrSyncSeg();

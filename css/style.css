@@ -1058,3 +1058,15 @@ body.svplay #slotView{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
 .chunkbtn.used{opacity:.22; box-shadow:none}
 .chunkbtn.wrong{background:#FDE3E6; color:var(--ng); box-shadow:none}
 .poschip.phrcat{color:var(--accent2)}
+
+/* ---- v5.2.0: フレーズカードの重なり対策+実戦ドリル ---- */
+/* フレーズは中央寄せをやめて上詰めにし、バッジ行(絶対配置)ぶんの余白を確保する。
+   24dvhの中央寄せだと複数行の日本語+文脈行がバッジと重なっていた(実機FB)。
+   小さい画面で収まらないときだけカードが伸びる(min-heightは従来と同じ) */
+#promptCard.phr{justify-content:flex-start; height:auto; min-height:24vh; min-height:24dvh;
+  padding-top:42px}
+#promptCard.phr #promptWord.ja{font-size:20px; line-height:1.45}
+/* 実戦ドリルのメニューボタン(ホームのhomelinksと同じ縦積みスタイル) */
+.drillbtn{display:flex; width:100%; flex-direction:column; align-items:flex-start; gap:3px;
+  padding:12px 14px; text-align:left; margin-top:10px}
+.drillbtn .hlsub{font-size:11px; font-weight:700; color:var(--sub); line-height:1.5}

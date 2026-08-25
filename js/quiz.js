@@ -121,6 +121,12 @@ function todayCountText(){
 function refreshQuizCount(){
   const el=$("qCount"); if(!el) return;
   const quick=(QUICK.goal? "⚡"+Math.min(QUICK.done,QUICK.goal)+"/"+QUICK.goal+"問 ・ ":"");
+  // 実戦ドリル中(v5.2.0)は進行を出す(PDRILL/phrAnsweredはphrase.jsが後から定義)
+  if(typeof PDRILL!=="undefined" && PDRILL){
+    const d=PHR_DRILLS[PDRILL.kind];
+    el.textContent=d.icon+" 実戦 "+Math.min(d.steps.length, PDRILL.res.length+(phrAnswered?0:1))+"/"+d.steps.length;
+    return;
+  }
   // フレーズは目安と別カウント(v5.0.0): 目安なしの「今日◯問」だけを出す
   if(quizTarget()==="p"){ el.textContent=quick+"フレーズ 今日 "+pdayRec().a+"問"; return; }
   el.textContent=quick+todayCountText();
@@ -221,9 +227,10 @@ function renderQuestion(){
   answered=false;
   $("resultBar").classList.remove("show");
   $("promptCard").classList.remove("srch"); // 辞書リンクは正誤確認中だけ
-  // フレーズ学習(v5.0.0)の描画残りを片づける(並べ替えの組み立て行とチャンク用レイアウト)
+  // フレーズ学習(v5.0.0)の描画残りを片づける(並べ替えの組み立て行・チャンク用レイアウト・上詰めカード)
   const pb=$("phrBuild");
   if(pb){ pb.classList.add("hidden"); pb.innerHTML=""; }
+  $("promptCard").classList.remove("phr");
   $("choices").className="choices";
   const w=cur.word, e2j=G.mode==="e2j";
   const st=G.words[w.en];
