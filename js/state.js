@@ -1,7 +1,7 @@
 "use strict";
 /* ================= 状態管理 ================= */
 const KEY="tangoquest_v1";
-const APP_VERSION="5.9.0"; // リリースごとに更新(設定表示・更新確認のリモート版比較に使う)
+const APP_VERSION="5.10.0"; // リリースごとに更新(設定表示・更新確認のリモート版比較に使う)
 
 /* ---- iOSスタンドアロン起動時の灰色帯対策(v4.5.0→v4.13.0で拡張) ----
    インストール直後の初回起動に加え、日をまたいだ最初のコールドスタート
@@ -111,8 +111,12 @@ G.idle=G.idle||{last:0}; // 旧るすばん探索の精算時刻(v5.9.0で機能
 /* 学習オプション(v4.26.0): autoNext=答え合わせ後に自動で次へ進むまでのms(0=オフ)/
    svAuto=サバイバー3択の自動選択/slotBet=ことだまスロットの掛け金🪙の記憶(0=未設定→既定100)。
    同期マージはローカル優先(Object.assign起点)=端末ごとの好みとして振る舞う */
-/* qtab=学習タブの対象(w/p)・spkSec=口頭の制限時間ms(0=オフ)・preRecall=4択の前に思い出すステップ(v5.3.0・既定ON) */
-G.opt=Object.assign({autoNext:0, svAuto:0, slotBet:0, qtab:"w", spkSec:0, preRecall:1}, G.opt||{});
+/* qtab=学習タブの対象(mix=ミックス/w=単語/p=フレーズ・v5.10.0でmixが既定)・spkSec=口頭の制限時間ms(0=オフ・口頭は
+   v5.10.0でSPEAK_ENABLED=false=UIから撤去)・preRecall=4択の前に思い出すステップ(v5.3.0・既定ON) */
+G.opt=Object.assign({autoNext:0, svAuto:0, slotBet:0, qtab:"mix", spkSec:0, preRecall:1}, G.opt||{});
+/* v5.10.0移行(実機FB「フレーズを日々の学習に組み込みやすく」): 既存の好みが単語だけの端末も、一度だけ
+   ミックス(30問セットの5問目ごとにフレーズ)へ切り替える。以後はセグの選択がそのまま残る(mixOn=移行済み印) */
+if(!G.opt.mixOn){ G.opt.qtab="mix"; G.opt.mixOn=1; }
 /* スロットの永続データ(v4.28.0): meta=スロットの心得(id→Lv)。
    同期はLvごとmaxマージ・部分リセットでも残す(sync.jsに明示、G.sv.metaと同じ扱い) */
 G.slot=G.slot||{}; G.slot.meta=G.slot.meta||{};
@@ -125,6 +129,9 @@ G.pdays=G.pdays||{};
    保存先はこの端末(と、同期を使う場合は本人のGoogleドライブの非公開領域)だけ ─
    静的サイトなので開発者や他の利用者に送られる経路は存在しない。SRS記録はG.phrに同居 */
 G.myphr=G.myphr||{};
+/* 今日の英語=リーディング/リスニングのおすすめ(v5.10.0・js/reading.js): topics=興味のあるテーマ(端末の好み・ローカル優先)/
+   mute=合わないソース(id→{at,on}: 操作時刻LWW)/done=読んだ・聴いた記録(url→{d,k,id,t}: 和集合)/last=ソースを最後に出した日 */
+G.rl=Object.assign({topics:{}, mute:{}, done:{}, last:{}}, G.rl||{});
 G.updatedAt=G.updatedAt||0;
 G.resetAt=G.resetAt||0;     // リセット世代印(同期マージで新しい世代が丸ごと勝つ)
 

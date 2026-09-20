@@ -6,7 +6,11 @@
    ・SRSはsrsApply/INTERVALS/MASTER_BOXを単語と完全共有(台帳だけG.phrに分離)
    ・経済(🎫/XP/コンボ/任務/5問ボーナス)も共有=どちらで学んでも損得なし
    ・今日の目安・学習のあゆみ・連続学習には計上しない(別カウント=実機FBの決定。日別はG.pdays)
-   ・出題形式はSRSの階段と連動(v5.1.0): box0-1=核のクローズ4択 / box2-3=並べ替え / box4〜=口頭自己判定+TTS */
+   ・出題形式はSRSの階段と連動(v5.1.0): box0-1=核のクローズ4択 / box2-3=並べ替え / box4〜=口頭自己判定+TTS
+   ・v5.10.0(実機FB「口頭のハードルが高い」): 口頭ステージと口頭ドリルはSPEAK_ENABLED=falseでUIから撤去し、
+     box4〜は「全文4択」(日本語の意図→4つの英文から選ぶ・先に思い出すステップつき)に。実戦ドリルも全て選択式。
+     復活はフラグをtrueに戻すだけ(スロットのSLOT_ENABLEDと同じ可逆設計) */
+var SPEAK_ENABLED=false;
 
 let phrCur=null, phrAnswered=false, phrPos=0, phrMiss=0;
 let phrAutoT=null;   // 「自動で次へ」(設定共有)のタイマー
@@ -16,9 +20,11 @@ function phrNoteRecent(en){ phrRecent.push(en); if(phrRecent.length>3) phrRecent
 /* 出題形式の階段(v5.1.0で3段に):
    box0-1 = 核のクローズ4択(文は最初から見え、核だけが空欄=「主語の名詞で選べてしまう」を封じる)
    box2-3 = 並べ替え(文全体の語順を産出)
-   box4〜 = 口頭自己判定(意図だけ見て声に出す→答えを見て⭕✖。box5=覚えた は「言えた」だけが進める) */
+   box4〜 = 全文4択(v5.10.0・"fs": 日本語の意図だけを見て、英文全体を4つから選ぶ。文脈行の助けなし・
+            誤答は同カテゴリの英文。box5=覚えた はここで正解したことを意味する)
+            ※SPEAK_ENABLED=trueなら従来の口頭自己判定("sp") */
 function phrFormat(st){
-  if(st && st[0]>=4) return "sp";
+  if(st && st[0]>=4) return SPEAK_ENABLED? "sp" : "fs";
   return (st && st[0]>=2)? "or" : "mc";
 }
 
@@ -173,14 +179,17 @@ function buildPhrChoices(p){
   return shuffle([p, ...picks]);
 }
 
-/* ---- 実戦ドリル(v5.2.0): 英検1級二次の実戦形 ----
-   どの定着段階でも「意図→口頭」で出す連続セッション。帳簿は通常のフレーズ学習と完全に同一
+/* ---- 実戦ドリル(v5.2.0→v5.10.0で全て選択式に): 英検1級二次の実戦形 ----
+   どの定着段階でもカテゴリ縛りで5問連続で出すセッション。帳簿は通常のフレーズ学習と完全に同一
    (SRS・🎫・任務・5問ボーナス)=練習した分がそのまま正史の学習記録になる。
-   ・PREP: 主張→理由→例→結論のstemを1つずつ声に出す=2分スピーチの骨組みを体で覚える
-   ・グラフ描写: 数値・傾向カテゴリを5連続=増減・横ばい・割合の言い回しを反射にする */
+   v5.10.0(実機FB「口頭のハードルが高い・実戦も選択式に」): 各ドリルの出題形式(fmt)を固定 ─
+   ・グラフ描写=全文4択(fs): 意図→英文全体を選ぶ(数値の言い回しを文ごと選ぶ)
+   ・大人の動詞/無生物主語/マイ=クローズ4択(mc): 動詞の型・主語の動詞・自分の核を、同カテゴリの誤答と弁別する
+   ・PREP(スピーチの組み立て)は選択式に置き換えられないため撤去(spk:1=口頭専用・SPEAK_ENABLEDで復活)
+   日替わりの「今日のドリル」(todayDrillKind)をセット完了画面に出し、日々の学習に組み込む */
 let PDRILL=null; // {kind, res:[ok...], used:Set}
 const PHR_DRILLS={
-  prep:{icon:"🎤", name:"2分スピーチの組み立て",
+  prep:{icon:"🎤", name:"2分スピーチの組み立て", spk:1,
     desc:"主張→理由→例→結論(PREP型)の順に、意図だけを見て声に出す。スピーチ1本ぶんの流れの練習",
     steps:[
       {t:"① 主張", f:p=>p.c==="op"},
@@ -188,32 +197,43 @@ const PHR_DRILLS={
       {t:"③ 例",   f:p=>p.c==="rs" && /例/.test(p.ja)},
       {t:"④ 結論", f:p=>p.c==="str" && /まとめ|結論|締め|以上/.test(p.ja)},
     ]},
-  graph:{icon:"📈", name:"グラフ・数値の描写",
-    desc:"増えた・減った・横ばい・◯割を占める…を口頭で5連続。スピーチやIELTSの数値描写を反射にする",
+  graph:{icon:"📈", name:"グラフ・数値の描写", fmt:"fs",
+    desc:"増えた・減った・横ばい・◯割を占める…の言い回しを、意図から英文ごと選ぶ(全文4択)。5問連続",
     steps:[1,2,3,4,5].map(n=>({t:"描写 "+n+"/5", f:p=>p.c==="num"}))},
   /* v5.4.0(実機FB「make/help/forceばかりで子供っぽい」): 添削後の英語の2大パターンを集中練習 */
-  verb:{icon:"🔁", name:"大人の動詞に言い換え",
-    desc:"make・help・forceに頼らず、enable/prevent/provide…の「動詞の型」で言う。口頭で5連続",
+  verb:{icon:"🔁", name:"大人の動詞に言い換え", fmt:"mc",
+    desc:"make・help・forceに頼らず、enable/prevent/provide…の「動詞の型」を選ぶ(クローズ4択・誤答も動詞の型)。5問連続",
     steps:[1,2,3,4,5].map(n=>({t:"動詞の型 "+n+"/5", f:p=>p.c==="vp"}))},
-  inan:{icon:"🏛", name:"無生物主語で言う",
-    desc:"「〜のおかげで/せいで/を見ると」を、モノや経験を主語にして言う(This graph shows…型)。口頭で5連続",
+  inan:{icon:"🏛", name:"無生物主語で言う", fmt:"mc",
+    desc:"「〜のおかげで/せいで/を見ると」を、モノや経験を主語にした文で(This graph shows…型)。クローズ4択で5問連続",
     steps:[1,2,3,4,5].map(n=>({t:"無生物主語 "+n+"/5", f:p=>p.c==="ims"}))},
   /* v5.6.0: 自分で登録した表現だけの特訓(登録が5件未満なら繰り返しで補う) */
-  mine:{icon:"📝", name:"マイフレーズ特訓",
-    desc:"自分で登録した「言えなかった表現」だけを口頭で5連続。次の英会話までに言えるようにする",
+  mine:{icon:"📝", name:"マイフレーズ特訓", fmt:"mc",
+    desc:"自分で登録した「言えなかった表現」だけをクローズ4択で5問連続。次の英会話までに言えるようにする",
     steps:[1,2,3,4,5].map(n=>({t:"マイ "+n+"/5", f:p=>p.c==="my"}))},
 };
+/* いま選べるドリル(口頭専用はSPEAK_ENABLEDのときだけ) */
+function drillKinds(){ return Object.keys(PHR_DRILLS).filter(k=>SPEAK_ENABLED || !PHR_DRILLS[k].spk); }
+/* 今日のドリル(純関数・日付で決定的に巡回): マイフレーズが無い日はmineを外す */
+function todayDrillKind(ymd, hasMine){
+  const ks=drillKinds().filter(k=>hasMine || k!=="mine");
+  if(!ks.length) return null;
+  return ks[hashStr("drill|"+ymd)%ks.length];
+}
 function drillPool(step, used){
   const pool=allPhrases().filter(p=>step.f(p) && !used.has(p.en));
   return pool.length? pool : allPhrases().filter(step.f); // 使い切ったら再利用(件数が少ないドリルの保険)
 }
 function openDrillMenu(){
-  openModal('<h3>🎤 実戦ドリル '+helpBtn("hlp-drill")+'</h3>'+
-    helpNote("hlp-drill", '定着段階に関わらず「意図だけを見て声に出す」実戦形式の連続セッション。'+
-      '解いた分はふつうのフレーズ学習として記録される(復習スケジュール・🎫・任務すべて共通)')+
-    Object.keys(PHR_DRILLS).map(k=>{
+  const today=todayDrillKind(todayKey(), myphrList().length>0);
+  openModal('<h3>🎯 実戦ドリル '+helpBtn("hlp-drill")+'</h3>'+
+    helpNote("hlp-drill", '定着段階に関わらず、テーマを1つに絞って5問連続で出す実戦形式(すべて選択式)。'+
+      '解いた分はふつうのフレーズ学習として記録される(復習スケジュール・🎫・任務すべて共通)。'+
+      '「今日のドリル」は日替わり ─ 30問セットの完了画面からも1タップで始められる')+
+    drillKinds().map(k=>{
       const d=PHR_DRILLS[k];
-      return '<button class="btn drillbtn" data-drill="'+k+'">'+d.icon+' <b>'+d.name+'</b>'+
+      return '<button class="btn drillbtn" data-drill="'+k+'"><span>'+d.icon+' <b>'+d.name+'</b>'+
+        (k===today? ' <span class="drilltoday">今日のドリル</span>':'')+'</span>'+
         '<span class="hlsub">'+d.desc+'</span></button>';
     }).join("")+
     '<button class="btn" id="phrHistBtn2" style="margin-top:12px; width:100%">📊 フレーズのあゆみ(これまでの記録)</button>');
@@ -229,22 +249,27 @@ function startDrill(kind){
   if(!PHR_DRILLS[kind]) return;
   if(!allPhrases().some(PHR_DRILLS[kind].steps[0].f)){ toast("対象のフレーズがまだ無い(➕から登録)"); return; }
   closeModal();
-  if(quizTarget()!=="p"){ G.opt.qtab="p"; saveG(); phrSyncSeg(); } // ドリルはフレーズ学習の中で走る
+  // v5.10.0: ドリルはどのモード(ミックス/単語/フレーズ)からでも走り、終わればそのモードに戻る
+  if(typeof FOCUS!=="undefined") FOCUS=null;
   PDRILL={kind, res:[], used:new Set()};
+  if($("quizView").classList.contains("hidden")) switchTab("quiz");
   phrNewQuestion();
 }
 function openDrillDone(){
   const d=PHR_DRILLS[PDRILL.kind], kind=PDRILL.kind;
   const okN=PDRILL.res.filter(Boolean).length, n=d.steps.length;
   PDRILL=null;
+  const tip={prep:'この流れ(主張→理由→例→結論)がそのまま2分スピーチの骨組みになる',
+    graph:'数値の言い回しは、文ごと口から出るまで繰り返すのがコツ',
+    verb:'「make 人 do」が浮かんだら、enable/allow/prevent…に置き換える癖をつける',
+    inan:'「私は〜のおかげで」を「〜が私に…させた」と主語を入れ替える発想を反射に',
+    mine:'言えなかった表現が「選べる」→次は会話で「使える」へ'}[kind]||'';
   openModal('<h3>'+d.icon+' '+d.name+' ─ 完了!</h3>'+
-    '<div class="giftbox">⭕ 言えた <b style="font-size:18px">'+okN+' / '+n+'</b>'+(okN>=n? ' ─ 完璧! 🎉':'')+
-    '<br><span class="small">'+(kind==="prep"
-      ? 'この流れ(主張→理由→例→結論)がそのまま2分スピーチの骨組みになる'
-      : '数値の言い回しは、考えずに口から出るまで繰り返すのがコツ')+'</span></div>'+
+    '<div class="giftbox">正解 <b style="font-size:18px">'+okN+' / '+n+'</b>'+(okN>=n? ' ─ 完璧! 🎉':'')+
+      '<br><span class="small">'+tip+'</span></div>'+
     '<div class="row" style="gap:10px">'+
     '<button class="btn grow" id="drillAgain">'+d.icon+' もう1本</button>'+
-    '<button class="btn primary grow" id="drillEnd">フレーズ学習へ</button></div>');
+    '<button class="btn primary grow" id="drillEnd">学習にもどる</button></div>');
   $("drillAgain").onclick=()=>startDrill(kind);
   $("drillEnd").onclick=()=>{ closeModal(); newQuestion(); };
 }
@@ -258,7 +283,7 @@ function phrNewQuestion(){
     const pool=drillPool(d.steps[PDRILL.res.length], PDRILL.used);
     const p=pool[Math.floor(Math.random()*pool.length)];
     PDRILL.used.add(p.en);
-    phrStart(p, "sp"); // 実戦=常に口頭
+    phrStart(p, SPEAK_ENABLED? "sp" : (d.fmt||"mc")); // 実戦=ドリルごとの固定形式(v5.10.0: 選択式)
     return;
   }
   phrStart(pickPhrase());
@@ -267,11 +292,22 @@ function phrStart(p, fmt){
   const st=G.phr[p.en];
   phrCur={p, fmt:fmt||phrFormat(st), choices:null};
   if(phrCur.fmt==="mc") phrCur.choices=buildPhrChoices(p);
+  if(phrCur.fmt==="fs") phrCur.choices=buildPhrChoicesFS(p);
   phrRenderQuestion();
+}
+/* 全文4択(v5.10.0)の誤答: 同じカテゴリの英文を優先(=意図の近い文どうしの弁別)。足りなければ全体から */
+function buildPhrChoicesFS(p){
+  const same=shuffle(allPhrases().filter(x=>x.c===p.c && x.en!==p.en && !overlaps(x,p)));
+  const picks=same.slice(0,3);
+  if(picks.length<3){
+    const rest=shuffle(allPhrases().filter(x=>x.c!==p.c && x.en!==p.en && !overlaps(x,p)));
+    picks.push(...rest.slice(0, 3-picks.length));
+  }
+  return shuffle([p, ...picks]);
 }
 
 function phrRenderQuestion(){
-  phrAnswered=false; phrPos=0; phrMiss=0;
+  phrAnswered=false; phrPos=0; phrMiss=0; qKind="p"; // 画面の種類(quiz.js・辞書リンクの分岐に使う)
   $("resultBar").classList.remove("show");
   const pc=$("promptCard");
   pc.classList.remove("srch");
@@ -307,6 +343,19 @@ function phrRenderQuestion(){
       b.onclick=()=>{ if(!phrAnswered) phrShowChoicesMC(); };
       box.appendChild(b);
     }else phrShowChoicesMC();
+  }else if(phrCur.fmt==="fs"){
+    /* 全文4択(v5.10.0・box4〜/グラフ描写ドリル): 文脈行の助けなしに、意図から英文全体を選ぶ。
+       「先に思い出す」ステップ(設定・既定ON)は、ここでも4択を開く前に1回の自力想起を挟む */
+    box.className="choices";
+    bl.innerHTML='<span class="pbslot">💬 この意図を英語で ─ 4つの英文から選ぶ</span>';
+    if(G.opt.preRecall){
+      const b=document.createElement("button");
+      b.className="choice rcbtn";
+      b.id="phrRecallBtn";
+      b.innerHTML='🧠 まず自力で英文を思い出す<span class="rcsub">頭の中で言ってから、タップで選択肢</span>';
+      b.onclick=()=>{ if(!phrAnswered) phrShowChoicesFS(); };
+      box.appendChild(b);
+    }else phrShowChoicesFS();
   }else if(phrCur.fmt==="or"){
     // 並べ替え: チャンクを正しい順にタップ(語順と結びつきの自動化)
     box.className="choices chunks";
@@ -367,7 +416,31 @@ function phrShowChoicesMC(){
   refitChoices("#choices .choice");
 }
 
-/* 口頭ステージ: 答えを開いてから自己判定。🔊お手本(TTS)は答え合わせ後も押せる(シャドーイング用)。
+/* 全文4択の選択肢を開く(v5.10.0)。英文は長いので専用の見た目(.fs=小さめの文字・複数行) */
+function phrShowChoicesFS(){
+  const box=$("choices"); box.innerHTML=""; box.className="choices";
+  phrCur.choices.forEach(c=>{
+    const b=document.createElement("button");
+    b.className="choice fs";
+    b.textContent=c.en;
+    b.onclick=()=>phrAnswerFS(c,b);
+    box.appendChild(b);
+  });
+}
+function phrAnswerFS(chosen, btn){
+  if(phrAnswered || !phrCur) return;
+  const p=phrCur.p, ok=chosen.en===p.en;
+  document.querySelectorAll("#choices .choice").forEach(b=>{
+    b.disabled=true;
+    if(b.textContent===p.en) b.classList.add("correct");
+    else if(b===btn) b.classList.add("wrong");
+    else b.classList.add("dim");
+  });
+  phrFinish(ok);
+  armCorrectNext("#choices", newQuestion); // 正解の英文タップでも次へ(v5.10.0)
+}
+
+/* 口頭ステージ(SPEAK_ENABLED=trueのときだけ出る): 答えを開いてから自己判定。🔊お手本(TTS)は答え合わせ後も押せる(シャドーイング用)。
    timedOut=制限時間切れで自動的に開いた(v5.3.0) */
 function phrSpeakReveal(timedOut){
   if(phrAnswered || !phrCur) return;
@@ -436,6 +509,7 @@ function phrAnswerMC(chosen, btn){
     else b.classList.add("dim");
   });
   phrFinish(ok);
+  armCorrectNext("#choices", newQuestion); // 正解の選択肢タップでも次へ(v5.10.0)
 }
 
 /* 帳簿(単語のanswer()と同じ骨格): SRS→フレーズ日別→経済(共有)→結果表示 */
@@ -445,6 +519,7 @@ function phrFinish(ok){
   let st=G.phr[p.en];
   const wasNew=!st;
   if(!st) st=G.phr[p.en]=[0,0,0,0,0,0,0];
+  const preBox=st[0];
   srsApply(st, ok, now);
   const pd=pdayRec(); pd.a++; if(ok) pd.c++;   // 目安・あゆみとは別台帳(G.pdays)
   const bonus5=ansBonus();                      // 5問ボーナスは単語+フレーズの合算
@@ -453,6 +528,10 @@ function phrFinish(ok){
   if(PDRILL) PDRILL.res.push(ok); // 実戦ドリルの進行(v5.2.0)
   let justMastered=false;
   if(ok && st[0]>=MASTER_BOX && !st[4]){ st[4]=1; pd.m++; justMastered=true; }
+  /* 30問セットの帳簿(v5.10.0): フレーズの解答もセットの進みに数える(単語+フレーズの合算)。
+     境界に達したら「次へ」で完了モーダル(ドリル中は終わってから) */
+  const tk=(ok? corTicketGain():0)+bonus5;
+  if(setRecord(G, todayTotal(), {ok, wasNew, up:ok && st[0]>preBox, mas:justMastered, tk, phr:1})) setDonePending=true;
   let bigT=false;
   if(ok){
     G.combo=(G.combo||0)+1;
@@ -525,10 +604,11 @@ function openPhrHistoryModal(page){
     else if(st[0]>=2) s2++;
     else s1++;
   });
+  const top=SPEAK_ENABLED? "🎙 口頭チェック" : "💬 全文4択", topDone=SPEAK_ENABLED? "口頭で言えた" : "全文4択で正解";
   openModal('<h3>📊 フレーズのあゆみ '+helpBtn("hlp-phist")+'</h3>'+
-    helpNote("hlp-phist", 'フレーズは単語の「今日の目安」とは別カウント(このグラフが専用の記録)。'+
-      '出題は定着の階段と連動する: 🧠クローズ4択(定着0-1)→🧩並べ替え(2-3)→🎙口頭(4)→'+
-      '⭕口頭で言えたら「✓覚えた」(定着5)。忘却曲線・復習間隔は単語と同じ')+
+    helpNote("hlp-phist", 'フレーズは単語の「今日の目安」とは別カウント(このグラフが専用の記録・30問セットの進みには数える)。'+
+      '出題は定着の階段と連動する: 🧠クローズ4択(定着0-1)→🧩並べ替え(2-3)→'+top+'(4)→'+
+      '正解で「✓覚えた」(定着5)。忘却曲線・復習間隔は単語と同じ')+
     '<div class="row histnav" style="gap:8px; margin-top:6px">'+
       '<button class="btn hnav" id="phrHistPrev"'+(hasPrev?'':' disabled')+'>◀</button>'+
       '<div class="grow" style="text-align:center; font-weight:800">'+h[0].md+' 〜 '+h[13].md+
@@ -546,8 +626,8 @@ function openPhrHistoryModal(page){
     '<table class="stt">'+
       '<tr><td>🧠 クローズ4択(定着0-1)</td><td>'+fmt(s1)+'</td></tr>'+
       '<tr><td>🧩 並べ替え(定着2-3)</td><td>'+fmt(s2)+'</td></tr>'+
-      '<tr><td>🎙 口頭チェック(定着4)</td><td>'+fmt(s3)+'</td></tr>'+
-      '<tr><td>✓ 覚えた(口頭で言えた)</td><td>'+fmt(s4)+'</td></tr>'+
+      '<tr><td>'+top+'(定着4)</td><td>'+fmt(s3)+'</td></tr>'+
+      '<tr><td>✓ 覚えた('+topDone+')</td><td>'+fmt(s4)+'</td></tr>'+
       '<tr><td>未学習</td><td>'+fmt(s0)+'</td></tr>'+
     '</table>');
   $("phrHistPrev").onclick=()=>{ if(hasPrev) openPhrHistoryModal(page+1); };
@@ -648,7 +728,8 @@ $("quizSeg").querySelectorAll("button").forEach(b=>{
   b.onclick=()=>{
     if(b.dataset.q==="dr"){ openDrillMenu(); return; } // 実戦は「入口」(モードではない=v5.2.0)
     if(b.dataset.q==="add"){ openMyphrAdd(); return; } // ➕マイフレーズ登録も入口(v5.6.0)
-    PDRILL=null; // 単語/フレーズへの切替でドリルは中断
+    PDRILL=null; // モード(ミックス/単語/フレーズ)への切替でドリル・にがて特訓は中断
+    if(typeof FOCUS!=="undefined") FOCUS=null;
     if(quizTarget()===b.dataset.q) return; // 同状態への切替は無視(冪等)
     G.opt.qtab=b.dataset.q; saveG();
     phrSyncSeg();

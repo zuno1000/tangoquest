@@ -39,12 +39,14 @@
 
 <!-- ============ 学習(クイズ) ============ -->
 <main id="quizView" class="hidden">
-  <!-- 学習対象の切替(v5.0.0): 単語=従来のSRSクイズ/フレーズ=意図→英語の産出訓練 -->
-  <!-- 実戦・➕はモードではなく入口(v5.2.0/v5.6.0) -->
+  <!-- 学習対象の切替(v5.0.0): 単語=従来のSRSクイズ/フレーズ=意図→英語の産出訓練/
+       ミックス(v5.10.0・既定)=30問セットの5問目ごとにフレーズ -->
+  <!-- 実戦・➕はモードではなく入口(v5.2.0/v5.6.0)。実戦はv5.10.0で全て選択式 -->
   <div class="seg qseg" id="quizSeg">
-    <button data-q="w" class="active">単語</button>
+    <button data-q="mix" class="active">ミックス</button>
+    <button data-q="w">単語</button>
     <button data-q="p">フレーズ</button>
-    <button data-q="dr">🎤 実戦</button>
+    <button data-q="dr" class="qdr">🎯</button>
     <button data-q="add" class="qadd">➕</button>
   </div>
   <div id="promptCard">
@@ -234,6 +236,7 @@
 <script src="js/sv.js"></script>
 <script src="js/slot.js"></script>
 <script src="js/sync.js"></script>
+<script src="js/reading.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

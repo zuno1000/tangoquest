@@ -1125,3 +1125,45 @@ body.svplay #slotView{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
 .phrrow.miss .pen{color:var(--sub); font-weight:700; opacity:.85}
 .phrrow .pst{flex:0 0 auto; font-size:11px; font-weight:800}
 .pstm{color:var(--ok)} .pstl{color:var(--accent2)} .pstn{color:var(--sub); font-weight:700}
+
+/* ---- v5.10.0: ミス立て直し・全文4択・今日の英語 ---- */
+/* 正誤確認中の正解の選択肢はタップで次へ(押せるまま残す)。右端の▶で「押せる」を示す */
+.choice.correct.gonext{cursor:pointer}
+.choice.correct.gonext::after{content:"次へ ▶"; margin-left:auto; padding-left:8px; flex:0 0 auto;
+  font-size:11px; font-weight:800; opacity:.7}
+.choice.correct.gonext:active{transform:scale(.97)}
+/* ミスの手がかりチップ */
+.rmeta.ngm{color:var(--ng)}
+.rmeta.kin{color:var(--ok)}
+/* 全文4択(フレーズ・box4〜/グラフ描写ドリル): 英文は長いので小さめの文字で複数行 */
+.choice.fs{font-size:14px; line-height:1.35; padding:6px 14px; max-height:none; min-height:44px; word-break:normal; overflow-wrap:anywhere}
+.qseg button.qdr{flex:0 0 46px; font-size:15px}
+.drilltoday{display:inline-block; margin-left:4px; padding:1px 7px; border-radius:8px; font-size:10px; font-weight:800;
+  background:var(--accent2); color:#fff; vertical-align:middle}
+/* セット完了画面の「次の一手」ボタン(にがて特訓・今日のドリル) */
+.setnext2{display:flex; width:100%; flex-direction:column; align-items:flex-start; gap:3px; padding:11px 14px; text-align:left; margin-top:8px}
+.setnext2 .hlsub{font-size:11px; font-weight:700; color:var(--sub)}
+.weakrow .qx{color:var(--ng); font-weight:800}
+/* 今日の英語: ホームのパネル(2行)とモーダルのカード */
+.rlpanel{margin-top:12px; padding:12px 14px; cursor:pointer}
+.rlrows{margin-top:6px}
+.rlrow{display:flex; gap:8px; align-items:baseline; padding:5px 0; font-size:13px; font-weight:700; line-height:1.4; min-width:0}
+.rlrow+.rlrow{border-top:1px solid var(--line)}
+.rlrow .rlk{flex:0 0 auto; font-size:11px; color:var(--sub)}
+.rlrow .rlt{flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--ink)}
+.rlrow .rls{flex:0 1 auto; max-width:38%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; color:var(--sub)}
+.rlcard{background:var(--bg); border-radius:18px; padding:12px 14px; margin-top:10px;
+  box-shadow:-4px -4px 8px var(--shl), 4px 4px 8px var(--shd)}
+.rlcard .rlhead{font-size:12px; font-weight:800; color:var(--accent2)}
+.rlcard .rlsrc{font-size:12px; font-weight:800; color:var(--sub); margin-top:4px; line-height:1.9}
+.rlcard .rltitle{display:block; margin-top:6px; font-size:15px; font-weight:800; line-height:1.45; color:var(--ink); text-decoration:none; word-break:break-word}
+.rlcard .rlmeta{font-size:11px; font-weight:700; color:var(--sub); margin-top:4px}
+.rlcard .rldesc{font-size:12px; font-weight:700; color:var(--sub); line-height:1.55; margin-top:6px;
+  display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; word-break:auto-phrase}
+.rlbtns{display:flex; flex-wrap:wrap; gap:8px; margin-top:10px}
+.rlbtns .btn{padding:8px 12px; min-height:38px; font-size:12px; text-decoration:none; display:inline-flex; align-items:center}
+.rlchips{display:flex; flex-wrap:wrap; gap:6px}
+.rlchip{display:inline-block; margin-right:4px; padding:1px 7px; border-radius:8px; font-size:10px; font-weight:800;
+  background:var(--bg2); color:var(--sub); vertical-align:middle}
+.rlchip.lv{background:#E3E7FF; color:var(--accent2)}
+.rlchip.pay{background:#FFF3DC; color:#7A5510}

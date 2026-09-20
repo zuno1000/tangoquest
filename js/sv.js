@@ -924,6 +924,7 @@ function svAnswer(chosen, btn){
   /* 正解でもミスでも「次へ」必須(v4.22.0実機FB): 自動進行タイマーを廃止。
      v4.23.0: 確認中も時間は流れる ─ 眺めている間も敵は迫る(svFrameが駆動を継続) */
   $("svNextBtn").style.visibility="visible";
+  armCorrectNext("#svChoices", svNext); // 正解の選択肢タップでも次へ(v5.10.0・学習タブと同じ)
   /* 自動で次へ(v4.26.0設定): 発火時にまだ確認中なら次へ。手動タップは
      svNext冒頭のclearTimeoutが先取りする(v4.22.0の決定的フローは崩さない) */
   if(G.opt && G.opt.autoNext){

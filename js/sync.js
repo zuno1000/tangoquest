@@ -138,6 +138,15 @@ function mergeData(a, b){
     const x=m.myphr[en], y=b.myphr[en];
     if(!x || (y.at||0)>(x.at||0)) m.myphr[en]=y;
   }
+  /* 今日の英語(v5.10.0): done(読んだ・聴いた)は和集合/mute(合わないソース)は項目ごとの操作時刻LWW
+     (「戻す」も伝播する=アイコン・マイフレーズと同じ型)/topics・lastは端末の好み=ローカル起点のまま */
+  m.rl=Object.assign({topics:{}, mute:{}, done:{}, last:{}}, m.rl||{});
+  m.rl.done=Object.assign({}, (b.rl&&b.rl.done)||{}, (a.rl&&a.rl.done)||{});
+  m.rl.mute=Object.assign({}, (a.rl&&a.rl.mute)||{});
+  for(const id in (b.rl&&b.rl.mute)||{}){
+    const x=m.rl.mute[id], y=b.rl.mute[id];
+    if(!x || (y.at||0)>(x.at||0)) m.rl.mute[id]=y;
+  }
   // フレーズSRS(v5.0.0): 単語と同じ「解答回数(正解+ミス)が多い方」
   m.phr=m.phr||{};
   for(const en in b.phr||{}){
@@ -367,6 +376,7 @@ function partialResetData(g, t){
         endless:(g.sv&&g.sv.endless)||null}, // サバイバーの記録・心得・荒野は冒険の記録として残す
     slot:{meta:(g.slot&&g.slot.meta)||{}}, // スロットの心得も冒険の記録として残す(v4.28.0)
     myphr:g.myphr||{}, // マイフレーズの定義はユーザーの資産=部分リセットでも残す(SRS記録だけやり直し・v5.6.0)
+    rl:g.rl||{topics:{}, mute:{}, done:{}, last:{}}, // 今日の英語の好み・記録も資産として残す(v5.10.0)
     daily:g.daily||{}, weekly:g.weekly||{}, counters:g.counters||{}, ach:g.ach||{},
     login:g.login||{last:null,day:0}, gift10:g.gift10||0,
     frz:g.frz||0, faces:g.faces||{}, faceAt:g.faceAt||{}, idle:{last:t},
@@ -391,11 +401,11 @@ function openSettings(){
       '(学習タブ・サバイバー共通。「次へ」を押せばすぐ進める。レベルアップの3択などは今までどおり止まる)<br><br>'+
       '<b>サバイバー3択の自動選択</b>: レベルアップ・宝箱の3択をおまかせで即決する'+
       '(HPが半分近く減っているときは回復を優先。じっくり選びたい人はオフのまま)<br><br>'+
-      '<b>フレーズ: 先に思い出すステップ</b>: 4択の選択肢を最初は伏せて、自力で思い出してから開く。'+
+      '<b>フレーズ: 先に思い出すステップ</b>: 4択(クローズ・全文)の選択肢を最初は伏せて、自力で思い出してから開く。'+
       '選択肢は「見れば分かる」(再認)で解けてしまい、見ずに言う力(再生)が付きにくい ─ '+
-      'このワンクッションが両者のギャップを埋める(テンポ優先ならオフ)<br><br>'+
-      '<b>フレーズ: 口頭の制限時間</b>: 口頭チェックにカウントダウンを付け、時間切れで自動的に答えが開く。'+
-      '本番で使えるのは「すぐ出てくる」フレーズだけ ─ 想起の速さを鍛える')+
+      'このワンクッションが両者のギャップを埋める(テンポ優先ならオフ)'+
+      (SPEAK_ENABLED? '<br><br><b>フレーズ: 口頭の制限時間</b>: 口頭チェックにカウントダウンを付け、時間切れで自動的に答えが開く。'+
+      '本番で使えるのは「すぐ出てくる」フレーズだけ ─ 想起の速さを鍛える' : ''))+
     '<button class="btn" id="modeToggle">出題: '+(G.mode==="e2j"?"EN → 日本語":"日本語 → EN")+' (タップで切替)</button>'+
     '<div style="height:8px"></div>'+
     '<button class="btn" id="autoNextBtn">自動で次へ: '+autoNextLabel(G.opt.autoNext)+' (タップで切替)</button>'+
@@ -403,8 +413,9 @@ function openSettings(){
     '<button class="btn" id="svAutoBtn">サバイバー3択の自動選択: '+(G.opt.svAuto? "ON":"OFF")+'</button>'+
     '<div style="height:8px"></div>'+
     '<button class="btn" id="preRecallBtn">フレーズ: 先に思い出すステップ: '+(G.opt.preRecall? "ON":"OFF")+'</button>'+
-    '<div style="height:8px"></div>'+
-    '<button class="btn" id="spkSecBtn">フレーズ: 口頭の制限時間: '+spkSecLabel(G.opt.spkSec)+' (タップで切替)</button>';
+    // 口頭ステージはv5.10.0でUIから撤去(SPEAK_ENABLED=false)。制限時間の設定も一緒に隠す
+    (SPEAK_ENABLED? '<div style="height:8px"></div>'+
+    '<button class="btn" id="spkSecBtn">フレーズ: 口頭の制限時間: '+spkSecLabel(G.opt.spkSec)+' (タップで切替)</button>' : '');
   const fxInner=(CAN_VIBRATE
     ? '<div class="small" style="margin-bottom:6px">正解やお祝いで端末が振動する '+helpBtn("hlp-vibe")+'</div>'+
       helpNote("hlp-vibe", 'ONにするとテスト振動が鳴る。鳴らない場合は端末のマナーモード/バイブ設定を確認')+
@@ -432,6 +443,7 @@ function openSettings(){
     '<tr><td>今日の解答</td><td>'+d.a+'問(正解'+d.c+')</td></tr>'+
     '<tr><td>覚えた単語</td><td>'+mastered+' / '+WORDS.length+'(学習した '+Object.keys(G.words).length+'語)</td></tr>'+
     '<tr><td>覚えたフレーズ</td><td>'+pmas+' / '+allPhrases().length+'(今日 '+pdayRec().a+'問)</td></tr>'+
+    '<tr><td>📰 読んだ・聴いた</td><td>'+Object.keys(G.rl.done||{}).length+'本(今日の英語)</td></tr>'+
     '<tr><td>連続学習</td><td>'+streak+'日(XP×'+(+streakXpMult().toFixed(2))+' ・ 🧊'+(G.frz||0)+'/'+FRZ_MAX+')</td></tr>'+
     // 正確な残高(v4.31.0: ヘッダーは短縮表記・ガチャ画面の残高行の移設先)
     '<tr><td>🎫 チケット</td><td>'+fmt(G.tickets)+'(限定召喚用・学習で入手)</td></tr>'+
@@ -441,6 +453,8 @@ function openSettings(){
       '<button class="btn" id="histBtn">📊 学習のあゆみ</button>'+
       '<button class="btn" id="paceCfgBtn">🎯 学習ペース管理</button>'+
       '<button class="btn" id="phrHistBtn">🗣 フレーズのあゆみ</button>'+
+      // にがてノート(v5.10.0): ミスした単語の一覧と「にがて特訓」の入口
+      '<button class="btn" id="weakBtn">🔥 にがてノート<span class="hlsub">'+weakWords(G).length+'語 ・ 特訓へ</span></button>'+
       // 任務・図鑑の入口(v5.9.0でホームから移設・実機FB)
       '<button class="btn" id="setMissionBtn"><span>📜 任務'+(mnClaim? ' <b style="color:var(--accent)">'+mnClaim+'件 受取</b>':'')+'</span></button>'+
       '<button class="btn" id="setDexBtn">📕 図鑑</button></div>'+
@@ -468,10 +482,11 @@ function openSettings(){
     G.opt.preRecall=G.opt.preRecall? 0:1; saveG();
     $("preRecallBtn").textContent="フレーズ: 先に思い出すステップ: "+(G.opt.preRecall? "ON":"OFF");
   };
-  $("spkSecBtn").onclick=()=>{
+  if($("spkSecBtn")) $("spkSecBtn").onclick=()=>{
     G.opt.spkSec=spkSecCycle(G.opt.spkSec); saveG();
     $("spkSecBtn").textContent="フレーズ: 口頭の制限時間: "+spkSecLabel(G.opt.spkSec)+" (タップで切替)";
   };
+  $("weakBtn").onclick=openWeakModal;
   $("phrHistBtn").onclick=()=>openPhrHistoryModal(0);
   $("setMissionBtn").onclick=()=>switchTab("mission"); // switchTabがモーダルを閉じる
   $("setDexBtn").onclick=()=>openDex();

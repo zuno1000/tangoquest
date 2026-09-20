@@ -20,6 +20,19 @@ var SET_N=30;
    復習が遅れる→忘れる→やり直しが増える→さらに遅れる、の悪循環(正答率の低下)を断つ。
    復習が片づけば新規はすぐ再開する(復習が尽きれば無制限=従来どおり) */
 var NEW_GUARD=40;
+/* ミックス(v5.10.0・実機FB「フレーズを日々の学習に組み込みやすく」): 学習タブの既定モード。
+   30問セットのうちMIX_EVERY問目ごと(5・10・…・30問目=6問)がフレーズ、残り24問が単語。
+   セットの物差しは「今日の解答数=単語(days)+フレーズ(pdays)の合算」に統一(5問ボーナスと同じ)=
+   どのモード(ミックス/単語/フレーズ)で解いてもセットは同じ速さで進む。
+   今日の目安(学習ペース管理)は従来どおり単語だけで数える(=単語の習得計画の数字。フレーズは加えない) */
+var MIX_EVERY=5;
+function mixSlotIsPhrase(total){ return ((total%SET_N)+1)%MIX_EVERY===0; } // total=今日の合算解答数(次が何問目か)
+function todayTotal(){ return dayRec().a+pdayRec().a; }
+/* 1セットに含まれる単語の数(目安→セット数の換算に使う)。ミックスは24・単語のみは30 */
+function wordsPerSet(){ return quizTarget()==="mix"? SET_N-SET_N/MIX_EVERY : SET_N; }
+/* いま画面に出ている問題の種類(w=単語/p=フレーズ)。モード(quizTarget)ではなく描画時に決まる */
+let qKind="w";
+function curKind(){ return qKind; }
 /* 直近に出した単語(3問)は再出題しない ─ 1問おきの機械的な往復を防ぐ */
 let recentEns=[];
 function noteRecent(en){ recentEns.push(en); if(recentEns.length>3) recentEns.shift(); }
@@ -137,8 +150,12 @@ function qStatsHTML(st){
    学習タブへ戻ったとき反映されない不具合があった → タブ切替時にrefreshQuizCountで引き直す */
 function todayCountText(){
   const d=dayRec(), q=paceToday(G);
+  // セットの進みは単語+フレーズの合算(v5.10.0)。「今日◯/◯問」は目安の分母=単語だけ
+  const tail=quizTarget()==="p"
+    ? "フレーズ 今日 "+pdayRec().a+"問"
+    : "今日 "+d.a+(q&&!q.done? "/"+q.perDay:"")+"問";
   return ((G.combo||0)>=3? "⚡"+G.combo+"連続 ・ ":"")+
-    "セット "+(d.a%SET_N)+"/"+SET_N+" ・ 今日 "+d.a+(q&&!q.done? "/"+q.perDay:"")+"問";
+    "セット "+(todayTotal()%SET_N)+"/"+SET_N+" ・ "+tail;
 }
 function refreshQuizCount(){
   const el=$("qCount"); if(!el) return;
@@ -148,8 +165,8 @@ function refreshQuizCount(){
     el.textContent=d.icon+" 実戦 "+Math.min(d.steps.length, PDRILL.res.length+(phrAnswered?0:1))+"/"+d.steps.length;
     return;
   }
-  // フレーズは目安と別カウント(v5.0.0): 目安なしの「今日◯問」だけを出す
-  if(quizTarget()==="p"){ el.textContent="フレーズ 今日 "+pdayRec().a+"問"; return; }
+  // にがて特訓中(v5.10.0)は進行を出す
+  if(FOCUS){ el.textContent="🔥 にがて "+Math.min(FOCUS.list.length, FOCUS.res.length+(answered?0:1))+"/"+FOCUS.list.length; return; }
   el.textContent=todayCountText();
 }
 
@@ -169,30 +186,36 @@ function ansBonus(){
   if(t>0 && t%ANS_BONUS_EVERY===0){ G.tickets+=ANS_BONUS_T; return ANS_BONUS_T; }
   return 0;
 }
-/* 学習タブの対象(w=単語/p=フレーズ)。セグ(quizSeg)とG.opt.qtabが好みを持つ */
-function quizTarget(){ return (G.opt && G.opt.qtab==="p")? "p" : "w"; }
+/* 学習タブの対象(mix=ミックス/w=単語/p=フレーズ・v5.10.0)。セグ(quizSeg)とG.opt.qtabが好みを持つ */
+function quizTarget(){ const t=G.opt && G.opt.qtab; return (t==="p"||t==="w"||t==="mix")? t : "mix"; }
 /* ---- 30問セット(v5.8.0) ---- */
-/* このセットの帳簿(純関数・G.setを更新)。d=今日の日別記録(d.aは計上済み)。
-   セットの境界=d.aが30の倍数。a0(セット開始時の解答数)か日付が変わっていたら新しいセットに。
-   up=定着の階段が上がった/mas=覚えた/tk=このセットで得た🎫。戻り値=このセットが完了した瞬間か */
-function setRecord(g, d, info){
-  const a0=Math.floor((d.a-1)/SET_N)*SET_N, k=todayKey();
+/* このセットの帳簿(純関数・G.setを更新)。total=今日の解答数(単語+フレーズの合算・この1問を計上済み)。
+   セットの境界=totalが30の倍数。a0(セット開始時の解答数)か日付が変わっていたら新しいセットに。
+   up=定着の階段が上がった/mas=覚えた/tk=このセットで得た🎫/phr=フレーズだった(v5.10.0)。
+   戻り値=このセットが完了した瞬間か */
+function setRecord(g, total, info){
+  const a0=Math.floor((total-1)/SET_N)*SET_N, k=todayKey();
   let s=g.set;
-  if(!s || s.d!==k || s.a0!==a0) s=g.set={d:k, a0, n:0, cor:0, newN:0, up:0, mas:0, tk:0};
+  if(!s || s.d!==k || s.a0!==a0) s=g.set={d:k, a0, n:0, cor:0, newN:0, up:0, mas:0, tk:0, phr:0, miss:[]};
   s.n++;
   if(info.ok) s.cor++;
   if(info.wasNew) s.newN++;
   if(info.up) s.up++;
   if(info.mas) s.mas++;
+  if(info.phr) s.phr=(s.phr||0)+1;
   s.tk+=info.tk||0;
-  return d.a%SET_N===0;
+  // このセットでミスした単語(にがて特訓の入口に使う)
+  if(!info.ok && info.en && !info.phr){ s.miss=s.miss||[]; if(s.miss.indexOf(info.en)<0) s.miss.push(info.en); }
+  return total%SET_N===0;
 }
 /* 今日のセット数の見え方: done=完了したセット数・cur=進行中のセットの問数・
-   target=目安から換算したセット数(目標未設定・達成後はnull) */
+   target=目安から換算したセット数(目標未設定・達成後はnull)。
+   v5.10.0: 進みは単語+フレーズの合算。目安(単語数)→セット数の換算は「1セットに含まれる単語の数」で割る
+   (ミックス=24語/セット・単語のみ=30語/セット) */
 function setProgress(g){
-  const d=dayRec(), q=paceToday(g);
-  const target=(q && !q.done)? Math.max(1, Math.ceil(q.perDay/SET_N)) : null;
-  return {done:Math.floor(d.a/SET_N), cur:d.a%SET_N, target, a:d.a};
+  const t=todayTotal(), q=paceToday(g);
+  const target=(q && !q.done)? Math.max(1, Math.ceil(q.perDay/wordsPerSet())) : null;
+  return {done:Math.floor(t/SET_N), cur:t%SET_N, target, a:t};
 }
 /* セットの●○表示(done=完了・cur=進行中の問数・target=目安のセット数)。
    目安なし=完了分+進行中(あれば)だけ。目安ありで超過した分は金の●で足す */
@@ -208,7 +231,7 @@ function setDotsHTML(p){
 }
 let setDonePending=false; // 30問目の答え合わせのあと、「次へ」で完了モーダルを出す
 function openSetDone(){
-  const s=G.set||{n:SET_N, cor:0, newN:0, up:0, mas:0, tk:0};
+  const s=G.set||{n:SET_N, cor:0, newN:0, up:0, mas:0, tk:0, phr:0, miss:[]};
   const p=setProgress(G);
   const full=s.cor>=s.n;
   const line=p.target
@@ -216,20 +239,127 @@ function openSetDone(){
         ? '🏅 今日の目安('+p.target+'セット)達成! ここからは前倒し'
         : '今日の目安 '+p.target+'セット ─ あと'+(p.target-p.done)+'セット')
     : '今日 '+p.done+'セット目を積み上げた';
+  const missN=(s.miss||[]).length;
+  /* v5.10.0: セットの締めに「次の一手」を並べる ─ ミスがあれば🔥にがて特訓(このセットのミスから)、
+     🎯今日の実戦ドリル(日替わり・選択式5問)。フレーズが混ざったセットはその数も出す */
+  const drillK=(typeof todayDrillKind==="function")? todayDrillKind(todayKey(), myphrList().length>0) : null;
   openModal('<h3>🧩 セット完了! <span class="small">今日 '+p.done+'セット目</span></h3>'+
     '<div class="giftbox">正解 <b style="font-size:20px">'+s.cor+' / '+s.n+'</b>'+(full? ' ─ 全問正解! 🎉':'')+
       '<div class="setstats">'+
-        '<span>🆕 はじめて <b>'+s.newN+'</b>語</span>'+
-        '<span>⬆ 定着が進んだ <b>'+s.up+'</b>語</span>'+
-        '<span>🏅 覚えた <b>'+s.mas+'</b>語</span></div>'+
+        '<span>🆕 はじめて <b>'+s.newN+'</b></span>'+
+        '<span>⬆ 定着が進んだ <b>'+s.up+'</b></span>'+
+        '<span>🏅 覚えた <b>'+s.mas+'</b></span>'+
+        (s.phr? '<span>💬 フレーズ <b>'+s.phr+'</b>問</span>':'')+'</div>'+
       '<div style="font-weight:800; color:var(--accent2); margin-top:8px">🎫 このセットで +'+s.tk+'</div>'+
       setDotsHTML(p)+
       '<div class="small" style="margin-top:6px">'+line+'</div></div>'+
-    '<div class="row" style="gap:10px">'+
+    (missN? '<button class="btn setnext2" id="setWeak"><span>🔥 このセットのミス <b>'+missN+'</b>語をすぐ立て直す</span><span class="hlsub">にがて特訓 ─ 正解の選択肢タップでサクサク進める</span></button>':'')+
+    (drillK? '<button class="btn setnext2" id="setDrill"><span>'+PHR_DRILLS[drillK].icon+' 今日の実戦ドリル: <b>'+PHR_DRILLS[drillK].name+'</b></span><span class="hlsub">選択式で5問 ─ フレーズを実戦の型で</span></button>':'')+
+    '<div class="row" style="gap:10px; margin-top:10px">'+
     '<button class="btn grow" id="setHome">ひと休み(ホームへ)</button>'+
     '<button class="btn primary grow" id="setNext">🧩 次のセットへ</button></div>');
   $("setNext").onclick=()=>{ closeModal(); newQuestion(); };
   $("setHome").onclick=()=>{ closeModal(); switchTab("home"); };
+  if(missN) $("setWeak").onclick=()=>{ closeModal(); startFocus(s.miss.slice()); };
+  if(drillK) $("setDrill").onclick=()=>startDrill(drillK);
+}
+
+/* ---- にがて(ミスした単語)の立て直し(v5.10.0・実機FB「間違えた問題を覚えやすくする仕組み」) ----
+   ①ミスの直後: 結果バーに「選んだ誤答の単語」(取り違えた相手を名指し=弁別の手がかり)と
+     「同じ語根の覚えた仲間」(既知の語に結びつける=記憶の足場)を出す
+   ②正解の選択肢をタップで次へ(正解を「押して確かめる」動作が想起の締めになる+片手で進める)
+   ③にがてノート: ミスがあってまだ覚えていない語を、連続ミス・ミス回数の多い順に並べる
+   ④にがて特訓: そのリスト(またはセットのミス)だけを連続で出す短いセッション。
+     解答はふつうの学習として計上(SRSは期限前の先取り=階段は上がらないが、想起の回数が増える) */
+var FOCUS=null; // {list:[en], i, res:[ok...]}
+/* にがてリスト(純関数): ミス1回以上でまだ覚えていない語。連続ミス→ミス回数→期限の近さ、の順 */
+function weakWords(g){
+  const out=[];
+  for(const en in g.words){
+    const st=g.words[en];
+    if(!st || !(st[3]>0) || st[0]>=MASTER_BOX || !byEn[en]) continue;
+    out.push(en);
+  }
+  out.sort((a,b)=>{
+    const x=g.words[a], y=g.words[b];
+    return ((y[5]||0)-(x[5]||0)) || (y[3]-x[3]) || (x[1]-y[1]);
+  });
+  return out;
+}
+/* 同じ語根を持つ「学習ずみ(定着2以上)」の仲間(純関数・最大n語)。定着の高い語を先に */
+function rootKin(g, en, n){
+  const ids=rootIdsOf(en); if(!ids.length) return [];
+  const kin=[];
+  for(const w of WORDS){
+    if(w.en===en) continue;
+    const st=g.words[w.en]; if(!st || st[0]<2) continue;
+    if(rootIdsOf(w.en).some(i=>ids.indexOf(i)>=0)) kin.push(w.en);
+  }
+  kin.sort((a,b)=>(g.words[b][0]-g.words[a][0]));
+  return kin.slice(0, n||2);
+}
+/* ミスの直後の手がかり(結果バーのチップ) */
+function missHintHTML(g, w, chosen, e2j){
+  const h=[];
+  if(chosen && chosen.en!==w.en) h.push('<span class="rmeta ngm">✗ 選んだのは「'+esc(e2j? chosen.en : chosen.ja)+'」</span>');
+  const kin=rootKin(g, w.en, 2);
+  if(kin.length) h.push('<span class="rmeta kin">🧬 覚えた仲間: '+kin.map(esc).join("・")+'</span>');
+  return h.join(" ");
+}
+var FOCUS_N=10;
+function startFocus(list){
+  list=(list && list.length)? list.filter(en=>byEn[en]) : weakWords(G).slice(0, FOCUS_N);
+  if(!list.length){ toast("いま立て直す「にがて」はない ─ いい調子!"); return; }
+  closeModal();
+  if(typeof PDRILL!=="undefined") PDRILL=null;
+  FOCUS={list:list.slice(0, 30), i:0, res:[]};
+  if($("quizView").classList.contains("hidden")) switchTab("quiz");
+  newQuestion();
+}
+function focusNext(){
+  if(FOCUS.i>=FOCUS.list.length){ openFocusDone(); return; }
+  const w=byEn[FOCUS.list[FOCUS.i++]];
+  cur={word:w, choices:buildChoices(w)};
+  renderQuestion();
+  $("qBadge").textContent="🔥 にがて"; $("qBadge").style.color="var(--ng)";
+}
+function openFocusDone(){
+  const f=FOCUS; FOCUS=null;
+  const okN=f.res.filter(Boolean).length, n=f.res.length;
+  const still=f.list.filter((en,i)=>!f.res[i]);
+  openModal('<h3>🔥 にがて特訓 ─ 完了!</h3>'+
+    '<div class="giftbox">正解 <b style="font-size:20px">'+okN+' / '+n+'</b>'+(okN>=n? ' ─ 全部立て直した! 🎉':'')+
+      (still.length? '<br><span class="small">まだ手ごわい: '+still.map(esc).join("・")+'</span>':'')+
+      '<br><span class="small">ミスした語は1分後・10分後にまた出る ─ 今日のうちに2回思い出せれば明日につながる</span></div>'+
+    '<div class="row" style="gap:10px">'+
+    (still.length? '<button class="btn grow" id="focusAgain">🔥 まだ手ごわい'+still.length+'語をもう一度</button>':'')+
+    '<button class="btn primary grow" id="focusEnd">学習にもどる</button></div>');
+  const a=$("focusAgain"); if(a) a.onclick=()=>startFocus(still);
+  $("focusEnd").onclick=()=>{ closeModal(); newQuestion(); };
+}
+/* にがてノート(⚙設定・記録から): リストの上位と、特訓の入口 */
+function openWeakModal(){
+  const list=weakWords(G);
+  openModal('<h3>🔥 にがてノート '+helpBtn("hlp-weak")+'</h3>'+
+    helpNote("hlp-weak", 'ミスしたことがあり、まだ「覚えた」に届いていない単語。連続ミス・ミス回数の多い順。'+
+      '「にがて特訓」は上位'+FOCUS_N+'語だけを連続で出す短いセッション(解答はふつうの学習として記録・🎫も入る)。'+
+      'ミスの直後には「選んだ誤答」と「同じ語根の覚えた仲間」が手がかりとして出る')+
+    '<div class="small">'+list.length+'語</div>'+
+    (list.length
+      ? '<div class="panel" style="margin-top:8px">'+list.slice(0, 30).map(en=>{
+          const w=byEn[en], st=G.words[en];
+          return '<div class="myrow weakrow"><div class="grow"><b style="font-size:14px">'+esc(en)+'</b>'+
+            ' <span class="small">'+esc(w.ja)+'</span><br><span class="small">'+
+            '<span class="qx">ミス '+st[3]+'</span>'+((st[5]||0)>=2? ' ・ 🔥連続'+st[5]:'')+' ・ 定着 '+st[0]+'/'+MASTER_BOX+
+            (rootText(en)? ' ・ 🧬'+esc(rootText(en)):'')+'</span></div>'+
+            '<button class="btn mydel wdict" data-en="'+esc(en)+'">🔍</button></div>';
+        }).join("")+(list.length>30? '<div class="small" style="margin-top:6px">…ほか'+(list.length-30)+'語</div>':'')+'</div>'
+      : '<div class="empty">いま立て直す「にがて」はない ─ いい調子!</div>')+
+    '<div class="row" style="margin-top:12px"><button class="btn primary grow" id="weakGo"'+(list.length?'':' disabled')+'>🔥 にがて特訓('+Math.min(FOCUS_N, list.length)+'問)</button></div>');
+  $("modal").querySelectorAll(".wdict").forEach(b=>{
+    b.onclick=()=>window.open("https://ejje.weblio.jp/content/"+encodeURIComponent(b.dataset.en), "_blank", "noopener");
+  });
+  $("weakGo").onclick=()=>startFocus(null);
 }
 
 /* 「自動で次へ」(v4.26.0)の設定値: 0=オフ→1秒→1.5秒→2秒を巡回 */
@@ -278,7 +408,7 @@ function choiceHTML(t){
 }
 
 function renderQuestion(){
-  answered=false;
+  answered=false; qKind="w";
   $("resultBar").classList.remove("show");
   $("promptCard").classList.remove("srch"); // 辞書リンクは正誤確認中だけ
   // フレーズ学習(v5.0.0)の描画残りを片づける(並べ替えの組み立て行・チャンク用レイアウト・上詰めカード)
@@ -309,11 +439,25 @@ function renderQuestion(){
 
 function newQuestion(){
   clearTimeout(autoNextT); // 手動の「次へ」と自動進行タイマーの二重発火を断つ
-  if(quizTarget()==="p"){ phrNewQuestion(); return; } // フレーズ学習(v5.0.0・phrase.jsが後から定義)
-  if(setDonePending){ setDonePending=false; openSetDone(); return; } // 30問セットの完了(v5.8.0)
+  const drill=(typeof PDRILL!=="undefined") && PDRILL;
+  // 30問セットの完了(v5.8.0)。ドリル・にがて特訓の途中では割り込まず、終わってから出す
+  if(setDonePending && !drill && !FOCUS){ setDonePending=false; openSetDone(); return; }
+  if(drill){ phrNewQuestion(); return; }   // 実戦ドリル(v5.2.0)はモードに関係なく続く
+  if(FOCUS){ focusNext(); return; }        // にがて特訓(v5.10.0)
+  const m=quizTarget();
+  // フレーズ学習(v5.0.0・phrase.jsが後から定義)。ミックス(v5.10.0)は5問目ごとにフレーズ
+  if(m==="p" || (m==="mix" && mixSlotIsPhrase(todayTotal()))){ phrNewQuestion(); return; }
   const w=pickWord();
   cur={word:w, choices:buildChoices(w)};
   renderQuestion();
+}
+/* 正誤確認中: 正解の選択肢は押せるまま残し、タップで次へ(v5.10.0実機FB)。
+   単語・フレーズ・サバイバーで共用。onNext=次へ進む関数 */
+function armCorrectNext(sel, onNext){
+  document.querySelectorAll(sel+" .choice.correct").forEach(b=>{
+    b.disabled=false; b.classList.add("gonext");
+    b.onclick=()=>onNext();
+  });
 }
 
 function answer(chosen, btn){
@@ -354,8 +498,9 @@ function answer(chosen, btn){
   }else{
     G.combo=0;
   }
-  // 30問セットの帳簿(v5.8.0)。境界に達したら「次へ」で完了モーダル
-  if(setRecord(G, d, {ok, wasNew, up:ok && st[0]>preSt[0], mas:justMastered, tk:tkGain+bonus5})) setDonePending=true;
+  // 30問セットの帳簿(v5.8.0)。境界に達したら「次へ」で完了モーダル(進みは単語+フレーズの合算=v5.10.0)
+  if(setRecord(G, todayTotal(), {ok, wasNew, up:ok && st[0]>preSt[0], mas:justMastered, tk:tkGain+bonus5, en:w.en})) setDonePending=true;
+  if(FOCUS) FOCUS.res.push(ok); // にがて特訓の進行(v5.10.0)
 
   // 知識XP: 正解が直接キャラの強さになる(連続学習日数+コンボ+キャラスキルでボーナス)
   let xpGain=0, lvUp=0;
@@ -388,8 +533,11 @@ function answer(chosen, btn){
   // 5問ごとのボーナスの通知(v4.31.0)。より大事なお祝いがあるときは譲る
   if(bonus5 && !bigT) toast("🎁 5問ごとのボーナス 🎫+"+bonus5);
   $("qStats").innerHTML=qStatsHTML(st); // 定着ステップの変化(上がった/戻った)を見せる
-  rc.innerHTML='<span class="poschip pos'+w.pos+'">'+POS_LABEL[w.pos]+'</span>'+meta.join(' ');
+  // ミスの直後は手がかり(選んだ誤答・同じ語根の覚えた仲間)を先頭に出す(v5.10.0)
+  if(!ok) meta.unshift(missHintHTML(G, w, chosen, e2j));
+  rc.innerHTML='<span class="poschip pos'+w.pos+'">'+POS_LABEL[w.pos]+'</span>'+meta.filter(Boolean).join(' ');
   $("resultBar").classList.add("show");
+  armCorrectNext("#choices", newQuestion); // 正解の選択肢タップでも次へ(v5.10.0)
   $("promptCard").classList.add("srch"); // 単語タップで辞書へ(意味の裏取り)
   // 今日の目安にちょうど到達した瞬間だけ祝う(毎問出る表示はノイズ=v4.6.2の知見)
   const pq=paceToday(G);
@@ -410,8 +558,8 @@ $("nextBtn").onclick=()=>newQuestion();
 /* 正誤確認中は上部の単語カードのタップで辞書(Weblio)を開き、意味を自分で確かめられる。
    出題中は誤タップ防止のため無効(srchクラスで見た目も切り替え) */
 $("promptCard").onclick=()=>{
-  // フレーズ学習中は核の語(🔑)を辞書へ(v5.0.0)
-  if(quizTarget()==="p"){
+  // フレーズ学習中は核の語(🔑)を辞書へ(v5.0.0)。判定は画面の種類(qKind)で=ミックスでも正しく分岐(v5.10.0)
+  if(qKind==="p"){
     if(!phrAnswered || !phrCur) return;
     window.open("https://ejje.weblio.jp/content/"+encodeURIComponent(phrCur.p.k), "_blank", "noopener");
     return;

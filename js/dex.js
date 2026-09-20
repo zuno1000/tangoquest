@@ -72,7 +72,7 @@ function openPhrDexModal(en){
       (p.pt? '<span class="rmeta">🧩 <b class="pkey">'+esc(p.pt)+'</b></span>'
            : '<span class="rmeta">🔑 <b class="pkey">'+esc(p.k)+'</b></span>')+'</div>'+
     '<table class="stt" style="margin-top:10px">'+
-      '<tr><td>定着</td><td>'+(st? (st[0]>=MASTER_BOX? "✓覚えた(口頭で言えた)" : st[0]+" / "+MASTER_BOX) : "未学習")+'</td></tr>'+
+      '<tr><td>定着</td><td>'+(st? (st[0]>=MASTER_BOX? "✓覚えた" : st[0]+" / "+MASTER_BOX) : "未学習")+'</td></tr>'+
       (st? '<tr><td>これまで</td><td>正解 '+st[2]+' ・ ミス '+st[3]+'</td></tr>':'')+
     '</table>'+
     '<div class="row" style="margin-top:12px; gap:8px">'+

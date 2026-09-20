@@ -36,6 +36,9 @@ const EVENTS=[
   // {d:"2026-08-03", t:"..."} 形式でバナー以外のイベント告知を書く
 ];
 const NEWS=[
+  {d:"2026-09-21", t:"📰 v5.10.0 「今日の英語」がホームに登場! 英検1級(CEFR C1)レベルの英語メディア約40誌・50番組(The Conversation・Aeon・Scientific American・BBC・NPR・TED・Kurzgesagt…)から、読む(記事)と聴く(ポッドキャスト/YouTube)を毎日1本ずつおすすめします。選び方は端末の中だけで完結(無料): 興味のあるテーマに合うソースを優先し、同じソースが続かないよう日替わりで入れ替え。合わないソースは「外す」で二度と出ません。📋LLMプロンプト: 解説フルセット・内容正誤問題・要約の添削(リスニングはディクテーション採点)の依頼文を題名・URL入りで用意 ─ コピーしてChatGPT・Claude・Gemini等に貼るだけ。読んだ・聴いたは✓で記録(同期あり)"},
+  {d:"2026-09-21", t:"💬 v5.10.0 フレーズを日々の学習に組み込みました! ①学習タブの既定が「ミックス」に: 30問セットの5問目ごと(5・10・…・30問目)にフレーズが混ざります(単語24+フレーズ6。セットの進みは単語+フレーズの合算・今日の目安は単語だけで数える) ②口頭ステージを廃止し、定着4以上は「全文4択」(日本語の意図→4つの英文から選ぶ・先に思い出すステップつき)に。口頭の制限時間の設定も撤去 ③🎯実戦ドリルはすべて選択式に: グラフ描写=全文4択・大人の動詞/無生物主語/マイフレーズ=クローズ4択。スピーチの組み立て(PREP)は選択式にできないため撤去 ④日替わりの「今日の実戦ドリル」がセット完了画面から1タップで始められます"},
+  {d:"2026-09-21", t:"🔥 v5.10.0 間違えた問題を覚えやすく! ①正誤確認中に正解の選択肢をタップしても次の問題へ進めます(単語・フレーズ) ②ミスの直後、結果バーに「選んだのは〜」(取り違えた相手)と「🧬覚えた仲間」(同じ語根で定着ずみの単語)を手がかりとして表示 ③⚙設定・記録に「🔥にがてノート」: ミスがあってまだ覚えていない単語を連続ミス・ミス回数順に一覧し、上位10語だけを連続で出す「にがて特訓」を始められます ④セット完了画面に「このセットのミス◯語をすぐ立て直す」ボタン"},
   {d:"2026-09-20", t:"🏠 v5.9.0 ホームを「今日やること」に集中! 上から 今日の目安 → 今日のセット → 📅今週の記録(曜日つきの7マス: 金=目安達成・青=学習した日) → 学習をはじめる、の並びに。任務・図鑑の入口は⚙設定・記録に移しました(任務報酬の一括受取ボタンは今までどおりホームに出ます)。💤るすばん探索(放置で🪙)は廃止 ─ 🪙は学習と冒険で。セット完了画面の中央ぞろえも修正"},
   {d:"2026-09-20", t:"🧩 v5.8.0 学習を「30問=1セット」に! ホームに「今日のセット」(●○で積み上げが見える・目安があればセット数に換算)、学習タブには「セット 12/30」の進み。30問目の答え合わせのあと、正解数・はじめて出会った語・定着が進んだ語・覚えた語・このセットの🎫をまとめた完了画面が出ます(「次のセットへ」でそのまま続行)。⚡サクッと5問は廃止しました(5問ごとの🎫+5ボーナスはそのまま)"},
   {d:"2026-09-20", t:"📈 v5.8.0 単語の学習効率を改善! ①ミスしても階段を全部やり直しにせず、1段下から再開(旧: 半分まで戻す) ②すでに知っている単語の早回し: 初見で正解なら1分/10分の段を飛ばして翌日へ、翌日も正解なら7日後へ ─ 既知語は3問で「覚えた」に(旧5問) ③復習が40問以上たまっているときは新規を待たせて、復習の遅れによる忘却の悪循環を防ぐ ④学習ペース管理の見積もりを実際の規則どおりに計算し直しました(旧モデルは「ミスで全部やり直し」を仮定していて悲観的すぎた。目安・試算の数字が変わります)"},
@@ -179,6 +182,11 @@ function renderHome(){
       '<div class="pacetop"><span>🧩 今日のセット</span>'+setHead+'</div>'+
       setDotsHTML(sp)+
       '<div class="pacefoot">'+setFoot+'</div></div>'+
+    // ── 今日の英語(v5.10.0): 読む・聴くのおすすめ1本ずつ(中身はreading.jsが非同期で埋める)。タップで詳細
+    '<div class="panel rlpanel" id="homeRL">'+
+      '<div class="pacetop"><span>📰 今日の英語 <span class="small" style="font-weight:700">読む・聴く ─ 英検1級レベル</span></span>'+
+        '<b style="font-size:13px; color:var(--sub)">›</b></div>'+
+      '<div class="rlrows"></div></div>'+
     // ── 今週の記録(7マスのカレンダー・タップで全期間)
     '<div class="panel weekpanel" id="homeWeek">'+
       '<div class="pacetop"><span>📅 今週の記録 <span class="small" style="font-weight:700">'+wdays+'日 ・ '+fmt(wsum)+'問</span></span>'+
@@ -203,6 +211,8 @@ function renderHome(){
         Math.floor((Date.now()-lastSyncAt())/864e5)+'日 ─ タップして同期</div>':'');
   $("homeStudy").onclick=()=>switchTab("quiz");
   $("homeSets").onclick=()=>switchTab("quiz");
+  $("homeRL").onclick=openRLModal;
+  rlFillHome(); rlEnsureLoaded(rlFillHome); // 今日の英語(v5.10.0): キャッシュがあれば即・なければ取得して埋める
   const lg=$("homeLogin");
   if(lg) lg.onclick=()=>{
     try{ localStorage.setItem(LOGIN_SEEN_KEY, todayKey()); }catch(e){}
@@ -352,6 +362,9 @@ if(syncClientId() && (lastSyncAt()>0 || localStorage.getItem("tq_gAuthed"))){
 /* セルフテスト(tests/)用: let/const宣言はwindowに載らないため明示公開 */
 window.G=G; window.WORDS=WORDS; window.DUNGEONS=DUNGEONS; window.BANNERS=BANNERS; window.CHARS=CHARS;
 window.PHRASES=PHRASES; window.PHR_CATS=PHR_CATS; window.PHR_DRILLS=PHR_DRILLS;
+window.RL_SOURCES=RL_SOURCES; window.RL_TOPICS=RL_TOPICS; window.RL_PROMPTS=RL_PROMPTS; window.RL_PROXIES=RL_PROXIES;
+window.setRlFetchImpl=f=>{ rlFetchImpl=f; }; window.rlStateGet=()=>rlState; window.rlAltGet=()=>rlAlt; // テスト用(let/varはwindowに載らない)
+window.setFocusFromTest=f=>{ FOCUS=f; }; window.focusGet=()=>FOCUS; window.pdrillGet=()=>PDRILL;
 window.LTD_SLOTS=LTD_SLOTS;
 window.ROOT_DEFS=ROOT_DEFS; window.PREFIX_DEFS=PREFIX_DEFS; window.APP_VERSION=APP_VERSION;
 window.LOGIN_BONUS=LOGIN_BONUS; window.ACH_DEFS=ACH_DEFS;
