@@ -261,7 +261,6 @@ function phrNewQuestion(){
     phrStart(p, "sp"); // 実戦=常に口頭
     return;
   }
-  if(QUICK.goal && QUICK.done>=QUICK.goal){ openQuickDone(); return; } // サクッと5問はフレーズでも同じ
   phrStart(pickPhrase());
 }
 function phrStart(p, fmt){
@@ -452,7 +451,6 @@ function phrFinish(ok){
   track("ans"); if(ok) track("cor");            // 任務・実績のクイズ系は共有
   phrNoteRecent(p.en);
   if(PDRILL) PDRILL.res.push(ok); // 実戦ドリルの進行(v5.2.0)
-  if(QUICK.goal){ QUICK.done++; if(ok) QUICK.cor++; }
   let justMastered=false;
   if(ok && st[0]>=MASTER_BOX && !st[4]){ st[4]=1; pd.m++; justMastered=true; }
   let bigT=false;

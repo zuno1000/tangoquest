@@ -315,6 +315,14 @@ function charFace(c){
   const f=G.faces && G.faces[c.id];
   return (f && f.slice(0,11)==="data:image/")? '<img class="cface" src="'+f+'" alt="">' : c.face;
 }
+/* アイコンの変更/戻す(v5.8.0・実機FB「絵文字に戻しても同期で画像が復活する」の修正)。
+   G.faceAt[id]={at:操作時刻, del:1=戻した}を残し、同期は操作時刻が新しい側が勝つ
+   (マイフレーズの削除トンボストーンと同じ考え方)。url=nullで絵文字に戻す。純関数 */
+function setFace(g, id, url, at){
+  g.faces=g.faces||{}; g.faceAt=g.faceAt||{};
+  if(url){ g.faces[id]=url; g.faceAt[id]={at}; }
+  else { delete g.faces[id]; g.faceAt[id]={at, del:1}; }
+}
 /* 画像ファイル→256px正方形のdataURL(中央を正方形に切り出し)。cbに渡す */
 function faceDataURL(file, cb, onerr){
   const img=new Image();
@@ -389,14 +397,14 @@ function openCharModal(id, opts){
     const f=e.target.files && e.target.files[0];
     if(!f) return;
     faceDataURL(f, url=>{
-      G.faces[id]=url; saveG();
+      setFace(G, id, url, Date.now()); saveG();
       toast("アイコンを変更した");
       refreshFaces(); openCharModal(id, opts);
     }, ()=>toast("画像を読み込めなかった"));
   };
   const fr=$("faceResetBtn");
   if(fr) fr.onclick=()=>{
-    delete G.faces[id]; saveG();
+    setFace(G, id, null, Date.now()); saveG();
     toast("絵文字アイコンに戻した");
     refreshFaces(); openCharModal(id, opts);
   };

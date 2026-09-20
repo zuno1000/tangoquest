@@ -178,7 +178,18 @@ function mergeData(a, b){
   m.xp=Math.max(m.xp||0, b.xp||0);
   m.gift10=Math.max(m.gift10||0, b.gift10||0); // 初回プレゼントは受取済みを優先
   m.frz=Math.max(m.frz||0, b.frz||0);          // フリーズ🧊は多い方(進捗を失わない方向)
-  m.faces=Object.assign({}, b.faces||{}, a.faces||{}); // カスタムアイコンは和集合(ローカル優先)
+  /* カスタムアイコン(v5.8.0): なかまごとに操作時刻(faceAt)が新しい側が勝つ=変更も「絵文字に戻す」
+     (削除トンボストーン)も伝播する。旧版の記録(faceAt無し=時刻0)どうしは従来どおり和集合(ローカル優先) */
+  m.faceAt=Object.assign({}, b.faceAt||{}, a.faceAt||{});
+  m.faces=Object.assign({}, b.faces||{}, a.faces||{});
+  const fids=new Set(Object.keys(m.faces).concat(Object.keys(m.faceAt)));
+  fids.forEach(id=>{
+    const ta=((a.faceAt||{})[id]||{}).at||0, tb=((b.faceAt||{})[id]||{}).at||0;
+    if(ta===tb) return; // 同時刻(旧版どうし)は和集合のまま
+    const w=ta>tb? a : b;
+    m.faceAt[id]=w.faceAt[id];
+    if(w.faces && w.faces[id]) m.faces[id]=w.faces[id]; else delete m.faces[id];
+  });
   for(const k in b.counters||{}) m.counters[k]=Math.max(m.counters[k]||0, b.counters[k]||0);
   m.inf=m.inf||{best:0,run:null};
   m.inf.best=Math.max(m.inf.best||0, (b.inf&&b.inf.best)||0);
@@ -211,6 +222,7 @@ function mergeData(a, b){
   m.daily=newer.daily||m.daily; m.weekly=newer.weekly||m.weekly;
   m.party=newer.party||m.party; m.login=newer.login||m.login; m.mode=newer.mode||m.mode;
   m.idle=newer.idle||m.idle;
+  m.set=newer.set||m.set; // 進行中の30問セットの帳簿(v5.8.0)は更新が新しい側
   /* 学習ペース: 目標日は「設定/解除した時刻(setAt)」が新しい側が勝つ。
      updatedAt基準だと起動しただけの未設定端末が勝って目標が消える(v4.7.1までの不具合)。
      setAt同士が同じ(旧版=0)なら目標あり側を優先。推定ログは長い方(結合すると重複計上になる) */
@@ -357,7 +369,7 @@ function partialResetData(g, t){
     myphr:g.myphr||{}, // マイフレーズの定義はユーザーの資産=部分リセットでも残す(SRS記録だけやり直し・v5.6.0)
     daily:g.daily||{}, weekly:g.weekly||{}, counters:g.counters||{}, ach:g.ach||{},
     login:g.login||{last:null,day:0}, gift10:g.gift10||0,
-    frz:g.frz||0, faces:g.faces||{}, idle:{last:t},
+    frz:g.frz||0, faces:g.faces||{}, faceAt:g.faceAt||{}, idle:{last:t},
     words:{}, days:{}, inv:{}, shards:0, combo:0,
     pace:{goal:null, setAt:t, log:[]}};
 }

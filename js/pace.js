@@ -6,33 +6,88 @@
    ・復習の正答率     → 記憶の定着力(SRSの階段を何問で登り切れるか)
    数値は保存せず毎回導出するので、毎日の学習・目標日の変更が自動で反映される */
 
-/* 直近100問のクイズ結果を記録する。entry=[新規なら1, 正解なら1] */
-function paceLog(isNew, ok){
+/* 直近100問のクイズ結果を記録する。entry=[新規なら1, 正解なら1, 解答時のbox(v5.8.0)]。
+   boxは「間隔をあけた復習(box2以上)」と「1分/10分の再挑戦(box0-1)」を分けて正答率を測るため
+   (再挑戦はほぼ正解するので、混ぜると復習の実力を高く見誤る。旧記録はboxなし=復習扱い) */
+function paceLog(isNew, ok, box){
   if(!G.pace) G.pace={goal:null, log:[]};
   const l=G.pace.log=G.pace.log||[];
-  l.push([isNew?1:0, ok?1:0]);
+  l.push([isNew?1:0, ok?1:0, box|0]);
   if(l.length>100) l.splice(0, l.length-100);
 }
 
 /* ログから既知語率と復習正答率を推定。8問未満のカテゴリは標準値で補う。
    v4.13.0: サンプル判定を新規/復習で独立に(sampledN/sampledR)。直近100問が
    復習ばかりでも(=1日にたくさん解くとよくある)、復習の実測は使い
-   「まだ分析中」に落ちない ─ 「復習68%なのに分析中」の不整合の修正 */
+   「まだ分析中」に落ちない ─ 「復習68%なのに分析中」の不整合の修正。
+   v5.8.0: recall=間隔をあけた復習(box2以上・旧記録)の正答率、recallM=1分/10分の再挑戦の正答率
+   (8問未満は標準値0.90)。コストモデル(srsCostTable)がこの2つを別々に使う */
 function paceEstimates(log){
-  let nN=0,cN=0,nR=0,cR=0;
-  (log||[]).forEach(e=>{ if(e[0]){ nN++; cN+=e[1]; } else { nR++; cR+=e[1]; } });
+  let nN=0,cN=0,nR=0,cR=0,nM=0,cM=0;
+  (log||[]).forEach(e=>{
+    if(e[0]){ nN++; cN+=e[1]; }
+    else if(e.length>=3 && e[2]<=1){ nM++; cM+=e[1]; }
+    else { nR++; cR+=e[1]; }
+  });
   const sampledN=nN>=8, sampledR=nR>=8;
   const knownRate = sampledN? Math.max(0, Math.min(1, (cN/nN-0.25)/0.75)) : 0.15;
   const recall    = sampledR? Math.max(0.55, Math.min(0.97, cR/nR)) : 0.80;
-  return {knownRate, recall, nNew:nN, nRev:nR, sampledN, sampledR, sampled:(sampledN && sampledR)};
+  const recallM   = nM>=8? Math.max(0.6, Math.min(0.99, cM/nM)) : 0.90;
+  return {knownRate, recall, recallM, nNew:nN, nRev:nR, nMassed:nM, sampledN, sampledR, sampled:(sampledN && sampledR)};
 }
 
-/* k回「連続」正解するまでの期待解答数(ミスでbox0に戻るSRSのコストモデル)。
-   E = (1-p^k) / (p^k(1-p))。p=1なら k 問ちょうど */
+/* k回「連続」正解するまでの期待解答数(ミスでbox0に戻る単純モデル)。
+   E = (1-p^k) / (p^k(1-p))。p=1なら k 問ちょうど。
+   v5.8.0からペース計算はsrsCostTable(実際の規則のマルコフ連鎖)を使う。こちらは参考値 */
 function expAttempts(k, p){
   if(p>=0.999) return k;
   const pk=Math.pow(p, k);
   return (1-pk)/(pk*(1-p));
+}
+
+/* 覚え切るまでの期待解答数(v5.8.0): srsApplyの実際の規則(ミス→1段下へ復帰・既知語の早回し)を
+   そのままマルコフ連鎖で解く。旧expAttemptsは「ミスで階段を全部やり直し」を仮定していて
+   実際より悲観的だった(復習正答率60%: 公式29.7問 vs 実際の規則20.8問)。
+   p=間隔をあけた復習(box2以上)の正答率・pm=1分/10分の再挑戦(box0-1)の正答率。
+   状態=(box, 復帰先lb, ミスなしclean)。E[b][lb][c]=そこから「覚えた」までの期待解答数。
+   同じ引数なら再計算しない(キャッシュ)。純関数=テスト可能 */
+const SRS_COST_CACHE={};
+function srsCostTable(p, pm, fast){
+  const key=p.toFixed(4)+"|"+pm.toFixed(4)+"|"+(fast?1:0);
+  if(SRS_COST_CACHE[key]) return SRS_COST_CACHE[key];
+  const B=MASTER_BOX, L=INTERVALS.length;
+  const E=[]; for(let b=0;b<B;b++){ E.push([]); for(let lb=0;lb<L;lb++) E[b].push([0,0]); }
+  for(let it=0; it<5000; it++){
+    let maxd=0;
+    for(let b=0;b<B;b++) for(let lb=0;lb<L;lb++) for(let c=0;c<2;c++){
+      const pr=b<=1? pm : p;
+      let nb;
+      if(fast && c && b===0) nb=2;       // 初見正解→1日後
+      else if(fast && c && b===2) nb=4;  // 1日後もミスなし正解→7日後
+      else nb=Math.min(Math.max(b+1, lb), L-1);
+      const eOk=nb>=B? 0 : E[nb][0][c];
+      const eMiss=E[0][b>=2? b-1 : 0][0];
+      const v=1+pr*eOk+(1-pr)*eMiss;
+      maxd=Math.max(maxd, Math.abs(v-E[b][lb][c]));
+      E[b][lb][c]=v;
+    }
+    if(maxd<1e-7) break;
+  }
+  return SRS_COST_CACHE[key]=E;
+}
+/* 単語の状態stから「覚えた」までの期待解答数。覚えた語は0 */
+function srsCostFrom(st, est){
+  const b=st[0]||0;
+  if(b>=MASTER_BOX) return 0;
+  const E=srsCostTable(est.recall, est.recallM||0.9, true);
+  return E[b][Math.min(INTERVALS.length-1, st[7]||0)][(st[3]||0)===0? 1:0];
+}
+/* 未着手の単語1語の期待解答数(既知語率で加重)。既知語は復習・再挑戦とも96%で早回しに乗る */
+function srsCostUnseen(est){
+  const R_KNOWN=0.96;
+  const known=srsCostTable(R_KNOWN, R_KNOWN, true)[0][0][1];
+  const learn=srsCostTable(est.recall, est.recallM||0.9, true)[0][0][1];
+  return est.knownRate*known+(1-est.knownRate)*learn;
 }
 
 /* boxから先の復習(維持コスト)が horizonDays 日以内に何回来るか。box7以降は90日周期 */
@@ -49,7 +104,6 @@ function upkeepReviews(box, horizonDays){
 /* 目標日までに必要な残り解答数(覚える分+覚えた単語の維持復習)。
    学習中・未着手の単語の維持分は「期間の半ばで覚える」と近似する */
 function paceRemaining(g, est, days){
-  const R_KNOWN=0.96; // 既に知っている単語の想定正答率
   let seen=0, mastered=0, learn=0, upkeep=0;
   for(const en in g.words){
     const st=g.words[en]; seen++;
@@ -57,13 +111,12 @@ function paceRemaining(g, est, days){
       mastered++;
       upkeep+=upkeepReviews(st[0], days)/est.recall;
     }else{
-      learn+=expAttempts(MASTER_BOX-st[0], est.recall);
+      learn+=srsCostFrom(st, est); // 実際の規則で(v5.8.0)
       upkeep+=upkeepReviews(MASTER_BOX, days/2)/est.recall;
     }
   }
   const unseen=Math.max(0, WORDS.length-seen);
-  learn+=unseen*(est.knownRate*expAttempts(MASTER_BOX, R_KNOWN)
-               +(1-est.knownRate)*expAttempts(MASTER_BOX, est.recall));
+  learn+=unseen*srsCostUnseen(est);
   upkeep+=unseen*upkeepReviews(MASTER_BOX, days/2)/est.recall;
   return {seen, mastered, unseen, attempts:Math.ceil(learn+upkeep)};
 }
@@ -74,18 +127,15 @@ function paceRemaining(g, est, days){
    単語ほど安い)から順に覚えていく。目安に届かない日が続いても「このペースならここまで」
    が見える=挫折の予防線。純関数 */
 function paceProjection(g, est, days, perDay){
-  const R_KNOWN=0.96;
   let mastered=0, budget=days*perDay;
   const costs=[];
   for(const en in g.words){
     const st=g.words[en];
     if(st[0]>=MASTER_BOX){ mastered++; budget-=upkeepReviews(st[0], days)/est.recall; }
-    else costs.push(expAttempts(MASTER_BOX-st[0], est.recall)+upkeepReviews(MASTER_BOX, days/2)/est.recall);
+    else costs.push(srsCostFrom(st, est)+upkeepReviews(MASTER_BOX, days/2)/est.recall);
   }
   const seen=mastered+costs.length;
-  const unseenCost=est.knownRate*expAttempts(MASTER_BOX, R_KNOWN)
-    +(1-est.knownRate)*expAttempts(MASTER_BOX, est.recall)
-    +upkeepReviews(MASTER_BOX, days/2)/est.recall;
+  const unseenCost=srsCostUnseen(est)+upkeepReviews(MASTER_BOX, days/2)/est.recall;
   for(let i=WORDS.length-seen;i>0;i--) costs.push(unseenCost);
   costs.sort((a,b)=>a-b);
   let add=0;
@@ -255,8 +305,9 @@ function openPaceModal(){
       ((est.sampledN||est.sampledR)
         ? 'すでに知っていそうな単語 約'+Math.round(est.knownRate*100)+'%'+
             (est.sampledN? '':'(標準値: 直近に新規の出題が少ない)')+
-          ' ・ 復習の正答率 '+Math.round(est.recall*100)+'%'+
-            (est.sampledR? '':'(標準値: 直近に復習の出題が少ない)')
+          ' ・ 間隔をあけた復習の正答率 '+Math.round(est.recall*100)+'%'+
+            (est.sampledR? '':'(標準値: 直近に復習の出題が少ない)')+
+          ' ・ 1語を覚え切るまで 約'+(Math.round(srsCostUnseen(est)*10)/10)+'問'
         : 'まだ分析中(新規・復習をそれぞれ8問以上解くと精度が上がる。いまは標準値で計算)')+'</div>'+
     '<button class="btn" id="paceHist" style="margin-top:12px">📊 学習のあゆみ(これまでの記録)</button>');
   $("paceHist").onclick=openHistoryModal;

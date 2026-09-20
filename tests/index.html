@@ -1231,6 +1231,15 @@ function run(){
     const e2=W.paceEstimates([[1,0],[1,0],[1,0],[1,0],[1,1],[1,0],[1,0],[1,0]]);
     eq(e2.knownRate, 0, "当て推量以下=既知0%");
     ok(!W.paceEstimates([]).sampled, "サンプル不足は標準値で計算");
+    // v5.8.0: 1分/10分の再挑戦(box0-1)は別枠(recallM)。間隔をあけた復習だけがrecall
+    const log3=[];
+    for(let i=0;i<10;i++) log3.push([0,1,0]);            // 再挑戦10問 全正解
+    for(let i=0;i<10;i++) log3.push([0, i<6?1:0, 3]);    // 間隔あり10問 60%
+    const e3=W.paceEstimates(log3);
+    ok(Math.abs(e3.recall-0.6)<1e-9, "間隔をあけた復習=60%(再挑戦を混ぜない)");
+    ok(Math.abs(e3.recallM-0.99)<1e-9, "再挑戦=100%→上限0.99");
+    ok(e3.sampledR, "間隔あり10問でサンプル済み");
+    eq(W.paceEstimates([[0,1,0],[0,1,0]]).recallM, 0.9, "再挑戦8問未満は標準値0.90");
   });
   t("paceLogは直近100問だけ保持する", ()=>{
     const G=W.G, old=G.pace.log;
@@ -1263,22 +1272,86 @@ function run(){
     eq(W.paceNewPerDay({unseen:900, days:100}), 10, "900語÷(100-10)日=10語");
     ok(W.paceNewPerDay({unseen:900, days:5})>=900, "目前なら残り全部");
   });
-  t("SRS: 高boxのミスは半分のboxから再開(全部やり直しにしない)", ()=>{
+  t("SRS: ミスは1段下のboxから再開(v5.8.0・全部やり直しにしない)", ()=>{
     const now=Date.now();
     const st=[6, 0, 10, 0, 1, 0, 0];
     W.srsApply(st, false, now);
     eq(st[0], 0, "ミスでbox0(1分後に再挑戦)");
-    eq(st[7], 3, "復帰先=box3を記憶");
+    eq(st[7], 5, "復帰先=1段下のbox5を記憶(旧v4=半分のbox3)");
     eq(st[1], now+60e3, "dueは1分後");
     W.srsApply(st, true, now+61e3); // 期限(1分後)が来てからの正解
-    eq(st[0], 3, "正解でbox3へ復帰");
+    eq(st[0], 5, "正解でbox5へ復帰");
     eq(st[7], 0, "復帰先はクリアされる");
+    const st4=[4, 0, 4, 0, 0, 0, 0];
+    W.srsApply(st4, false, now);
+    eq(st4[7], 3, "box4(7日)のミス→復帰先はbox3(3日)");
+    const st2b=[2, 0, 2, 0, 0, 0, 0];
+    W.srsApply(st2b, false, now);
+    eq(st2b[7], 1, "box2(1日)のミス→復帰先はbox1(10分)");
     const st2=[1, 0, 1, 1, 0, 0, 0];
     W.srsApply(st2, false, now);
-    eq(st2[0], 0); ok(!st2[7], "低box(3未満)は通常どおり最初から");
+    eq(st2[0], 0); ok(!st2[7], "box1のミスは最初から");
     const st3=[0, 0, 0, 0, 0, 0, 0];
     W.srsApply(st3, true, now);
-    eq(st3[0], 1, "正解で+1(従来どおり)");
+    eq(st3[0], 1, "正解で+1(早回し指定なし=フレーズと同じ)");
+  });
+  t("SRS: 既知語の早回し(v5.8.0・{fast:true}=単語だけ): 初見正解→1日後、翌日も正解→7日後、そこで正解→覚えた", ()=>{
+    const now=Date.now(), D=864e5;
+    const st=[0,0,0,0,0,0,0,0];
+    W.srsApply(st, true, now, {fast:true});
+    eq(st[0], 2, "初見で正解→box2(1分/10分の段を飛ばす)");
+    eq(st[1], now+D, "1日後に再確認");
+    W.srsApply(st, true, now+D+1000, {fast:true});
+    eq(st[0], 4, "翌日もミスなしで正解→box4(7日後)");
+    W.srsApply(st, true, now+8*D+2000, {fast:true});
+    eq(st[0], 5, "8日目に正解→box5=覚えた(3問で到達・旧5問)");
+    // 当て推量で通った語は翌日に落ちて通常の階段へ
+    const g=[0,0,0,0,0,0,0,0];
+    W.srsApply(g, true, now, {fast:true});
+    W.srsApply(g, false, now+D+1000, {fast:true});
+    eq(g[0], 0, "翌日ミス→box0");
+    eq(g[7], 1, "復帰先はbox1(1段下)");
+    W.srsApply(g, true, now+D+70e3, {fast:true});
+    eq(g[0], 1, "ミス歴があるので早回しはもう使われない(通常どおり)");
+    // 初見ミス→通常の階段(早回しなし)
+    const m=[0,0,0,0,0,0,0,0];
+    W.srsApply(m, false, now, {fast:true});
+    W.srsApply(m, true, now+61e3, {fast:true});
+    eq(m[0], 1, "初見ミスの語は1分→10分の通常階段");
+    // フレーズ(opts無し)は従来どおり
+    const p=[0,0,0,0,0,0,0,0];
+    W.srsApply(p, true, now);
+    eq(p[0], 1, "opts無しは+1");
+  });
+  t("srsCostTable: 実際の規則のマルコフ連鎖=旧公式より少なく、正答率が高いほど少ない・既知語は約3.4問(v5.8.0)", ()=>{
+    const c=(p,pm,fast)=>W.srsCostTable(p,pm,fast)[0][0][1];
+    ok(Math.abs(c(0.96,0.96,true)-3.4)<0.15, "既知語(96%)は約3.4問 got="+c(0.96,0.96,true));
+    ok(c(0.6,0.9,true) < W.expAttempts(5,0.6), "正答率60%: 旧公式("+W.expAttempts(5,0.6).toFixed(1)+")より少ない got="+c(0.6,0.9,true).toFixed(1));
+    ok(c(0.6,0.9,true) > 10 && c(0.6,0.9,true) < 16, "60%(再挑戦90%)で10〜16問の範囲 got="+c(0.6,0.9,true).toFixed(1));
+    ok(c(0.8,0.9,true) < c(0.6,0.9,true), "正答率が高いほど少ない");
+    ok(c(0.8,0.9,false) > c(0.8,0.9,true), "早回し無し(フレーズ)は多い");
+    const E=W.srsCostTable(0.8,0.9,true);
+    ok(E[3][0][0] < E[0][0][0], "階段が進んでいる語ほど残りが少ない");
+    ok(E[0][3][0] < E[0][0][0], "復帰先が高い(ミス直後)ほど残りが少ない");
+    eq(W.srsCostFrom([5,0,9,1,1,0,0], {recall:0.8, recallM:0.9}), 0, "覚えた語は0");
+    ok(W.srsCostFrom([0,0,0,0,0,0,0], {recall:0.8, recallM:0.9})>1, "未着手相当は1問超");
+    const est={knownRate:1, recall:0.6, recallM:0.9};
+    ok(Math.abs(W.srsCostUnseen(est)-c(0.96,0.96,true))<1e-9, "既知率100%なら既知語のコスト");
+  });
+  t("pickWord: 期限の来た復習が40問以上たまっていると新規を混ぜない(v5.8.0・復習の渋滞ガード)", ()=>{
+    const G=W.G, oldWords=G.words, oldPace=G.pace;
+    G.pace={goal:null, setAt:0, log:[]};
+    G.words={};
+    const now=Date.now();
+    for(let i=0;i<W.NEW_GUARD;i++) G.words[W.WORDS[i].en]=[2, now-3600e3, 2,0,0,0,0]; // 期限切れ40語
+    let sawNew=false;
+    for(let i=0;i<60;i++){ if(!G.words[W.pickWord().en]) sawNew=true; }
+    ok(!sawNew, "渋滞中は新規が出ない");
+    G.words={};
+    for(let i=0;i<W.NEW_GUARD-1;i++) G.words[W.WORDS[i].en]=[2, now-3600e3, 2,0,0,0,0]; // 39語
+    for(let i=0;i<200;i++){ if(!G.words[W.pickWord().en]) sawNew=true; }
+    ok(sawNew, "40未満なら従来どおり新規が混ざる(20%)");
+    G.words=oldWords; G.pace=oldPace;
   });
   t("復習は「忘れかけ度」(期限超過÷記憶間隔)の高い順に優先される", ()=>{
     const now=Date.now();
@@ -1558,9 +1631,34 @@ function run(){
       days:{"2026-08-09":{a:0,c:0,m:0}}, idle:{last:100}});
     const m=W.mergeData(a,b);
     eq(m.frz, 2, "フリーズは多い方");
-    ok(m.faces.c01 && m.faces.c02, "アイコンは和集合");
+    ok(m.faces.c01 && m.faces.c02, "アイコンは和集合(旧版どうし=操作時刻なし)");
     eq(m.days["2026-08-09"].fz, 1, "凍結マーカーを保持");
     eq(m.idle.last, 500, "るすばん精算は更新が新しい側");
+  });
+  t("mergeData: アイコンは操作時刻が新しい側が勝つ ─ 「絵文字に戻す」も伝播し、他端末の画像で復活しない(v5.8.0実機FB)", ()=>{
+    const base=()=>({resetAt:0, words:{},days:{},inv:{},chars:{},dungeons:{},counters:{},ach:{},inf:{best:0},
+                     gold:0,tickets:0,shards:0,xp:0});
+    // 端末A: 画像を設定(t=100)→絵文字に戻した(t=200)。端末B(リモート): 同期時点の画像(t=100)が残っている
+    const a=Object.assign(base(),{updatedAt:1});
+    W.setFace(a, "c01", "data:image/png;base64,AAA", 100);
+    W.setFace(a, "c01", null, 200);
+    ok(!a.faces.c01 && a.faceAt.c01.del && a.faceAt.c01.at===200, "戻した記録=トンボストーン");
+    const b=Object.assign(base(),{updatedAt:9, faces:{c01:"data:image/png;base64,AAA"}, faceAt:{c01:{at:100}}});
+    const m=W.mergeData(a,b);
+    ok(!m.faces.c01, "戻した(新しい操作)が勝つ=画像は復活しない");
+    eq(m.faceAt.c01.at, 200, "トンボストーンが残る(Bにも伝播する)");
+    const m2=W.mergeData(b,a);
+    ok(!m2.faces.c01, "向きを変えても同じ(冪等)");
+    // 逆: 他端末で後から新しい画像に変えた(t=300)なら、その画像が勝つ
+    const c=Object.assign(base(),{updatedAt:1, faces:{c01:"data:image/png;base64,NEW"}, faceAt:{c01:{at:300}}});
+    const m3=W.mergeData(a,c);
+    eq(m3.faces.c01, "data:image/png;base64,NEW", "新しい変更が勝つ");
+    // 旧版の端末(faceAt無し)の画像 vs 新版で戻した記録: 戻した側(時刻あり)が勝つ
+    const legacy=Object.assign(base(),{updatedAt:1, faces:{c01:"data:image/png;base64,OLD"}});
+    ok(!W.mergeData(a,legacy).faces.c01, "旧版の画像より「戻した」が新しい");
+    // 部分リセットでも操作時刻は残る
+    const r=W.partialResetData(a, 999);
+    eq(r.faceAt.c01.at, 200, "faceAtは部分リセットでも残る");
   });
   t("部分リセット: 学習記録・カードは消え、なかま・通貨・レベルは残る", ()=>{
     const g={mode:"e2j", chars:{c01:{dup:3}}, party:{char:"c01", sentence:["abate|1|0"]},
@@ -1881,7 +1979,7 @@ function run(){
     const d0=W.dayRec().a, t0=G.tickets, c0=G.counters.ans;
     const r=W.svApplyAnswer(w, true);
     ok(r.ok && r.wasNew, "新規判定");
-    eq(G.words[w.en][0], 1, "SRS: 正解でbox1");
+    eq(G.words[w.en][0], 2, "SRS: 初見正解はbox2(既知語の早回し=学習タブと同じ規則・v5.8.0)");
     eq(W.dayRec().a, d0+1, "日別記録に+1");
     eq(G.tickets, t0+1, "正解1問=🎫1");
     eq(G.counters.ans, c0+1, "累計解答+1");
@@ -2175,9 +2273,10 @@ function run(){
     // v4.30.0の並び替え(実機FB): 上=記録(目安→直近7日)・中=任務/図鑑・下=アクション
     eq(hb.children[1].id, "homeWeek", "記録はまとめて上(目安の直後に直近7日)");
     ok(hb.children[2].classList.contains("homelinks"), "中段は任務・図鑑の入口");
-    eq(hb.children[3].id, "homeStudy", "学習をはじめるは任務・図鑑の下");
-    eq(hb.children[4].id, "homeQuick", "サクッと5問はその下(報酬受取・ログボ・同期の条件行も下のグループ)");
-    ok(W.document.getElementById("homeStudy") && W.document.getElementById("homeQuick"), "学習をはじめる・サクッと5問");
+    eq(hb.children[3].id, "homeSets", "今日のセット(v5.8.0)は任務・図鑑の下");
+    eq(hb.children[4].id, "homeStudy", "学習をはじめるはその下(報酬受取・ログボ・同期の条件行も下のグループ)");
+    ok(!W.document.getElementById("homeQuick"), "サクッと5問は廃止(v5.8.0)");
+    ok(W.document.querySelector("#homeSets .setdots"), "セットの●○表示");
     ok(W.document.querySelectorAll("#homeWeek .wcol").length===7, "直近7日のあゆみ(7本)");
     ok(W.document.querySelector("#homeWeek .wcol.today"), "右端が今日");
     ok(W.document.getElementById("homeMission") && W.document.getElementById("homeDex"), "任務・図鑑の小さな入口(ナビに無いため)");
@@ -2196,7 +2295,7 @@ function run(){
     eq(+nx.dataset.i, W.svNextStageIdx(), "次のステージ=解放済みで未生還の最初");
     eq(W.svNextStageIdx(), 0, "まっさらなら最初のステージ");
     ok(doc.getElementById("svNextBtnGo"), "挑戦ボタン");
-    eq(doc.querySelectorAll(".svmodes .svmode").length, 3, "あそびかたはデイリー/荒野/スロットの3つ");
+    eq(doc.querySelectorAll(".svmodes .svmode").length, 2, "あそびかたはデイリー/荒野の2つ(スロットはv5.8.0で撤去)");
     ok(!doc.getElementById("svSlotMetaBtn"), "スロット個別の心得ボタンは無い(1入口に統合)");
     const list=doc.getElementById("svStageList");
     ok(list.hidden, "ステージ一覧は既定で閉じている");
@@ -2206,14 +2305,10 @@ function run(){
     ok(doc.querySelector("#svStageList .svstage.next"), "一覧でも次のステージが強調される");
     doc.getElementById("svStagesToggle").click();
     ok(doc.getElementById("svStageList").hidden, "もう一度で閉じる");
-    // 心得の統合: サバイバーの心得を開くとタブがあり、スロットへ切り替えられる
+    // 心得: スロット撤去中(v5.8.0)はタブ無しでサバイバーの心得だけ
     W.svOpenMeta();
-    ok(doc.querySelector("#modal .metaseg [data-mt=sv].active"), "サバイバー側タブが選択中");
-    doc.querySelector("#modal .metaseg [data-mt=slot]").click();
-    eq(doc.querySelectorAll("#modal [data-slmeta]").length, W.SLOT_META.length, "スロットの心得に切り替わる");
-    ok(doc.querySelector("#modal .metaseg [data-mt=slot].active"), "スロット側タブが選択中");
-    doc.querySelector("#modal .metaseg [data-mt=sv]").click();
-    eq(doc.querySelectorAll("#modal [data-meta]").length, W.SV_META.length, "サバイバーに戻れる");
+    ok(!doc.querySelector("#modal .metaseg"), "スロット撤去中は心得のタブが無い");
+    eq(doc.querySelectorAll("#modal [data-meta]").length, W.SV_META.length, "サバイバーの心得が並ぶ");
     W.closeModal();
     // 次のステージの解釈: 最初を生還済みにすると2番目が次になる
     const rec=W.svRec(); const bak=Object.assign({}, rec.clears);
@@ -2711,16 +2806,68 @@ function run(){
     ok(!W.loginBonusBannerNeeded(), "畳んだらその日は出ない");
     LS.removeItem("tq_lgSeen");
   });
-  t("サクッと5問: 5問終えると完了モーダル→通常学習へ戻れる", ()=>{
-    const doc=W.document;
-    W.QUICK={goal:5, done:5, cor:4};
+  t("30問セット(v5.8.0): 帳簿setRecord・進捗setProgress・●○表示は純関数", ()=>{
+    const g={set:null, pace:{goal:null, setAt:0, log:[]}, days:{}};
+    const k=W.todayKey();
+    const d={a:1,c:1,m:0};
+    ok(!W.setRecord(g, d, {ok:1, wasNew:1, up:1, mas:0, tk:1}), "1問目は完了ではない");
+    eq(g.set.a0, 0, "セット開始時の解答数=0"); eq(g.set.n, 1); eq(g.set.cor, 1); eq(g.set.newN, 1); eq(g.set.up, 1); eq(g.set.tk, 1);
+    eq(g.set.d, k, "今日の日付");
+    for(let i=2;i<=W.SET_N-1;i++){ d.a=i; ok(!W.setRecord(g, d, {ok:0}), "途中は完了ではない"); }
+    d.a=W.SET_N;
+    ok(W.setRecord(g, d, {ok:1, tk:6}), "30問目で完了");
+    eq(g.set.n, W.SET_N, "このセットの問数=30"); eq(g.set.cor, 2); eq(g.set.tk, 7);
+    d.a=W.SET_N+1;
+    W.setRecord(g, d, {ok:1});
+    eq(g.set.a0, W.SET_N, "31問目は次のセット(a0=30)"); eq(g.set.n, 1, "帳簿は新しく");
+    g.set.d="2000-01-01"; d.a=W.SET_N+2;
+    W.setRecord(g, d, {ok:1});
+    eq(g.set.n, 1, "日付が変わっていたら新しいセット");
+    // 進捗: 目安なし
+    const G=W.G, oldPace=JSON.parse(JSON.stringify(G.pace)), dr=W.dayRec(), a0=dr.a;
+    G.pace={goal:null, setAt:0, log:[]};
+    dr.a=75;
+    let p=W.setProgress(G);
+    eq(p.done, 2, "75問=2セット完了"); eq(p.cur, 15, "進行中15問"); eq(p.target, null, "目安なし");
+    let h=W.setDotsHTML(p);
+    eq((h.match(/class="sd on/g)||[]).length, 2, "完了2つ"); eq((h.match(/sd cur/g)||[]).length, 1, "進行中1つ");
+    // 進捗: 目安あり(100問=4セット)
+    G.pace={goal:W.addDays(W.todayKey(), 100), setAt:Date.now(), log:[], qd:{d:W.todayKey(), per:100}};
+    p=W.setProgress(G);
+    eq(p.target, 4, "目安100問=4セット");
+    h=W.setDotsHTML(p);
+    eq((h.match(/class="sd/g)||[]).length, 4, "●○は目安の4つ");
+    dr.a=150; p=W.setProgress(G);
+    eq(p.done, 5); h=W.setDotsHTML(p);
+    eq((h.match(/class="sd/g)||[]).length, 5, "超過分は足す");
+    eq((h.match(/over/g)||[]).length, 1, "超過分は金");
+    dr.a=a0; G.pace=oldPace; W.saveG();
+  });
+  t("30問セット: 30問目の答え合わせのあと「次へ」で完了モーダル→次のセットへ続けられる(学習タブ)", ()=>{
+    const doc=W.document, G=W.G;
+    const oldQtab=G.opt.qtab; G.opt.qtab="w";
+    W.switchTab("quiz"); W.newQuestion();
+    const dr=W.dayRec(), snap={a:dr.a, c:dr.c, m:dr.m, t:G.tickets, xp:G.xp, cb:G.combo, set:G.set};
+    dr.a=W.SET_N-1; // 29問目まで解いた状態
+    ok(doc.getElementById("qCount").textContent.indexOf("セット")>=0, "出題ヘッダにセットの進み");
+    const en=doc.getElementById("promptWord").textContent;
+    const w=W.WORDS.find(x=>x.en===en); ok(w, "出題語");
+    const oldSt=JSON.parse(JSON.stringify(G.words[w.en]||null));
+    const btn=[...doc.querySelectorAll("#choices .choice")].find(b=>b.textContent===w.ja);
+    btn.click(); // 30問目
+    eq(dr.a, W.SET_N, "今日30問");
+    ok(!doc.getElementById("overlay").classList.contains("show"), "答え合わせ中はまだモーダルを出さない");
     W.newQuestion();
-    ok(doc.getElementById("overlay").classList.contains("show"), "完了モーダルが開く");
-    ok(doc.getElementById("modal").textContent.indexOf("5問")>=0, "5問の完了表示");
-    eq(W.QUICK.goal, 0, "表示と同時に通常学習へ復帰(✕で閉じても続けられる)");
-    W.closeModal();
-    W.newQuestion();
+    ok(doc.getElementById("overlay").classList.contains("show"), "「次へ」で完了モーダル");
+    ok(doc.getElementById("modal").textContent.indexOf("セット完了")>=0, "セット完了の表示");
+    ok(doc.getElementById("setNext") && doc.getElementById("setHome"), "次のセットへ/ひと休み");
+    doc.getElementById("setNext").click();
+    ok(!doc.getElementById("overlay").classList.contains("show"), "閉じて");
     ok(doc.getElementById("promptWord").textContent.length>0, "次の問題が出る");
+    // 後片付け
+    if(oldSt) G.words[w.en]=oldSt; else delete G.words[w.en];
+    dr.a=snap.a; dr.c=snap.c; dr.m=snap.m; G.tickets=snap.t; G.xp=snap.xp; G.combo=snap.cb; G.set=snap.set;
+    G.opt.qtab=oldQtab; W.saveG(); W.switchTab("home");
   });
   t("ペース試算: 1日の問題数を増やすほど習得見込みが伸び、全語で頭打ち", ()=>{
     const est=W.paceEstimates([]);
@@ -2856,10 +3003,13 @@ function run(){
     const pr=W.partialResetData({slot:{meta:{pay:3}}}, 99);
     eq(pr.slot.meta.pay, 3, "部分リセットでも心得は残る");
   });
-  t("スロット: 冒険ハブから入れて、サバイバー式レイアウトでクイズが出る", ()=>{
+  t("スロット(v5.8.0でUIから撤去・可逆): 冒険ハブに入口は無いが、フラグ以外は残っていて直接開けば動く", ()=>{
     const doc=W.document;
+    eq(W.SLOT_ENABLED, false, "撤去フラグ");
     W.switchTab("adv");
-    ok(doc.getElementById("svSlotBtn"), "冒険ハブに入口パネル");
+    ok(!doc.getElementById("svSlotBtn"), "冒険ハブに入口パネルは無い");
+    ok(doc.getElementById("svHub").innerHTML.indexOf("あそびかた2種")>=0, "説明文も2種");
+    ok(doc.getElementById("slotView") && typeof W.openSlotGame==="function", "ビューとコードは残っている(復活はフラグ1つ)");
     W.openSlotGame();
     ok(!doc.getElementById("slotView").classList.contains("hidden"), "スロットビューが開く");
     ok(doc.getElementById("slWord").textContent.length>0, "出題される");
@@ -3014,13 +3164,8 @@ async function runAsync(W){
     W.svApplyAnswer(W.WORDS[0], true); // d.a→10=ボーナス境界
     eq(G.tickets, t1+1+5, "正解🎫1+5問ボーナス🎫5(学習タブと同レート)");
     if(oldWords) G.words[W.WORDS[0].en]=oldWords; else delete G.words[W.WORDS[0].en];
-    d.a=a0; pd.a=pa0; G.tickets=t0; W.saveG();
-    // 完了モーダルにもボーナスが明示される
-    W.QUICK={goal:5, done:5, cor:5};
-    W.newQuestion();
-    ok(W.document.getElementById("modal").textContent.indexOf("5問ごとのボーナス")>=0, "モーダルに明示");
-    W.closeModal();
     d.a=a0; pd.a=pa0; G.tickets=t0; W.saveG(); // svApplyAnswer/ansBonusで動いた分を戻す
+    ok(typeof W.QUICK==="undefined" && typeof W.startQuick==="undefined", "サクッと5問はv5.8.0で廃止(ボーナスは残る)");
     W.newQuestion(); // 後片付け: 通常の出題に戻す
   });
   t("任務: 今日の目安の達成でドカンと報酬(v4.31.0・全達成の必須には数えない)", ()=>{
@@ -3480,7 +3625,7 @@ async function runAsync(W){
     doc.getElementById("phrSpkShow").click();
     doc.getElementById("phrSpkNg").click();
     eq(G.phr[p.en][0], 0, "✖は立て直し");
-    eq(G.phr[p.en][7], 2, "半戻り(次の正解でbox2)");
+    eq(G.phr[p.en][7], 3, "1段下へ復帰(次の正解でbox3・v5.8.0=単語と同じ規則)");
     G.phr=oldPhr; G.opt.qtab=oldQtab; G.combo=oldCb;
     d.a=snap.da; pd.a=snap.pa; pd.c=snap.pc; pd.m=snap.pm; G.tickets=snap.t; G.xp=snap.xp;
     W.saveG(); W.newQuestion();

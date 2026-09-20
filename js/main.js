@@ -36,6 +36,9 @@ const EVENTS=[
   // {d:"2026-08-03", t:"..."} 形式でバナー以外のイベント告知を書く
 ];
 const NEWS=[
+  {d:"2026-09-20", t:"🧩 v5.8.0 学習を「30問=1セット」に! ホームに「今日のセット」(●○で積み上げが見える・目安があればセット数に換算)、学習タブには「セット 12/30」の進み。30問目の答え合わせのあと、正解数・はじめて出会った語・定着が進んだ語・覚えた語・このセットの🎫をまとめた完了画面が出ます(「次のセットへ」でそのまま続行)。⚡サクッと5問は廃止しました(5問ごとの🎫+5ボーナスはそのまま)"},
+  {d:"2026-09-20", t:"📈 v5.8.0 単語の学習効率を改善! ①ミスしても階段を全部やり直しにせず、1段下から再開(旧: 半分まで戻す) ②すでに知っている単語の早回し: 初見で正解なら1分/10分の段を飛ばして翌日へ、翌日も正解なら7日後へ ─ 既知語は3問で「覚えた」に(旧5問) ③復習が40問以上たまっているときは新規を待たせて、復習の遅れによる忘却の悪循環を防ぐ ④学習ペース管理の見積もりを実際の規則どおりに計算し直しました(旧モデルは「ミスで全部やり直し」を仮定していて悲観的すぎた。目安・試算の数字が変わります)"},
+  {d:"2026-09-20", t:"🔧 v5.8.0 ①なかまのアイコンを絵文字に戻したあと、同期すると他の端末の画像が復活してしまう不具合を修正(変更・戻した時刻の新しい方が勝つ) ②🎰ことだまスロットは冒険タブから姿を消しました(心得のデータは残っています)"},
   {d:"2026-08-26", t:"📕 v5.7.0 図鑑に「フレーズ」の項目が登場! 全フレーズ(内蔵+📝マイフレーズ)の習得状況を一覧できます。✓覚えた/学習中/未学習の絞り込み・カテゴリ(動詞の型・無生物主語など)の絞り込み・英語と日本語の両方で検索OK。フレーズをタップすると詳細が開き、核のハイライト・🧩型の一般形・定着の段階に加えて、🔊お手本(読み上げ)と🔍辞書もその場から使えます"},
   {d:"2026-08-26", t:"📝 v5.6.0 「マイフレーズ」が登場! 英会話の先生の添削や、ネイティブとの会話・記事で出会った「言えなかった表現」を、自分専用のフレーズとして登録できます。学習タブの➕から英文を貼り付けるだけ ─ 日本語(2行目にあれば)・チャンク分割・核(🔑)の候補まで自動で読み取るので、手で入れるのは日本語の一言だけ。登録後は内蔵フレーズと同じ復習スケジュール・出題(クローズ→並べ替え→口頭)・🎫や任務に乗り、🎤実戦ドリルには「📝マイフレーズ特訓」(登録した表現だけを口頭で5連続)も追加。登録内容はこの端末と、同期を使う場合はあなた自身のGoogleドライブの非公開領域にだけ保存され、開発者や他の利用者に送られることは一切ありません(学習記録だけのリセットでも登録内容は残ります)"},
   {d:"2026-08-25", t:"📚 v5.5.0 「動詞の型」と「無生物主語」を大幅拡充! 動詞の型は28→62フレーズ: prefer A to B・regard A as B・cope with・adapt to・blame 人 for・distinguish A from B・take A into account・end up -ing など、判断・比較/対処/対人/結果・変化の使用頻度が高い型を追加。無生物主語は16→36フレーズ: The report highlights…・This ticket entitles you to…・What makes you think so?・That explains a lot.・The idea never crossed my mind. など、報告にも雑談にも回せる構文を追加しました。全388フレーズに! 🎤実戦ドリルの「大人の動詞に言い換え」「無生物主語で言う」も自動的に手ごわくなります"},
@@ -157,8 +160,18 @@ function renderHome(){
   }).join("");
   const wsum=wk.reduce((s,x)=>s+x.a, 0);
   let mastered=0; for(const en in G.words){ if(G.words[en][0]>=MASTER_BOX) mastered++; }
+  // 今日のセット(v5.8.0): 30問=1セット。目安があればセット数に換算して●○で見せる
+  const sp=setProgress(G);
+  const setHead=sp.target
+    ? '<b>'+sp.done+' <span class="ptgt">/ '+sp.target+'セット</span></b>'
+    : '<b>'+sp.done+' <span class="ptgt">セット</span></b>';
+  const setFoot=sp.cur
+    ? 'このセット '+sp.cur+'/'+SET_N+'問 ─ つづきから'
+    : sp.target && sp.done>=sp.target? '🏅 今日の目安ぶんは積み上げた ─ 前倒しでもう1セット?'
+    : sp.done? '次は'+(sp.done+1)+'セット目 ─ すきま時間に1セット'
+    : '30問=1セット。すきま時間に1セットずつ積み上げよう';
   /* 並び(v4.30.0実機FB): ①記録はまとめて上(今日の目安の直後に直近7日)
-     ②行き先の入口(任務・図鑑)を挟んで ③アクション(学習をはじめる/サクッと5問/報酬受取)は下=
+     ②行き先の入口(任務・図鑑)を挟んで ③今日のセット(v5.8.0)→アクション(学習をはじめる/報酬受取)は下=
      親指の届く位置。ログボ/同期の条件行も「受け取る・やる」側なので下のグループに置く */
   $("homeBox").innerHTML=
     // ── 記録: 今日の目安(ヒーロー)+直近7日のあゆみ(タップで全期間)
@@ -178,10 +191,14 @@ function renderHome(){
       '<button class="btn" id="homeDex">📕 図鑑'+
         '<span class="hlsub">カード'+cdx.owned+'/'+cdx.total+' ・ なかま'+xdx.owned+'/'+xdx.total+'</span></button>'+
     '</div>'+
-    // ── アクション: 学習CTA(主役)+サクッと5問(完了ボーナス🎫があれば案内)
-    '<button id="homeStudy" class="studycta shine">📖 学習をはじめる'+
-      '<span class="ctasub">今日 '+d.a+'問(正解'+d.c+')'+(stk>=2? ' ・ 🔥'+stk+'日連続':'')+'</span></button>'+
-    '<button id="homeQuick" class="btn quick5">⚡ サクッと5問だけ <span class="small" style="font-weight:700">─ 5問ごとに🎫+'+ANS_BONUS_T+'</span></button>'+
+    // ── 今日のセット(v5.8.0): 30問=1セットの積み上げ。タップで学習へ
+    '<div class="panel setpanel" id="homeSets">'+
+      '<div class="pacetop"><span>🧩 今日のセット</span>'+setHead+'</div>'+
+      setDotsHTML(sp)+
+      '<div class="pacefoot">'+setFoot+'</div></div>'+
+    // ── アクション: 学習CTA(主役)
+    '<button id="homeStudy" class="studycta shine">📖 '+(sp.cur? 'セットのつづき('+sp.cur+'/'+SET_N+')' : '1セット(30問)はじめる')+
+      '<span class="ctasub">今日 '+d.a+'問(正解'+d.c+')'+(stk>=2? ' ・ 🔥'+stk+'日連続':'')+' ・ 5問ごとに🎫+'+ANS_BONUS_T+'</span></button>'+
     // 任務報酬の一括受取(受け取れるものがあるときだけ出す)
     (mn? '<button id="homeClaim" class="claimbtn homeclaim">🎁 任務報酬をすべて受け取る('+mn+'件)</button>':'')+
     // ログインボーナスのバナー(v4.26.0: 起動モーダル廃止の受け皿。タップで7日カレンダー)
@@ -193,7 +210,7 @@ function renderHome(){
       '<div class="panel syncnag" id="homeSync">📥 最終同期から'+
         Math.floor((Date.now()-lastSyncAt())/864e5)+'日 ─ タップして同期</div>':'');
   $("homeStudy").onclick=()=>switchTab("quiz");
-  $("homeQuick").onclick=()=>startQuick(5);
+  $("homeSets").onclick=()=>switchTab("quiz");
   const lg=$("homeLogin");
   if(lg) lg.onclick=()=>{
     try{ localStorage.setItem(LOGIN_SEEN_KEY, todayKey()); }catch(e){}

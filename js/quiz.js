@@ -8,9 +8,18 @@ const MASTER_BOX=5;
 
 let cur=null, answered=false;
 let autoNextT=null; // 「自動で次へ」(v4.26.0設定)のタイマー
-/* サクッと5問(v4.26.0): 隙間時間の小さなセッション。varはテスト(iframe)からの参照用。
-   保存しない=アプリを閉じれば消える一時状態(帳簿はすべて通常の学習計上に乗る) */
-var QUICK={goal:0, done:0, cor:0};
+/* 30問セット(v5.8.0・実機FB「30単語程度が1回の隙間時間にちょうどいい」):
+   学習の単位を「30問=1セット」にし、1日を「セットを何回積むか」で見せる。
+   v4.26.0のサクッと5問は廃止(5問は短すぎて達成感がなく、目安との関係も見えなかった)。
+   セットの境界は今日の解答数(dayRec().a)の30の倍数=どの入口(学習/サバイバー)で解いても
+   同じ物差し(5問ボーナスと同じ思想)。完了モーダルは学習タブでだけ出す(ゲーム中は邪魔)。
+   このセットの中身(正解・新規・定着が進んだ数・🎫)はG.set(setRecord)に持つ。
+   varはテスト(iframe)からの参照用 */
+var SET_N=30;
+/* 新規導入の待ったガード(v5.8.0): 期限が来た復習がこの数以上たまっているときは新規を混ぜない。
+   復習が遅れる→忘れる→やり直しが増える→さらに遅れる、の悪循環(正答率の低下)を断つ。
+   復習が片づけば新規はすぐ再開する(復習が尽きれば無制限=従来どおり) */
+var NEW_GUARD=40;
 /* 直近に出した単語(3問)は再出題しない ─ 1問おきの機械的な往復を防ぐ */
 let recentEns=[];
 function noteRecent(en){ recentEns.push(en); if(recentEns.length>3) recentEns.shift(); }
@@ -43,6 +52,7 @@ function pickWord(){
     const nT=paceNewPerDay(q);
     pNew=(nT>0 && (dayRec().n||0)<nT)? 0.3 : 0;
   }
+  if(due.length>=NEW_GUARD) pNew=0; // 復習の渋滞中は新規を待たせる(v5.8.0)
   if(d.length && (u.length===0 || Math.random()>=pNew)){
     // 編成中の単語が復習期限なら優先出題(野生語の記憶Lv維持ループ)
     const eqEn=equippedEnSet();
@@ -60,21 +70,33 @@ function pickWord(){
   return pool[Math.floor(Math.random()*pool.length)] || WORDS[0];
 }
 
-/* SRS更新(純関数)。ミスはbox0(1分後に再挑戦)に落とすが、box3以上で覚えていた単語は
-   st[7]に「復帰先=半分のbox」を記録し、次の正解でそこへ戻る ─ 高い階段を全部
-   登り直させると復習が渋滞し、挫折感も大きい(Ankiのlapse運用と同じ発想) */
-function srsApply(st, ok, now){
+/* SRS更新(純関数)。ミスはbox0(1分後に再挑戦)に落とすが、st[7]に「復帰先」を記録し、
+   次の正解でそこへ戻る ─ 高い階段を全部登り直させると復習が渋滞し、挫折感も大きい
+   (Ankiのlapse運用と同じ発想)。
+   v5.8.0(実機FB「100問/日でも1年で1,200語」への回答=覚え切るまでの解答数を減らす):
+   ①復帰先は「1段だけ下」(box2以上のミス→box-1。旧=box3以上を半分に)。
+     期待解答数のマルコフ連鎖計算(復習正答率60%): 1語28.5問→24.8問。
+     忘れた語を1日→3日→7日と全部やり直させるのは、忘却の実態(記憶は一部残る)より厳しすぎた
+   ②既知語の早回し(opts.fast・単語だけ): 初見で正解した語は1分/10分の「覚える」段を飛ばして
+     box2(1日後)へ。1日後もミスなしで正解ならbox4(7日後)へ。既知語は3問(0日・1日・8日)で
+     「覚えた」に到達(旧5問)。当て推量で通ってしまった語は1日後に落ちて通常の階段に戻る。
+     フレーズは階段そのものが訓練(クローズ→並べ替え→口頭)なので早回しは使わない
+   ①②合わせて正答率60%の語で28.5→20.8問(-27%)・96%の既知語で5.6→3.4問(-39%) */
+function srsApply(st, ok, now, opts){
   if(ok){
     /* 期限前の正解では階段を上がらない(v4.13.0): 出題対象が尽きたときの
        先取り復習(pickWordのフォールバック)で同じ日に何度も正解しても、
        実時間の間隔をあけて思い出せたことにはならない。忘却曲線の検証は
        期限が来た出題での正解だけが担う(正解・ミスの回数は通常どおり数える) */
     if(st[1]>now && (st[2]+st[3])>0){ st[2]++; st[5]=0; st[6]=now; return st; }
-    st[0]=Math.min(Math.max(st[0]+1, st[7]||0), INTERVALS.length-1);
+    const clean=(st[3]||0)===0; // まだ一度もミスしていない
+    if(opts && opts.fast && clean && st[2]===0 && st[0]===0) st[0]=2;      // 初見正解→1日後
+    else if(opts && opts.fast && clean && st[2]===1 && st[0]===2) st[0]=4; // 1日後も正解→7日後
+    else st[0]=Math.min(Math.max(st[0]+1, st[7]||0), INTERVALS.length-1);
     st[7]=0;
     st[2]++; st[5]=0; st[6]=now;
   }else{
-    if(st[0]>=3) st[7]=Math.max(1, Math.floor(st[0]/2));
+    st[7]=st[0]>=2? st[0]-1 : 0; // 復帰先=1段下(v5.8.0)
     st[0]=0;
     st[3]++; st[5]=(st[5]||0)+1;
   }
@@ -116,11 +138,10 @@ function qStatsHTML(st){
 function todayCountText(){
   const d=dayRec(), q=paceToday(G);
   return ((G.combo||0)>=3? "⚡"+G.combo+"連続 ・ ":"")+
-    "今日 "+d.a+(q&&!q.done? "/"+q.perDay:"")+"問";
+    "セット "+(d.a%SET_N)+"/"+SET_N+" ・ 今日 "+d.a+(q&&!q.done? "/"+q.perDay:"")+"問";
 }
 function refreshQuizCount(){
   const el=$("qCount"); if(!el) return;
-  const quick=(QUICK.goal? "⚡"+Math.min(QUICK.done,QUICK.goal)+"/"+QUICK.goal+"問 ・ ":"");
   // 実戦ドリル中(v5.2.0)は進行を出す(PDRILL/phrAnsweredはphrase.jsが後から定義)
   if(typeof PDRILL!=="undefined" && PDRILL){
     const d=PHR_DRILLS[PDRILL.kind];
@@ -128,16 +149,15 @@ function refreshQuizCount(){
     return;
   }
   // フレーズは目安と別カウント(v5.0.0): 目安なしの「今日◯問」だけを出す
-  if(quizTarget()==="p"){ el.textContent=quick+"フレーズ 今日 "+pdayRec().a+"問"; return; }
-  el.textContent=quick+todayCountText();
+  if(quizTarget()==="p"){ el.textContent="フレーズ 今日 "+pdayRec().a+"問"; return; }
+  el.textContent=todayCountText();
 }
 
-/* ---- サクッと5問(v4.26.0): 「5問だけならやろう」の背中押し ---- */
 /* 5問ごとのボーナス(v4.31.0・実機FB): 今日の解答数(d.a)が5の倍数に達するたび🎫5・上限なし。
    v4.30.0の「サクッと完了ボーナス(🎫3・1日3回)」を置き換え ─
    ①上限廃止=1日に何度でも気軽にチャレンジできる
-   ②d.aは学習タブ/サクッと/サバイバー/スロットの全入口で共通=「サクッとだけ得」の歪みがない
-   (どこで解いても5問ごとに同じだけもらえる。サクッと5問は入口であって特別レートではない)
+   ②d.aは学習タブ/サバイバーの全入口で共通=入口による損得の歪みがない
+   (どこで解いても5問ごとに同じだけもらえる)
    ③額も🎫3→🎫5に増額。🎫は「学習だけが源泉」の限定通貨=学習ボーナスとして経済の筋が通り、
    1回の付与に5解答が必要なので放置では稼げない。varはテスト(iframe)からの参照用 */
 var ANS_BONUS_EVERY=5, ANS_BONUS_T=5;
@@ -151,31 +171,65 @@ function ansBonus(){
 }
 /* 学習タブの対象(w=単語/p=フレーズ)。セグ(quizSeg)とG.opt.qtabが好みを持つ */
 function quizTarget(){ return (G.opt && G.opt.qtab==="p")? "p" : "w"; }
-function startQuick(n){
-  QUICK={goal:n||5, done:0, cor:0};
-  switchTab("quiz");
-  refreshQuizCount();
-  toast("⚡ サクッと"+QUICK.goal+"問 ─ 気軽にどうぞ!");
+/* ---- 30問セット(v5.8.0) ---- */
+/* このセットの帳簿(純関数・G.setを更新)。d=今日の日別記録(d.aは計上済み)。
+   セットの境界=d.aが30の倍数。a0(セット開始時の解答数)か日付が変わっていたら新しいセットに。
+   up=定着の階段が上がった/mas=覚えた/tk=このセットで得た🎫。戻り値=このセットが完了した瞬間か */
+function setRecord(g, d, info){
+  const a0=Math.floor((d.a-1)/SET_N)*SET_N, k=todayKey();
+  let s=g.set;
+  if(!s || s.d!==k || s.a0!==a0) s=g.set={d:k, a0, n:0, cor:0, newN:0, up:0, mas:0, tk:0};
+  s.n++;
+  if(info.ok) s.cor++;
+  if(info.wasNew) s.newN++;
+  if(info.up) s.up++;
+  if(info.mas) s.mas++;
+  s.tk+=info.tk||0;
+  return d.a%SET_N===0;
 }
-function openQuickDone(){
-  const d=dayRec(), q=paceToday(G);
-  const g=QUICK.goal, c=QUICK.cor;
-  QUICK={goal:0, done:0, cor:0}; // ✕で閉じても通常学習として続けられる
-  /* 5問ボーナスは解答時(ansBonus)に付与済み: 5問のセッションは今日の解答数が
-     5の倍数をちょうど1回またぐ=毎回きっかり🎫+5(ここでは表示だけ) */
-  openModal('<h3>⚡ '+g+'問 おつかれさま!</h3>'+
-    '<div class="giftbox">正解 <b style="font-size:18px">'+c+' / '+g+'</b>'+(c>=g? ' ─ 全問正解! 🎉':'')+
-    '<br><span style="font-weight:800; color:var(--accent2)">🎁 5問ごとのボーナス 🎫+'+ANS_BONUS_T+' ゲット!</span>'+
-    '<span class="small">(何度でも・どの学習でも5問ごと)</span>'+
-    '<br><span class="small">'+(quizTarget()==="p"
-      ? 'フレーズ 今日 '+pdayRec().a+'問'   // フレーズは目安と別カウント(v5.0.0)
-      : '今日 '+d.a+(q&&!q.done? "/"+q.perDay:"")+'問'+
-        (q&&!q.done&&d.a>=q.perDay? ' ─ 目安達成! 🏅':''))+'</span></div>'+
+/* 今日のセット数の見え方: done=完了したセット数・cur=進行中のセットの問数・
+   target=目安から換算したセット数(目標未設定・達成後はnull) */
+function setProgress(g){
+  const d=dayRec(), q=paceToday(g);
+  const target=(q && !q.done)? Math.max(1, Math.ceil(q.perDay/SET_N)) : null;
+  return {done:Math.floor(d.a/SET_N), cur:d.a%SET_N, target, a:d.a};
+}
+/* セットの●○表示(done=完了・cur=進行中の問数・target=目安のセット数)。
+   目安なし=完了分+進行中(あれば)だけ。目安ありで超過した分は金の●で足す */
+function setDotsHTML(p){
+  const n=p.target? Math.max(p.target, p.done+(p.cur?1:0)) : p.done+(p.cur?1:0);
+  let h='<div class="setdots">';
+  for(let i=0;i<n;i++){
+    if(i<p.done) h+='<i class="sd on'+(p.target && i>=p.target? ' over':'')+'"></i>';
+    else if(i===p.done && p.cur) h+='<i class="sd cur"><b style="width:'+Math.round(100*p.cur/SET_N)+'%"></b></i>';
+    else h+='<i class="sd"></i>';
+  }
+  return h+'</div>';
+}
+let setDonePending=false; // 30問目の答え合わせのあと、「次へ」で完了モーダルを出す
+function openSetDone(){
+  const s=G.set||{n:SET_N, cor:0, newN:0, up:0, mas:0, tk:0};
+  const p=setProgress(G);
+  const full=s.cor>=s.n;
+  const line=p.target
+    ? (p.done>=p.target
+        ? '🏅 今日の目安('+p.target+'セット)達成! ここからは前倒し'
+        : '今日の目安 '+p.target+'セット ─ あと'+(p.target-p.done)+'セット')
+    : '今日 '+p.done+'セット目を積み上げた';
+  openModal('<h3>🧩 セット完了! <span class="small">今日 '+p.done+'セット目</span></h3>'+
+    '<div class="giftbox">正解 <b style="font-size:20px">'+s.cor+' / '+s.n+'</b>'+(full? ' ─ 全問正解! 🎉':'')+
+      '<div class="setstats">'+
+        '<span>🆕 はじめて <b>'+s.newN+'</b>語</span>'+
+        '<span>⬆ 定着が進んだ <b>'+s.up+'</b>語</span>'+
+        '<span>🏅 覚えた <b>'+s.mas+'</b>語</span></div>'+
+      '<div style="font-weight:800; color:var(--accent2); margin-top:8px">🎫 このセットで +'+s.tk+'</div>'+
+      setDotsHTML(p)+
+      '<div class="small" style="margin-top:6px">'+line+'</div></div>'+
     '<div class="row" style="gap:10px">'+
-    '<button class="btn grow" id="quickMore">⚡ もう5問</button>'+
-    '<button class="btn primary grow" id="quickHome">ホームへ</button></div>');
-  $("quickMore").onclick=()=>{ closeModal(); startQuick(5); newQuestion(); };
-  $("quickHome").onclick=()=>{ closeModal(); switchTab("home"); };
+    '<button class="btn grow" id="setHome">ひと休み(ホームへ)</button>'+
+    '<button class="btn primary grow" id="setNext">🧩 次のセットへ</button></div>');
+  $("setNext").onclick=()=>{ closeModal(); newQuestion(); };
+  $("setHome").onclick=()=>{ closeModal(); switchTab("home"); };
 }
 
 /* 「自動で次へ」(v4.26.0)の設定値: 0=オフ→1秒→1.5秒→2秒を巡回 */
@@ -256,7 +310,7 @@ function renderQuestion(){
 function newQuestion(){
   clearTimeout(autoNextT); // 手動の「次へ」と自動進行タイマーの二重発火を断つ
   if(quizTarget()==="p"){ phrNewQuestion(); return; } // フレーズ学習(v5.0.0・phrase.jsが後から定義)
-  if(QUICK.goal && QUICK.done>=QUICK.goal){ openQuickDone(); return; } // サクッと5問の完了
+  if(setDonePending){ setDonePending=false; openSetDone(); return; } // 30問セットの完了(v5.8.0)
   const w=pickWord();
   cur={word:w, choices:buildChoices(w)};
   renderQuestion();
@@ -282,15 +336,14 @@ function answer(chosen, btn){
   const wasNew=!st;
   if(!st) st=G.words[w.en]=[0,0,0,0,0,0,0];
   const preSt=st.slice(); // ドロップ判定は解答前の状態で
-  srsApply(st, ok, now);
+  srsApply(st, ok, now, {fast:true}); // 単語は既知語の早回しあり(v5.8.0)
   const d=dayRec(); recordDayAnswer(d, wasNew, ok);
   const bonus5=ansBonus(); // 5問ごとの🎫ボーナス(v4.31.0・上限なし・全入口共通/v5.0.0からフレーズと合算)
   let justMastered=false;
   if(ok && st[0]>=MASTER_BOX && !st[4]){ st[4]=1; d.m++; justMastered=true; }
   track("ans"); if(ok) track("cor");
-  paceLog(wasNew, ok); // 学習ペース推定の材料(直近100問)
+  paceLog(wasNew, ok, preSt[0]); // 学習ペース推定の材料(直近100問・boxで間隔ありの復習と1分/10分の再挑戦を区別)
   noteRecent(w.en);
-  if(QUICK.goal){ QUICK.done++; if(ok) QUICK.cor++; } // サクッと5問の進捗(帳簿は通常と同一)
 
   // 連続正解コンボ(XPボーナス・ドロップ★率UP)と、正解ごとの🎫(v4.6.0: 1問=🎫1)
   let tkGain=0;
@@ -301,6 +354,8 @@ function answer(chosen, btn){
   }else{
     G.combo=0;
   }
+  // 30問セットの帳簿(v5.8.0)。境界に達したら「次へ」で完了モーダル
+  if(setRecord(G, d, {ok, wasNew, up:ok && st[0]>preSt[0], mas:justMastered, tk:tkGain+bonus5})) setDonePending=true;
 
   // 知識XP: 正解が直接キャラの強さになる(連続学習日数+コンボ+キャラスキルでボーナス)
   let xpGain=0, lvUp=0;
@@ -341,7 +396,7 @@ function answer(chosen, btn){
   if(pq && !pq.done && d.a===pq.perDay){ toast("🎉 今日の目安 "+pq.perDay+"問を達成! 任務でドカンと報酬を受け取ろう"); vibe(40); }
   saveG();
   refreshHeader();
-  refreshQuizCount(); // 解答数・サクッと5問の進捗を即時反映
+  refreshQuizCount(); // 解答数・セットの進捗を即時反映
   /* 自動で次へ(v4.26.0設定): タイマー発火時にまだ確認中(answered)のときだけ進む。
      手動の「次へ」はnewQuestion冒頭のclearTimeoutで先取りされる */
   if(G.opt && G.opt.autoNext){

@@ -154,7 +154,8 @@
 
 <!-- ============ ことだまスロット(ミニゲーム・冒険タブから入る v4.27.0) ============
      svViewと同じ「上=ゲーム/下=クイズ」構成・svcol=display:contentsでPCは2カラム。
-     可逆設計: このブロック+js/slot.js+CSSブロック+TABS1行+renderAdvの入口パネルで完結 -->
+     可逆設計: このブロック+js/slot.js+CSSブロック+TABS1行+renderAdvの入口パネルで完結。
+     v5.8.0: UIから撤去中(js/slot.jsのSLOT_ENABLED=false)。ブロックは残し、復活はフラグ1つ -->
 <main id="slotView" class="hidden">
   <div class="svcol" id="slColL">
     <div class="row" id="slHead" style="margin-top:4px; gap:8px; align-items:center">

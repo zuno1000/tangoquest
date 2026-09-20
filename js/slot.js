@@ -20,6 +20,10 @@
      TABSの1行+renderAdv(sv.js)の入口パネルで完結(svApplyAnswer/svShouldPause/svFxは
      冒険モード共通の土台として参照する) */
 
+/* v5.8.0(実機FB): スロットはUIから撤去。データ(G.slot.meta・G.opt.slotBet)・このファイル・
+   #slotViewブロック・CSS・TABS行はそのまま残す=復活させたいときはこのフラグをtrueに戻すだけ
+   (冒険ハブの入口パネル・心得モーダルのスロットタブ・ハブの説明文がこのフラグで出し入れされる) */
+var SLOT_ENABLED=false;
 const SLOT_TICK=250;                 // 論理tick(ms)
 const SLOT_SPIN_IV=3000;             // リールが結果を出す間隔(ms)
 const SLOT_BET_MIN=10, SLOT_BET_MAX=2000, SLOT_BET_DEF=100;

@@ -950,9 +950,22 @@ body.svplay #svView{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
   body{zoom:1.2}
 }
 
-/* ---- v4.26.0: サクッと5問・ログボバナー・ペース試算・ことだまスロット ---- */
-/* ホームの「サクッと5問」: 学習CTAの控えめな相棒 */
-.quick5{display:block; width:100%; margin-top:10px; text-align:center}
+/* ---- v4.26.0: ログボバナー・ペース試算・ことだまスロット(サクッと5問はv5.8.0で廃止) ---- */
+/* 今日のセット(v5.8.0): 30問=1セットの積み上げを●○で見せる(ホーム#homeSets・完了モーダル) */
+.setpanel{margin-top:12px; padding:12px 14px; cursor:pointer}
+.setpanel .pacetop b{font-size:22px; line-height:1}
+.setpanel .pacetop .ptgt{font-size:13px; color:var(--sub)}
+.setdots{display:flex; flex-wrap:wrap; gap:8px; margin-top:10px}
+.setdots .sd{display:block; width:26px; height:12px; border-radius:6px; background:var(--bg2); overflow:hidden;
+  box-shadow:inset 1.5px 1.5px 3px var(--shd), inset -1.5px -1.5px 3px var(--shl)}
+.setdots .sd.on{background:linear-gradient(135deg,var(--accent2),#7B8CFF); box-shadow:0 2px 6px rgba(91,108,255,.35)}
+.setdots .sd.on.over{background:linear-gradient(135deg,#FFB547,#F5A020); box-shadow:0 2px 6px rgba(245,160,32,.4)}
+.setdots .sd.cur b{display:block; height:100%; background:linear-gradient(135deg,var(--accent2),#7B8CFF); border-radius:6px}
+.setstats{display:flex; flex-wrap:wrap; gap:6px 14px; margin-top:8px; font-size:12px; font-weight:700; color:var(--sub)}
+.setstats b{color:var(--ink); font-size:14px}
+.giftbox .setdots{justify-content:center}
+/* 冒険ハブのあそびかた: スロット撤去中は2列(v5.8.0・SLOT_ENABLED) */
+.svmodes.two{grid-template-columns:repeat(2,1fr)}
 /* ログインボーナスのバナー(起動モーダル廃止の受け皿。タップで7日カレンダー) */
 .lgbanner{margin-top:12px; padding:11px 14px; font-size:13px; font-weight:700;
   cursor:pointer; text-align:center;

@@ -768,14 +768,16 @@ function svApplyAnswer(w, ok){
   const wasNew=!st;
   if(!st) st=G.words[w.en]=[0,0,0,0,0,0,0];
   const preSt=st.slice();
-  srsApply(st, ok, now);
+  srsApply(st, ok, now, {fast:true}); // 学習タブと同じ規則(既知語の早回し・v5.8.0)
   const d=dayRec(); recordDayAnswer(d, wasNew, ok);
-  ansBonus(); // 5問ごとの🎫ボーナス(v4.31.0・上限なし・学習タブと同じ=入口で損得が出ない)
+  const bonus5=ansBonus(); // 5問ごとの🎫ボーナス(v4.31.0・上限なし・学習タブと同じ=入口で損得が出ない)
   let justMastered=false;
   if(ok && st[0]>=MASTER_BOX && !st[4]){ st[4]=1; d.m++; justMastered=true; }
   track("ans"); if(ok) track("cor");
-  paceLog(wasNew, ok);
+  paceLog(wasNew, ok, preSt[0]);
   noteRecent(w.en);
+  // 30問セットの帳簿は共有(v5.8.0)。完了モーダルは出さない(ゲーム中に割り込まない)
+  setRecord(G, d, {ok, wasNew, up:ok && st[0]>preSt[0], mas:justMastered, tk:(ok? corTicketGain():0)+bonus5});
   if(ok){
     G.combo=(G.combo||0)+1;
     G.tickets+=corTicketGain();
@@ -1233,6 +1235,7 @@ function svOpenMeta(){
 /* 心得モーダル共通のタブ(v4.29.0): サバイバーの心得とスロットの心得を1つの入口にまとめる。
    モーダルの先頭に置き、openModal後にbindMetaTabsで切替を結ぶ */
 function metaTabs(cur){
+  if(typeof SLOT_ENABLED==="undefined" || !SLOT_ENABLED) return ""; // スロット撤去中はタブ無し(v5.8.0)
   return '<div class="seg metaseg">'+
     '<button data-mt="sv"'+(cur==="sv"?' class="active"':'')+'>⚔ サバイバー</button>'+
     '<button data-mt="slot"'+(cur==="slot"?' class="active"':'')+'>🎰 スロット</button></div>';
@@ -1266,6 +1269,7 @@ let svStagesOpen=false;
 function renderAdv(){
   const box=$("svHub"); if(!box) return;
   const rec=svRec();
+  const slotOn=(typeof SLOT_ENABLED!=="undefined" && SLOT_ENABLED); // スロットの入口の出し入れ(v5.8.0)
   let h='<div class="row" style="align-items:center; margin-top:4px; gap:8px">'+
     '<div class="grow" style="font-weight:800; font-size:17px">💫 冒険 '+helpBtn("hlp-svsel")+'</div>'+
     '<button class="btn" id="svMetaBtn">📜 心得</button></div>'+
@@ -1278,10 +1282,14 @@ function renderAdv(){
     '時間が流れるのは<b>出題中と答え合わせ中</b>(3択・離脱中は完全停止)。'+SV_STAGE_SEC+'秒生きのびるとボスが出現、倒せば勝利!<br>'+
     '倒した敵の🪙は<b>勝っても負けても全額持ち帰り</b>(初生還🪙3000・本日最初の生還🪙1000)。解いた分は<b>ふつうの学習として記録される</b>(今日の目安・🎫・カードすべて)。<br>'+
     '生還すると次のステージが解放される。編成は出撃時のスナップショットで固定。⏳復習期限切れの野生語は言霊が錆びる(-6%/枚)。<br><br>'+
-    '<b>あそびかた3種</b> ─ 📅<b>デイリー</b>: 毎日ちがうステージ×ルール×品詞しばり(初回勝利に🪙ボーナス)/'+
-    '🏜️<b>荒野</b>: 勝利のない無限モード(1分ごとに深化・2分ごとにボス乱入・🏳でいつでも切り上げ)/'+
-    '🎰<b>スロット</b>: 3秒ごとに回り続けるリールに正解の◆ことだまを乗せるミニゲーム(掛け金🪙10〜2,000・放置では儲からない)。'+
-    '📜心得はサバイバー/スロットどちらも🪙で修める永続強化(上限なし)。');
+    (slotOn
+      ? '<b>あそびかた3種</b> ─ 📅<b>デイリー</b>: 毎日ちがうステージ×ルール×品詞しばり(初回勝利に🪙ボーナス)/'+
+        '🏜️<b>荒野</b>: 勝利のない無限モード(1分ごとに深化・2分ごとにボス乱入・🏳でいつでも切り上げ)/'+
+        '🎰<b>スロット</b>: 3秒ごとに回り続けるリールに正解の◆ことだまを乗せるミニゲーム(掛け金🪙10〜2,000・放置では儲からない)。'+
+        '📜心得はサバイバー/スロットどちらも🪙で修める永続強化(上限なし)。'
+      : '<b>あそびかた2種</b> ─ 📅<b>デイリー</b>: 毎日ちがうステージ×ルール×品詞しばり(初回勝利に🪙ボーナス)/'+
+        '🏜️<b>荒野</b>: 勝利のない無限モード(1分ごとに深化・2分ごとにボス乱入・🏳でいつでも切り上げ)。'+
+        '📜心得は🪙で修める永続強化(上限なし)。'));
   if(SV && !SV.over){
     h+='<button class="btn primary" id="svResumeBtn" style="margin-top:10px; width:100%">▶ 戦闘に戻る('+esc(SV.name)+')</button>'+
       '<div class="small" style="margin-top:4px">離れている間、時間は止まっている</div>';
@@ -1304,7 +1312,7 @@ function renderAdv(){
   const dDone=rec.dailyDone===todayKey();
   const er=rec.endless||{best:0, kills:0};
   const slOn=(typeof SL!=="undefined" && SL);
-  h+='<div class="svmodes">'+
+  h+='<div class="svmodes'+(slotOn? '':' two')+'">'+
     '<button class="btn svmode" id="svDailyBtn">'+
       '<span class="svmic">📅</span><b>デイリー'+(dDone? ' <span style="color:var(--ok)">✓</span>':'')+'</b>'+
       '<span class="svmsub">'+ds.icon+esc(ds.name)+'<br>'+dc.mods.name+' ・ '+POS_LABEL[dc.pos]+'<br>'+
@@ -1313,9 +1321,9 @@ function renderAdv(){
       '<span class="svmic">🏜️</span><b>荒野 ∞</b>'+
       '<span class="svmsub">倒れるまで戦う<br>'+
         (er.best? 'ベスト ⏱'+Math.floor(er.best/60)+":"+String(er.best%60).padStart(2,"0")+'<br>💀'+er.kills : '記録に挑む<br>🏳で持ち帰り')+'</span></button>'+
-    '<button class="btn svmode" id="svSlotBtn">'+
+    (slotOn? '<button class="btn svmode" id="svSlotBtn">'+
       '<span class="svmic">🎰</span><b>スロット</b>'+
-      '<span class="svmsub">'+(slOn? '▶ つづける<br>回転'+SL.ses.n+'<br>収支'+(SL.ses.net>=0?"+":"")+fmt(SL.ses.net) : '正解のことだまで<br>リールを味方に<br>🪙10〜2,000')+'</span></button>'+
+      '<span class="svmsub">'+(slOn? '▶ つづける<br>回転'+SL.ses.n+'<br>収支'+(SL.ses.net>=0?"+":"")+fmt(SL.ses.net) : '正解のことだまで<br>リールを味方に<br>🪙10〜2,000')+'</span></button>' : '')+
     '</div>';
   // ステージ一覧(折りたたみ・既定は閉): 解放済み=挑戦可・未解放=🔒(前のステージで生還すると解放)
   const clears=DUNGEONS.filter(d=>rec.clears[d.id]>0).length;
@@ -1354,7 +1362,8 @@ function renderAdv(){
     if(SV && !SV.over) svCleanup();
     svStart(SV_ENDLESS);
   };
-  $("svSlotBtn").onclick=()=>openSlotGame(); // サバイバーのランは保持されたまま(時間停止)
+  const slb=$("svSlotBtn");
+  if(slb) slb.onclick=()=>openSlotGame(); // サバイバーのランは保持されたまま(時間停止)
   $("svStagesToggle").onclick=()=>{ svStagesOpen=!svStagesOpen; renderAdv(); };
   const rb=$("svResumeBtn");
   if(rb) rb.onclick=()=>{ switchTab("sv"); svRestore(); };

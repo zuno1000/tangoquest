@@ -1,7 +1,7 @@
 "use strict";
 /* ================= 状態管理 ================= */
 const KEY="tangoquest_v1";
-const APP_VERSION="5.7.0"; // リリースごとに更新(設定表示・更新確認のリモート版比較に使う)
+const APP_VERSION="5.8.0"; // リリースごとに更新(設定表示・更新確認のリモート版比較に使う)
 
 /* ---- iOSスタンドアロン起動時の灰色帯対策(v4.5.0→v4.13.0で拡張) ----
    インストール直後の初回起動に加え、日をまたいだ最初のコールドスタート
@@ -105,6 +105,8 @@ if(!Array.isArray(G.pace.log)) G.pace.log=[];
 G.pace.setAt=G.pace.setAt||0; // 目標を設定/解除した時刻(同期はこれが新しい側が勝つ=v4.7.2)
 G.frz=G.frz||0;         // 連続学習フリーズ🧊の所持数(v4.13.0・最大FRZ_MAX)
 G.faces=G.faces||{};    // なかまのカスタムアイコン(charId -> dataURL・v4.13.0)
+G.faceAt=G.faceAt||{};  // アイコンの操作時刻(charId -> {at, del}・v5.8.0: 同期は新しい操作が勝つ)
+G.set=G.set||null;      // 進行中の30問セットの帳簿(v5.8.0・quiz.js setRecord)
 G.idle=G.idle||{last:0}; // るすばん探索(放置報酬)の最終精算時刻(v4.13.0)
 /* 学習オプション(v4.26.0): autoNext=答え合わせ後に自動で次へ進むまでのms(0=オフ)/
    svAuto=サバイバー3択の自動選択/slotBet=ことだまスロットの掛け金🪙の記憶(0=未設定→既定100)。
