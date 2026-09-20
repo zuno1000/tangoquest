@@ -217,7 +217,7 @@ function mergeData(a, b){
                   kills:Math.max(mel.kills||0, (bel&&bel.kills)||0)};
   }
   for(const id in b.ach||{}) m.ach[id]=Math.max(m.ach[id]||0, b.ach[id]||0);
-  // 任務・編成・ログイン・るすばん探索の精算時刻は更新が新しい側を優先
+  // 任務・編成・ログイン(と旧るすばん探索の記録)は更新が新しい側を優先
   const newer=(b.updatedAt||0)>(a.updatedAt||0)? b : a;
   m.daily=newer.daily||m.daily; m.weekly=newer.weekly||m.weekly;
   m.party=newer.party||m.party; m.login=newer.login||m.login; m.mode=newer.mode||m.mode;
@@ -384,6 +384,7 @@ function openSettings(){
   const streak=studyStreak();
   let mastered=0; for(const en in G.words){ if(G.words[en][0]>=MASTER_BOX) mastered++; }
   let pmas=0; for(const en in G.phr){ if(G.phr[en][0]>=MASTER_BOX) pmas++; } // フレーズ(v5.0.0)
+  const mnClaim=claimableCount(); // 受け取れる任務報酬の件数(任務ボタンのバッジ)
   const learnInner=
     '<div class="small" style="margin-bottom:6px">出題と自動化のしくみ '+helpBtn("hlp-opt")+'</div>'+
     helpNote("hlp-opt", '<b>自動で次へ</b>: 答え合わせのあと、「次へ」を押さなくても設定した秒数で自動的に次の問題へ進む'+
@@ -439,7 +440,10 @@ function openSettings(){
     '<div class="homelinks" style="margin-top:8px">'+
       '<button class="btn" id="histBtn">📊 学習のあゆみ</button>'+
       '<button class="btn" id="paceCfgBtn">🎯 学習ペース管理</button>'+
-      '<button class="btn" id="phrHistBtn">🗣 フレーズのあゆみ</button></div>'+
+      '<button class="btn" id="phrHistBtn">🗣 フレーズのあゆみ</button>'+
+      // 任務・図鑑の入口(v5.9.0でホームから移設・実機FB)
+      '<button class="btn" id="setMissionBtn"><span>📜 任務'+(mnClaim? ' <b style="color:var(--accent)">'+mnClaim+'件 受取</b>':'')+'</span></button>'+
+      '<button class="btn" id="setDexBtn">📕 図鑑</button></div>'+
     foldSec("sfoldLearn", "📖 学習(出題・自動化)", learnInner, false)+
     foldSec("sfoldFx",    "🎨 演出(振動)", fxInner, false)+
     foldSec("sfoldSync",  "📥 端末間同期(Googleドライブ)", syncInner, false)+
@@ -469,6 +473,8 @@ function openSettings(){
     $("spkSecBtn").textContent="フレーズ: 口頭の制限時間: "+spkSecLabel(G.opt.spkSec)+" (タップで切替)";
   };
   $("phrHistBtn").onclick=()=>openPhrHistoryModal(0);
+  $("setMissionBtn").onclick=()=>switchTab("mission"); // switchTabがモーダルを閉じる
+  $("setDexBtn").onclick=()=>openDex();
   const vt=$("vibeToggle");
   if(vt) vt.onclick=()=>{
     const off=localStorage.getItem("tq_vibe")==="off";

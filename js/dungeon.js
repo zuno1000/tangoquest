@@ -3,7 +3,7 @@
    v4.25.0: 冒険=サバイバー一本化 ─ 旧ダンジョン(オート戦闘)と無限回廊は廃止。
    DUNGEONSはサバイバーのステージ定義・敵カタログとして続投し、解放連鎖(dgUnlocked)は
    サバイバーの生還記録(G.sv.clears)が進める(旧クリア記録 G.dungeons でも解放済みを維持)。
-   るすばん探索(idleGain)と編成(おまかせ・スロットUI)もこのファイルが担う */
+   編成(おまかせ・スロットUI)もこのファイルが担う */
 
 /* elem: 敵の属性(0火/1水/2風/3光/4闇) / trait: 敵の特性(なし・tough・fierce・swift)。
    ステージごとに有効な編成が変わる=編成を考える理由になる */
@@ -64,31 +64,7 @@ function dgUnlocked(i){
 
 function recPower(d){ return Math.round(Math.pow(1.55,d.tier-1)*(1+0.13*(d.floors-1))*430); } // 推奨戦闘力の目安
 
-/* ---- るすばん探索(v4.13.0): アプリを開くだけで経過時間ぶんの🪙が貯まる ----
-   放置ゲームの「ログインするだけでメリット」を最小構成で:
-   レートは制した最高tierで決まる(冒険が進むほど留守番も稼ぐ)。
-   上限24時間ぶん=毎日開くのがいちばん得。精算は起動・復帰時に自動 */
-function idleRate(g){
-  let t=0;
-  for(const d of DUNGEONS){
-    const r=g.dungeons&&g.dungeons[d.id];        // 旧ダンジョンのクリア記録(互換)
-    const s=g.sv&&g.sv.clears&&g.sv.clears[d.id]; // サバイバーの生還記録(v4.25.0〜)
-    if(((r&&r.clears>0)||s>0) && d.tier>t) t=d.tier;
-  }
-  return 10+2*t*t; // 🪙/時(未クリアでも10/時=最初のログインからメリットがある)
-}
-function idleGain(g, now){
-  now=now||Date.now();
-  if(!g.idle) g.idle={last:0};
-  if(!g.idle.last){ g.idle.last=now; return null; } // 初回は基準時刻を置くだけ
-  const hours=Math.min(24, (now-g.idle.last)/3600e3);
-  if(hours<0.5) return null; // 30分未満は貯めたまま(開くたびに出るとノイズ)
-  const gold=Math.floor(hours*idleRate(g));
-  if(gold<1) return null;
-  g.idle.last=now;
-  g.gold+=gold;
-  return {gold, hours, rate:idleRate(g)};
-}
+/* るすばん探索(放置報酬・v4.13.0〜v5.8.0)はv5.9.0で廃止(実機FB)。G.idleの記録は同期互換のため残す */
 
 /* ---- 振動(演出の共通部品。旧・演出プレイヤーから続投) ---- */
 const CAN_VIBRATE = typeof navigator!=="undefined" && "vibrate" in navigator;

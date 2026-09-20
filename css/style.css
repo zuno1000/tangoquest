@@ -205,12 +205,19 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
 .pacebar.phero .pacemsg{font-size:13px; margin-top:9px}
 /* 直近7日のあゆみ(タップで全期間) */
 .weekpanel{margin-top:12px; padding:12px 14px; cursor:pointer}
-.weekchart{display:flex; align-items:flex-end; gap:5px; margin-top:8px}
-.wcol{flex:1; min-width:0; display:flex; flex-direction:column; align-items:center}
-.wbarw{position:relative; width:100%; height:34px; display:flex; align-items:flex-end; justify-content:center}
-.wcol .hbar{width:60%; min-width:8px}
-.wday{font-size:10px; color:var(--sub); margin-top:3px; font-weight:700}
-.wcol.today .wday{color:var(--accent2)}
+/* 今週の記録(v5.9.0): 曜日つき7マスのカレンダー。金=目安達成・青=学習した日・今日は枠線 */
+.weekcal{display:grid; grid-template-columns:repeat(7,1fr); gap:6px; margin-top:10px}
+.wc{display:flex; flex-direction:column; align-items:center; gap:1px; padding:7px 0 6px; border-radius:12px;
+  background:var(--bg2); color:var(--sub); box-shadow:inset 1.5px 1.5px 3px var(--shd), inset -1.5px -1.5px 3px var(--shl)}
+.wc .wcd{font-size:10px; font-weight:800}
+.wc .wcn{font-size:15px; line-height:1.15; font-weight:800}
+.wc .wcs{font-size:9px; font-weight:700; height:11px; line-height:11px}
+.wc.did{background:linear-gradient(135deg,#E3E7FF,#D3D9FF); color:var(--accent2); box-shadow:none}
+.wc.hit{background:linear-gradient(135deg,#FFB547,#F5A020); color:#4A3200; box-shadow:0 2px 6px rgba(245,160,32,.35)}
+.wc.today{outline:2px solid var(--accent2); outline-offset:-2px}
+.wc.today.hit{outline-color:#B87400}
+.wlg{display:inline-block; margin-right:2px; line-height:1}
+.wlg.hit{color:#F5A020} .wlg.did{color:#9AA6FF}
 /* 任務・図鑑の小さな入口(下部ナビにないもの) */
 .homelinks{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px}
 .homelinks .btn{display:flex; flex-direction:column; align-items:flex-start; gap:2px; padding:12px 14px; text-align:left}
@@ -963,7 +970,7 @@ body.svplay #svView{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
 .setdots .sd.cur b{display:block; height:100%; background:linear-gradient(135deg,var(--accent2),#7B8CFF); border-radius:6px}
 .setstats{display:flex; flex-wrap:wrap; gap:6px 14px; margin-top:8px; font-size:12px; font-weight:700; color:var(--sub)}
 .setstats b{color:var(--ink); font-size:14px}
-.giftbox .setdots{justify-content:center}
+.giftbox .setdots,.giftbox .setstats{justify-content:center}
 /* 冒険ハブのあそびかた: スロット撤去中は2列(v5.8.0・SLOT_ENABLED) */
 .svmodes.two{grid-template-columns:repeat(2,1fr)}
 /* ログインボーナスのバナー(起動モーダル廃止の受け皿。タップで7日カレンダー) */

@@ -1622,7 +1622,7 @@ function run(){
     eq(W.rewardText({g:100,t:1,f:1}), "🪙100 🎫1 🧊1", "報酬表記");
     G.frz=f0;
   });
-  t("mergeData: フリーズ・凍結日・アイコン・るすばん精算も引き継ぐ", ()=>{
+  t("mergeData: フリーズ・凍結日・アイコンも引き継ぐ", ()=>{
     const base=()=>({words:{},days:{},inv:{},chars:{},dungeons:{},counters:{},ach:{},inf:{best:0},
                      gold:0,tickets:0,shards:0,xp:0});
     const a=Object.assign(base(),{frz:1, faces:{c01:"data:image/png;base64,AAA"}, updatedAt:2,
@@ -1633,7 +1633,6 @@ function run(){
     eq(m.frz, 2, "フリーズは多い方");
     ok(m.faces.c01 && m.faces.c02, "アイコンは和集合(旧版どうし=操作時刻なし)");
     eq(m.days["2026-08-09"].fz, 1, "凍結マーカーを保持");
-    eq(m.idle.last, 500, "るすばん精算は更新が新しい側");
   });
   t("mergeData: アイコンは操作時刻が新しい側が勝つ ─ 「絵文字に戻す」も伝播し、他端末の画像で復活しない(v5.8.0実機FB)", ()=>{
     const base=()=>({resetAt:0, words:{},days:{},inv:{},chars:{},dungeons:{},counters:{},ach:{},inf:{best:0},
@@ -1739,25 +1738,13 @@ function run(){
     W.closeModal();
     if(old===undefined) delete G.faces[c.id]; else G.faces[c.id]=old;
   });
-  t("るすばん探索: 経過時間×レートの🪙(tierで時給UP・上限24時間)", ()=>{
-    const G=W.G;
-    const oldD=G.dungeons, oldSv=G.sv, oldIdle=G.idle, g0=G.gold;
-    G.dungeons={}; G.sv={clears:{}};
-    eq(W.idleRate(G), 10, "未クリアでも時給10");
-    G.dungeons={d5:{clears:1}};
-    eq(W.idleRate(G), 60, "旧ダンジョンtier5クリアで時給10+2×25=60(互換)");
-    G.dungeons={}; G.sv={clears:{d5:1}};
-    eq(W.idleRate(G), 60, "サバイバーのtier5生還でも同じ時給(v4.25.0)");
-    const now=Date.now();
-    G.idle={last:now-2*3600e3};
-    const r=W.idleGain(G, now);
-    eq(r.gold, 120, "2時間×60");
-    eq(G.gold, g0+120, "🪙が付与される");
-    ok(!W.idleGain(G, now+60e3), "精算直後(30分未満)は貯め直し");
-    G.idle={last:now-48*3600e3};
-    eq(W.idleGain(G, now).gold, 24*60, "上限24時間ぶん");
-    ok(!W.idleGain({idle:{last:0}, dungeons:{}, gold:0}, now), "初回は基準時刻を置くだけ");
-    G.dungeons=oldD; G.sv=oldSv; G.idle=oldIdle; G.gold=g0;
+  t("るすばん探索はv5.9.0で廃止: 起動時の精算で🪙が増えない・関数も無い", ()=>{
+    const G=W.G, g0=G.gold, oldIdle=G.idle, oldFrz=G.frz, oldInf=G.inf;
+    G.idle={last:Date.now()-48*3600e3}; G.frz=0; G.inf={best:0, run:null};
+    W.settleIdleAndFreeze();
+    eq(G.gold, g0, "放置時間があっても🪙は増えない");
+    ok(typeof W.idleGain==="undefined" && typeof W.idleRate==="undefined", "idleGain/idleRateは撤去");
+    G.idle=oldIdle; G.frz=oldFrz; G.inf=oldInf;
   });
   t("灰色帯対策: 日をまたいだ最初の起動でも1回だけリロード(v4.13.0)", ()=>{
     const store=init=>{ const s=Object.assign({},init);
@@ -2263,28 +2250,41 @@ function run(){
     eq(r.sv.dailyDone, "2026-08-12", "達成日も残る");
     eq(r.sv.winDay, "2026-08-13", "本日初生還の受取日も残る(二重取り防止)");
   });
-  t("ホーム(v4.29.0): 進捗と学習開始に絞る ─ ヒーロー/タイル廃止・目安が最上段・直近7日・任務/図鑑の入口", ()=>{
+  t("ホーム(v5.9.0): 今日(目安→セット)→今週の記録(7マスカレンダー)→学習をはじめる。任務/図鑑の入口は設定へ", ()=>{
     W.renderHome();
     const hb=W.document.getElementById("homeBox");
     ok(!hb.querySelector(".hero") && !hb.querySelector(".tilegrid"), "キャラ/戦闘力パネルと冒険/ガチャ/編成タイルは無い");
     ok(hb.innerHTML.indexOf("戦闘力")<0 && hb.innerHTML.indexOf("📖 Lv")<0, "戦闘力・📖Lv/XPの表示は無い");
     eq(hb.firstElementChild.id, "homePace", "いちばん上は今日の目安(ヒーロー)");
     ok(hb.firstElementChild.classList.contains("phero"), "目安は大きい表示");
-    // v4.30.0の並び替え(実機FB): 上=記録(目安→直近7日)・中=任務/図鑑・下=アクション
-    eq(hb.children[1].id, "homeWeek", "記録はまとめて上(目安の直後に直近7日)");
-    ok(hb.children[2].classList.contains("homelinks"), "中段は任務・図鑑の入口");
-    eq(hb.children[3].id, "homeSets", "今日のセット(v5.8.0)は任務・図鑑の下");
-    eq(hb.children[4].id, "homeStudy", "学習をはじめるはその下(報酬受取・ログボ・同期の条件行も下のグループ)");
+    eq(hb.children[1].id, "homeSets", "今日のセットは目安の直後");
+    eq(hb.children[2].id, "homeWeek", "今週の記録はその下");
+    eq(hb.children[3].id, "homeStudy", "学習をはじめるは記録の下(報酬受取・ログボ・同期の条件行も下のグループ)");
     ok(!W.document.getElementById("homeQuick"), "サクッと5問は廃止(v5.8.0)");
-    ok(W.document.querySelector("#homeSets .setdots"), "セットの●○表示");
-    ok(W.document.querySelectorAll("#homeWeek .wcol").length===7, "直近7日のあゆみ(7本)");
-    ok(W.document.querySelector("#homeWeek .wcol.today"), "右端が今日");
-    ok(W.document.getElementById("homeMission") && W.document.getElementById("homeDex"), "任務・図鑑の小さな入口(ナビに無いため)");
-    W.document.getElementById("homeMission").click();
-    ok(!W.document.getElementById("missionView").classList.contains("hidden"), "任務の入口から任務タブへ");
-    W.switchTab("home");
+    ok(!W.document.getElementById("homeMission") && !W.document.getElementById("homeDex"), "任務・図鑑の入口はホームに無い(設定へ移設)");
+    ok(!hb.querySelector(".weekchart") && !hb.querySelector(".wcol"), "バーグラフは廃止");
+    eq(W.document.querySelectorAll("#homeWeek .weekcal .wc").length, 7, "7マスのカレンダー");
+    ok(W.document.querySelector("#homeWeek .wc.today"), "右端が今日");
+    ok(W.document.querySelector("#homeWeek .wc.today .wcd").textContent==="今日", "今日のマスは「今日」");
+    // マスの色: 目安達成=hit・学習した日=did
+    const G=W.G, dr=W.dayRec(), snap={a:dr.a, t:dr.t};
+    dr.a=12; dr.t=10; W.renderHome();
+    ok(W.document.querySelector("#homeWeek .wc.today.hit"), "目安達成の日は金");
+    dr.a=3; dr.t=10; W.renderHome();
+    ok(W.document.querySelector("#homeWeek .wc.today.did") && !W.document.querySelector("#homeWeek .wc.today.hit"), "学習しただけの日は青");
+    dr.a=snap.a; if(snap.t===undefined) delete dr.t; else dr.t=snap.t; W.renderHome();
     W.document.getElementById("homeWeek").click();
-    ok(W.document.querySelector("#modal .histchart"), "7日パネルのタップで学習のあゆみが開く");
+    ok(W.document.querySelector("#modal .histchart"), "カレンダーのタップで学習のあゆみが開く");
+    W.closeModal();
+    // 任務・図鑑は⚙設定・記録から
+    W.openSettings();
+    ok(W.document.getElementById("setMissionBtn") && W.document.getElementById("setDexBtn"), "設定に任務・図鑑の入口");
+    W.document.getElementById("setMissionBtn").click();
+    ok(!W.document.getElementById("missionView").classList.contains("hidden"), "設定の入口から任務タブへ");
+    W.switchTab("home");
+    W.openSettings();
+    W.document.getElementById("setDexBtn").click();
+    ok(W.document.getElementById("dexSeg"), "設定の入口から図鑑が開く");
     W.closeModal();
   });
   t("冒険ハブ(v4.29.0): 次のステージ1枚+あそびかた3種・ステージ一覧は折りたたみ・心得は1入口(タブ切替)", ()=>{

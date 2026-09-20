@@ -36,6 +36,7 @@ const EVENTS=[
   // {d:"2026-08-03", t:"..."} 形式でバナー以外のイベント告知を書く
 ];
 const NEWS=[
+  {d:"2026-09-20", t:"🏠 v5.9.0 ホームを「今日やること」に集中! 上から 今日の目安 → 今日のセット → 📅今週の記録(曜日つきの7マス: 金=目安達成・青=学習した日) → 学習をはじめる、の並びに。任務・図鑑の入口は⚙設定・記録に移しました(任務報酬の一括受取ボタンは今までどおりホームに出ます)。💤るすばん探索(放置で🪙)は廃止 ─ 🪙は学習と冒険で。セット完了画面の中央ぞろえも修正"},
   {d:"2026-09-20", t:"🧩 v5.8.0 学習を「30問=1セット」に! ホームに「今日のセット」(●○で積み上げが見える・目安があればセット数に換算)、学習タブには「セット 12/30」の進み。30問目の答え合わせのあと、正解数・はじめて出会った語・定着が進んだ語・覚えた語・このセットの🎫をまとめた完了画面が出ます(「次のセットへ」でそのまま続行)。⚡サクッと5問は廃止しました(5問ごとの🎫+5ボーナスはそのまま)"},
   {d:"2026-09-20", t:"📈 v5.8.0 単語の学習効率を改善! ①ミスしても階段を全部やり直しにせず、1段下から再開(旧: 半分まで戻す) ②すでに知っている単語の早回し: 初見で正解なら1分/10分の段を飛ばして翌日へ、翌日も正解なら7日後へ ─ 既知語は3問で「覚えた」に(旧5問) ③復習が40問以上たまっているときは新規を待たせて、復習の遅れによる忘却の悪循環を防ぐ ④学習ペース管理の見積もりを実際の規則どおりに計算し直しました(旧モデルは「ミスで全部やり直し」を仮定していて悲観的すぎた。目安・試算の数字が変わります)"},
   {d:"2026-09-20", t:"🔧 v5.8.0 ①なかまのアイコンを絵文字に戻したあと、同期すると他の端末の画像が復活してしまう不具合を修正(変更・戻した時刻の新しい方が勝つ) ②🎰ことだまスロットは冒険タブから姿を消しました(心得のデータは残っています)"},
@@ -144,22 +145,20 @@ function renderHome(){
   const d=dayRec();
   const stk=studyStreak();
   const mn=claimableCount();
-  const cdx=cardDexStats(), xdx=charDexStats();
-  // 直近7日のあゆみ: 金=その日の目安を達成・点線=目安の高さ(あゆみモーダルと同じ縮尺の縮小版)
+  /* 今週の記録(v5.9.0・実機FB「直近7日のグラフが直感的でない」): バーグラフをやめ、
+     曜日つきの7マスのカレンダーに。マス=その日の解答数・金=目安達成・青=学習した日・今日は枠線。
+     「どの日にやった/やらなかった」が一目で分かる(習慣トラッカーの流儀)。タップで学習のあゆみ */
   const wk=paceHistory(G, 7, 0);
-  const wmax=Math.max(1, ...wk.map(x=>Math.max(x.a, x.t)));
-  const WH=34;
-  const wbars=wk.map((x,i)=>{
+  const WDAY=["日","月","火","水","木","金","土"];
+  const wcells=wk.map((x,i)=>{
     const hit=x.t>0 && x.a>=x.t;
-    const bh=x.a? Math.max(3, Math.round(WH*x.a/wmax)) : 0;
-    return '<div class="wcol'+(i===6?" today":"")+'">'+
-      '<div class="wbarw">'+
-        (x.t? '<i class="htick" style="bottom:'+Math.round(WH*Math.min(x.t,wmax)/wmax)+'px"></i>':'')+
-        '<div class="hbar'+(hit?" hit":"")+'" style="height:'+bh+'px"></div></div>'+
-      '<div class="wday">'+(i===6? "今日" : x.day)+'</div></div>';
+    const dt=new Date(+x.k.slice(0,4), +x.k.slice(5,7)-1, +x.k.slice(8));
+    return '<div class="wc'+(hit?" hit":x.a?" did":"")+(i===6?" today":"")+'">'+
+      '<span class="wcd">'+(i===6? "今日" : WDAY[dt.getDay()])+'</span>'+
+      '<b class="wcn">'+(x.a? x.a : "・")+'</b>'+
+      '<span class="wcs">'+(hit? "達成" : x.a? "問" : "")+'</span></div>';
   }).join("");
-  const wsum=wk.reduce((s,x)=>s+x.a, 0);
-  let mastered=0; for(const en in G.words){ if(G.words[en][0]>=MASTER_BOX) mastered++; }
+  const wsum=wk.reduce((s,x)=>s+x.a, 0), wdays=wk.filter(x=>x.a>0).length;
   // 今日のセット(v5.8.0): 30問=1セット。目安があればセット数に換算して●○で見せる
   const sp=setProgress(G);
   const setHead=sp.target
@@ -170,32 +169,25 @@ function renderHome(){
     : sp.target && sp.done>=sp.target? '🏅 今日の目安ぶんは積み上げた ─ 前倒しでもう1セット?'
     : sp.done? '次は'+(sp.done+1)+'セット目 ─ すきま時間に1セット'
     : '30問=1セット。すきま時間に1セットずつ積み上げよう';
-  /* 並び(v4.30.0実機FB): ①記録はまとめて上(今日の目安の直後に直近7日)
-     ②行き先の入口(任務・図鑑)を挟んで ③今日のセット(v5.8.0)→アクション(学習をはじめる/報酬受取)は下=
-     親指の届く位置。ログボ/同期の条件行も「受け取る・やる」側なので下のグループに置く */
+  /* 並び(v5.9.0): ①今日(目安→セット) ②今週の記録 ③アクション(学習をはじめる/報酬受取)は下=
+     親指の届く位置。任務・図鑑の入口は⚙設定・記録へ移した(実機FB・ホームは「今日やること」に集中)。
+     ログボ/同期の条件行も「受け取る・やる」側なので下のグループに置く */
   $("homeBox").innerHTML=
-    // ── 記録: 今日の目安(ヒーロー)+直近7日のあゆみ(タップで全期間)
+    // ── 今日: 目安(ヒーロー)+セット
     '<div class="panel pacebar phero" id="homePace"></div>'+
-    '<div class="panel weekpanel" id="homeWeek">'+
-      '<div class="pacetop"><span>📊 直近7日 <span class="small" style="font-weight:700">'+fmt(wsum)+'問</span></span>'+
-        '<b style="font-size:13px; color:var(--ink)">'+
-          (stk>=1? '<span style="color:var(--accent)">🔥'+stk+'日連続</span>':'<span class="small">今日から連続記録を</span>')+
-          (G.frz? ' <span class="small" title="連続学習フリーズ">🧊'+G.frz+'</span>':'')+'</b></div>'+
-      '<div class="weekchart">'+wbars+'</div>'+
-      '<div class="pacefoot">覚えた '+fmt(mastered)+' / '+fmt(WORDS.length)+'語 ・ タップで学習のあゆみ ›</div>'+
-    '</div>'+
-    // ── 入口: 任務・図鑑(下部ナビにないもの)
-    '<div class="homelinks">'+
-      '<button class="btn" id="homeMission">📜 任務'+(mn? ' <b style="color:var(--accent)">'+mn+'</b>':'')+
-        '<span class="hlsub">デイリー・実績</span></button>'+
-      '<button class="btn" id="homeDex">📕 図鑑'+
-        '<span class="hlsub">カード'+cdx.owned+'/'+cdx.total+' ・ なかま'+xdx.owned+'/'+xdx.total+'</span></button>'+
-    '</div>'+
-    // ── 今日のセット(v5.8.0): 30問=1セットの積み上げ。タップで学習へ
     '<div class="panel setpanel" id="homeSets">'+
       '<div class="pacetop"><span>🧩 今日のセット</span>'+setHead+'</div>'+
       setDotsHTML(sp)+
       '<div class="pacefoot">'+setFoot+'</div></div>'+
+    // ── 今週の記録(7マスのカレンダー・タップで全期間)
+    '<div class="panel weekpanel" id="homeWeek">'+
+      '<div class="pacetop"><span>📅 今週の記録 <span class="small" style="font-weight:700">'+wdays+'日 ・ '+fmt(wsum)+'問</span></span>'+
+        '<b style="font-size:13px; color:var(--ink)">'+
+          (stk>=1? '<span style="color:var(--accent)">🔥'+stk+'日連続</span>':'<span class="small">今日から連続記録を</span>')+
+          (G.frz? ' <span class="small" title="連続学習フリーズ">🧊'+G.frz+'</span>':'')+'</b></div>'+
+      '<div class="weekcal">'+wcells+'</div>'+
+      '<div class="pacefoot"><span class="wlg hit">■</span>目安達成 <span class="wlg did">■</span>学習した日 ・ タップで全期間のあゆみ ›</div>'+
+    '</div>'+
     // ── アクション: 学習CTA(主役)
     '<button id="homeStudy" class="studycta shine">📖 '+(sp.cur? 'セットのつづき('+sp.cur+'/'+SET_N+')' : '1セット(30問)はじめる')+
       '<span class="ctasub">今日 '+d.a+'問(正解'+d.c+')'+(stk>=2? ' ・ 🔥'+stk+'日連続':'')+' ・ 5問ごとに🎫+'+ANS_BONUS_T+'</span></button>'+
@@ -219,8 +211,6 @@ function renderHome(){
   };
   fillPaceEl($("homePace"));
   $("homeWeek").onclick=()=>openHistoryModal(0);
-  $("homeMission").onclick=()=>switchTab("mission");
-  $("homeDex").onclick=()=>openDex();
   if(mn) $("homeClaim").onclick=()=>{ claimAllCurrent(); renderHome(); };
   const sn=$("homeSync");
   if(sn){ ensureGis(()=>{}); sn.onclick=syncNow; } // GIS事前ロード=タップ時のポップアップブロック防止
@@ -297,8 +287,8 @@ $("bellBtn").onclick=openNews;
 
 /* ---- 起動 ---- */
 /* 灰色帯対策の自動リロード判定は state.js 冒頭(全初期化の前)で実施(v4.5.1→v4.13.0拡張) */
-/* るすばん探索(放置報酬)とフリーズの自動適用(v4.13.0)。
-   どちらも起きたときだけ1つのトーストにまとめる(上書きされないように) */
+/* フリーズの自動適用(v4.13.0)と無限回廊の最終精算。起きたときだけ1つのトーストにまとめる。
+   るすばん探索(放置報酬)はv5.9.0で廃止 */
 function settleIdleAndFreeze(){
   const msgs=[];
   /* v4.25.0: 無限回廊の廃止 ─ 探索中だった分の🪙はここで最終精算する(1回だけ)。
@@ -311,8 +301,7 @@ function settleIdleAndFreeze(){
       msgs.push("🌀 無限回廊の最終精算: 🪙+"+fmt(g)+(tk? " 🎫+"+tk:"")+"(回廊はサバイバーに道を譲った)");
     }else saveG();
   }
-  const idle=idleGain(G);
-  if(idle) msgs.push("💤 るすばん探索: 🪙+"+fmt(idle.gold)+"("+(Math.round(idle.hours*10)/10)+"時間ぶん)");
+  // るすばん探索(放置報酬)はv5.9.0で廃止(実機FB): 学習と冒険だけが🪙の源泉
   const frozen=applyStreakFreeze(G);
   if(frozen) msgs.push("🧊 フリーズが連続学習を守った("+frozen+"日ぶん)");
   if(msgs.length){ saveG(); refreshHeader(); toast(msgs.join(" ／ ")); }
@@ -328,7 +317,7 @@ if(!TQ_REBOOTING) checkLogin();
 saveG();
 
 /* PWAを閉じずに日をまたいだ場合: 復帰時に日付が変わっていたらログインボーナスを付与。
-   るすばん探索・フリーズも復帰時に精算する */
+   フリーズも復帰時に精算する */
 document.addEventListener("visibilitychange", ()=>{
   if(document.hidden) return;
   settleIdleAndFreeze();
