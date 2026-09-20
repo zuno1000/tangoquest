@@ -36,6 +36,7 @@ const EVENTS=[
   // {d:"2026-08-03", t:"..."} 形式でバナー以外のイベント告知を書く
 ];
 const NEWS=[
+  {d:"2026-09-21", t:"📅 v5.10.2 今日の英語を✓(読んだ/聴いた)した日は、ホームの「今週の記録」のマスに📰の印が付きます。パネルの右上にも「✓ 今日 n本」"},
   {d:"2026-09-21", t:"🔧 v5.10.1 「今日の英語」のソースを、全文を無料で読める・全編を無料で視聴できるものだけに絞りました。有料・閲読制限のあるメディア(The Economist・The Atlantic・NYT・WIRED・New Scientist・MIT Technology Review・Scientific American・Nautilus・Project Syndicate・Foreign Policy・Nature)と更新の止まった番組・外部の有料記事へ飛ぶ集約サイトを外し、記事25誌・番組45本に。開いたら読めない、が起きません"},
   {d:"2026-09-21", t:"📰 v5.10.0 「今日の英語」がホームに登場! 英検1級(CEFR C1)レベルの英語メディア(The Conversation・Aeon・The Guardian・BBC・NPR・TED・Kurzgesagt…)から、読む(記事)と聴く(ポッドキャスト/YouTube)を毎日1本ずつおすすめします。選び方は端末の中だけで完結(無料): 興味のあるテーマに合うソースを優先し、同じソースが続かないよう日替わりで入れ替え。合わないソースは「外す」で二度と出ません。📋LLMプロンプト: 解説フルセット・内容正誤問題・要約の添削(リスニングはディクテーション採点)の依頼文を題名・URL入りで用意 ─ コピーしてChatGPT・Claude・Gemini等に貼るだけ。読んだ・聴いたは✓で記録(同期あり)"},
   {d:"2026-09-21", t:"💬 v5.10.0 フレーズを日々の学習に組み込みました! ①学習タブの既定が「ミックス」に: 30問セットの5問目ごと(5・10・…・30問目)にフレーズが混ざります(単語24+フレーズ6。セットの進みは単語+フレーズの合算・今日の目安は単語だけで数える) ②口頭ステージを廃止し、定着4以上は「全文4択」(日本語の意図→4つの英文から選ぶ・先に思い出すステップつき)に。口頭の制限時間の設定も撤去 ③🎯実戦ドリルはすべて選択式に: グラフ描写=全文4択・大人の動詞/無生物主語/マイフレーズ=クローズ4択。スピーチの組み立て(PREP)は選択式にできないため撤去 ④日替わりの「今日の実戦ドリル」がセット完了画面から1タップで始められます"},
@@ -154,14 +155,17 @@ function renderHome(){
      「どの日にやった/やらなかった」が一目で分かる(習慣トラッカーの流儀)。タップで学習のあゆみ */
   const wk=paceHistory(G, 7, 0);
   const WDAY=["日","月","火","水","木","金","土"];
+  const rlDays=rlDoneByDay(G.rl); // 今日の英語を✓した日(v5.10.2): マスの下に📰の印
   const wcells=wk.map((x,i)=>{
     const hit=x.t>0 && x.a>=x.t;
     const dt=new Date(+x.k.slice(0,4), +x.k.slice(5,7)-1, +x.k.slice(8));
     return '<div class="wc'+(hit?" hit":x.a?" did":"")+(i===6?" today":"")+'">'+
       '<span class="wcd">'+(i===6? "今日" : WDAY[dt.getDay()])+'</span>'+
       '<b class="wcn">'+(x.a? x.a : "・")+'</b>'+
-      '<span class="wcs">'+(hit? "達成" : x.a? "問" : "")+'</span></div>';
+      '<span class="wcs">'+(hit? "達成" : x.a? "問" : "")+'</span>'+
+      '<span class="wcr">'+(rlDays[x.k]? "📰" : "")+'</span></div>';
   }).join("");
+  const rlToday=rlDays[todayKey()]||0;
   const wsum=wk.reduce((s,x)=>s+x.a, 0), wdays=wk.filter(x=>x.a>0).length;
   // 今日のセット(v5.8.0): 30問=1セット。目安があればセット数に換算して●○で見せる
   const sp=setProgress(G);
@@ -186,7 +190,7 @@ function renderHome(){
     // ── 今日の英語(v5.10.0): 読む・聴くのおすすめ1本ずつ(中身はreading.jsが非同期で埋める)。タップで詳細
     '<div class="panel rlpanel" id="homeRL">'+
       '<div class="pacetop"><span>📰 今日の英語 <span class="small" style="font-weight:700">読む・聴く ─ 英検1級レベル・すべて無料</span></span>'+
-        '<b style="font-size:13px; color:var(--sub)">›</b></div>'+
+        (rlToday? '<b style="font-size:13px; color:var(--ok)">✓ 今日 '+rlToday+'本</b>' : '<b style="font-size:13px; color:var(--sub)">›</b>')+'</div>'+
       '<div class="rlrows"></div></div>'+
     // ── 今週の記録(7マスのカレンダー・タップで全期間)
     '<div class="panel weekpanel" id="homeWeek">'+
@@ -195,7 +199,7 @@ function renderHome(){
           (stk>=1? '<span style="color:var(--accent)">🔥'+stk+'日連続</span>':'<span class="small">今日から連続記録を</span>')+
           (G.frz? ' <span class="small" title="連続学習フリーズ">🧊'+G.frz+'</span>':'')+'</b></div>'+
       '<div class="weekcal">'+wcells+'</div>'+
-      '<div class="pacefoot"><span class="wlg hit">■</span>目安達成 <span class="wlg did">■</span>学習した日 ・ タップで全期間のあゆみ ›</div>'+
+      '<div class="pacefoot"><span class="wlg hit">■</span>目安達成 <span class="wlg did">■</span>学習した日 <span class="wlg">📰</span>今日の英語 ・ タップで全期間のあゆみ ›</div>'+
     '</div>'+
     // ── アクション: 学習CTA(主役)
     '<button id="homeStudy" class="studycta shine">📖 '+(sp.cur? 'セットのつづき('+sp.cur+'/'+SET_N+')' : '1セット(30問)はじめる')+

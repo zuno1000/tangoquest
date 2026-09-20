@@ -3151,6 +3151,26 @@ function run(){
     const pr=W.partialResetData({rl:{topics:{env:1}, mute:{}, done:{u1:{}}, last:{}}, chars:{}, party:{}}, 1);
     ok(pr.rl && pr.rl.done.u1, "部分リセットでも今日の英語の記録は残る");
   });
+  t("今日の英語(v5.10.2): ✓した日は今週の記録のマスに📰・パネルに「✓ 今日 n本」", ()=>{
+    const G=W.G, doc=W.document, oldDone=G.rl.done;
+    const key=d=>{ const t=new Date(); const x=new Date(t.getFullYear(),t.getMonth(),t.getDate()-d);
+      return x.getFullYear()+"-"+String(x.getMonth()+1).padStart(2,"0")+"-"+String(x.getDate()).padStart(2,"0"); };
+    G.rl.done={};
+    W.renderHome();
+    ok([...doc.querySelectorAll("#homeWeek .wc .wcr")].every(e=>e.textContent===""), "記録なし=印なし(高さは予約)");
+    ok(doc.getElementById("homeRL").textContent.indexOf("✓ 今日")<0, "パネルに✓なし");
+    G.rl.done={"https://a/1":{d:key(0),k:"read"}, "https://a/2":{d:key(0),k:"listen"}, "https://a/3":{d:key(2),k:"read"}};
+    const by=W.rlDoneByDay(G.rl);
+    eq(by[key(0)], 2); eq(by[key(2)], 1); ok(!by[key(1)], "純関数: 日別の本数");
+    W.renderHome();
+    const cells=[...doc.querySelectorAll("#homeWeek .wc")];
+    eq(cells[6].querySelector(".wcr").textContent, "📰", "今日のマスに📰");
+    eq(cells[4].querySelector(".wcr").textContent, "📰", "2日前のマスに📰");
+    eq(cells[5].querySelector(".wcr").textContent, "", "昨日は印なし");
+    ok(doc.getElementById("homeRL").textContent.indexOf("✓ 今日 2本")>=0, "パネルに「✓ 今日 2本」");
+    ok(doc.querySelector("#homeWeek .pacefoot").textContent.indexOf("📰")>=0, "凡例に📰");
+    G.rl.done=oldDone; W.renderHome();
+  });
   t("ペース試算: 1日の問題数を増やすほど習得見込みが伸び、全語で頭打ち", ()=>{
     const est=W.paceEstimates([]);
     const p1=W.paceProjection(W.G, est, 100, 20);

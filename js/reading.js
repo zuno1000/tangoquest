@@ -207,6 +207,12 @@ async function rlFetch(src){
   rlCachePut(src.id, items);
   return items;
 }
+/* 日別の「読んだ・聴いた」本数(純関数・ymd→件数)。今週の記録の📰印と今日の英語パネルの✓に使う(v5.10.2) */
+function rlDoneByDay(rl){
+  const out={}; const done=(rl&&rl.done)||{};
+  for(const u in done){ const d=done[u]&&done[u].d; if(d) out[d]=(out[d]||0)+1; }
+  return out;
+}
 /* おすすめの1本: ソースの最新から「読んだ・聴いた」ものを飛ばした先頭 */
 function rlChoose(items, rl){
   const done=(rl&&rl.done)||{};
