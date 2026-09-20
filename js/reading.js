@@ -207,11 +207,47 @@ async function rlFetch(src){
   rlCachePut(src.id, items);
   return items;
 }
-/* 日別の「読んだ・聴いた」本数(純関数・ymd→件数)。今週の記録の📰印と今日の英語パネルの✓に使う(v5.10.2) */
+/* 日別の「読んだ・聴いた」本数(純関数・ymd→{r:読んだ, l:聴いた, n:合計})。
+   今週の記録の📖/🎧印と今日の英語パネルの✓に使う(v5.10.2→v5.10.3で読む/聴くを分けた) */
 function rlDoneByDay(rl){
   const out={}; const done=(rl&&rl.done)||{};
-  for(const u in done){ const d=done[u]&&done[u].d; if(d) out[d]=(out[d]||0)+1; }
+  for(const u in done){
+    const e=done[u]; if(!e || !e.d) continue;
+    const o=out[e.d]=out[e.d]||{r:0, l:0, n:0};
+    if(e.k==="listen") o.l++; else o.r++;
+    o.n++;
+  }
   return out;
+}
+/* マス・パネル用の印: 読んだ=📖・聴いた=🎧(両方なら並ぶ) */
+function rlMarks(o){ return o? (o.r? "📖":"")+(o.l? "🎧":"") : ""; }
+/* これまでの記録(純関数): 新しい日→同じ日は新しい順(登録順が無いので題名順)。[{d,k,id,t,u}] */
+function rlHistoryList(rl, max){
+  const done=(rl&&rl.done)||{};
+  const list=Object.keys(done).filter(u=>done[u] && done[u].d).map(u=>Object.assign({u}, done[u]));
+  list.sort((a,b)=>(b.d>a.d? 1 : b.d<a.d? -1 : String(a.t).localeCompare(String(b.t))));
+  return max? list.slice(0, max) : list;
+}
+/* 記録の一覧モーダル(v5.10.3): 日ごとに区切って📖/🎧・題名(リンク)・出典。◀で今日の英語へ */
+function openRLHistory(){
+  const list=rlHistoryList(G.rl, 200);
+  const by=rlDoneByDay(G.rl);
+  let r=0, l=0; for(const d in by){ r+=by[d].r; l+=by[d].l; }
+  const md=k=>{ const dt=new Date(k+"T00:00:00"); return isNaN(dt)? k : (dt.getMonth()+1)+"/"+dt.getDate(); };
+  let html="", last=null;
+  list.forEach(e=>{
+    if(e.d!==last){ last=e.d; html+='<div class="rlhday">'+md(e.d)+(e.d===todayKey()? "(今日)":"")+' <span class="small">'+rlMarks(by[e.d])+'</span></div>'; }
+    const src=byRl[e.id];
+    html+='<div class="myrow rlhrow"><span class="rlhk">'+(e.k==="listen"? "🎧":"📖")+'</span>'+
+      '<div class="grow"><a class="rlhtitle" href="'+esc(e.u)+'" target="_blank" rel="noopener">'+esc(e.t||e.u)+'</a>'+
+      (src? '<br><span class="small">'+esc(src.name)+'</span>':'')+'</div></div>';
+  });
+  openModal('<h3>📚 読んだ・聴いたの記録</h3>'+
+    '<div class="small">📖 読んだ '+r+'本 ・ 🎧 聴いた '+l+'本'+(list.length<Object.keys(G.rl.done||{}).length? ' ・ 直近200本を表示':'')+'</div>'+
+    (list.length? '<div class="panel" style="margin-top:8px">'+html+'</div>'
+                : '<div class="empty">まだ記録がない ─ 今日の英語で読んだ・聴いたら ✓ を押そう</div>')+
+    '<div class="row" style="margin-top:12px"><button class="btn" id="rlhBack">◀ 今日の英語</button></div>');
+  $("rlhBack").onclick=openRLModal;
 }
 /* おすすめの1本: ソースの最新から「読んだ・聴いた」ものを飛ばした先頭 */
 function rlChoose(items, rl){
@@ -358,8 +394,10 @@ function openRLModal(){
       '<div class="rlchips">'+Object.keys(RL_TOPICS).map(t=>'<button class="wchip rltop'+(G.rl.topics[t]? " ksel":"")+'" data-t="'+t+'">'+RL_TOPICS[t]+'</button>').join("")+'</div>', false)+
     foldSec("rlMuted", "🔕 外したソース("+Object.keys(G.rl.mute||{}).filter(id=>G.rl.mute[id].on).length+")",
       '<div id="rlMuteList">'+rlMuteListHTML()+'</div>', false)+
+    '<button class="btn" id="rlHistBtn" style="margin-top:10px; width:100%">📚 読んだ・聴いたの記録('+Object.keys(G.rl.done||{}).length+'本)</button>'+
     '<div class="small" style="margin-top:10px">ソース '+RL_SOURCES.filter(s=>s.kind==="read").length+'誌 ・ '+RL_SOURCES.filter(s=>s.kind==="listen").length+'番組。'+
-      'すべて無料で読める・聴けるものだけ。読んだ・聴いた: '+Object.keys(G.rl.done||{}).length+'本</div></div>');
+      'すべて無料で読める・聴けるものだけ</div></div>');
+  $("rlHistBtn").onclick=openRLHistory;
   render();
   rlEnsureLoaded(()=>{ render(); rlFillHome(); });
   $("modal").querySelectorAll(".rltop").forEach(b=>{

@@ -443,7 +443,7 @@ function openSettings(){
     '<tr><td>今日の解答</td><td>'+d.a+'問(正解'+d.c+')</td></tr>'+
     '<tr><td>覚えた単語</td><td>'+mastered+' / '+WORDS.length+'(学習した '+Object.keys(G.words).length+'語)</td></tr>'+
     '<tr><td>覚えたフレーズ</td><td>'+pmas+' / '+allPhrases().length+'(今日 '+pdayRec().a+'問)</td></tr>'+
-    '<tr><td>📰 読んだ・聴いた</td><td>'+Object.keys(G.rl.done||{}).length+'本(今日の英語)</td></tr>'+
+    '<tr><td>📰 今日の英語</td><td>📖 '+Object.keys(G.rl.done||{}).filter(u=>G.rl.done[u].k!=="listen").length+'本 ・ 🎧 '+Object.keys(G.rl.done||{}).filter(u=>G.rl.done[u].k==="listen").length+'本</td></tr>'+
     '<tr><td>連続学習</td><td>'+streak+'日(XP×'+(+streakXpMult().toFixed(2))+' ・ 🧊'+(G.frz||0)+'/'+FRZ_MAX+')</td></tr>'+
     // 正確な残高(v4.31.0: ヘッダーは短縮表記・ガチャ画面の残高行の移設先)
     '<tr><td>🎫 チケット</td><td>'+fmt(G.tickets)+'(限定召喚用・学習で入手)</td></tr>'+
@@ -455,6 +455,7 @@ function openSettings(){
       '<button class="btn" id="phrHistBtn">🗣 フレーズのあゆみ</button>'+
       // にがてノート(v5.10.0): ミスした単語の一覧と「にがて特訓」の入口
       '<button class="btn" id="weakBtn">🔥 にがてノート<span class="hlsub">'+weakWords(G).length+'語 ・ 特訓へ</span></button>'+
+      '<button class="btn" id="rlHistBtn2">📚 読んだ・聴いた<span class="hlsub">今日の英語の記録</span></button>'+
       // 任務・図鑑の入口(v5.9.0でホームから移設・実機FB)
       '<button class="btn" id="setMissionBtn"><span>📜 任務'+(mnClaim? ' <b style="color:var(--accent)">'+mnClaim+'件 受取</b>':'')+'</span></button>'+
       '<button class="btn" id="setDexBtn">📕 図鑑</button></div>'+
@@ -487,6 +488,7 @@ function openSettings(){
     $("spkSecBtn").textContent="フレーズ: 口頭の制限時間: "+spkSecLabel(G.opt.spkSec)+" (タップで切替)";
   };
   $("weakBtn").onclick=openWeakModal;
+  $("rlHistBtn2").onclick=openRLHistory;
   $("phrHistBtn").onclick=()=>openPhrHistoryModal(0);
   $("setMissionBtn").onclick=()=>switchTab("mission"); // switchTabがモーダルを閉じる
   $("setDexBtn").onclick=()=>openDex();

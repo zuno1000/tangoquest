@@ -3151,7 +3151,7 @@ function run(){
     const pr=W.partialResetData({rl:{topics:{env:1}, mute:{}, done:{u1:{}}, last:{}}, chars:{}, party:{}}, 1);
     ok(pr.rl && pr.rl.done.u1, "部分リセットでも今日の英語の記録は残る");
   });
-  t("今日の英語(v5.10.2): ✓した日は今週の記録のマスに📰・パネルに「✓ 今日 n本」", ()=>{
+  t("今日の英語(v5.10.2→5.10.3): ✓した日は今週の記録のマスに📖/🎧を分けて・パネルに「✓ 📖n 🎧n」・記録の一覧", ()=>{
     const G=W.G, doc=W.document, oldDone=G.rl.done;
     const key=d=>{ const t=new Date(); const x=new Date(t.getFullYear(),t.getMonth(),t.getDate()-d);
       return x.getFullYear()+"-"+String(x.getMonth()+1).padStart(2,"0")+"-"+String(x.getDate()).padStart(2,"0"); };
@@ -3161,14 +3161,32 @@ function run(){
     ok(doc.getElementById("homeRL").textContent.indexOf("✓ 今日")<0, "パネルに✓なし");
     G.rl.done={"https://a/1":{d:key(0),k:"read"}, "https://a/2":{d:key(0),k:"listen"}, "https://a/3":{d:key(2),k:"read"}};
     const by=W.rlDoneByDay(G.rl);
-    eq(by[key(0)], 2); eq(by[key(2)], 1); ok(!by[key(1)], "純関数: 日別の本数");
+    eq(by[key(0)].n, 2); eq(by[key(0)].r, 1); eq(by[key(0)].l, 1); eq(by[key(2)].r, 1); eq(by[key(2)].l, 0); ok(!by[key(1)], "純関数: 日別に読んだ/聴いたを分けて数える");
+    eq(W.rlMarks(by[key(0)]), "📖🎧"); eq(W.rlMarks(by[key(2)]), "📖"); eq(W.rlMarks(null), "");
     W.renderHome();
     const cells=[...doc.querySelectorAll("#homeWeek .wc")];
-    eq(cells[6].querySelector(".wcr").textContent, "📰", "今日のマスに📰");
-    eq(cells[4].querySelector(".wcr").textContent, "📰", "2日前のマスに📰");
+    eq(cells[6].querySelector(".wcr").textContent, "📖🎧", "今日のマスに📖🎧(両方)");
+    eq(cells[4].querySelector(".wcr").textContent, "📖", "2日前のマスは📖だけ");
     eq(cells[5].querySelector(".wcr").textContent, "", "昨日は印なし");
-    ok(doc.getElementById("homeRL").textContent.indexOf("✓ 今日 2本")>=0, "パネルに「✓ 今日 2本」");
-    ok(doc.querySelector("#homeWeek .pacefoot").textContent.indexOf("📰")>=0, "凡例に📰");
+    ok(doc.getElementById("homeRL").textContent.indexOf("✓ 📖1 🎧1")>=0, "パネルに「✓ 📖1 🎧1」");
+    ok(doc.querySelector("#homeWeek .pacefoot").textContent.indexOf("📖")>=0 && doc.querySelector("#homeWeek .pacefoot").textContent.indexOf("🎧")>=0, "凡例に📖/🎧");
+    // これまでの記録(一覧): 新しい日が上・日ごとの見出し・題名リンク・出典
+    G.rl.done["https://a/1"].t="Read One"; G.rl.done["https://a/1"].id=W.RL_SOURCES[0].id;
+    G.rl.done["https://a/2"].t="Listen Two"; G.rl.done["https://a/3"].t="Read Old";
+    const hl=W.rlHistoryList(G.rl);
+    eq(hl.length, 3); eq(hl[0].d, key(0), "新しい日が先"); eq(hl[2].t, "Read Old", "古い日が後");
+    W.openRLHistory();
+    const m=doc.getElementById("modal");
+    ok(m.textContent.indexOf("読んだ・聴いたの記録")>=0 && m.textContent.indexOf("📖 読んだ 2本")>=0 && m.textContent.indexOf("🎧 聴いた 1本")>=0, "見出しと本数(読む/聴く別)");
+    eq(m.querySelectorAll(".rlhday").length, 2, "日ごとの見出し2つ");
+    eq(m.querySelectorAll(".rlhrow").length, 3, "3本の行");
+    const a=[...m.querySelectorAll(".rlhtitle")].find(x=>x.textContent==="Read One");
+    ok(a && a.getAttribute("href")==="https://a/1", "題名から開き直せる");
+    ok(m.textContent.indexOf(W.RL_SOURCES[0].name)>=0, "出典名");
+    ok(doc.getElementById("rlhBack"), "◀今日の英語");
+    W.closeModal();
+    W.openRLModal(); ok(doc.getElementById("rlHistBtn"), "今日の英語に記録の入口"); W.closeModal();
+    W.openSettings(); ok(doc.getElementById("rlHistBtn2"), "設定・記録にも入口"); W.closeModal();
     G.rl.done=oldDone; W.renderHome();
   });
   t("ペース試算: 1日の問題数を増やすほど習得見込みが伸び、全語で頭打ち", ()=>{

@@ -212,7 +212,10 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
 .wc .wcd{font-size:10px; font-weight:800}
 .wc .wcn{font-size:15px; line-height:1.15; font-weight:800}
 .wc .wcs{font-size:9px; font-weight:700; height:11px; line-height:11px}
-.wc .wcr{font-size:9px; height:11px; line-height:11px} /* 📰=今日の英語を✓した日(v5.10.2・空でも高さを予約) */
+.wc .wcr{font-size:9px; height:11px; line-height:11px; letter-spacing:-1px} /* 📖/🎧=今日の英語を✓した日(v5.10.2〜・空でも高さを予約) */
+.rlhday{font-size:12px; font-weight:800; color:var(--accent2); padding:8px 0 2px}
+.rlhrow .rlhk{flex:0 0 auto; font-size:16px}
+.rlhrow .rlhtitle{font-size:13px; font-weight:800; color:var(--ink); text-decoration:none; word-break:break-word}
 .wc.did{background:linear-gradient(135deg,#E3E7FF,#D3D9FF); color:var(--accent2); box-shadow:none}
 .wc.hit{background:linear-gradient(135deg,#FFB547,#F5A020); color:#4A3200; box-shadow:0 2px 6px rgba(245,160,32,.35)}
 .wc.today{outline:2px solid var(--accent2); outline-offset:-2px}
