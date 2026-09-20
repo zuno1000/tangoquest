@@ -3072,10 +3072,14 @@ function run(){
     d.a=snap.da; pd.a=snap.pa; pd.c=snap.pc; G.tickets=snap.t; G.xp=snap.xp; G.set=snap.set;
     W.saveG(); W.switchTab("home"); W.newQuestion();
   });
-  t("今日の英語(v5.10.0): カタログは英検1級レベルのソース(読む/聴く)・id一意・フィード/テーマが揃う", ()=>{
+  t("今日の英語(v5.10.0): カタログは英検1級レベルのソース(読む/聴く)・id一意・フィード/テーマが揃う・すべて無料(v5.10.1)", ()=>{
     const S=W.RL_SOURCES;
-    ok(S.filter(s=>s.kind==="read").length>=30, "読むは30誌以上");
+    ok(S.filter(s=>s.kind==="read").length>=20, "読むは20誌以上");
     ok(S.filter(s=>s.kind==="listen").length>=30, "聴くは30番組以上");
+    // 掲載基準(ユーザー決定2026-09-21): 全文を無料で読める・全編を無料で視聴できるソースだけ
+    eq(S.filter(s=>s.pay).length, 0, "有料・閲読制限つき(pay)のソースは載せない");
+    const banned=["economist","atlantic","nytimes","ft.com","wired","newscientist","technologyreview","scientificamerican","nautil.us","project-syndicate","foreignpolicy","nature.com","longreads"];
+    S.filter(s=>!s.yt).forEach(s=>ok(banned.every(b=>s.url.indexOf(b)<0 && s.feed.indexOf(b)<0), s.id+": 有料・閲読制限のあるメディアではない"));
     ok(S.filter(s=>s.yt).length>=15, "YouTubeチャンネルが15以上");
     eq(new Set(S.map(s=>s.id)).size, S.length, "idは一意");
     S.forEach(s=>{

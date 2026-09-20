@@ -18,18 +18,19 @@
 
 const RL_TOPICS={sci:"科学", tec:"テクノロジー", eco:"経済・ビジネス", pol:"政治・国際", env:"環境",
   med:"医療・健康", cul:"思想・文化", soc:"社会", his:"歴史"};
-/* kind: read=記事 / listen=音声・動画。lv: 1=英検1級標準 / 2=1級+(長文・専門寄り)。pay: 1=一部有料(閲読制限あり)。
-   yt: YouTubeチャンネル(fetchはAtom)。feedはすべて2026-09-20に応答・件数を確認済み */
+/* kind: read=記事 / listen=音声・動画。lv: 1=英検1級標準 / 2=1級+(長文・専門寄り)。
+   yt: YouTubeチャンネル(fetchはAtom)。feedはすべて2026-09-20に応答・件数・最新日付を確認済み。
+   ★掲載基準(ユーザー決定2026-09-21): 全文を無料で読める・全編を無料で視聴できるソースだけ。有料・閲読制限(メーター)のある
+   メディア(The Economist・The Atlantic・NYT・FT・WIRED・New Scientist・MIT TR・SciAm・Nautilus・Project Syndicate・
+   Foreign Policy・Nature)と、更新の止まったもの(Hakai・Science In Action)、外部の有料記事へ飛ぶ集約(Longreads)は載せない。
+   種類が減っても「開いたら読めない」を出さないことを優先する。payフラグは使わない(テストで0件を固定) */
 const YT_FEED="https://www.youtube.com/feeds/videos.xml?channel_id=";
 const RL_SOURCES=[
   /* ---- 読む ---- */
   {id:"conversation", kind:"read", name:"The Conversation", url:"https://theconversation.com/us", feed:"https://theconversation.com/us/articles.atom", t:["soc","sci","pol"], lv:1},
   {id:"aeon", kind:"read", name:"Aeon", url:"https://aeon.co", feed:"https://aeon.co/feed.rss", t:["cul","sci"], lv:2},
   {id:"psyche", kind:"read", name:"Psyche", url:"https://psyche.co", feed:"https://psyche.co/feed", t:["cul","med"], lv:1},
-  {id:"nautilus", kind:"read", name:"Nautilus", url:"https://nautil.us", feed:"https://nautil.us/feed/", t:["sci","cul"], lv:2},
   {id:"quanta", kind:"read", name:"Quanta Magazine", url:"https://www.quantamagazine.org", feed:"https://api.quantamagazine.org/feed/", t:["sci","tec"], lv:2},
-  {id:"mittr", kind:"read", name:"MIT Technology Review", url:"https://www.technologyreview.com", feed:"https://www.technologyreview.com/feed/", t:["tec","sci"], lv:1, pay:1},
-  {id:"sciam", kind:"read", name:"Scientific American", url:"https://www.scientificamerican.com", feed:"http://rss.sciam.com/ScientificAmerican-Global", t:["sci","med"], lv:1},
   {id:"guardian-long", kind:"read", name:"The Guardian ─ The long read", url:"https://www.theguardian.com/news/series/the-long-read", feed:"https://www.theguardian.com/news/series/the-long-read/rss", t:["soc","cul","pol"], lv:2},
   {id:"guardian-sci", kind:"read", name:"The Guardian ─ Science", url:"https://www.theguardian.com/science", feed:"https://www.theguardian.com/science/rss", t:["sci"], lv:1},
   {id:"guardian-op", kind:"read", name:"The Guardian ─ Opinion", url:"https://www.theguardian.com/commentisfree", feed:"https://www.theguardian.com/commentisfree/rss", t:["pol","soc"], lv:1},
@@ -38,29 +39,19 @@ const RL_SOURCES=[
   {id:"npr-health", kind:"read", name:"NPR ─ Health", url:"https://www.npr.org/sections/health/", feed:"https://feeds.npr.org/1128/rss.xml", t:["med"], lv:1},
   {id:"npr-sci", kind:"read", name:"NPR ─ Science", url:"https://www.npr.org/sections/science/", feed:"https://feeds.npr.org/1007/rss.xml", t:["sci"], lv:1},
   {id:"bbc-future", kind:"read", name:"BBC Future", url:"https://www.bbc.com/future", feed:"https://www.bbc.com/future/feed.rss", t:["sci","tec","soc"], lv:1},
-  {id:"projsynd", kind:"read", name:"Project Syndicate", url:"https://www.project-syndicate.org", feed:"https://www.project-syndicate.org/rss", t:["eco","pol"], lv:2, pay:1},
   {id:"smithsonian", kind:"read", name:"Smithsonian Magazine", url:"https://www.smithsonianmag.com", feed:"https://www.smithsonianmag.com/rss/latest_articles/", t:["his","cul","sci"], lv:1},
   {id:"knowable", kind:"read", name:"Knowable Magazine", url:"https://knowablemagazine.org", feed:"https://knowablemagazine.org/rss", t:["sci","med"], lv:1},
   {id:"noema", kind:"read", name:"Noema Magazine", url:"https://www.noemamag.com", feed:"https://www.noemamag.com/feed/", t:["cul","pol","tec"], lv:2},
   {id:"undark", kind:"read", name:"Undark", url:"https://undark.org", feed:"https://undark.org/feed/", t:["sci","med"], lv:1},
   {id:"bigthink", kind:"read", name:"Big Think", url:"https://bigthink.com", feed:"https://bigthink.com/feed/", t:["cul","sci"], lv:1},
-  {id:"atlantic", kind:"read", name:"The Atlantic", url:"https://www.theatlantic.com", feed:"https://www.theatlantic.com/feed/all/", t:["pol","cul","soc"], lv:2, pay:1},
-  {id:"wired", kind:"read", name:"WIRED", url:"https://www.wired.com", feed:"https://www.wired.com/feed/rss", t:["tec","sci"], lv:1, pay:1},
   {id:"vox", kind:"read", name:"Vox", url:"https://www.vox.com", feed:"https://www.vox.com/rss/index.xml", t:["soc","pol"], lv:1},
-  {id:"fp", kind:"read", name:"Foreign Policy", url:"https://foreignpolicy.com", feed:"https://foreignpolicy.com/feed/", t:["pol"], lv:2, pay:1},
-  {id:"nyt-world", kind:"read", name:"The New York Times ─ World", url:"https://www.nytimes.com/section/world", feed:"https://rss.nytimes.com/services/xml/rss/nyt/World.xml", t:["pol","soc"], lv:1, pay:1},
-  {id:"longreads", kind:"read", name:"Longreads", url:"https://longreads.com", feed:"https://longreads.com/feed/", t:["cul","soc"], lv:2},
   {id:"ars", kind:"read", name:"Ars Technica", url:"https://arstechnica.com", feed:"https://feeds.arstechnica.com/arstechnica/index", t:["tec","sci"], lv:1},
   {id:"owid", kind:"read", name:"Our World in Data", url:"https://ourworldindata.org", feed:"https://ourworldindata.org/atom.xml", t:["soc","eco","env"], lv:1},
   {id:"marginalian", kind:"read", name:"The Marginalian", url:"https://www.themarginalian.org", feed:"https://www.themarginalian.org/feed/", t:["cul"], lv:2},
-  {id:"newsci", kind:"read", name:"New Scientist", url:"https://www.newscientist.com", feed:"https://www.newscientist.com/feed/home/", t:["sci","tec"], lv:1, pay:1},
-  {id:"nature-news", kind:"read", name:"Nature ─ News", url:"https://www.nature.com/news", feed:"https://www.nature.com/nature.rss", t:["sci"], lv:2},
   {id:"jstor", kind:"read", name:"JSTOR Daily", url:"https://daily.jstor.org", feed:"https://daily.jstor.org/feed/", t:["his","cul"], lv:1},
-  {id:"hakai", kind:"read", name:"Hakai Magazine", url:"https://hakaimagazine.com", feed:"https://hakaimagazine.com/feed/", t:["env","sci"], lv:1},
   {id:"e360", kind:"read", name:"Yale Environment 360", url:"https://e360.yale.edu", feed:"https://e360.yale.edu/feed.xml", t:["env"], lv:2},
   {id:"grist", kind:"read", name:"Grist", url:"https://grist.org", feed:"https://grist.org/feed/", t:["env","pol"], lv:1},
   {id:"harvard-gaz", kind:"read", name:"The Harvard Gazette", url:"https://news.harvard.edu/gazette/", feed:"https://news.harvard.edu/gazette/feed/", t:["sci","soc","med"], lv:1},
-  {id:"economist-leaders", kind:"read", name:"The Economist ─ Leaders", url:"https://www.economist.com/leaders", feed:"https://www.economist.com/leaders/rss.xml", t:["eco","pol"], lv:2, pay:1},
   /* ---- 聴く: ポッドキャスト ---- */
   {id:"ted-audio", kind:"listen", name:"TED Talks Daily", url:"https://www.ted.com/podcasts/ted-talks-daily", feed:"https://feeds.feedburner.com/TEDTalks_audio", t:["cul","sci","soc"], lv:1},
   {id:"ted-radio", kind:"listen", name:"TED Radio Hour (NPR)", url:"https://www.npr.org/programs/ted-radio-hour/", feed:"https://feeds.npr.org/510298/podcast.xml", t:["cul","sci","soc"], lv:1},
@@ -71,15 +62,12 @@ const RL_SOURCES=[
   {id:"bbc-doc", kind:"listen", name:"BBC The Documentary", url:"https://www.bbc.co.uk/programmes/p02nq0lx", feed:"https://podcasts.files.bbci.co.uk/p02nq0lx.rss", t:["soc","pol","cul"], lv:1},
   {id:"bbc-reith", kind:"listen", name:"BBC The Reith Lectures", url:"https://www.bbc.co.uk/programmes/b00729d9", feed:"https://podcasts.files.bbci.co.uk/b00729d9.rss", t:["cul","pol"], lv:2},
   {id:"bbc-inourtime", kind:"listen", name:"BBC In Our Time", url:"https://www.bbc.co.uk/programmes/b006qykl", feed:"https://podcasts.files.bbci.co.uk/b006qykl.rss", t:["his","cul","sci"], lv:2},
-  {id:"bbc-sciaction", kind:"listen", name:"BBC Science In Action", url:"https://www.bbc.co.uk/programmes/p002vsnb", feed:"https://podcasts.files.bbci.co.uk/p002vsnb.rss", t:["sci"], lv:1},
   {id:"bbc-bizdaily", kind:"listen", name:"BBC Business Daily", url:"https://www.bbc.co.uk/programmes/p002vsxs", feed:"https://podcasts.files.bbci.co.uk/p002vsxs.rss", t:["eco"], lv:1},
   {id:"bbc-moreorless", kind:"listen", name:"BBC More or Less", url:"https://www.bbc.co.uk/programmes/p02nrss1", feed:"https://podcasts.files.bbci.co.uk/p02nrss1.rss", t:["eco","soc"], lv:1},
   {id:"bbc-inquiry", kind:"listen", name:"BBC The Inquiry", url:"https://www.bbc.co.uk/programmes/p029399x", feed:"https://podcasts.files.bbci.co.uk/p029399x.rss", t:["pol","soc"], lv:1},
   {id:"sciencevs", kind:"listen", name:"Science Vs", url:"https://gimletmedia.com/shows/science-vs", feed:"https://feeds.megaphone.fm/sciencevs", t:["sci","med"], lv:1},
   {id:"99pi", kind:"listen", name:"99% Invisible", url:"https://99percentinvisible.org", feed:"https://feeds.simplecast.com/BqbsxVfO", t:["cul","tec","his"], lv:1},
   {id:"radiolab", kind:"listen", name:"Radiolab", url:"https://radiolab.org", feed:"https://feeds.simplecast.com/EmVW7VGp", t:["sci","cul"], lv:1},
-  {id:"thedaily", kind:"listen", name:"The Daily (NYT)", url:"https://www.nytimes.com/column/the-daily", feed:"https://feeds.simplecast.com/54nAGcIl", t:["pol","soc"], lv:1},
-  {id:"economist-pod", kind:"listen", name:"Economist Podcasts", url:"https://www.economist.com/podcasts", feed:"https://rss.acast.com/theeconomistallaudio", t:["eco","pol"], lv:2, pay:1},
   /* ---- 聴く: YouTube ---- */
   {id:"yt-ted", kind:"listen", yt:1, name:"TED (YouTube)", url:"https://www.youtube.com/@TED", feed:YT_FEED+"UCAuUUnT6oDeKwE6v1NGQxug", t:["cul","sci","soc"], lv:1},
   {id:"yt-teded", kind:"listen", yt:1, name:"TED-Ed (YouTube)", url:"https://www.youtube.com/@TEDEd", feed:YT_FEED+"UCsooa4yRKGN_zEE8iknghZA", t:["sci","his","cul"], lv:1},
@@ -295,7 +283,7 @@ let rlState={read:null, listen:null}; // {src, items|null, err}
 function rlKindLabel(k){ return k==="read"? "📖 読む" : "🎧 聴く"; }
 function rlSrcChips(s){
   return '<span class="rlchip lv">'+(s.lv>=2? "1級+" : "英検1級")+'</span>'+
-    (s.pay? '<span class="rlchip pay">🔒一部有料</span>':'')+
+    (s.pay? '<span class="rlchip pay">🔒一部有料</span>':'')+ // 掲載基準は無料のみ=通常は出ない(保険)
     s.t.map(t=>'<span class="rlchip">'+RL_TOPICS[t]+'</span>').join("");
 }
 function rlDateText(d){
@@ -352,6 +340,7 @@ function openRLModal(){
   };
   openModal('<h3>📰 今日の英語 '+helpBtn("hlp-rl")+'</h3>'+
     helpNote("hlp-rl", '英検1級(CEFR C1)レベルの英語メディアから、<b>読む</b>(記事)と<b>聴く</b>(ポッドキャスト・YouTube)を毎日1本ずつおすすめする。'+
+      '<b>すべて無料で全文を読める・全編を視聴できるソースだけ</b>(有料・閲読制限のあるメディアは載せていない)。'+
       '選び方は端末の中だけで完結(無料・通信は記事一覧の取得だけ): 「興味のあるテーマ」に合うソースを優先し、同じソースが3日続かないよう入れ替え、'+
       '日付で決まる順番なので同じ日に何度開いても同じおすすめ。合わないソースは「外す」で二度と出ない。<br><br>'+
       '<b>📋 LLMプロンプト</b>: 解説・語彙・内容正誤問題・要約の添削などを、あなたが使うLLM(ChatGPT・Claude・Gemini等)に頼むための依頼文。'+
@@ -364,7 +353,7 @@ function openRLModal(){
     foldSec("rlMuted", "🔕 外したソース("+Object.keys(G.rl.mute||{}).filter(id=>G.rl.mute[id].on).length+")",
       '<div id="rlMuteList">'+rlMuteListHTML()+'</div>', false)+
     '<div class="small" style="margin-top:10px">ソース '+RL_SOURCES.filter(s=>s.kind==="read").length+'誌 ・ '+RL_SOURCES.filter(s=>s.kind==="listen").length+'番組。'+
-      '読んだ・聴いた: '+Object.keys(G.rl.done||{}).length+'本</div></div>');
+      'すべて無料で読める・聴けるものだけ。読んだ・聴いた: '+Object.keys(G.rl.done||{}).length+'本</div></div>');
   render();
   rlEnsureLoaded(()=>{ render(); rlFillHome(); });
   $("modal").querySelectorAll(".rltop").forEach(b=>{
