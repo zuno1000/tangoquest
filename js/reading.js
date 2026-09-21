@@ -265,7 +265,7 @@ function rlChoose(items, rl){
    聴く: 字幕なしで1回 → ①正誤問題 → ②教材化(スクリプト・語彙・キーセンテンス)→ シャドーイング → 📝
          → ③ディクテーション採点 → ④意見を英語で → ✓聴いた
    ②の語彙一覧は「単語 — 日本語」の1行1語で返してもらう=📝マイ単語にそのまま貼れる */
-const RL_VOCAB_FMT="最後に、3の語彙15個を「単語 — 日本語訳」の形式(1行1語・記号や番号なし)でまとめて一覧にしてください(単語帳アプリにそのまま貼り付けます)。";
+const RL_VOCAB_FMT="最後に、3の語彙15個を「単語 — 日本語訳 — その語が使われている英文1文(本文からの引用)」の形式(1行1語・記号や番号なし・見出しの単語は原形)でまとめて一覧にしてください(単語帳アプリにそのまま貼り付けます)。";
 const RL_PROMPTS={
   read:[
     {id:"tf", step:"①", name:"✅ 内容正誤問題", when:"読み終えた直後に。辞書なしで通読してから、理解できたかを問題で確かめる", tpl:(s,it)=>
@@ -443,7 +443,7 @@ function openRLModal(){
     '<div class="small" style="margin-top:10px">ソース '+RL_SOURCES.filter(s=>s.kind==="read").length+'誌 ・ '+RL_SOURCES.filter(s=>s.kind==="listen").length+'番組。'+
       'すべて無料で読める・聴けるものだけ</div></div>');
   $("rlHistBtn").onclick=openRLHistory;
-  $("rlMywBtn").onclick=()=>openMywAdd();
+  $("rlMywBtn").onclick=()=>openMywAdd("", rlCurrentTitle("read")||rlCurrentTitle("listen"));
   if(!G.rl.flowSeen){ G.rl.flowSeen=1; saveG(); } // 進め方は初回だけ開いた状態で見せる(端末の好み)
   render();
   rlEnsureLoaded(()=>{ render(); rlFillHome(); });
@@ -563,5 +563,5 @@ function openRLPrompt(kind, src, item){
   });
   $("rlpCopy").onclick=()=>rlCopy(ta.value, ta);
   $("rlpBack").onclick=openRLModal;
-  $("rlpMyw").onclick=()=>openMywAdd();
+  $("rlpMyw").onclick=()=>openMywAdd("", item.t);
 }

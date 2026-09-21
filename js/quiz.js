@@ -37,6 +37,41 @@ function curKind(){ return qKind; }
 let recentEns=[];
 function noteRecent(en){ recentEns.push(en); if(recentEns.length>3) recentEns.shift(); }
 
+/* ---- 取り違えの学習(v5.12.0・「学習」を押すだけで最適な流れになるよう、既定の出題に組み込む) ----
+   ①記録: ミスで選んだ誤答の単語を「取り違えペア」としてG.conf(en→{相手:回数}・両方向)に数える
+   ②誤答の生成: 4択の誤答は「取り違えた相手」→「同じ語根の語」→ 無作為、の順(=消去法で解けない・弁別を毎回練習)
+   ③追い出題: ミスの直後、取り違えた相手を数問以内に出す(pairQueue)=ペアを続けて見比べて区別を固める
+   新しいモードやボタンは足さない(にがてノートには「取り違え: 相手」の情報だけ出す) */
+let pairQueue=[]; // 追い出題の待ち行列(en)
+function noteConfusion(g, en, other){
+  if(!en || !other || en===other) return;
+  g.conf=g.conf||{};
+  (g.conf[en]=g.conf[en]||{})[other]=(g.conf[en][other]||0)+1;
+  (g.conf[other]=g.conf[other]||{})[en]=(g.conf[other][en]||0)+1;
+}
+/* 取り違えの相手(回数の多い順・純関数)。同じ品詞で現存する語だけ */
+function confusedWith(g, en, n){
+  const c=(g.conf||{})[en]; if(!c) return [];
+  const w=byEn[en];
+  return Object.keys(c).filter(o=>byEn[o] && (!w || byEn[o].pos===w.pos)).sort((a,b)=>c[b]-c[a]).slice(0, n||2);
+}
+/* 同じ語根の語(同じ品詞・純関数)。取り違えやすい家族を誤答に混ぜる */
+function rootMates(en, n){
+  const ids=rootIdsOf(en); if(!ids.length) return [];
+  const w=byEn[en], out=[];
+  for(const x of WORDS){
+    if(x.en===en || x.pos!==w.pos) continue;
+    if(rootIdsOf(x.en).some(i=>ids.indexOf(i)>=0)) out.push(x.en);
+  }
+  return shuffle(out).slice(0, n||1);
+}
+/* マイ単語の新規導入は1セット(30問)にこの数まで(v5.12.0): 1記事から15語登録した日に復習を押しのけない */
+var MYW_PER_SET=6;
+function setMyNew(g, total){
+  const s=g.set; if(!s || s.d!==todayKey() || s.a0!==Math.floor(total/SET_N)*SET_N) return 0;
+  return s.myN||0;
+}
+
 /* 復習の緊急度=「忘れかけ度」: 期限をどれだけ過ぎたかを、その単語の記憶間隔で割った比。
    間隔1日を半日超過(0.5)は、間隔35日を1日超過(0.03)よりずっと危ない。
    連続ミス中の単語はさらに優先して早めに立て直す */
@@ -50,6 +85,11 @@ function reviewUrgency(st, now){
 /* word state: [box, due, correct, wrong, mastered, wrongStreak, lastCorrectAt, lapseBack] */
 function pickWord(){
   const now=Date.now(); const due=[], unseen=[];
+  // 取り違えた相手の追い出題(v5.12.0): ミスの直後の数問以内に、区別すべき相手を出す
+  while(pairQueue.length){
+    const en=pairQueue.shift();
+    if(byEn[en] && !recentEns.includes(en)) return byEn[en];
+  }
   for(const w of WORDS){
     const st=G.words[w.en];
     if(!st) unseen.push(w);
@@ -61,7 +101,7 @@ function pickWord(){
      登録した直後に会えるように2問に1問の確率で先取り(復習の渋滞ガードより優先=本人の意思が最優先)。
      1度出れば通常のSRSに乗る(=優先は自然に消える) */
   const mu=fresh(unseen.filter(w=>mywWanted(w.en)));
-  if(mu.length && Math.random()<0.5) return mu[Math.floor(Math.random()*mu.length)];
+  if(mu.length && setMyNew(G, todayTotal())<MYW_PER_SET && Math.random()<0.5) return mu[Math.floor(Math.random()*mu.length)];
   /* 新規を混ぜる確率: 目標があれば「1日の新規目安」を消化するまで30%、消化後は復習に専念
      (復習が尽きたら新規は無制限)。目標なしは従来どおり20% */
   let pNew=0.2;
@@ -205,6 +245,7 @@ function setRecord(g, total, info){
   s.n++;
   if(info.ok) s.cor++;
   if(info.wasNew) s.newN++;
+  if(info.my) s.myN=(s.myN||0)+1; // マイ単語の新規導入(1セットの上限に使う・v5.12.0)
   if(info.up) s.up++;
   if(info.mas) s.mas++;
   if(info.phr) s.phr=(s.phr||0)+1;
@@ -378,7 +419,8 @@ function openWeakModal(){
             (sort!=="miss"? ' ・ <span class="qx">ミス '+st[3]+'</span>':'')+
             (sort!=="streak" && (st[5]||0)>=2? ' ・ 🔥連続'+st[5]:'')+
             (sort!=="box"? ' ・ 定着 '+st[0]+'/'+MASTER_BOX:'')+
-            (rootText(en)? ' ・ 🧬'+esc(rootText(en)):'')+'</span></div>'+
+            (rootText(en)? ' ・ 🧬'+esc(rootText(en)):'')+
+            (confusedWith(G, en, 1).length? ' ・ ⇄ 取り違え: '+esc(confusedWith(G, en, 1)[0]):'')+'</span></div>'+
             '<button class="btn mydel wdict" data-en="'+esc(en)+'">🔍</button></div>';
         }).join("")+(list.length>30? '<div class="small" style="margin-top:6px">…ほか'+(list.length-30)+'語</div>':'')+'</div>'
       : '<div class="empty">いま立て直す「にがて」はない ─ いい調子!</div>')+
@@ -402,10 +444,18 @@ function overlaps(a,b){
   return ta.some(t=>tb.has(t));
 }
 function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+/* 4択の誤答(v5.12.0): 取り違えた相手(最大2)→同じ語根の語(最大1)→無作為、の順で3つ。
+   いつも同じ顔ぶれにならないよう、取り違え・語根の枠は1/4の確率で空ける */
 function buildChoices(word){
-  const pool=WORDS.filter(c=>c.pos===word.pos && c.en!==word.en && !overlaps(c,word));
+  const okc=c=>c && c.en!==word.en && c.pos===word.pos && !overlaps(c,word);
+  const picks=[], has=en=>picks.some(p=>p.en===en);
+  const add=en=>{ const c=byEn[en]; if(okc(c) && !has(en) && picks.length<3) picks.push(c); };
+  if(Math.random()<0.75) confusedWith(G, word.en, 2).forEach(add);
+  if(Math.random()<0.75) rootMates(word.en, 1).forEach(add);
+  const pool=WORDS.filter(c=>okc(c) && !has(c.en));
   shuffle(pool);
-  return shuffle([word, ...pool.slice(0,3)]);
+  while(picks.length<3 && pool.length) picks.push(pool.pop());
+  return shuffle([word, ...picks]);
 }
 
 /* 長い訳語の選択肢は1行に収まるまで文字をわずかに縮める(最小13px・v4.23.0)。
@@ -457,6 +507,20 @@ function renderQuestion(){
   pw.className = e2j? "" : "ja";
   $("qStats").innerHTML = qStatsHTML(st);
   const box=$("choices"); box.innerHTML="";
+  /* 先に思い出すステップ(v5.12.0・単語の復習にも): 4択は再認で解けてしまうので、復習(一度出た語)は
+     選択肢を開く前に1回の自力想起を挟む。新規は思い出すものがないので即4択。フレーズと同じ設定(preRecall)で
+     オフにできる。にがて特訓・サバイバーは対象外(特訓はテンポ優先・サバイバーは時間駆動) */
+  if(st && G.opt.preRecall && !FOCUS){
+    const b=document.createElement("button");
+    b.className="choice rcbtn"; b.id="wordRecallBtn";
+    b.innerHTML='🧠 まず自力で思い出す<span class="rcsub">'+(e2j? "意味を" : "英語を")+'(心の中で)言ってから、タップで選択肢</span>';
+    b.onclick=()=>{ if(!answered) wordShowChoices(); };
+    box.appendChild(b);
+  }else wordShowChoices();
+}
+function wordShowChoices(){
+  const e2j=G.mode==="e2j";
+  const box=$("choices"); box.innerHTML="";
   cur.choices.forEach(c=>{
     const b=document.createElement("button");
     b.className="choice";
@@ -465,6 +529,12 @@ function renderQuestion(){
     box.appendChild(b);
   });
   refitChoices("#choices .choice");
+}
+/* マイ単語の用例(v5.12.0): 答え合わせのあと、出会った文を単語カードの下に出す(単語は太字) */
+function mywExampleHTML(en){
+  const m=G.myw && G.myw[en]; if(!m || m.del || !m.ex) return "";
+  const re=new RegExp("("+en.replace(/[.*+?^${}()|[\]\\]/g,"\\$&").replace(/ /g,"\\s+")+"\\w*)","i");
+  return '<span class="myex">📝 '+esc(m.ex).replace(re, "<b>$1</b>")+'</span>';
 }
 
 function newQuestion(){
@@ -538,8 +608,13 @@ function answer(chosen, btn){
     G.combo=0;
   }
   // 30問セットの帳簿(v5.8.0)。境界に達したら「次へ」で完了モーダル(進みは単語+フレーズの合算=v5.10.0)
-  if(setRecord(G, todayTotal(), {ok, wasNew, up:ok && st[0]>preSt[0], mas:justMastered, tk:tkGain+bonus5, en:w.en})) setDonePending=true;
+  if(setRecord(G, todayTotal(), {ok, wasNew, up:ok && st[0]>preSt[0], mas:justMastered, tk:tkGain+bonus5, en:w.en, my:wasNew && isMyWord(w.en)})) setDonePending=true;
   if(FOCUS) FOCUS.res.push(ok); // にがて特訓の進行(v5.10.0)
+  // 取り違えの記録と追い出題(v5.12.0): 選んだ誤答の単語を相手として数え、数問以内に出す
+  if(!ok && chosen.en!==w.en){ noteConfusion(G, w.en, chosen.en); if(!FOCUS && pairQueue.indexOf(chosen.en)<0) pairQueue.push(chosen.en); }
+  // マイ単語の用例(v5.12.0): 出会った文があれば単語カードの下に
+  const exh=mywExampleHTML(w.en);
+  if(exh){ const pb=$("phrBuild"); pb.innerHTML=exh; pb.classList.remove("hidden"); }
 
   // 知識XP: 正解が直接キャラの強さになる(連続学習日数+コンボ+キャラスキルでボーナス)
   let xpGain=0, lvUp=0;

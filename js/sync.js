@@ -138,6 +138,12 @@ function mergeData(a, b){
     const x=m.myphr[en], y=b.myphr[en];
     if(!x || (y.at||0)>(x.at||0)) m.myphr[en]=y;
   }
+  // 取り違えペア(v5.12.0): ペアごとに回数の多い方(日別記録と同じmaxマージ)
+  m.conf=m.conf||{};
+  for(const en in b.conf||{}){
+    m.conf[en]=m.conf[en]||{};
+    for(const o in b.conf[en]) m.conf[en][o]=Math.max(m.conf[en][o]||0, b.conf[en][o]||0);
+  }
   // マイ単語(v5.11.0): マイフレーズと同じ項目ごとの操作時刻LWW(追加・意味の取り込み・削除が伝播)
   m.myw=m.myw||{};
   for(const en in b.myw||{}){
@@ -387,7 +393,7 @@ function partialResetData(g, t){
     daily:g.daily||{}, weekly:g.weekly||{}, counters:g.counters||{}, ach:g.ach||{},
     login:g.login||{last:null,day:0}, gift10:g.gift10||0,
     frz:g.frz||0, faces:g.faces||{}, faceAt:g.faceAt||{}, idle:{last:t},
-    words:{}, days:{}, inv:{}, shards:0, combo:0,
+    words:{}, days:{}, inv:{}, shards:0, combo:0, conf:{},
     pace:{goal:null, setAt:t, log:[]}};
 }
 
@@ -408,9 +414,11 @@ function openSettings(){
       '(学習タブ・サバイバー共通。「次へ」を押せばすぐ進める。レベルアップの3択などは今までどおり止まる)<br><br>'+
       '<b>サバイバー3択の自動選択</b>: レベルアップ・宝箱の3択をおまかせで即決する'+
       '(HPが半分近く減っているときは回復を優先。じっくり選びたい人はオフのまま)<br><br>'+
-      '<b>フレーズ: 先に思い出すステップ</b>: 4択(クローズ・全文)の選択肢を最初は伏せて、自力で思い出してから開く。'+
+      '<b>先に思い出すステップ</b>: 単語の復習(一度出た語)とフレーズの4択で、選択肢を最初は伏せて自力で思い出してから開く。'+
       '選択肢は「見れば分かる」(再認)で解けてしまい、見ずに言う力(再生)が付きにくい ─ '+
-      'このワンクッションが両者のギャップを埋める(テンポ優先ならオフ)'+
+      'このワンクッションが両者のギャップを埋める(新規の単語・にがて特訓・サバイバーでは出ない。テンポ優先ならオフ)<br><br>'+
+      '<b>4択の誤答と追い出題(設定なし・常時)</b>: 誤答には「以前に取り違えた相手」と「同じ語根の語」を優先して混ぜ、'+
+      'ミスの直後はその相手を数問以内に出す ─ 消去法で解けず、似た語の区別が毎回の学習の中で固まる'+
       (SPEAK_ENABLED? '<br><br><b>フレーズ: 口頭の制限時間</b>: 口頭チェックにカウントダウンを付け、時間切れで自動的に答えが開く。'+
       '本番で使えるのは「すぐ出てくる」フレーズだけ ─ 想起の速さを鍛える' : ''))+
     '<button class="btn" id="modeToggle">出題: '+(G.mode==="e2j"?"EN → 日本語":"日本語 → EN")+' (タップで切替)</button>'+
@@ -419,7 +427,7 @@ function openSettings(){
     '<div style="height:8px"></div>'+
     '<button class="btn" id="svAutoBtn">サバイバー3択の自動選択: '+(G.opt.svAuto? "ON":"OFF")+'</button>'+
     '<div style="height:8px"></div>'+
-    '<button class="btn" id="preRecallBtn">フレーズ: 先に思い出すステップ: '+(G.opt.preRecall? "ON":"OFF")+'</button>'+
+    '<button class="btn" id="preRecallBtn">先に思い出すステップ(単語の復習・フレーズ): '+(G.opt.preRecall? "ON":"OFF")+'</button>'+
     // 口頭ステージはv5.10.0でUIから撤去(SPEAK_ENABLED=false)。制限時間の設定も一緒に隠す
     (SPEAK_ENABLED? '<div style="height:8px"></div>'+
     '<button class="btn" id="spkSecBtn">フレーズ: 口頭の制限時間: '+spkSecLabel(G.opt.spkSec)+' (タップで切替)</button>' : '');
@@ -490,7 +498,7 @@ function openSettings(){
   };
   $("preRecallBtn").onclick=()=>{
     G.opt.preRecall=G.opt.preRecall? 0:1; saveG();
-    $("preRecallBtn").textContent="フレーズ: 先に思い出すステップ: "+(G.opt.preRecall? "ON":"OFF");
+    $("preRecallBtn").textContent="先に思い出すステップ(単語の復習・フレーズ): "+(G.opt.preRecall? "ON":"OFF");
   };
   if($("spkSecBtn")) $("spkSecBtn").onclick=()=>{
     G.opt.spkSec=spkSecCycle(G.opt.spkSec); saveG();

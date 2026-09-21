@@ -1144,6 +1144,10 @@ body.svplay #slotView{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
 .choice.wrong.said{justify-content:flex-start}
 .btn .hlsub{font-size:11px; font-weight:700; color:var(--sub); margin-left:6px}
 .rmeta.myw{color:var(--accent2)}
+/* マイ単語の用例(v5.12.0): 答え合わせのあと単語カードの下・一覧・登録プレビュー */
+.myex{display:block; font-size:13px; font-weight:600; color:var(--sub); line-height:1.5; text-align:left}
+.myex b{color:var(--accent2)}
+.myexs{font-weight:600; color:var(--sub)}
 /* マイ単語の一覧: 意味はタップで手直し(テキスト風ボタン・点線下線で「押せる」を示す) */
 .mywja{border:none; background:none; font:inherit; font-size:13px; font-weight:700; color:var(--ink); padding:0 2px; cursor:pointer;
   text-decoration:underline dotted var(--sub); text-underline-offset:3px; text-align:left; word-break:break-word}

@@ -903,6 +903,7 @@ function svAnswer(chosen, btn){
     else b.classList.add("dim");
   });
   svApplyAnswer(w, ok);
+  if(!ok && chosen.en!==w.en) noteConfusion(G, w.en, chosen.en); // 取り違えの記録(v5.12.0・学習タブと同じ台帳)
   $("svStats").innerHTML=qStatsHTML(G.words[w.en]); // 定着ステップの変化を見せる
   $("svPrompt").classList.add("srch"); // 単語タップで辞書へ(学習タブと同じ流儀)
   saveG(); refreshHeader();

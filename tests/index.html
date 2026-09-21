@@ -44,6 +44,9 @@ const keepalive=setInterval(()=>{}, 25);
 function run(){
   const W=frame.contentWindow;
   try{
+  /* v5.12.0: 単語の復習にも「先に思い出す」ステップ(既定ON)が入ったため、4択を直接クリックする既存テストのために
+     既定はオフで走らせる。ステップ自体は専用テストでONにして検証する */
+  W.G.opt.preRecall=0;
 
   /* ---- データ ---- */
   t("WORDSが800語以上", ()=>ok(W.WORDS.length>=800, "len="+W.WORDS.length));
@@ -4148,6 +4151,110 @@ async function runAsync(W){
     W.markWrongChoice(b2, {en:"abate", ja:"（嵐・痛みなどが）和らぐ、弱まる"}, false);
     eq(b2.dataset.said, "（嵐・痛みなどが）和らぐ", "日本語→EN: 訳の先頭のかたまり");
     ok(W.svAnswer && String(W.svAnswer).indexOf("markWrongChoice")>=0, "サバイバーも同じ関数");
+  });
+  /* ---- v5.12.0: 既定の出題を賢く(先に思い出す・取り違えの誤答/追い出題・マイ単語の上限・用例) ---- */
+  t("先に思い出す(v5.12.0・単語): 復習は選択肢を伏せて1タップで開く・新規は即4択・にがて特訓では出ない", ()=>{
+    const G=W.G, doc=W.document;
+    const oldPre=G.opt.preRecall, oldQtab=G.opt.qtab; G.opt.preRecall=1; G.opt.qtab="w";
+    const w=W.WORDS[10], old=G.words[w.en];
+    G.words[w.en]=[2, Date.now()-1000, 2, 0, 0, 0, 0]; // 復習
+    W.switchTab("quiz"); W.setCurFromTest(w);
+    ok(doc.getElementById("wordRecallBtn") && doc.querySelectorAll("#choices .choice").length===1, "復習は選択肢が伏せてある");
+    doc.getElementById("wordRecallBtn").click();
+    eq(doc.querySelectorAll("#choices .choice").length, 4, "タップで4択が開く");
+    ok(!doc.getElementById("wordRecallBtn"), "ボタンは消える");
+    delete G.words[w.en]; W.setCurFromTest(w);
+    ok(!doc.getElementById("wordRecallBtn") && doc.querySelectorAll("#choices .choice").length===4, "新規は即4択");
+    G.opt.preRecall=0; G.words[w.en]=[2, Date.now()-1000, 2, 0, 0, 0, 0]; W.setCurFromTest(w);
+    ok(!doc.getElementById("wordRecallBtn"), "設定オフなら復習でも即4択");
+    G.opt.preRecall=1;
+    const dr=W.dayRec(), pd=W.pdayRec(), snap={a:dr.a, c:dr.c, pa:pd.a, t:G.tickets, xp:G.xp, cb:G.combo, set:G.set};
+    dr.a=1; pd.a=0;
+    W.startFocus([w.en]);
+    ok(!doc.getElementById("wordRecallBtn") && doc.querySelectorAll("#choices .choice").length===4, "にがて特訓はテンポ優先で即4択");
+    [...doc.querySelectorAll("#choices .choice")].find(b=>b.textContent===w.ja).click(); W.newQuestion();
+    if(doc.getElementById("focusEnd")) doc.getElementById("focusEnd").click();
+    W.openSettings(); ok(doc.getElementById("preRecallBtn").textContent.indexOf("単語の復習")>=0, "設定の表記は単語・フレーズ共通"); W.closeModal();
+    if(old) G.words[w.en]=old; else delete G.words[w.en];
+    dr.a=snap.a; dr.c=snap.c; pd.a=snap.pa; G.tickets=snap.t; G.xp=snap.xp; G.combo=snap.cb; G.set=snap.set;
+    G.opt.preRecall=oldPre; G.opt.qtab=oldQtab; W.saveG(); W.switchTab("home");
+  });
+  t("取り違え(v5.12.0): 記録は両方向・誤答に相手と語根仲間を優先・ミス直後に相手を追い出題・同期はmax・部分リセットで消える", ()=>{
+    const G=W.G, doc=W.document;
+    const oldConf=G.conf; G.conf={};
+    const vs=W.WORDS.filter(w=>w.pos==="v"), a=vs[0], b=vs[1], c=vs[2], n=W.WORDS.find(w=>w.pos==="n");
+    W.noteConfusion(G, a.en, b.en); W.noteConfusion(G, a.en, b.en); W.noteConfusion(G, a.en, c.en); W.noteConfusion(G, a.en, n.en);
+    eq(G.conf[a.en][b.en], 2); eq(G.conf[b.en][a.en], 2, "両方向に数える");
+    eq(W.confusedWith(G, a.en, 2).join(","), b.en+","+c.en, "回数の多い順");
+    ok(W.confusedWith(G, a.en, 3).indexOf(n.en)<0, "品詞の違う相手は誤答に使えないので除く");
+    let hit=0;
+    for(let i=0;i<24;i++){ if(W.buildChoices(a).some(x=>x.en===b.en)) hit++; }
+    ok(hit>=10, "取り違えた相手が誤答に優先して混ざる(24回中 "+hit+"回)");
+    ok(W.buildChoices(a).length===4 && W.buildChoices(a).every(x=>x.pos==="v"), "4択・同じ品詞");
+    // 語根仲間
+    const fam=W.WORDS.filter(w=>W.rootIdsOf(w.en).length && W.rootIdsOf(w.en).some(i=>W.ROOT_DEFS[i].t==="ject") && w.pos==="v").map(w=>w.en);
+    if(fam.length>=2){
+      const rm=W.rootMates(fam[0], 3); ok(rm.length>=1 && rm.every(en=>fam.indexOf(en)>=0 || W.rootIdsOf(en).some(i=>W.ROOT_DEFS[i].t==="ject")), "同じ語根・同じ品詞");
+    }
+    // ミスの直後に相手を追い出題(学習タブ)
+    const oldQtab=G.opt.qtab; G.opt.qtab="w";
+    const dr=W.dayRec(), pd=W.pdayRec(), snap={a:dr.a, c:dr.c, pa:pd.a, t:G.tickets, xp:G.xp, cb:G.combo, set:G.set};
+    dr.a=1; pd.a=0; G.conf={};
+    const olda=G.words[a.en];
+    W.switchTab("quiz"); W.setCurFromTest(a);
+    const cs=[...doc.querySelectorAll("#choices .choice")];
+    const wrong=cs.find(x=>x.textContent!==a.ja); const chosen=W.WORDS.find(x=>x.ja===wrong.textContent && x.pos==="v");
+    wrong.click();
+    eq(G.conf[a.en][chosen.en], 1, "ミスで記録");
+    eq(W.pairQueueGet()[0], chosen.en, "相手が追い出題の待ち行列に入る");
+    W.newQuestion();
+    eq(doc.getElementById("promptWord").textContent, chosen.en, "次の問題で相手が出る");
+    eq(W.pairQueueGet().length, 0);
+    [...doc.querySelectorAll("#choices .choice")].find(x=>x.textContent===chosen.ja).click(); // 正解して片づける
+    // にがてノートに「⇄ 取り違え」
+    W.openWeakModal(); ok(doc.getElementById("modal").textContent.indexOf("取り違え: "+chosen.en)>=0, "にがてノートに相手を表示"); W.closeModal();
+    // 同期・部分リセット
+    const mk=(conf)=>({resetAt:0, updatedAt:1, words:{}, inv:{}, chars:{}, dungeons:{}, days:{}, conf});
+    const m=W.mergeData(mk({x:{y:2}}), mk({x:{y:5, z:1}, q:{r:1}}));
+    eq(m.conf.x.y, 5, "ペアごとにmax"); eq(m.conf.x.z, 1); eq(m.conf.q.r, 1);
+    eq(Object.keys(W.partialResetData({conf:{x:{y:1}}}, 1).conf).length, 0, "学習記録なので部分リセットで消える");
+    // 後始末
+    if(olda) G.words[a.en]=olda; else delete G.words[a.en];
+    delete G.words[chosen.en];
+    G.conf=oldConf; G.opt.qtab=oldQtab;
+    dr.a=snap.a; dr.c=snap.c; pd.a=snap.pa; G.tickets=snap.t; G.xp=snap.xp; G.combo=snap.cb; G.set=snap.set;
+    W.saveG(); W.switchTab("home");
+  });
+  t("マイ単語の新規は1セット6語まで(v5.12.0)・用例「単語 — 日本語 — 英文」の解析と答え合わせでの表示", ()=>{
+    const G=W.G, doc=W.document;
+    const oldMyw=G.myw, oldSet=G.set, oldQtab=G.opt.qtab; G.myw={}; G.opt.qtab="w";
+    W.mywAdd("zzcapword", "上限テスト", "n"); delete G.words.zzcapword;
+    const dr=W.dayRec(), pd=W.pdayRec(), snap={a:dr.a, c:dr.c, pa:pd.a};
+    dr.a=5; pd.a=0;
+    G.set={d:W.todayKey(), a0:0, n:5, cor:5, newN:5, myN:W.MYW_PER_SET, up:0, mas:0, tk:0, phr:0, miss:[]};
+    eq(W.setMyNew(G, 5), W.MYW_PER_SET, "このセットのマイ単語の新規数");
+    let hit=0; for(let i=0;i<40;i++){ if(W.pickWord().en==="zzcapword") hit++; }
+    ok(hit<=2, "上限に達したセットでは優先されない(40回中 "+hit+"回)");
+    G.set.myN=0; hit=0; for(let i=0;i<40;i++){ if(W.pickWord().en==="zzcapword") hit++; }
+    ok(hit>=5, "上限前は優先される("+hit+"回)");
+    eq(W.setMyNew(G, 30), 0, "次のセット(境界)では0から");
+    // 用例
+    const r=W.mywParse("abate — 和らぐ — The storm abated by morning.\nzzexword — 用例つき — We saw the zzexword rise quickly.");
+    eq(r[0].ja, "和らぐ"); eq(r[0].ex, "The storm abated by morning.", "3つ目の区画は用例");
+    eq(W.mywParse("allay — 和らげる")[0].ex, "", "用例なし");
+    W.mywAdd(r[1].en, r[1].ja, r[1].pos, r[1].ex, "Test Article");
+    eq(G.myw.zzexword.ex, "We saw the zzexword rise quickly."); eq(G.myw.zzexword.src, "Test Article", "出典の題名");
+    ok(W.mywExampleHTML("zzexword").indexOf("<b>zzexword</b>")>=0, "用例の中の単語を太字に");
+    ok(W.mywExampleHTML("abate")==="", "用例のない語は空");
+    W.switchTab("quiz"); W.setCurFromTest(W.byEn.zzexword);
+    ok(doc.getElementById("phrBuild").classList.contains("hidden"), "出題中は用例を見せない");
+    [...doc.querySelectorAll("#choices .choice")].find(b=>b.textContent==="用例つき").click();
+    ok(!doc.getElementById("phrBuild").classList.contains("hidden") && doc.getElementById("phrBuild").textContent.indexOf("rise quickly")>=0, "答え合わせで用例が出る");
+    W.openMywList(); ok(doc.getElementById("modal").textContent.indexOf("rise quickly")>=0 && doc.getElementById("modal").textContent.indexOf("Test Article")>=0, "一覧に用例と出典"); W.closeModal();
+    ok(W.rlPromptText("read", "full", W.RL_SOURCES[0], {t:"T", u:"https://t/x"}).indexOf("英文1文")>=0, "②の語彙一覧は用例つきの形式を指定");
+    // 後始末
+    W.mywDelete("zzexword"); W.mywDelete("zzcapword"); delete G.words.zzexword;
+    G.myw=oldMyw; G.set=oldSet; G.opt.qtab=oldQtab; dr.a=snap.a; dr.c=snap.c; pd.a=snap.pa; W.saveG(); W.switchTab("home");
   });
   t("マイフレーズ登録: 内蔵と同じ出題・帳簿に乗る(誤答は内蔵から自動生成=手間ゼロ)", ()=>{
     const G=W.G, doc=W.document;

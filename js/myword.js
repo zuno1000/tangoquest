@@ -85,7 +85,7 @@ function mywParse(text){
     const parts=hasJa? [line] : line.split(/[,;／/]+/);
     parts.forEach(part=>{
       part=part.trim(); if(!part) return;
-      let en="", ja="", pos="";
+      let en="", ja="", pos="", ex="";
       // 区切り: — – : ： = → タブ、または空白に挟まれた -(well-beingのような語中のハイフンは区切らない)
       const m=part.match(/^([A-Za-z][A-Za-z' -]{0,40}?)\s*(?:[—–:：=→\t]+|\s-+\s|(?=[（(])|(?=[぀-ヿ一-鿿]))\s*(.*)$/);
       if(m && m[2]!==undefined && (hasJa || /[（(]/.test(part))){
@@ -93,15 +93,18 @@ function mywParse(text){
         // 品詞のかっこ書き/区切り: "(v)" "動詞 —" "adj:"
         const pm=rest.match(/^[（(]?\s*([A-Za-z]+\.?|動詞|名詞|形容詞|副詞|動|名|形|副)\s*[)）]?\s*(?:[—–\-:：=]+)?\s*(.*)$/);
         if(pm && mywPosOf(pm[1])){ pos=mywPosOf(pm[1]); rest=pm[2].trim(); }
-        ja=rest.replace(/^[—–\-:：=\s]+/,"").trim();
-        if(!/[぀-ヿ一-鿿]/.test(ja)) ja="";
+        rest=rest.replace(/^[—–\-:：=\s]+/,"").trim();
+        // 「単語 — 日本語 — 用例(英文)」(v5.12.0): 区切りの後ろの区画から、日本語=意味・英語3語以上=用例
+        const segs=rest.split(/\s*(?:[—–|]|\t)\s*/).map(s=>s.trim()).filter(Boolean);
+        ja=segs.find(s=>/[぀-ヿ一-鿿]/.test(s))||"";
+        ex=segs.find(s=>s!==ja && (s.match(/[A-Za-z]+/g)||[]).length>=3)||"";
       }else{
         en=part;
       }
       en=mywNorm(en);
       if(!en || seen[en]) return;
       seen[en]=1;
-      out.push({en, ja, pos:pos||mywGuessPos(en)});
+      out.push({en, ja, pos:pos||mywGuessPos(en), ex});
     });
   });
   return out;
@@ -129,9 +132,10 @@ function mywUnmount(en){
   delete byEn[en];
 }
 function mywApply(){ mywActive().forEach(mywMount); }
-/* 登録の本体(UIとテストの共用)。戻り値={en, ref?, pending?} か {err} */
-function mywAdd(en, ja, pos){
+/* 登録の本体(UIとテストの共用)。ex=出会った文(任意・v5.12.0)/src=出典の題名(任意)。戻り値={en, ref?, pending?} か {err} */
+function mywAdd(en, ja, pos, ex, src){
   en=mywNorm(en); ja=String(ja||"").replace(/\s+/g," ").trim();
+  ex=String(ex||"").replace(/\s+/g," ").trim().slice(0,200); src=String(src||"").trim().slice(0,80);
   pos=MYW_POS_CYCLE.indexOf(pos)>=0? pos : mywGuessPos(en);
   if(!en) return {err:"英単語として読み取れない"};
   G.myw=G.myw||{};
@@ -143,10 +147,12 @@ function mywAdd(en, ja, pos){
   }
   if(cur && !cur.del){
     if(cur.ja || !ja) return {err:en+" はすでに登録済み"};
-    cur.ja=ja; cur.pos=pos; cur.at=Date.now(); mywMount(en); saveG(); // 意味待ちを埋める
+    cur.ja=ja; cur.pos=pos; cur.at=Date.now(); if(ex) cur.ex=ex; if(src && !cur.src) cur.src=src; mywMount(en); saveG(); // 意味待ちを埋める
     return {en};
   }
   G.myw[en]={ja, pos, at:Date.now()};
+  if(ex) G.myw[en].ex=ex;
+  if(src) G.myw[en].src=src;
   if(ja) mywMount(en);
   saveG();
   return {en, pending:!ja};
@@ -247,12 +253,13 @@ function bindAddSeg(){
   const s=$("addSeg"); if(!s) return;
   s.querySelectorAll("button").forEach(b=>{ b.onclick=()=>{ if(b.dataset.a==="w") openMywAdd(); else openMyphrAdd(); }; });
 }
-function openMywAdd(prefill){
+function openMywAdd(prefill, src){
   const pend=mywPending().length;
   openModal('<h3>📝 マイ単語登録 '+helpBtn("hlp-myw")+'</h3>'+
     helpNote("hlp-myw", '記事を読んでいて分からなかった単語を、自分専用の単語として登録する。<b>単語を貼るだけ</b>(1行1語・カンマ区切りでも可)。'+
       '意味は<b>あとから自動で取り込む</b>(無料の翻訳エンドポイントに単語だけを送る。取れない日は「意味待ち」として残り、次に開いたとき再挑戦)。'+
-      '「単語 — 日本語」と書けば意味も同時に登録でき、LLMの語彙一覧(今日の英語のプロンプト)をそのまま貼るとまとめて登録できる。<br><br>'+
+      '「単語 — 日本語」と書けば意味も同時に登録でき、LLMの語彙一覧(今日の英語のプロンプト)をそのまま貼るとまとめて登録できる。'+
+      '「単語 — 日本語 — 出会った英文」と3つ目に文を添えると、答え合わせのときにその文が出る(文脈つきの方が覚えやすい)。<br><br>'+
       '登録した語は内蔵の単語と同じ復習・カード・図鑑に乗り、<b>未出題のうちは新規の中で優先して出る</b>。内蔵の2,500語に同じ語があれば、その語を優先出題にする。'+
       '<b>句動詞・慣用表現も登録できる</b>(put up with・in tandem・what if・rule of thumb など6語まで)。品詞は語尾や先頭の語から推定'+
       '(動詞+小辞=動詞/前置詞句・つなぎの表現=副詞/名詞句=名詞。4択の誤答は同じ品詞の内蔵語から自動生成)。タップで変更できる。<br><br>'+
@@ -276,7 +283,7 @@ function openMywAdd(prefill){
         let note;
         if(bi && !bi.my) note='<span class="qmas">内蔵にある → 優先出題に</span>'+(G.words[it.en]? ' ・ 定着 '+G.words[it.en][0]+'/'+MASTER_BOX : '');
         else if(m && !m.del) note='<span class="small">登録済み'+(m.ja? '':'(意味待ち)')+'</span>';
-        else note=it.ja? esc(it.ja) : '<span style="color:var(--accent2)">意味は自動で取得</span>';
+        else note=(it.ja? esc(it.ja) : '<span style="color:var(--accent2)">意味は自動で取得</span>')+(it.ex? '<br><span class="myexs">📝 '+esc(it.ex)+'</span>':'');
         return '<div class="myrow"><button class="wchip poschip pos'+it.pos+' mywpos" data-i="'+i+'"'+((bi&&!bi.my)?' disabled':'')+'>'+POS_SHORT[it.pos]+'</button>'+
           '<div class="grow"><b style="font-size:14px">'+esc(it.en)+'</b><br><span class="small">'+note+'</span></div></div>';
       }).join("")+'</div>';
@@ -297,7 +304,7 @@ function openMywAdd(prefill){
   $("mywSave").onclick=()=>{
     let added=0, ref=0, pend2=0, errs=[];
     items.forEach(it=>{
-      const r=mywAdd(it.en, it.ja, it.pos);
+      const r=mywAdd(it.en, it.ja, it.pos, it.ex, src);
       if(r.err){ errs.push(r.err); return; }
       if(r.ref) ref++; else { added++; if(r.pending) pend2++; }
     });
@@ -326,7 +333,8 @@ function openMywList(){
           return '<div class="myrow"><button class="wchip poschip pos'+(m.pos||"n")+' mywpos2" data-en="'+esc(m.en)+'">'+POS_SHORT[m.pos||"n"]+'</button>'+
             '<div class="grow"><b style="font-size:14px">'+esc(m.en)+'</b> '+
             '<button class="mywja" data-en="'+esc(m.en)+'">'+(m.ja? esc(m.ja) : '<span style="color:var(--accent2)">意味待ち ─ タップで入力</span>')+'</button><br>'+
-            '<span class="small">'+(st? '定着 '+st[0]+'/'+MASTER_BOX+(st[3]? ' ・ <span class="qx">ミス '+st[3]+'</span>':'') : (m.ja? '未出題(優先して出る)':'意味が入ると出題される'))+(m.auto? ' ・ 自動取得':'')+'</span></div>'+
+            '<span class="small">'+(st? '定着 '+st[0]+'/'+MASTER_BOX+(st[3]? ' ・ <span class="qx">ミス '+st[3]+'</span>':'') : (m.ja? '未出題(優先して出る)':'意味が入ると出題される'))+(m.auto? ' ・ 自動取得':'')+(m.src? ' ・ 📰'+esc(m.src.slice(0,24)):'')+'</span>'+
+            (m.ex? '<br><span class="small myexs">📝 '+esc(m.ex)+'</span>':'')+'</div>'+
             '<button class="btn mydel wdict" data-en="'+esc(m.en)+'">🔍</button><button class="btn mydel mywdel" data-en="'+esc(m.en)+'">🗑</button></div>';
         }).join("")+'</div>'
       : '<div class="empty">まだ無い ─ 読んでいて分からなかった単語を貼り付けて登録しよう</div>')+
@@ -349,6 +357,12 @@ function openMywList(){
   if($("mywRetry")) $("mywRetry").onclick=()=>{ toast("取得中…"); mywFillPending(n=>{ if(!n) toast("取れなかった ─ 通信か翻訳の都合。LLMに頼む道もある"); if($("mywAddBtn")) openMywList(); }); };
   if($("mywLLM")) $("mywLLM").onclick=()=>openMywPrompt(pend);
   $("mywAddBtn").onclick=()=>openMywAdd();
+}
+/* 今日の英語から開くときの出典(いま出ている記事/番組の題名)。無ければ空 */
+function rlCurrentTitle(kind){
+  const st=(typeof rlState!=="undefined") && rlState[kind];
+  const it=st && st.items? rlChoose(st.items, G.rl) : null;
+  return it? it.t : "";
 }
 /* 意味待ちの語をLLMに頼む(コピー→答えを貼り付けて登録) */
 function openMywPrompt(list){
