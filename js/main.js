@@ -5,6 +5,7 @@ const TABS={
   home:    {view:"homeView",    nav:"navHome",    on:()=>renderHome()},
   quiz:    {view:"quizView",    nav:"navQuiz",    on:()=>{ refreshQuizCount(); refitChoices("#choices .choice"); }},
   /* refreshQuizCount: サバイバー(荒野含む)で解いた分の「今日◯問」をタブ切替時に引き直す(v4.26.0修正) */
+  rec:     {view:"recView",     nav:"navRec",     on:()=>renderRecords()}, // 記録(v5.14.0)
   party:   {view:"partyView",   nav:"navParty",   on:()=>renderParty()},
   adv:     {view:"advView",     nav:"navAdv",     on:()=>renderAdv()},
   gacha:   {view:"gachaView",   nav:"navGacha",   on:()=>renderGacha()},
@@ -32,6 +33,7 @@ function applyGameFlag(){
 applyGameFlag();
 $("navHome").onclick=()=>switchTab("home");
 $("navQuiz").onclick=()=>switchTab("quiz");
+$("navRec").onclick=()=>switchTab("rec");
 $("navParty").onclick=()=>switchTab("party");
 $("navAdv").onclick=()=>switchTab("adv");
 $("navGacha").onclick=()=>switchTab("gacha");
@@ -43,6 +45,7 @@ const EVENTS=[
   // {d:"2026-08-03", t:"..."} 形式でバナー以外のイベント告知を書く
 ];
 const NEWS=[
+  {d:"2026-09-21", t:"📊 v5.14.0 ①ナビを「ホーム・学習・記録」の3つに。⚙設定・記録に同居していた数字の表・学習のあゆみ・にがてノート・読んだ聴いた・マイ単語・図鑑・実績は「記録」タブへ移り、⚙は設定だけになりました。PCでもタブが上から詰めて並びます ②今日の目安のセットを問数に厳密に: 目安113語(ミックス)は142問=4セット+22問。最後の●は22/30の幅で短く描き、脚注も「このセット n/22問」。達成の判定はセット数ではなく問数です"},
   {d:"2026-09-21", t:"🏆 v5.13.0 英単語アプリとして絞り込みました。①編成・冒険(サバイバー)・ガチャのタブ、🪙🎫、カードの演出を非表示に(データは残しています) ②任務(デイリー/ウィークリー)を廃止し、代わりに「実績」: 覚えた単語・累計正解・連続学習・学習した日数・目安達成日・30問セット・にがて克服・フレーズ・マイ単語・今日の英語(読んだ/聴いた)の12種×段階制。段階に達すると自動で📖XPが入り、受け取る操作はありません(⚙設定・記録→🏆実績で確認) ③ヘッダは📖Lv・🏅覚えた語数・🔥連続日数に。ログインボーナスの報酬もXPに"},
   {d:"2026-09-21", t:"🏠 v5.12.1 ホームの「今日の目安」と「今日のセット」を1枚に統合しました。数字は目安(今日の問数)、バーはセット(30問ごとの●○)、脚注に「このセット n/30問」。「学習をはじめる」ボタンの「5問ごとに🎫+5」の表記は外しました"},
   {d:"2026-09-21", t:"🧠 v5.12.0 「学習」を押すだけで効率よく覚えられるように、既定の出題そのものを見直しました(新しいモードやボタンは増えていません)。①復習の単語は、選択肢を開く前に「まず自力で思い出す」ワンクッション(新規・にがて特訓・サバイバーでは出ない。⚙設定でオフ可) ②4択の誤答に「以前に取り違えた相手」と「同じ語根の語」を優先して混ぜ、消去法で解けないように ③ミスの直後は取り違えた相手を数問以内に出して、区別をその場で固める(にがてノートに「⇄ 取り違え: 〜」) ④マイ単語の新規は1セットに6語まで(まとめて登録した日も復習を押しのけない) ⑤マイ単語に「出会った英文」を添えられ、答え合わせで表示(今日の英語②の語彙一覧に用例が付くようにしたので、貼るだけ)"},
@@ -205,7 +208,7 @@ function renderHome(){
       '<div class="pacefoot"><span class="wlg hit">■</span>目安達成 <span class="wlg did">■</span>学習した日 <span class="wlg">📖</span>読んだ <span class="wlg">🎧</span>聴いた ・ タップで全期間のあゆみ ›</div>'+
     '</div>'+
     // ── アクション: 学習CTA(主役)
-    '<button id="homeStudy" class="studycta shine">📖 '+(sp.cur? 'セットのつづき('+sp.cur+'/'+SET_N+')' : '1セット(30問)はじめる')+
+    '<button id="homeStudy" class="studycta shine">📖 '+(sp.cur? 'セットのつづき('+sp.cur+'/'+((sp.target && sp.done===sp.target-1 && sp.last<SET_N)? sp.last : SET_N)+')' : '1セット(30問)はじめる')+
       '<span class="ctasub">今日 '+d.a+'問(正解'+d.c+')'+(stk>=2? ' ・ 🔥'+stk+'日連続':'')+'</span></button>'+
     // 任務報酬の一括受取(受け取れるものがあるときだけ出す)
     (mn? '<button id="homeClaim" class="claimbtn homeclaim">🎁 任務報酬をすべて受け取る('+mn+'件)</button>':'')+

@@ -215,10 +215,13 @@ function paceMsg(done, target){
 /* v5.12.1(実機FB「今日の目安と今日のセットを統廃合」): 目安のパネルにセットの●○バーを組み込み、
    ホームの「今日のセット」パネルは廃止。数字=目安(単語の問数)・バー=セット(30問の単位)・脚注=このセットの進み */
 function setFootText(sp){
+  // 最後のセットが端数(v5.14.0)のときは「このセット n/残り問数」で見せる
+  const inLast=sp.target && sp.done===sp.target-1 && sp.last<SET_N;
+  const need=inLast? sp.last : SET_N;
+  if(sp.hit) return '🏅 今日の目安ぶんは積み上げた ─ 前倒しでもう1セット?';
   return sp.cur
-    ? '🧩 このセット '+sp.cur+'/'+SET_N+'問 ─ つづきから'
-    : sp.target && sp.done>=sp.target? '🏅 今日の目安ぶんは積み上げた ─ 前倒しでもう1セット?'
-    : sp.done? '🧩 次は'+(sp.done+1)+'セット目 ─ すきま時間に1セット'
+    ? '🧩 このセット '+sp.cur+'/'+need+'問 ─ つづきから'
+    : sp.done? '🧩 次は'+(sp.done+1)+'セット目'+(inLast? '('+need+'問で目安に届く)':'')+' ─ すきま時間に1セット'
     : '🧩 30問=1セット ─ すきま時間に1セットずつ';
 }
 function fillPaceEl(el){

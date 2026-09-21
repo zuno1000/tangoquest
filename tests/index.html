@@ -1563,10 +1563,11 @@ function run(){
     W.openPaceModal();
     ok(W.document.getElementById("paceHist"), "ペースモーダルにボタン");
     W.closeModal();
+    W.switchTab("rec");
+    ok(W.document.getElementById("histBtn"), "記録タブにボタン");
     W.openSettings();
-    ok(W.document.getElementById("histBtn"), "設定にボタン");
     ok(W.document.getElementById("updateBtn").textContent.indexOf("🔄")<0, "更新ボタンにアイコンなし");
-    W.closeModal();
+    W.closeModal(); W.switchTab("home");
   });
 
   /* ---- v4.13.0: 覚えた基準・時間帯目安・フリーズ・部分リセット・図鑑・アイコン・放置報酬 ---- */
@@ -2301,16 +2302,13 @@ function run(){
     W.document.getElementById("homeWeek").click();
     ok(W.document.querySelector("#modal .histchart"), "カレンダーのタップで学習のあゆみが開く");
     W.closeModal();
-    // 任務・図鑑は⚙設定・記録から
-    W.openSettings();
-    ok(W.document.getElementById("setMissionBtn") && W.document.getElementById("setDexBtn"), "設定に任務・図鑑の入口");
-    W.document.getElementById("setMissionBtn").click();
-    ok(!W.document.getElementById("missionView").classList.contains("hidden"), "設定の入口から任務タブへ");
-    W.switchTab("home");
-    W.openSettings();
+    // 実績・図鑑は📊記録タブから(v5.14.0: ⚙設定・記録→記録タブへ移設)
+    W.switchTab("rec");
+    ok(W.document.getElementById("recAch") && W.document.getElementById("setDexBtn"), "記録タブに実績・図鑑の入口");
+    ok(W.document.querySelectorAll("#recAch .mrow").length===W.LEARN_ACH_DEFS.length, "実績は記録タブに直接並ぶ");
     W.document.getElementById("setDexBtn").click();
-    ok(W.document.getElementById("dexSeg"), "設定の入口から図鑑が開く");
-    W.closeModal();
+    ok(W.document.getElementById("dexSeg"), "記録タブの入口から図鑑が開く");
+    W.closeModal(); W.switchTab("home");
   });
   t("冒険ハブ(v4.29.0): 次のステージ1枚+あそびかた3種・ステージ一覧は折りたたみ・心得は1入口(タブ切替)", ()=>{
     W.renderAdv();
@@ -3005,9 +3003,9 @@ function run(){
     ok(!W.focusGet(), "特訓は終わっている");
     doc.getElementById("focusEnd").click();
     ok(doc.getElementById("promptWord").textContent.length>0, "通常の出題に戻る");
-    // ⚙設定・記録の入口と、にがてノートのモーダル
-    W.openSettings();
-    ok(doc.getElementById("weakBtn"), "設定に🔥にがてノート");
+    // 📊記録タブの入口と、にがてノートのモーダル
+    W.switchTab("rec");
+    ok(doc.getElementById("weakBtn"), "記録タブに🔥にがてノート");
     doc.getElementById("weakBtn").click();
     ok(doc.getElementById("modal").textContent.indexOf("にがてノート")>=0 && doc.getElementById("weakGo"), "ノートと特訓ボタン");
     W.closeModal();
@@ -3266,7 +3264,7 @@ function run(){
     ok(doc.getElementById("rlhBack"), "◀今日の英語");
     W.closeModal();
     W.openRLModal(); ok(doc.getElementById("rlHistBtn"), "今日の英語に記録の入口"); W.closeModal();
-    W.openSettings(); ok(doc.getElementById("rlHistBtn2"), "設定・記録にも入口"); W.closeModal();
+    W.switchTab("rec"); ok(doc.getElementById("rlHistBtn2"), "記録タブにも入口"); W.switchTab("home");
     G.rl.done=oldDone; W.renderHome();
   });
   t("ペース試算: 1日の問題数を増やすほど習得見込みが伸び、全語で頭打ち", ()=>{
@@ -3626,7 +3624,7 @@ async function runAsync(W){
     });
     ok(doc.getElementById("modeToggle") && doc.getElementById("autoNextBtn") && doc.getElementById("svAutoBtn"), "学習(出題・自動化)");
     ok(doc.getElementById("updateBtn") && doc.getElementById("resetLearnBtn") && doc.getElementById("resetBtn"), "更新・リセット");
-    ok(doc.getElementById("histBtn") && doc.getElementById("paceCfgBtn"), "あゆみ・学習ペース管理の入口は常時見える");
+    ok(!doc.querySelector("#modal #histBtn") && !doc.querySelector("#modal #paceCfgBtn"), "記録系の入口は⚙から📊記録タブへ移設(v5.14.0)");
     doc.querySelector('[data-fold="sfoldLearn"]').click();
     ok(!doc.getElementById("sfoldLearn").hidden, "タップで開く");
     W.closeModal();
@@ -3656,8 +3654,8 @@ async function runAsync(W){
     // 正確な残高は⚙設定・記録で確認できる
     const G=W.G, t0=G.tickets, g0=G.gold;
     G.tickets=12345; G.gold=678901;
-    W.openSettings();
-    const mh=doc.getElementById("modal").innerHTML;
+    W.switchTab("rec");
+    const mh=doc.getElementById("recBox").innerHTML;
     ok(mh.indexOf("12,345")>=0 && mh.indexOf("678,901")>=0, "設定・記録に🎫🪙の正確な残高");
     W.closeModal();
     G.tickets=t0; G.gold=g0; W.saveG();
@@ -3934,9 +3932,9 @@ async function runAsync(W){
     ok(txt.indexOf("覚えたフレーズ")>=0 && txt.indexOf("1 / "+W.PHRASES.length)>=0, "覚えた1件");
     ok(doc.getElementById("phrHistPrev") && doc.getElementById("phrHistNext"), "◀▶でさかのぼれる");
     W.closeModal();
-    // 導線: ⚙設定・記録と🎤実戦メニュー
-    W.openSettings();
-    ok(doc.getElementById("phrHistBtn"), "設定に入口");
+    // 導線: 📊記録タブと🎤実戦メニュー
+    W.switchTab("rec");
+    ok(doc.getElementById("phrHistBtn"), "記録タブに入口");
     W.closeModal();
     W.openDrillMenu();
     ok(doc.getElementById("phrHistBtn2"), "実戦メニューにも入口");
@@ -4036,9 +4034,9 @@ async function runAsync(W){
     const m=W.mergeData(mk([1,0,2,1,0,0,0],3), mk([3,0,5,2,0,0,0],7));
     eq(m.phr["Test phrase."][0], 3, "解答回数が多い方のSRSが勝つ");
     eq(m.pdays["2026-01-01"].a, 7, "日別はmaxマージ");
-    // 設定・記録にフレーズの行がある
-    W.openSettings();
-    ok(W.document.getElementById("modal").textContent.indexOf("覚えたフレーズ")>=0, "設定・記録に表示");
+    // 記録タブにフレーズの行がある
+    W.switchTab("rec");
+    ok(W.document.getElementById("recBox").textContent.indexOf("覚えたフレーズ")>=0, "記録タブに表示");
     W.closeModal();
   });
 
@@ -4149,7 +4147,7 @@ async function runAsync(W){
     eq(wb2.dataset.said, W.byEn[wb2.textContent].ja.split(/[、。／]/)[0], "訳の先頭のかたまり");
     W.newQuestion(); if(doc.getElementById("focusEnd")) doc.getElementById("focusEnd").click();
     // 入口: ⚙設定・➕(単語/フレーズの切替)・今日の英語
-    W.openSettings(); ok(doc.getElementById("mywBtn") && doc.getElementById("mywBtn").textContent.indexOf("1語")>=0, "設定に📝マイ単語");
+    W.switchTab("rec"); ok(doc.getElementById("mywBtn") && doc.getElementById("mywBtn").textContent.indexOf("1語")>=0, "記録タブに📝マイ単語");
     doc.getElementById("mywBtn").click(); ok(doc.getElementById("modal").textContent.indexOf("zzprioritas")>=0, "一覧に出る");
     doc.getElementById("mywAddBtn").click(); ok(doc.getElementById("mywText") && doc.getElementById("addSeg"), "登録画面(単語/フレーズの切替つき)");
     doc.getElementById("mywText").value="zzserendip — 幸運な偶然\nzzprioritas\nabate"; doc.getElementById("mywText").dispatchEvent(new W.Event("input"));
@@ -4293,12 +4291,12 @@ async function runAsync(W){
     eq(W.rewardText({x:100, f:1}), "📖+100XP 🧊1");
     const xp0=G.xp, tk0=G.tickets; W.grantReward({t:2, g:50}); eq(G.xp, xp0+62, "XPが増える"); eq(G.tickets, tk0, "🎫は増えない");
     G.xp=xp0;
-    // ⚙設定: 🎫🪙の行は無く、実績の行と🏆実績の入口
-    W.openSettings();
-    const m=doc.getElementById("modal");
-    ok(m.textContent.indexOf("🎫 チケット")<0 && m.textContent.indexOf("知識XP")>=0 && m.textContent.indexOf("🏆 実績")>=0, "設定の行");
-    ok(doc.getElementById("setMissionBtn").textContent.indexOf("実績")>=0, "任務の入口は実績に");
-    W.closeModal();
+    // 📊記録: 🎫🪙の行は無く、知識XPの行と🏆実績が直接並ぶ・任務の入口は無い
+    W.switchTab("rec");
+    const m=doc.getElementById("recBox");
+    ok(m.textContent.indexOf("🎫 チケット")<0 && m.textContent.indexOf("知識XP")>=0 && m.textContent.indexOf("🏆 実績")>=0, "記録タブの行");
+    ok(!doc.getElementById("setMissionBtn") && doc.querySelectorAll("#recAch .mrow").length===12, "任務の入口は無く実績が並ぶ");
+    W.switchTab("home");
     // 図鑑: なかまは無く、カード→単語
     W.openDex("cards");
     ok(!doc.querySelector('#dexSeg [data-m="chars"]') && doc.querySelector('#dexSeg [data-m="cards"]').textContent==="単語", "図鑑のセグ");
@@ -4336,6 +4334,59 @@ async function runAsync(W){
     const s=W.achSummary(); ok(s.done>=3 && s.all===W.LEARN_ACH_DEFS.reduce((n,a)=>n+a.tiers.length,0), "集計");
     W.switchTab("home");
     G.ach=oldAch; G.counters=oldCnt; G.xp=xp0; W.saveG();
+  });
+  /* ---- v5.14.0: 記録タブ・目安に厳密なセット数 ---- */
+  t("記録タブ(v5.14.0): ナビはホーム/学習/記録の3つ・記録に数字の表と入口と実績・⚙は設定だけ", ()=>{
+    const doc=W.document;
+    const vis=[...doc.querySelectorAll("nav button")].filter(b=>!b.classList.contains("hidden")).map(b=>b.id);
+    eq(vis.join(","), "navHome,navQuiz,navRec", "見えるタブは3つ");
+    doc.getElementById("navRec").click();
+    ok(!doc.getElementById("recView").classList.contains("hidden") && doc.getElementById("navRec").classList.contains("active"), "記録タブへ");
+    const rb=doc.getElementById("recBox");
+    ["今日の解答","覚えた単語","覚えたフレーズ","今日の英語","連続学習","知識XP"].forEach(s=>ok(rb.textContent.indexOf(s)>=0, "表: "+s));
+    ["histBtn","paceCfgBtn","phrHistBtn","weakBtn","rlHistBtn2","mywBtn","setDexBtn"].forEach(id=>ok(doc.getElementById(id), "入口: "+id));
+    ok(doc.getElementById("recAch") && doc.querySelectorAll("#recAch .mrow").length===W.LEARN_ACH_DEFS.length, "実績がそのまま並ぶ");
+    ok(rb.textContent.indexOf("最長")>=0, "連続学習に最長日数");
+    doc.getElementById("histBtn").click(); ok(doc.getElementById("modal").textContent.indexOf("学習のあゆみ")>=0, "あゆみが開く"); W.closeModal();
+    // ⚙は設定だけ
+    W.openSettings();
+    const m=doc.getElementById("modal");
+    ok(m.textContent.indexOf("⚙ 設定")>=0 && !m.querySelector("#histBtn") && !m.querySelector("#weakBtn") && !m.querySelector(".stt"), "設定に記録の表・入口は無い");
+    ok(m.textContent.indexOf("📊 記録")>=0, "記録タブへの案内");
+    ok(doc.getElementById("modeToggle") && doc.getElementById("preRecallBtn") && doc.getElementById("updateBtn") && doc.getElementById("resetBtn"), "設定の中身は残る");
+    W.closeModal(); W.switchTab("home");
+  });
+  t("目安とセット(v5.14.0): 目安の問数に厳密・端数のセットは短い●・達成は問数で判定", ()=>{
+    const G=W.G, doc=W.document;
+    const oldPace=JSON.parse(JSON.stringify(G.pace)), dr=W.dayRec(), pd=W.pdayRec(), a0=dr.a, pa0=pd.a, oldQtab=G.opt.qtab;
+    const dk=W.todayKey(), oldT=G.days[dk] && G.days[dk].t;
+    G.opt.qtab="mix";
+    G.pace={goal:W.addDays(dk, 100), setAt:Date.now(), log:[], qd:{d:dk, per:113}};
+    dr.a=0; pd.a=0;
+    let p=W.setProgress(G);
+    eq(p.targetQ, 142, "目安113語=ミックスでは142問(113×30/24を切り上げ)");
+    eq(p.target, 5, "5セットめは端数"); eq(p.last, 22, "最後のセットは22問");
+    let h=W.setDotsHTML(p);
+    eq((h.match(/class="sd/g)||[]).length, 5, "●は5つ");
+    ok(h.indexOf("あと22問のセット")>=0 && h.indexOf("*0.73")>=0, "最後の●は22/30の幅");
+    dr.a=110; pd.a=27; p=W.setProgress(G); // 合算137=4セット+17問(単語110<113)
+    eq(p.done, 4); eq(p.cur, 17); ok(!p.hit, "単語110問ではまだ");
+    h=W.setDotsHTML(p);
+    ok(h.indexOf('sd cur')>=0 && h.indexOf('width:77%')>=0, "端数のセットの進みは17/22で描く");
+    ok(W.setFootText(p).indexOf("17/22問")>=0, "脚注は このセット 17/22問");
+    W.renderHome();
+    ok(doc.getElementById("homeStudy").textContent.indexOf("17/22")>=0, "CTAも 17/22");
+    dr.a=113; p=W.setProgress(G);
+    ok(p.hit && p.done===4, "単語113問で達成=目安の数字と同じ判定(セット数は4のまま)");
+    ok(W.setFootText(p).indexOf("目安ぶんは積み上げた")>=0, "達成の脚注");
+    // 単語のみ: 100問=3セット+10問
+    G.opt.qtab="w"; G.pace.qd.per=100; dr.a=0; pd.a=0; p=W.setProgress(G);
+    eq(p.targetQ, 100); eq(p.target, 4); eq(p.last, 10);
+    // 目安なし: 端数の概念はない
+    G.pace={goal:null, setAt:0, log:[]}; dr.a=45; p=W.setProgress(G);
+    eq(p.targetQ, null); eq(p.last, W.SET_N); ok(!p.hit);
+    ok(W.setFootText(p).indexOf("15/30問")>=0);
+    dr.a=a0; pd.a=pa0; G.pace=oldPace; G.opt.qtab=oldQtab; if(G.days[dk]) G.days[dk].t=oldT; W.saveG(); W.renderHome();
   });
   t("マイフレーズ登録: 内蔵と同じ出題・帳簿に乗る(誤答は内蔵から自動生成=手間ゼロ)", ()=>{
     const G=W.G, doc=W.document;

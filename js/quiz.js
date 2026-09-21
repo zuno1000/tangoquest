@@ -258,20 +258,30 @@ function setRecord(g, total, info){
    target=目安から換算したセット数(目標未設定・達成後はnull)。
    v5.10.0: 進みは単語+フレーズの合算。目安(単語数)→セット数の換算は「1セットに含まれる単語の数」で割る
    (ミックス=24語/セット・単語のみ=30語/セット) */
+/* v5.14.0(実機FB「113問の目安に5セットは仕様か」): 目安は問数で厳密に。targetQ=目安に相当する今日の合算問数
+   (ミックスは単語24問ごとにフレーズ6問が混ざるので 目安×30/24)。target=そのセット数(端数は切り上げ)、
+   last=最後のセットに必要な問数(0<last<30なら端数のセット=●○バーで短く描く)。達成判定は a>=targetQ(セット数ではない) */
 function setProgress(g){
   const t=todayTotal(), q=paceToday(g);
-  const target=(q && !q.done)? Math.max(1, Math.ceil(q.perDay/wordsPerSet())) : null;
-  return {done:Math.floor(t/SET_N), cur:t%SET_N, target, a:t};
+  const targetQ=(q && !q.done)? Math.max(1, Math.ceil(q.perDay*SET_N/wordsPerSet())) : null;
+  const target=targetQ? Math.ceil(targetQ/SET_N) : null;
+  const last=targetQ? (targetQ%SET_N || SET_N) : SET_N;
+  // 達成=目安(単語の問数)に届いたか。セット換算(targetQ)は描画用で、端数の丸めで1〜2問ずれるため判定には単語数を使う
+  const hit=!!targetQ && (dayRec().a>=q.perDay || t>=targetQ);
+  return {done:Math.floor(t/SET_N), cur:t%SET_N, target, targetQ, last, a:t, hit};
 }
-/* セットの●○表示(done=完了・cur=進行中の問数・target=目安のセット数)。
-   目安なし=完了分+進行中(あれば)だけ。目安ありで超過した分は金の●で足す */
+/* セットの●○表示(done=完了・cur=進行中の問数・target=目安のセット数・last=最後のセットの問数)。
+   目安なし=完了分+進行中(あれば)だけ。目安ありで超過した分は金の●で足す。最後のセットが端数なら幅を問数に比例させる */
 function setDotsHTML(p){
   const n=p.target? Math.max(p.target, p.done+(p.cur?1:0)) : p.done+(p.cur?1:0);
   let h='<div class="setdots">';
   for(let i=0;i<n;i++){
-    if(i<p.done) h+='<i class="sd on'+(p.target && i>=p.target? ' over':'')+'"></i>';
-    else if(i===p.done && p.cur) h+='<i class="sd cur"><b style="width:'+Math.round(100*p.cur/SET_N)+'%"></b></i>';
-    else h+='<i class="sd"></i>';
+    const isLast=p.target && i===p.target-1 && p.last<SET_N;
+    const need=isLast? p.last : SET_N;
+    const st=isLast? ' style="width:calc(var(--sdw,26px)*'+(need/SET_N).toFixed(2)+')" title="あと'+need+'問のセット"' : '';
+    if(i<p.done) h+='<i class="sd on'+(p.target && i>=p.target? ' over':'')+'"'+st+'></i>';
+    else if(i===p.done && p.cur) h+='<i class="sd cur"'+st+'><b style="width:'+Math.min(100, Math.round(100*p.cur/need))+'%"></b></i>';
+    else h+='<i class="sd"'+st+'></i>';
   }
   return h+'</div>';
 }
@@ -281,9 +291,9 @@ function openSetDone(){
   const p=setProgress(G);
   const full=s.cor>=s.n;
   const line=p.target
-    ? (p.done>=p.target
-        ? '🏅 今日の目安('+p.target+'セット)達成! ここからは前倒し'
-        : '今日の目安 '+p.target+'セット ─ あと'+(p.target-p.done)+'セット')
+    ? (p.hit
+        ? '🏅 今日の目安('+p.targetQ+'問)達成! ここからは前倒し'
+        : '今日の目安まで あと'+(p.targetQ-p.a)+'問'+(p.targetQ-p.a>SET_N? '(約'+Math.ceil((p.targetQ-p.a)/SET_N)+'セット)':''))
     : '今日 '+p.done+'セット目を積み上げた';
   const missN=(s.miss||[]).length;
   /* v5.10.0: セットの締めに「次の一手」を並べる ─ ミスがあれば🔥にがて特訓(このセットのミスから)、

@@ -403,11 +403,6 @@ function partialResetData(g, t){
    📖学習/🎨演出/📥同期/🔄更新/🗑リセットの開閉セクション(foldSec)に分類して畳む。
    中身は常にDOMに置く=既存のボタンID・テストは全部そのまま生きる */
 function openSettings(){
-  const d=dayRec();
-  const streak=studyStreak();
-  let mastered=0; for(const en in G.words){ if(G.words[en][0]>=MASTER_BOX) mastered++; }
-  let pmas=0; for(const en in G.phr){ if(G.phr[en][0]>=MASTER_BOX) pmas++; } // フレーズ(v5.0.0)
-  const mnClaim=claimableCount(); // 受け取れる任務報酬の件数(任務ボタンのバッジ)
   const learnInner=
     '<div class="small" style="margin-bottom:6px">出題と自動化のしくみ '+helpBtn("hlp-opt")+'</div>'+
     helpNote("hlp-opt", '<b>自動で次へ</b>: 答え合わせのあと、「次へ」を押さなくても設定した秒数で自動的に次の問題へ進む'+
@@ -453,41 +448,16 @@ function openSettings(){
     '<button class="btn" id="resetLearnBtn">学習記録とカードだけリセット</button>'+
     '<div style="height:10px"></div>'+
     '<button class="btn danger" id="resetBtn">データをすべてリセット</button>';
-  openModal('<h3>⚙ 設定・記録</h3>'+
-    '<table class="stt">'+
-    '<tr><td>今日の解答</td><td>'+d.a+'問(正解'+d.c+')</td></tr>'+
-    '<tr><td>覚えた単語</td><td>'+mastered+' / '+WORDS.length+'(学習した '+Object.keys(G.words).length+'語)</td></tr>'+
-    '<tr><td>覚えたフレーズ</td><td>'+pmas+' / '+allPhrases().length+'(今日 '+pdayRec().a+'問)</td></tr>'+
-    '<tr><td>📰 今日の英語</td><td>📖 '+Object.keys(G.rl.done||{}).filter(u=>G.rl.done[u].k!=="listen").length+'本 ・ 🎧 '+Object.keys(G.rl.done||{}).filter(u=>G.rl.done[u].k==="listen").length+'本</td></tr>'+
-    '<tr><td>連続学習</td><td>'+streak+'日(XP×'+(+streakXpMult().toFixed(2))+' ・ 🧊'+(G.frz||0)+'/'+FRZ_MAX+')</td></tr>'+
-    // 正確な残高(v4.31.0: ヘッダーは短縮表記・ガチャ画面の残高行の移設先)。ゲーム面オフでは実績の行(v5.13.0)
-    (GAME_ENABLED
-      ? '<tr><td>🎫 チケット</td><td>'+fmt(G.tickets)+'(限定召喚用・学習で入手)</td></tr>'+
-        '<tr><td>🪙 ゴールド</td><td>'+fmt(G.gold)+'(恒常召喚用・冒険で入手)</td></tr>'
-      : '<tr><td>📖 知識XP</td><td>'+fmt(G.xp)+'(Lv'+accountLevel()+' ・ 正解と実績で増える)</td></tr>'+
-        '<tr><td>🏆 実績</td><td>'+achSummary().done+' / '+achSummary().all+'段階</td></tr>')+
-    '</table>'+
-    '<div class="homelinks" style="margin-top:8px">'+
-      '<button class="btn" id="histBtn">📊 学習のあゆみ</button>'+
-      '<button class="btn" id="paceCfgBtn">🎯 学習ペース管理</button>'+
-      '<button class="btn" id="phrHistBtn">🗣 フレーズのあゆみ</button>'+
-      // にがてノート(v5.10.0): ミスした単語の一覧と「にがて特訓」の入口
-      '<button class="btn" id="weakBtn">🔥 にがてノート<span class="hlsub">'+weakWords(G).length+'語 ・ 特訓へ</span></button>'+
-      '<button class="btn" id="rlHistBtn2">📚 読んだ・聴いた<span class="hlsub">今日の英語の記録</span></button>'+
-      // マイ単語(v5.11.0): 読んでいて分からなかった単語の登録・一覧
-      '<button class="btn" id="mywBtn">📝 マイ単語<span class="hlsub">'+mywList().length+'語'+(mywPending().length? ' ・ 意味待ち'+mywPending().length:'')+'</span></button>'+
-      // 任務・図鑑の入口(v5.9.0でホームから移設・実機FB)
-      (GAME_ENABLED
-        ? '<button class="btn" id="setMissionBtn"><span>📜 任務'+(mnClaim? ' <b style="color:var(--accent)">'+mnClaim+'件 受取</b>':'')+'</span></button>'
-        : '<button class="btn" id="setMissionBtn"><span>🏆 実績</span><span class="hlsub">'+achSummary().done+'/'+achSummary().all+'段階</span></button>')+
-      '<button class="btn" id="setDexBtn">📕 図鑑</button></div>'+
+  /* v5.14.0: 「記録」(数字の表・あゆみ・にがて・読んだ聴いた・マイ単語・図鑑・実績)は📊記録タブ(records.js)へ移した。
+     ⚙は設定だけ(出題・演出・同期・更新・リセット) */
+  openModal('<h3>⚙ 設定</h3>'+
+    '<div class="small" style="margin-bottom:8px">学習の記録・あゆみ・実績は下のナビの <b>📊 記録</b> に</div>'+
     foldSec("sfoldLearn", "📖 学習(出題・自動化)", learnInner, false)+
     foldSec("sfoldFx",    "🎨 演出(振動)", fxInner, false)+
     foldSec("sfoldSync",  "📥 端末間同期(Googleドライブ)", syncInner, false)+
     foldSec("sfoldUpd",   "🔄 アプリの更新", updInner, false)+
     foldSec("sfoldReset", "🗑 データのリセット", resetInner, false)+
     '<div class="small" style="margin-top:14px">LEXICA(レキシカ) v'+APP_VERSION+' ─ 英単語×ローグライクRPG<br>単語データ: 英検1級レベル '+WORDS.length+'語(<a href="https://github.com/zuno1000/tango" target="_blank" rel="noopener" style="color:var(--accent2)">tango</a> 由来)</div>');
-  $("paceCfgBtn").onclick=openPaceModal;
   $("modeToggle").onclick=()=>{
     G.mode=G.mode==="e2j"?"j2e":"e2j"; saveG();
     $("modeToggle").textContent=(G.mode==="e2j"?"EN → 日本語":"日本語 → EN")+" (タップで切替)";
@@ -509,12 +479,6 @@ function openSettings(){
     G.opt.spkSec=spkSecCycle(G.opt.spkSec); saveG();
     $("spkSecBtn").textContent="フレーズ: 口頭の制限時間: "+spkSecLabel(G.opt.spkSec)+" (タップで切替)";
   };
-  $("weakBtn").onclick=openWeakModal;
-  $("rlHistBtn2").onclick=openRLHistory;
-  $("mywBtn").onclick=openMywList;
-  $("phrHistBtn").onclick=()=>openPhrHistoryModal(0);
-  $("setMissionBtn").onclick=()=>switchTab("mission"); // switchTabがモーダルを閉じる
-  $("setDexBtn").onclick=()=>openDex();
   const vt=$("vibeToggle");
   if(vt) vt.onclick=()=>{
     const off=localStorage.getItem("tq_vibe")==="off";
@@ -525,7 +489,6 @@ function openSettings(){
   };
   const sb=$("syncBtn");
   if(sb){ ensureGis(()=>{}); sb.onclick=syncNow; } // GIS先読み=タップ時にポップアップがブロックされない
-  $("histBtn").onclick=openHistoryModal;
   $("updateBtn").onclick=appUpdate;
   $("resetLearnBtn").onclick=()=>{
     openModal('<h3>学習記録とカードをリセットする？</h3>'+

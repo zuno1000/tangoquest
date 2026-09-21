@@ -208,10 +208,13 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
 .achstars i{display:block; width:9px; height:9px; border-radius:50%; background:var(--bg2)}
 .achstars i.on{background:var(--accent)}
 .mrow.adone .mname{color:var(--ok)}
-body.nogame nav{justify-content:space-around}
+/* v5.14.0: 記録タブ */
+#recView .stt{margin:0}
+#recAch .achhead{padding-top:0}
 /* v5.12.1: 目安のパネルにセットの●○バーを統合(ヒーロー用に少し大きく) */
 .pacebar.phero .setdots{margin-top:12px; gap:8px}
-.pacebar.phero .setdots .sd{width:34px; height:14px; border-radius:7px}
+.pacebar.phero .setdots{--sdw:34px}
+.pacebar.phero .setdots .sd{width:var(--sdw); height:14px; border-radius:7px}
 .pacebar.phero .pacefoot+.pacefoot{margin-top:4px}
 .pacebar.phero .pacemsg{font-size:13px; margin-top:9px}
 /* 直近7日のあゆみ(タップで全期間) */
@@ -948,8 +951,8 @@ body.svplay #svView{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
   #svStageList .svstage{margin-top:0}
   #svStageList[hidden]{display:none}
   .svmodes{gap:12px}
-  /* サイドバー: 縦ナビ(アイコン+ラベルを横並びの行に) */
-  nav{grid-column:1; grid-row:1/3; flex-direction:column; justify-content:flex-start;
+  /* サイドバー: 縦ナビ(アイコン+ラベルを横並びの行に)。上から詰めて並べる(v5.14.0: タブが2〜3個でも離れない) */
+  nav{grid-column:1; grid-row:1/3; flex-direction:column; justify-content:flex-start !important; align-items:stretch;
     gap:6px; padding:18px 12px;
     box-shadow:6px 0 14px rgba(136,152,184,.16)}
   nav button{flex:0 0 auto; flex-direction:row; justify-content:flex-start; gap:12px;

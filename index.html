@@ -66,6 +66,11 @@
   </div>
 </main>
 
+<!-- ============ 記録(v5.14.0: 数字・あゆみ・にがて・マイ単語・図鑑・実績。中身はrecords.jsのrenderRecords) ============ -->
+<main id="recView" class="hidden">
+  <div id="recBox"></div>
+</main>
+
 <!-- ============ 編成(そうび・カード・なかま) ============ -->
 <main id="partyView" class="hidden">
   <div class="seg" id="partySeg">
@@ -211,6 +216,7 @@
 <nav>
   <button id="navHome" class="active"><span class="nic badge">🏰<span class="dot hidden" id="navHomeDot"></span></span>ホーム</button>
   <button id="navQuiz"><span class="nic">📖</span>学習</button>
+  <button id="navRec"><span class="nic">📊</span>記録</button>
   <button id="navParty"><span class="nic">🛡️</span>編成</button>
   <button id="navAdv"><span class="nic">🗺️</span>冒険</button>
   <button id="navGacha"><span class="nic">🔮</span>ガチャ</button>
@@ -237,6 +243,7 @@
 <script src="js/sv.js"></script>
 <script src="js/slot.js"></script>
 <script src="js/sync.js"></script>
+<script src="js/records.js"></script>
 <script src="js/reading.js"></script>
 <script src="js/main.js"></script>
 </body>
