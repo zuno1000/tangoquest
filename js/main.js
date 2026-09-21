@@ -36,6 +36,7 @@ const EVENTS=[
   // {d:"2026-08-03", t:"..."} 形式でバナー以外のイベント告知を書く
 ];
 const NEWS=[
+  {d:"2026-09-21", t:"🏠 v5.12.1 ホームの「今日の目安」と「今日のセット」を1枚に統合しました。数字は目安(今日の問数)、バーはセット(30問ごとの●○)、脚注に「このセット n/30問」。「学習をはじめる」ボタンの「5問ごとに🎫+5」の表記は外しました"},
   {d:"2026-09-21", t:"🧠 v5.12.0 「学習」を押すだけで効率よく覚えられるように、既定の出題そのものを見直しました(新しいモードやボタンは増えていません)。①復習の単語は、選択肢を開く前に「まず自力で思い出す」ワンクッション(新規・にがて特訓・サバイバーでは出ない。⚙設定でオフ可) ②4択の誤答に「以前に取り違えた相手」と「同じ語根の語」を優先して混ぜ、消去法で解けないように ③ミスの直後は取り違えた相手を数問以内に出して、区別をその場で固める(にがてノートに「⇄ 取り違え: 〜」) ④マイ単語の新規は1セットに6語まで(まとめて登録した日も復習を押しのけない) ⑤マイ単語に「出会った英文」を添えられ、答え合わせで表示(今日の英語②の語彙一覧に用例が付くようにしたので、貼るだけ)"},
   {d:"2026-09-21", t:"🔧 v5.11.1 マイ単語に句動詞・慣用表現も登録できるようにしました(what if・in tandem・put up with・rule of thumb など6語まで)。品詞は先頭の語から推定します: 動詞+小辞(look into)=動詞/前置詞句・つなぎの表現(in tandem・what if)=副詞/名詞句(rule of thumb)=名詞。合わなければチップをタップで変更。意味の自動取得も表現に対応(例: in tandem→並行して)"},
   {d:"2026-09-21", t:"📝 v5.11.0 「マイ単語」が登場! 記事を読んでいて分からなかった単語を、貼り付けるだけで登録できます(学習タブの➕・今日の英語・⚙設定から)。意味は後から自動で取り込み(取れない語は「意味待ち」として残り、あとで再挑戦・LLMに頼む道もあり)、登録した語は未出題のうち優先して4択に出ます。内蔵の単語と同じ復習・カード・図鑑に乗ります。「単語 — 日本語」と書けば意味も同時に登録でき、今日の英語の②解説プロンプトが返す語彙一覧をそのまま貼るとまとめて登録できます"},
@@ -172,26 +173,14 @@ function renderHome(){
   }).join("");
   const rlToday=rlDays[todayKey()]||null;
   const wsum=wk.reduce((s,x)=>s+x.a, 0), wdays=wk.filter(x=>x.a>0).length;
-  // 今日のセット(v5.8.0): 30問=1セット。目安があればセット数に換算して●○で見せる
+  // 今日のセット(v5.8.0): 30問=1セット。v5.12.1で目安のパネルに統合(●○バーはfillPaceElが描く)
   const sp=setProgress(G);
-  const setHead=sp.target
-    ? '<b>'+sp.done+' <span class="ptgt">/ '+sp.target+'セット</span></b>'
-    : '<b>'+sp.done+' <span class="ptgt">セット</span></b>';
-  const setFoot=sp.cur
-    ? 'このセット '+sp.cur+'/'+SET_N+'問 ─ つづきから'
-    : sp.target && sp.done>=sp.target? '🏅 今日の目安ぶんは積み上げた ─ 前倒しでもう1セット?'
-    : sp.done? '次は'+(sp.done+1)+'セット目 ─ すきま時間に1セット'
-    : '30問=1セット。すきま時間に1セットずつ積み上げよう';
-  /* 並び(v5.9.0): ①今日(目安→セット) ②今週の記録 ③アクション(学習をはじめる/報酬受取)は下=
+  /* 並び(v5.9.0): ①今日(目安+セット) ②今週の記録 ③アクション(学習をはじめる/報酬受取)は下=
      親指の届く位置。任務・図鑑の入口は⚙設定・記録へ移した(実機FB・ホームは「今日やること」に集中)。
      ログボ/同期の条件行も「受け取る・やる」側なので下のグループに置く */
   $("homeBox").innerHTML=
-    // ── 今日: 目安(ヒーロー)+セット
+    // ── 今日: 目安+セット(ヒーロー・1枚に統合=v5.12.1)
     '<div class="panel pacebar phero" id="homePace"></div>'+
-    '<div class="panel setpanel" id="homeSets">'+
-      '<div class="pacetop"><span>🧩 今日のセット</span>'+setHead+'</div>'+
-      setDotsHTML(sp)+
-      '<div class="pacefoot">'+setFoot+'</div></div>'+
     // ── 今日の英語(v5.10.0): 読む・聴くのおすすめ1本ずつ(中身はreading.jsが非同期で埋める)。タップで詳細
     '<div class="panel rlpanel" id="homeRL">'+
       '<div class="pacetop"><span>📰 今日の英語 <span class="small" style="font-weight:700">読む・聴く ─ 英検1級レベル・すべて無料</span></span>'+
@@ -208,7 +197,7 @@ function renderHome(){
     '</div>'+
     // ── アクション: 学習CTA(主役)
     '<button id="homeStudy" class="studycta shine">📖 '+(sp.cur? 'セットのつづき('+sp.cur+'/'+SET_N+')' : '1セット(30問)はじめる')+
-      '<span class="ctasub">今日 '+d.a+'問(正解'+d.c+')'+(stk>=2? ' ・ 🔥'+stk+'日連続':'')+' ・ 5問ごとに🎫+'+ANS_BONUS_T+'</span></button>'+
+      '<span class="ctasub">今日 '+d.a+'問(正解'+d.c+')'+(stk>=2? ' ・ 🔥'+stk+'日連続':'')+'</span></button>'+
     // 任務報酬の一括受取(受け取れるものがあるときだけ出す)
     (mn? '<button id="homeClaim" class="claimbtn homeclaim">🎁 任務報酬をすべて受け取る('+mn+'件)</button>':'')+
     // ログインボーナスのバナー(v4.26.0: 起動モーダル廃止の受け皿。タップで7日カレンダー)
@@ -220,7 +209,6 @@ function renderHome(){
       '<div class="panel syncnag" id="homeSync">📥 最終同期から'+
         Math.floor((Date.now()-lastSyncAt())/864e5)+'日 ─ タップして同期</div>':'');
   $("homeStudy").onclick=()=>switchTab("quiz");
-  $("homeSets").onclick=()=>switchTab("quiz");
   $("homeRL").onclick=openRLModal;
   rlFillHome(); rlEnsureLoaded(rlFillHome); // 今日の英語(v5.10.0): キャッシュがあれば即・なければ取得して埋める
   const lg=$("homeLogin");

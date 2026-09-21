@@ -212,13 +212,25 @@ function paceMsg(done, target){
 /* ペースパネルの中身を描く(ホーム #homePace)。
    学習画面には置かない: 縦に要素を足すと選択肢が押し出されて構成が崩れる(v4.7.1)。
    学習中の進捗は promptCard の「今日 X/Y問」表記(高さ増なし)が担う */
+/* v5.12.1(実機FB「今日の目安と今日のセットを統廃合」): 目安のパネルにセットの●○バーを組み込み、
+   ホームの「今日のセット」パネルは廃止。数字=目安(単語の問数)・バー=セット(30問の単位)・脚注=このセットの進み */
+function setFootText(sp){
+  return sp.cur
+    ? '🧩 このセット '+sp.cur+'/'+SET_N+'問 ─ つづきから'
+    : sp.target && sp.done>=sp.target? '🏅 今日の目安ぶんは積み上げた ─ 前倒しでもう1セット?'
+    : sp.done? '🧩 次は'+(sp.done+1)+'セット目 ─ すきま時間に1セット'
+    : '🧩 30問=1セット ─ すきま時間に1セットずつ';
+}
 function fillPaceEl(el){
   if(!el) return;
   const q=paceToday(G);
+  const sp=setProgress(G);
   if(!q){
-    el.innerHTML='<div class="pacetop"><span>🎯 学習ペース管理</span>'+
-      '<b style="color:var(--accent2); font-size:13px">目標日を設定 ›</b></div>'+
-      '<div class="pacemsg">「いつまでに全部覚えるか」から1日の目安を逆算する</div>';
+    el.innerHTML='<div class="pacetop"><span>🧩 今日 <b style="font-size:22px">'+sp.done+'</b> <span class="ptgt">セット</span></span>'+
+      '<b style="color:var(--accent2); font-size:13px">🎯 目標日を設定 ›</b></div>'+
+      setDotsHTML(sp)+
+      '<div class="pacemsg">「いつまでに全部覚えるか」を決めると、1日の目安をここに逆算する</div>'+
+      '<div class="pacefoot">'+setFootText(sp)+'</div>';
   }else if(q.done){
     el.innerHTML='<div class="pacetop"><span>🏆 全'+fmt(q.total)+'語 制覇!</span><b>🎊</b></div>'+
       '<div class="pacemsg">おめでとう! 復習を続けて記憶を守ろう</div>';
@@ -235,9 +247,10 @@ function fillPaceEl(el){
     el.innerHTML=
       '<div class="pacetop"><span>🎯 今日の目安</span>'+
         '<b class="'+(done>=target?"pgold":"")+'">'+done+' <span class="ptgt">/ '+target+'問</span></b></div>'+
-      '<div class="pbar'+(done>=target?" full":"")+'"><i style="width:'+pct+'%"></i></div>'+
+      setDotsHTML(sp)+ // セット単位の●○バー(v5.12.1・旧「今日のセット」パネルを統合)
       '<div class="pacemsg'+(done>=target?" pdone":"")+'">'+paceMsg(done, target)+'</div>'+
       nowLine+
+      '<div class="pacefoot">'+setFootText(sp)+'</div>'+
       '<div class="pacefoot">'+(q.expired
         ? '⚠️ 目標日を過ぎている ─ タップして立て直そう'
         : '目標 '+q.goal.replace(/-/g,"/")+' まで残り'+q.daysLeft+'日 ・ 覚えた '+fmt(q.mastered)+'/'+fmt(q.total)+'語')+'</div>';

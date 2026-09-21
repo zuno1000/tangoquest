@@ -202,6 +202,10 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
 .pacebar.phero .pacetop b{font-size:30px; line-height:1}
 .pacebar.phero .pacetop .ptgt{font-size:14px}
 .pacebar.phero .pbar{height:16px; margin-top:12px}
+/* v5.12.1: 目安のパネルにセットの●○バーを統合(ヒーロー用に少し大きく) */
+.pacebar.phero .setdots{margin-top:12px; gap:8px}
+.pacebar.phero .setdots .sd{width:34px; height:14px; border-radius:7px}
+.pacebar.phero .pacefoot+.pacefoot{margin-top:4px}
 .pacebar.phero .pacemsg{font-size:13px; margin-top:9px}
 /* 直近7日のあゆみ(タップで全期間) */
 .weekpanel{margin-top:12px; padding:12px 14px; cursor:pointer}

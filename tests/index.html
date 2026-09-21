@@ -1413,7 +1413,7 @@ function run(){
     W.renderHome();
     const el=W.document.getElementById("homePace");
     ok(el.innerHTML.indexOf("今日の目安")>=0, "目安表示");
-    ok(el.querySelector(".pbar"), "メーターがある");
+    ok(el.querySelector(".setdots"), "メーター(セットの●○バー・v5.12.1で統合)がある");
     ok(el.innerHTML.indexOf("残り")>=0, "目標日カウントダウン");
     // 学習画面には縦積みのパネルを置かない(クイズの選択肢が押し出されるため v4.7.1)
     ok(!W.document.getElementById("paceBar"), "学習画面にペースパネルはない");
@@ -2260,10 +2260,22 @@ function run(){
     ok(hb.innerHTML.indexOf("戦闘力")<0 && hb.innerHTML.indexOf("📖 Lv")<0, "戦闘力・📖Lv/XPの表示は無い");
     eq(hb.firstElementChild.id, "homePace", "いちばん上は今日の目安(ヒーロー)");
     ok(hb.firstElementChild.classList.contains("phero"), "目安は大きい表示");
-    eq(hb.children[1].id, "homeSets", "今日のセットは目安の直後");
-    eq(hb.children[2].id, "homeRL", "今日の英語(v5.10.0)はセットの直後");
-    eq(hb.children[3].id, "homeWeek", "今週の記録はその下");
-    eq(hb.children[4].id, "homeStudy", "学習をはじめるは記録の下(報酬受取・ログボ・同期の条件行も下のグループ)");
+    // v5.12.1: 今日のセットのパネルは目安に統合(●○バーが目安のパネルの中に入る)
+    ok(!W.document.getElementById("homeSets"), "今日のセットのパネルは無い");
+    ok(hb.firstElementChild.querySelector(".setdots"), "目安のパネルにセットの●○バー");
+    ok(hb.firstElementChild.textContent.indexOf("セット")>=0, "セットの進みの脚注");
+    ok(W.document.getElementById("homeStudy").textContent.indexOf("5問ごと")<0, "「5問ごとに🎫+5」の表記は廃止");
+    eq(hb.children[1].id, "homeRL", "今日の英語(v5.10.0)は目安の直後");
+    eq(hb.children[2].id, "homeWeek", "今週の記録はその下");
+    eq(hb.children[3].id, "homeStudy", "学習をはじめるは記録の下(報酬受取・ログボ・同期の条件行も下のグループ)");
+    // 目標ありのときも●○バーと目安の数字が同じパネルに
+    const oldPace=JSON.parse(JSON.stringify(W.G.pace)), dk=W.todayKey(), oldT=W.G.days[dk] && W.G.days[dk].t;
+    W.G.pace={goal:W.addDays(W.todayKey(), 100), setAt:Date.now(), log:[], qd:{d:W.todayKey(), per:60}};
+    W.renderHome();
+    const hp=W.document.getElementById("homePace");
+    ok(hp.querySelector(".setdots") && hp.textContent.indexOf("今日の目安")>=0 && hp.textContent.indexOf("/ 60問")>=0, "目安の数字+●○バー");
+    ok(!hp.querySelector(".pbar"), "旧の帯グラフは無い");
+    W.G.pace=oldPace; if(W.G.days[dk]) W.G.days[dk].t=oldT; W.renderHome();
     ok(!W.document.getElementById("homeQuick"), "サクッと5問は廃止(v5.8.0)");
     ok(!W.document.getElementById("homeMission") && !W.document.getElementById("homeDex"), "任務・図鑑の入口はホームに無い(設定へ移設)");
     ok(!hb.querySelector(".weekchart") && !hb.querySelector(".wcol"), "バーグラフは廃止");
