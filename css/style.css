@@ -217,6 +217,29 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
 .pacebar.phero .setdots .sd{width:var(--sdw); height:14px; border-radius:7px}
 .pacebar.phero .pacefoot+.pacefoot{margin-top:4px}
 .pacebar.phero .pacemsg{font-size:13px; margin-top:9px}
+/* v5.15.0: 記録タブの刷新(成長が見える1枚) */
+.growhero{padding:16px 18px}
+.growhero .pacetop b{font-size:28px; line-height:1}
+.growhero .pacetop .ptgt{font-size:13px}
+.growhero .pbar{height:14px; margin-top:10px}
+.growhero .pacetop.gsub{margin-top:16px}
+.growhero .pacetop.gsub b{font-size:20px}
+.growhero .pbar.thin{height:10px; margin-top:8px}
+.gplus{color:var(--ok)}
+.gchart .hbar.cur{background:linear-gradient(180deg,#FFB547,#F5A020)}
+.statgrid{display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:10px}
+.stat{display:flex; flex-direction:column; gap:2px; padding:10px 12px; border-radius:14px; background:var(--card2);
+  box-shadow:inset 2px 2px 4px var(--shd), inset -2px -2px 4px var(--shl)}
+.stat .sl{font-size:11px; font-weight:800; color:var(--sub)}
+.stat .sv{font-size:18px; line-height:1.15; color:var(--ink)}
+.stat .ss{font-size:11px; font-weight:700; color:var(--sub)}
+#recView .homelinks .btn:last-child:nth-child(odd){grid-column:1/-1}
+#recView .foldbody .panel{margin-top:6px}
+/* v5.15.0: ⚙設定のいちばん上=同期・更新の横並び */
+.settop{gap:10px; margin-top:4px}
+/* v5.15.0: 単語単位の並べ替え(片が3〜12個)はタイルを少し小さく */
+#choices.chunks.words{gap:7px}
+#choices.chunks.words .chunkbtn{padding:9px 12px; min-height:40px; font-size:14px; border-radius:12px}
 /* 直近7日のあゆみ(タップで全期間) */
 .weekpanel{margin-top:12px; padding:12px 14px; cursor:pointer}
 /* 今週の記録(v5.9.0): 曜日つき7マスのカレンダー。金=目安達成・青=学習した日・今日は枠線 */

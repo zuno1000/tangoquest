@@ -9,8 +9,16 @@
    ・出題形式はSRSの階段と連動(v5.1.0): box0-1=核のクローズ4択 / box2-3=並べ替え / box4〜=口頭自己判定+TTS
    ・v5.10.0(実機FB「口頭のハードルが高い」): 口頭ステージと口頭ドリルはSPEAK_ENABLED=falseでUIから撤去し、
      box4〜は「全文4択」(日本語の意図→4つの英文から選ぶ・先に思い出すステップつき)に。実戦ドリルも全て選択式。
-     復活はフラグをtrueに戻すだけ(スロットのSLOT_ENABLEDと同じ可逆設計) */
+     復活はフラグをtrueに戻すだけ(スロットのSLOT_ENABLEDと同じ可逆設計)
+   ・v5.15.0(実機FB「並べ替え形式に」): 通常の出題はPHR_REORDER_ALL=trueで並べ替えに一本化(粒度の階段=下記) */
 var SPEAK_ENABLED=false;
+/* v5.15.0(実機FB「フレーズの勉強は並べ替え形式に」): 出題形式を並べ替えに一本化(PHR_REORDER_ALL・可逆)。
+   理由: 並べ替え(整序)は語順・チャンクの切れ目・動詞の型(enable 人 to do)を自分で組み立てる「再構成」の課題で、
+   4択(再認)より産出に近く、自由作文より詰まらない。弱点=片が大きいと意味順だけで並ぶので、階段は「粒度」で作る:
+   box0-1=チャンク(2〜3片)の並べ替え / box2-3=単語(3〜12語)の並べ替え /
+   box4〜=単語の並べ替え+「まず自力で英文を思い出す」(先に思い出すステップ・設定共有)→正解で「覚えた」。
+   クローズ4択(mc)・全文4択(fs)のコードは残し、🎯実戦ドリル(fmt固定)とフラグoffで従来どおり使える */
+var PHR_REORDER_ALL=true;
 
 let phrCur=null, phrAnswered=false, phrPos=0, phrMiss=0;
 let phrAutoT=null;   // 「自動で次へ」(設定共有)のタイマー
@@ -24,9 +32,17 @@ function phrNoteRecent(en){ phrRecent.push(en); if(phrRecent.length>3) phrRecent
             誤答は同カテゴリの英文。box5=覚えた はここで正解したことを意味する)
             ※SPEAK_ENABLED=trueなら従来の口頭自己判定("sp") */
 function phrFormat(st){
+  if(PHR_REORDER_ALL) return "or"; // v5.15.0: 通常の出題は並べ替えだけ(階段は粒度=phrGrain)
   if(st && st[0]>=4) return SPEAK_ENABLED? "sp" : "fs";
   return (st && st[0]>=2)? "or" : "mc";
 }
+/* 並べ替えの粒度(v5.15.0): "ch"=チャンク(定着0-1) / "w"=単語(定着2〜)。フラグoffの従来の並べ替え(定着2-3)はチャンク */
+function phrGrain(st){ return (PHR_REORDER_ALL && st && st[0]>=2)? "w" : "ch"; }
+/* 並べ替えの片(タイル): チャンクまたは単語。join(" ")===en を保つ(enはch.join(" ")で導出しているため) */
+function phrTiles(p, grain){ return grain==="w"? p.en.split(" ") : p.ch.slice(); }
+/* 定着4〜の単語並べ替えは、片を見る前に英文全体の自力想起を1回挟む(先に思い出すステップ・設定共有)。
+   片を見ると語順は「見れば分かる」に寄るため。チャンク段階・ドリル(fmt固定)では出ない */
+function phrRecallFirst(st){ return !!(G.opt.preRecall && PHR_REORDER_ALL && st && st[0]>=4 && !PDRILL); }
 
 /* 核(k)の位置を英文から探し、語境界まで広げて返す(v5.1.0)。
    kは辞書形でも良い(seem→seemsのように活用語尾まで空欄が伸びる)。
@@ -290,7 +306,8 @@ function phrNewQuestion(){
 }
 function phrStart(p, fmt){
   const st=G.phr[p.en];
-  phrCur={p, fmt:fmt||phrFormat(st), choices:null};
+  phrCur={p, fmt:fmt||phrFormat(st), choices:null, grain:phrGrain(st), tiles:null};
+  if(phrCur.fmt==="or") phrCur.tiles=phrTiles(p, phrCur.grain);
   if(phrCur.fmt==="mc") phrCur.choices=buildPhrChoices(p);
   if(phrCur.fmt==="fs") phrCur.choices=buildPhrChoicesFS(p);
   phrRenderQuestion();
@@ -357,16 +374,18 @@ function phrRenderQuestion(){
       box.appendChild(b);
     }else phrShowChoicesFS();
   }else if(phrCur.fmt==="or"){
-    // 並べ替え: チャンクを正しい順にタップ(語順と結びつきの自動化)
-    box.className="choices chunks";
-    bl.innerHTML='<span class="pbslot">💬 チャンクを正しい順にタップ</span>';
-    shuffle(p.ch.slice()).forEach(t=>{
+    // 並べ替え: 片(チャンク=定着0-1/単語=定着2〜)を正しい順にタップ(語順と結びつきの自動化)
+    const wordy=phrCur.grain==="w";
+    bl.innerHTML='<span class="pbslot">💬 '+(wordy? '単語':'チャンク')+'を正しい順にタップ</span>';
+    if(phrRecallFirst(st)){
+      box.className="choices";
       const b=document.createElement("button");
-      b.className="chunkbtn";
-      b.textContent=t;
-      b.onclick=()=>phrTapChunk(t,b);
+      b.className="choice rcbtn";
+      b.id="phrRecallBtn";
+      b.innerHTML='🧠 まず自力で英文を思い出す<span class="rcsub">頭の中で言ってから、タップで単語を並べる</span>';
+      b.onclick=()=>{ if(!phrAnswered) phrShowTiles(); };
       box.appendChild(b);
-    });
+    }else phrShowTiles();
   }else{
     // 口頭自己判定(v5.1.0・box4〜): 意図だけ見て声に出す→答えを見て⭕✖(採点は自分に正直に)
     box.className="choices";
@@ -480,17 +499,31 @@ function phrSay(en){
   }catch(e){}
 }
 
-/* 並べ替えのタップ: 正しい次のチャンクなら確定、違えばミスとして数える(1ミスでも不正解扱い)。
-   タップは常にどれかが正解なので詰まない=降参ボタン不要 */
+/* 並べ替えの片を開く(v5.15.0: 「先に思い出す」の後、または即時)。片はシャッフル(偶然正順になったら混ぜ直す) */
+function phrShowTiles(){
+  const box=$("choices"); box.innerHTML="";
+  box.className="choices chunks"+(phrCur.grain==="w"? " words":"");
+  let arr=shuffle(phrCur.tiles.slice());
+  if(arr.length>2 && arr.join(" ")===phrCur.tiles.join(" ")) arr=shuffle(arr);
+  arr.forEach(t=>{
+    const b=document.createElement("button");
+    b.className="chunkbtn";
+    b.textContent=t;
+    b.onclick=()=>phrTapChunk(t,b);
+    box.appendChild(b);
+  });
+}
+/* 並べ替えのタップ: 正しい次の片なら確定、違えばミスとして数える(1ミスでも不正解扱い)。
+   タップは常にどれかが正解なので詰まない=降参ボタン不要。同じ語が2つあっても表層形が同じならどちらでも正解 */
 function phrTapChunk(t,b){
   if(phrAnswered || !phrCur) return;
-  const p=phrCur.p;
-  if(t===p.ch[phrPos]){
+  const tiles=phrCur.tiles||phrCur.p.ch;
+  if(t===tiles[phrPos]){
     b.disabled=true; b.classList.add("used");
     phrPos++;
-    $("phrBuild").innerHTML='<b>'+esc(p.ch.slice(0,phrPos).join(" "))+'</b>'+
-      (phrPos<p.ch.length? ' <span class="pbslot">▁</span>':'');
-    if(phrPos>=p.ch.length) phrFinish(phrMiss===0);
+    $("phrBuild").innerHTML='<b>'+esc(tiles.slice(0,phrPos).join(" "))+'</b>'+
+      (phrPos<tiles.length? ' <span class="pbslot">▁</span>':'');
+    if(phrPos>=tiles.length) phrFinish(phrMiss===0);
   }else{
     phrMiss++;
     b.classList.add("wrong");
@@ -606,10 +639,17 @@ function openPhrHistoryModal(page){
     else s1++;
   });
   const top=SPEAK_ENABLED? "🎙 口頭チェック" : "💬 全文4択", topDone=SPEAK_ENABLED? "口頭で言えた" : "全文4択で正解";
+  // 階段の説明(v5.15.0: 並べ替えに一本化=粒度の階段。フラグoffは従来の3形式)
+  const ladder=PHR_REORDER_ALL
+    ? {help:'🧩チャンクの並べ替え(定着0-1)→🔤単語の並べ替え(2-3)→🧠思い出してから単語の並べ替え(4)→正解で「✓覚えた」(定着5)',
+       rows:[['🧩 チャンクの並べ替え(定着0-1)', s1], ['🔤 単語の並べ替え(定着2-3)', s2], ['🧠 思い出してから並べ替え(定着4)', s3]],
+       done:'思い出して並べられた'}
+    : {help:'🧠クローズ4択(定着0-1)→🧩並べ替え(2-3)→'+top+'(4)→正解で「✓覚えた」(定着5)',
+       rows:[['🧠 クローズ4択(定着0-1)', s1], ['🧩 並べ替え(定着2-3)', s2], [top+'(定着4)', s3]],
+       done:topDone};
   openModal('<h3>📊 フレーズのあゆみ '+helpBtn("hlp-phist")+'</h3>'+
     helpNote("hlp-phist", 'フレーズは単語の「今日の目安」とは別カウント(このグラフが専用の記録・30問セットの進みには数える)。'+
-      '出題は定着の階段と連動する: 🧠クローズ4択(定着0-1)→🧩並べ替え(2-3)→'+top+'(4)→'+
-      '正解で「✓覚えた」(定着5)。忘却曲線・復習間隔は単語と同じ')+
+      '出題は定着の階段と連動する: '+ladder.help+'。忘却曲線・復習間隔は単語と同じ')+
     '<div class="row histnav" style="gap:8px; margin-top:6px">'+
       '<button class="btn hnav" id="phrHistPrev"'+(hasPrev?'':' disabled')+'>◀</button>'+
       '<div class="grow" style="text-align:center; font-weight:800">'+h[0].md+' 〜 '+h[13].md+
@@ -625,10 +665,8 @@ function openPhrHistoryModal(page){
     '</table>'+
     '<h2 style="margin-top:12px">🪜 定着の階段(いまの分布)</h2>'+
     '<table class="stt">'+
-      '<tr><td>🧠 クローズ4択(定着0-1)</td><td>'+fmt(s1)+'</td></tr>'+
-      '<tr><td>🧩 並べ替え(定着2-3)</td><td>'+fmt(s2)+'</td></tr>'+
-      '<tr><td>'+top+'(定着4)</td><td>'+fmt(s3)+'</td></tr>'+
-      '<tr><td>✓ 覚えた('+topDone+')</td><td>'+fmt(s4)+'</td></tr>'+
+      ladder.rows.map(r=>'<tr><td>'+r[0]+'</td><td>'+fmt(r[1])+'</td></tr>').join("")+
+      '<tr><td>✓ 覚えた('+ladder.done+')</td><td>'+fmt(s4)+'</td></tr>'+
       '<tr><td>未学習</td><td>'+fmt(s0)+'</td></tr>'+
     '</table>');
   $("phrHistPrev").onclick=()=>{ if(hasPrev) openPhrHistoryModal(page+1); };

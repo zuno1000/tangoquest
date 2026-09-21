@@ -212,8 +212,8 @@ function paceMsg(done, target){
 /* ペースパネルの中身を描く(ホーム #homePace)。
    学習画面には置かない: 縦に要素を足すと選択肢が押し出されて構成が崩れる(v4.7.1)。
    学習中の進捗は promptCard の「今日 X/Y問」表記(高さ増なし)が担う */
-/* v5.12.1(実機FB「今日の目安と今日のセットを統廃合」): 目安のパネルにセットの●○バーを組み込み、
-   ホームの「今日のセット」パネルは廃止。数字=目安(単語の問数)・バー=セット(30問の単位)・脚注=このセットの進み */
+/* v5.12.1(実機FB「今日の目安と今日のセットを統廃合」): ホームの「今日のセット」パネルは廃止し目安のパネルに統合。
+   数字=目安(単語の問数)・脚注=このセットの進み。バーはv5.12.1〜v5.14.0はセットの●○、v5.15.0で連続1本に戻した */
 function setFootText(sp){
   // 最後のセットが端数(v5.14.0)のときは「このセット n/残り問数」で見せる
   const inLast=sp.target && sp.done===sp.target-1 && sp.last<SET_N;
@@ -224,14 +224,17 @@ function setFootText(sp){
     : sp.done? '🧩 次は'+(sp.done+1)+'セット目'+(inLast? '('+need+'問で目安に届く)':'')+' ─ すきま時間に1セット'
     : '🧩 30問=1セット ─ すきま時間に1セットずつ';
 }
+/* v5.15.0(実機FB「セット分割のバーを連続した1本に戻す」): バーは旧来の帯グラフ(.pbar)=今日の問数/目安。
+   セット(30問)の情報は脚注の1行(setFootText)だけが担う。●○(setDotsHTML)はセット完了モーダルに残す */
 function fillPaceEl(el){
   if(!el) return;
   const q=paceToday(G);
   const sp=setProgress(G);
   if(!q){
-    el.innerHTML='<div class="pacetop"><span>🧩 今日 <b style="font-size:22px">'+sp.done+'</b> <span class="ptgt">セット</span></span>'+
+    // 目標なし: 数字=今日の問数・バー=いま進めているセットの進み(30問で1本)
+    el.innerHTML='<div class="pacetop"><span>🧩 今日 <b style="font-size:22px">'+sp.a+'</b> <span class="ptgt">問'+(sp.done? ' ・ '+sp.done+'セット':'')+'</span></span>'+
       '<b style="color:var(--accent2); font-size:13px">🎯 目標日を設定 ›</b></div>'+
-      setDotsHTML(sp)+
+      '<div class="pbar"><i style="width:'+Math.round(100*sp.cur/SET_N)+'%"></i></div>'+
       '<div class="pacemsg">「いつまでに全部覚えるか」を決めると、1日の目安をここに逆算する</div>'+
       '<div class="pacefoot">'+setFootText(sp)+'</div>';
   }else if(q.done){
@@ -250,7 +253,7 @@ function fillPaceEl(el){
     el.innerHTML=
       '<div class="pacetop"><span>🎯 今日の目安</span>'+
         '<b class="'+(done>=target?"pgold":"")+'">'+done+' <span class="ptgt">/ '+target+'問</span></b></div>'+
-      setDotsHTML(sp)+ // セット単位の●○バー(v5.12.1・旧「今日のセット」パネルを統合)
+      '<div class="pbar'+(done>=target?" full":"")+'"><i style="width:'+pct+'%"></i></div>'+ // 連続1本のバー(v5.15.0で●○から戻した)
       '<div class="pacemsg'+(done>=target?" pdone":"")+'">'+paceMsg(done, target)+'</div>'+
       nowLine+
       '<div class="pacefoot">'+setFootText(sp)+'</div>'+

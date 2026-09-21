@@ -432,16 +432,25 @@ function openSettings(){
       '<button class="btn" id="vibeToggle">振動: '+(localStorage.getItem("tq_vibe")==="off"?"OFF":"ON")+'</button>'
     : '<button class="btn" disabled>振動: この端末は非対応</button>'+
       '<div class="small" style="margin-top:6px">iPhone・iPad・PCのブラウザは振動APIに対応していない(Android Chrome等で使える)</div>');
-  const syncInner=(syncClientId()
-    ? '<div class="small" style="margin-bottom:6px">最終同期: '+(lastSyncAt()? fmtSyncTime(lastSyncAt()) : 'この端末ではまだ同期していない')+' '+helpBtn("hlp-sync")+'</div>'+
-      helpNote("hlp-sync", 'あなた自身のGoogleドライブ(アプリ専用領域)に保存。進捗を失わない方向でマージされる')+
-      '<button class="btn primary" id="syncBtn">今すぐ同期</button>'
-    : '<div class="small">未設定 '+helpBtn("hlp-sync")+'</div>'+
-      helpNote("hlp-sync", '未設定。GCPでOAuthクライアントIDを発行し js/sync.js に設定すると使える(README参照)。データは端末内に保存されている'));
-  const updInner=
-    '<div class="small" style="margin-bottom:6px">最新版への更新 '+helpBtn("hlp-upd")+'</div>'+
-    helpNote("hlp-upd", 'ホーム画面から起動している場合(iOS等)もこのボタンで最新版に更新できる。学習データ・同期は消えない')+
-    '<button class="btn" id="updateBtn">アップデートを確認</button>';
+  /* v5.15.0(実機FB「同期・アップデートのボタンを処理しやすい位置に」): 2つのボタンは開閉セクションに畳まず、
+     ⚙を開いた直後のいちばん上に横並びで常時表示する(1タップ目=⚙・2タップ目=同期/更新)。
+     ID(syncBtn/updateBtn)・ヘルプ文は従来どおり。同期が未設定の端末ではボタンを無効にして理由を添える */
+  const topRow=
+    '<div class="row settop">'+
+      (syncClientId()
+        ? '<button class="btn primary grow" id="syncBtn">📥 今すぐ同期</button>'
+        : '<button class="btn grow" id="syncBtn" disabled>📥 同期(未設定)</button>')+
+      '<button class="btn grow" id="updateBtn">アップデートを確認</button>'+
+    '</div>'+
+    '<div class="small" style="margin:6px 0 4px">'+
+      (syncClientId()
+        ? '最終同期: '+(lastSyncAt()? fmtSyncTime(lastSyncAt()) : 'この端末ではまだ同期していない')
+        : '同期は未設定')+' '+helpBtn("hlp-sync")+
+      ' ・ v'+APP_VERSION+' '+helpBtn("hlp-upd")+'</div>'+
+    helpNote("hlp-sync", syncClientId()
+      ? 'あなた自身のGoogleドライブ(アプリ専用領域)に保存。進捗を失わない方向でマージされる'
+      : '未設定。GCPでOAuthクライアントIDを発行し js/sync.js に設定すると使える(README参照)。データは端末内に保存されている')+
+    helpNote("hlp-upd", 'ホーム画面から起動している場合(iOS等)も「アップデートを確認」で最新版に更新できる。学習データ・同期は消えない');
   const resetInner=
     '<div class="small" style="margin-bottom:6px">やり直したいときに '+helpBtn("hlp-reset")+'</div>'+
     helpNote("hlp-reset", '「学習記録とカードだけリセット」はなかま・通貨・レベル・冒険の記録を残して単語の学習をやり直す。どちらも確認画面が出る')+
@@ -451,13 +460,12 @@ function openSettings(){
   /* v5.14.0: 「記録」(数字の表・あゆみ・にがて・読んだ聴いた・マイ単語・図鑑・実績)は📊記録タブ(records.js)へ移した。
      ⚙は設定だけ(出題・演出・同期・更新・リセット) */
   openModal('<h3>⚙ 設定</h3>'+
-    '<div class="small" style="margin-bottom:8px">学習の記録・あゆみ・実績は下のナビの <b>📊 記録</b> に</div>'+
+    topRow+ // 同期・更新はいちばん上(v5.15.0)
     foldSec("sfoldLearn", "📖 学習(出題・自動化)", learnInner, false)+
     foldSec("sfoldFx",    "🎨 演出(振動)", fxInner, false)+
-    foldSec("sfoldSync",  "📥 端末間同期(Googleドライブ)", syncInner, false)+
-    foldSec("sfoldUpd",   "🔄 アプリの更新", updInner, false)+
     foldSec("sfoldReset", "🗑 データのリセット", resetInner, false)+
-    '<div class="small" style="margin-top:14px">LEXICA(レキシカ) v'+APP_VERSION+' ─ 英単語×ローグライクRPG<br>単語データ: 英検1級レベル '+WORDS.length+'語(<a href="https://github.com/zuno1000/tango" target="_blank" rel="noopener" style="color:var(--accent2)">tango</a> 由来)</div>');
+    '<div class="small" style="margin-top:14px">学習の記録・あゆみ・実績は下のナビの <b>📊 記録</b> に<br>'+
+      'LEXICA(レキシカ) v'+APP_VERSION+' ─ 単語データ: 英検1級レベル '+WORDS.length+'語(<a href="https://github.com/zuno1000/tango" target="_blank" rel="noopener" style="color:var(--accent2)">tango</a> 由来)</div>');
   $("modeToggle").onclick=()=>{
     G.mode=G.mode==="e2j"?"j2e":"e2j"; saveG();
     $("modeToggle").textContent=(G.mode==="e2j"?"EN → 日本語":"日本語 → EN")+" (タップで切替)";
@@ -488,7 +496,7 @@ function openSettings(){
     if(off){ try{ navigator.vibrate([80,50,80]); }catch(e){} }
   };
   const sb=$("syncBtn");
-  if(sb){ ensureGis(()=>{}); sb.onclick=syncNow; } // GIS先読み=タップ時にポップアップがブロックされない
+  if(sb && !sb.disabled){ ensureGis(()=>{}); sb.onclick=syncNow; } // GIS先読み=タップ時にポップアップがブロックされない
   $("updateBtn").onclick=appUpdate;
   $("resetLearnBtn").onclick=()=>{
     openModal('<h3>学習記録とカードをリセットする？</h3>'+

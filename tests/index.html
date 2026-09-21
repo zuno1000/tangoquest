@@ -1422,7 +1422,7 @@ function run(){
     W.renderHome();
     const el=W.document.getElementById("homePace");
     ok(el.innerHTML.indexOf("今日の目安")>=0, "目安表示");
-    ok(el.querySelector(".setdots"), "メーター(セットの●○バー・v5.12.1で統合)がある");
+    ok(el.querySelector(".pbar") && !el.querySelector(".setdots"), "メーター(連続1本のバー・v5.15.0で●○から戻した)がある");
     ok(el.innerHTML.indexOf("残り")>=0, "目標日カウントダウン");
     // 学習画面には縦積みのパネルを置かない(クイズの選択肢が押し出されるため v4.7.1)
     ok(!W.document.getElementById("paceBar"), "学習画面にペースパネルはない");
@@ -2272,7 +2272,7 @@ function run(){
     ok(hb.firstElementChild.classList.contains("phero"), "目安は大きい表示");
     // v5.12.1: 今日のセットのパネルは目安に統合(●○バーが目安のパネルの中に入る)
     ok(!W.document.getElementById("homeSets"), "今日のセットのパネルは無い");
-    ok(hb.firstElementChild.querySelector(".setdots"), "目安のパネルにセットの●○バー");
+    ok(hb.firstElementChild.querySelector(".pbar") && !hb.firstElementChild.querySelector(".setdots"), "目安のパネルのバーは連続1本(v5.15.0)");
     ok(hb.firstElementChild.textContent.indexOf("セット")>=0, "セットの進みの脚注");
     ok(W.document.getElementById("homeStudy").textContent.indexOf("5問ごと")<0, "「5問ごとに🎫+5」の表記は廃止");
     eq(hb.children[1].id, "homeRL", "今日の英語(v5.10.0)は目安の直後");
@@ -2283,8 +2283,9 @@ function run(){
     W.G.pace={goal:W.addDays(W.todayKey(), 100), setAt:Date.now(), log:[], qd:{d:W.todayKey(), per:60}};
     W.renderHome();
     const hp=W.document.getElementById("homePace");
-    ok(hp.querySelector(".setdots") && hp.textContent.indexOf("今日の目安")>=0 && hp.textContent.indexOf("/ 60問")>=0, "目安の数字+●○バー");
-    ok(!hp.querySelector(".pbar"), "旧の帯グラフは無い");
+    ok(hp.querySelector(".pbar") && hp.textContent.indexOf("今日の目安")>=0 && hp.textContent.indexOf("/ 60問")>=0, "目安の数字+連続バー");
+    ok(!hp.querySelector(".setdots") && hp.textContent.indexOf("セット")>=0, "●○は無く、セットは脚注の1行(v5.15.0)");
+    ok(W.document.getElementById("homeRL").textContent.indexOf("英検1級レベル")<0 && W.document.getElementById("homeRL").textContent.indexOf("すべて無料")<0, "今日の英語の添え書きは無い(v5.15.0)");
     W.G.pace=oldPace; if(W.G.days[dk]) W.G.days[dk].t=oldT; W.renderHome();
     ok(!W.document.getElementById("homeQuick"), "サクッと5問は廃止(v5.8.0)");
     ok(!W.document.getElementById("homeMission") && !W.document.getElementById("homeDex"), "任務・図鑑の入口はホームに無い(設定へ移設)");
@@ -3035,9 +3036,10 @@ function run(){
     // フレーズの解答でも帳簿(G.set)が進む・セットの境界にも達する
     dr.a=24; pd.a=5; W.newQuestion(); // 合算29=30問目=フレーズ
     ok(doc.getElementById("promptCard").classList.contains("phr"), "30問目もフレーズ");
-    const key=W.phrCloze(W.PHRASES.find(p=>p.ja===doc.getElementById("promptWord").textContent)||{en:"",k:""});
-    const btn=[...doc.querySelectorAll("#choices .choice")].find(b=>key && b.textContent===key.key)||doc.querySelector("#choices .choice");
-    btn.click();
+    // v5.15.0: フレーズは並べ替え(新規=チャンク)。正しい順にタップして解答する
+    const cp=W.allPhrases().find(p=>p.ja===doc.getElementById("promptWord").textContent);
+    ok(cp && doc.querySelectorAll("#choices .chunkbtn").length===cp.ch.length, "ミックスの中のフレーズも並べ替え");
+    cp.ch.forEach(t=>[...doc.querySelectorAll("#choices .chunkbtn")].find(b=>!b.disabled && b.textContent===t).click());
     eq(pd.a, 6, "フレーズの日別に計上"); eq(dr.a, 24, "単語の日別(目安)は動かない");
     ok(G.set && G.set.n>=1 && G.set.phr>=1, "セット帳簿にフレーズとして記録");
     W.newQuestion();
@@ -3051,15 +3053,15 @@ function run(){
     dr.a=snap.a; dr.c=snap.c; pd.a=snap.pa; pd.c=snap.pc; G.tickets=snap.t; G.xp=snap.xp; G.combo=snap.cb; G.set=snap.set;
     W.saveG(); W.switchTab("home"); W.newQuestion();
   });
-  t("全文4択(v5.10.0): 定着4以上は意図→英文全体を選ぶ・正解で覚えた・口頭は撤去(SPEAK_ENABLED=false)", ()=>{
+  t("全文4択(v5.10.0・v5.15.0からはドリル用にfmt指定で残る): 意図→英文全体を選ぶ・正解で覚えた・口頭は撤去(SPEAK_ENABLED=false)", ()=>{
     const doc=W.document, G=W.G;
     eq(W.SPEAK_ENABLED, false, "口頭はフラグで撤去(可逆)");
     const oldPhr=G.phr, oldQtab=G.opt.qtab, oldPre=G.opt.preRecall, oldCb=G.combo;
     const d=W.dayRec(), pd=W.pdayRec(), snap={da:d.a, pa:pd.a, pc:pd.c, pm:pd.m, t:G.tickets, xp:G.xp, set:G.set};
     d.a=1; pd.a=0; pd.c=0; pd.m=0; G.phr={}; G.opt.qtab="p"; G.opt.preRecall=1;
     const p=W.PHRASES[3];
-    G.phr[p.en]=[4, Date.now()-1000, 4, 0, 0, 0, 0]; // box4+期限到来=全文4択
-    W.phrStart(p);
+    G.phr[p.en]=[4, Date.now()-1000, 4, 0, 0, 0, 0]; // box4+期限到来
+    W.phrStart(p, "fs"); // v5.15.0: 通常の出題は並べ替えなので形式を指定
     ok(doc.getElementById("phrRecallBtn"), "先に思い出すステップは全文4択にも効く");
     ok(doc.getElementById("phrBuild").textContent.indexOf(p.en)<0, "英文は出ない(意図だけ)");
     doc.getElementById("phrRecallBtn").click();
@@ -3075,7 +3077,7 @@ function run(){
     // 不正解=box0へ(1段下に復帰)
     G.opt.preRecall=0;
     G.phr[p.en]=[4, Date.now()-1000, 4, 0, 0, 0, 0];
-    W.phrStart(p);
+    W.phrStart(p, "fs");
     [...doc.querySelectorAll("#choices .choice.fs")].find(b=>b.textContent!==p.en).click();
     eq(G.phr[p.en][0], 0, "誤答は立て直し"); eq(G.phr[p.en][7], 3, "1段下へ復帰");
     // 設定から口頭の制限時間は消えている
@@ -3618,12 +3620,19 @@ async function runAsync(W){
   t("設定(v4.30.0): 分類の開閉に畳んでも既存の設定ボタンはDOMに常在", ()=>{
     const doc=W.document;
     W.openSettings();
-    ["sfoldLearn","sfoldFx","sfoldSync","sfoldUpd","sfoldReset"].forEach(id=>{
+    ["sfoldLearn","sfoldFx","sfoldReset"].forEach(id=>{
       const n=doc.getElementById(id);
       ok(n && n.hidden, id+"は畳まれている");
     });
+    ok(!doc.getElementById("sfoldSync") && !doc.getElementById("sfoldUpd"), "同期・更新は畳まない(v5.15.0: いちばん上に常時表示)");
     ok(doc.getElementById("modeToggle") && doc.getElementById("autoNextBtn") && doc.getElementById("svAutoBtn"), "学習(出題・自動化)");
     ok(doc.getElementById("updateBtn") && doc.getElementById("resetLearnBtn") && doc.getElementById("resetBtn"), "更新・リセット");
+    // v5.15.0(実機FB): 同期・更新のボタンは⚙を開いた直後に見える(開閉セクションの外・横並び・最初の要素)
+    const top=doc.querySelector("#modal .settop");
+    ok(top && top.querySelector("#syncBtn") && top.querySelector("#updateBtn"), "同期・更新は横並びの1行に");
+    ok(!doc.getElementById("syncBtn").closest(".foldbody") && !doc.getElementById("updateBtn").closest(".foldbody"), "畳まれたセクションの中ではない");
+    eq(doc.querySelector("#modal h3").nextElementSibling, top, "見出しの直後=いちばん上");
+    ok(doc.getElementById("syncBtn").disabled===!W.syncClientId(), "同期が未設定の端末ではボタンは無効(理由つき)");
     ok(!doc.querySelector("#modal #histBtn") && !doc.querySelector("#modal #paceCfgBtn"), "記録系の入口は⚙から📊記録タブへ移設(v5.14.0)");
     doc.querySelector('[data-fold="sfoldLearn"]').click();
     ok(!doc.getElementById("sfoldLearn").hidden, "タップで開く");
@@ -3727,13 +3736,27 @@ async function runAsync(W){
       ok(cs.filter(x=>x.en!==p.en).every(x=>x.c===p.c), "誤答は同カテゴリ(紛らわしい=学習になる)");
     }
   });
-  t("フレーズの出題形式はSRSの階段と連動(box0-1=クローズ4択・box2-3=並べ替え・box4〜=全文4択)", ()=>{
-    eq(W.phrFormat(null), "mc", "新規=クローズ4択");
-    eq(W.phrFormat([1,0,1,0,0,0,0]), "mc", "box1=クローズ4択");
-    eq(W.phrFormat([2,0,1,0,0,0,0]), "or", "box2から並べ替え");
-    eq(W.phrFormat([3,0,2,0,0,0,0]), "or");
-    eq(W.phrFormat([4,0,5,0,0,0,0]), "fs", "box4から全文4択(v5.10.0・口頭はSPEAK_ENABLED=falseで撤去)");
-    eq(W.phrFormat([5,0,9,0,1,0,0]), "fs", "box5=覚えた は全文4択で正解したことを意味する");
+  t("フレーズの出題形式(v5.15.0): 並べ替えに一本化(PHR_REORDER_ALL)・階段は粒度=box0-1チャンク/box2〜単語/box4〜は先に思い出す", ()=>{
+    eq(W.PHR_REORDER_ALL, true, "既定は並べ替えのみ(可逆フラグ)");
+    [null,[1,0,1,0,0,0,0],[2,0,1,0,0,0,0],[3,0,2,0,0,0,0],[4,0,5,0,0,0,0],[5,0,9,0,1,0,0]].forEach(st=>eq(W.phrFormat(st), "or", "どの定着でも並べ替え"));
+    eq(W.phrGrain(null), "ch", "新規=チャンク"); eq(W.phrGrain([1,0,1,0,0,0,0]), "ch", "box1=チャンク");
+    eq(W.phrGrain([2,0,1,0,0,0,0]), "w", "box2から単語"); eq(W.phrGrain([4,0,5,0,0,0,0]), "w"); eq(W.phrGrain([5,0,9,0,1,0,0]), "w");
+    const p=W.PHRASES.find(x=>x.ch.length>=3);
+    eq(W.phrTiles(p,"ch").join(" "), p.en, "チャンクの片を結ぶと英文"); eq(W.phrTiles(p,"ch").length, p.ch.length);
+    eq(W.phrTiles(p,"w").join(" "), p.en, "単語の片を結ぶと英文"); eq(W.phrTiles(p,"w").length, p.en.split(" ").length);
+    ok(W.PHRASES.every(x=>x.en.split(" ").length<=12), "単語の片は最大12(スマホに収まる)");
+    const G=W.G, oldPre=G.opt.preRecall;
+    G.opt.preRecall=1;
+    ok(!W.phrRecallFirst(null) && !W.phrRecallFirst([2,0,1,0,0,0,0]), "定着3以下は即タイル");
+    ok(W.phrRecallFirst([4,0,5,0,0,0,0]), "定着4は先に思い出す");
+    G.opt.preRecall=0; ok(!W.phrRecallFirst([4,0,5,0,0,0,0]), "設定オフなら出ない");
+    G.opt.preRecall=oldPre;
+    // フラグoff=従来の3形式(可逆性)
+    W.PHR_REORDER_ALL=false;
+    try{
+      eq(W.phrFormat(null), "mc", "新規=クローズ4択"); eq(W.phrFormat([2,0,1,0,0,0,0]), "or", "box2から並べ替え");
+      eq(W.phrFormat([4,0,5,0,0,0,0]), "fs", "box4から全文4択"); eq(W.phrGrain([4,0,5,0,0,0,0]), "ch", "従来の並べ替えはチャンク");
+    }finally{ W.PHR_REORDER_ALL=true; }
   });
   t("phrCloze: 核の位置を語境界まで広げて切り出す(seem→seems等の活用対応)", ()=>{
     const p1=W.PHRASES.find(x=>x.k==="seem"); // It seems to me that …
@@ -3754,7 +3777,7 @@ async function runAsync(W){
     G.phr={}; G.opt.qtab="p"; G.opt.preRecall=0; // このテストは4択の中身を直接見る
     d.a=1; pd.a=0; pd.c=0; // 合計2で終わる=5問ボーナスを踏まない
     const p=W.PHRASES[0];
-    W.phrStart(p);
+    W.phrStart(p, "mc"); // v5.15.0: 通常の出題は並べ替え。クローズ4択はfmt指定(ドリルと同じ経路)で検証
     eq(doc.getElementById("promptWord").textContent, p.ja, "問題は日本語の意図");
     // v5.2.0: バッジは定着状態だけ(分類名は長く日本語と重なっていた=実機FB。分類は答え合わせに)
     ok(doc.getElementById("qBadge").textContent.indexOf("新規")>=0 &&
@@ -3781,33 +3804,63 @@ async function runAsync(W){
     G.counters.ans=snap.ans; G.counters.cor=snap.cor; dl.a=snap.dla; dl.c=snap.dlc;
     W.saveG(); W.newQuestion();
   });
-  t("フレーズ並べ替え: 正しい順のタップで正解・誤タップが1つでもあれば不正解として復習に回る", ()=>{
+  t("フレーズ並べ替え(v5.15.0: 粒度の階段=チャンク→単語→思い出してから単語): 正しい順のタップで正解・誤タップが1つでもあれば不正解として復習に回る", ()=>{
     const G=W.G, doc=W.document;
-    const oldPhr=G.phr, oldQtab=G.opt.qtab, oldCb=G.combo;
-    const pd=W.pdayRec(), snap={a:pd.a, c:pd.c, t:G.tickets, xp:G.xp};
-    const d=W.dayRec(), da0=d.a; d.a=1; pd.a=0; // 5問ボーナスの境界を踏まない
+    const oldPhr=G.phr, oldQtab=G.opt.qtab, oldCb=G.combo, oldPre=G.opt.preRecall, oldAch=JSON.parse(JSON.stringify(G.ach||{}));
+    const pd=W.pdayRec(), snap={a:pd.a, c:pd.c, m:pd.m, t:G.tickets, xp:G.xp, set:G.set};
+    const d=W.dayRec(), da0=d.a; d.a=1; pd.a=0; pd.m=0;
     G.phr={}; G.opt.qtab="p";
     const p=W.PHRASES.find(x=>x.ch.length>=3);
-    // box2+期限到来=並べ替え+正解で階段が上がる状態
+    const btns=()=>[...doc.querySelectorAll("#choices .chunkbtn")];
+    // 新規=チャンクの並べ替え(v5.15.0: 定着0-1の粒度)
+    G.opt.preRecall=1;
+    W.phrStart(p);
+    ok(!doc.getElementById("phrRecallBtn"), "チャンク段階では先に思い出すは出ない");
+    eq(btns().length, p.ch.length, "チャンクの数だけボタン");
+    ok(!doc.getElementById("choices").classList.contains("words"), "チャンクのタイル");
+    p.ch.forEach(t=>btns().find(b=>!b.disabled && b.textContent===t).click());
+    ok(G.phr[p.en] && G.phr[p.en][2]===1, "新規の正解を記録");
+    // box2+期限到来=単語の並べ替え+正解で階段が上がる状態
     G.phr[p.en]=[2, Date.now()-1000, 1, 0, 0, 0, 0];
     W.phrStart(p);
-    const btns=()=>[...doc.querySelectorAll("#choices .chunkbtn")];
-    eq(btns().length, p.ch.length, "チャンクの数だけボタン");
-    p.ch.forEach(t=>btns().find(b=>!b.disabled && b.textContent===t).click());
-    eq(G.phr[p.en][0], 3, "全チャンク正順=正解でbox2→3");
+    const words=p.en.split(" ");
+    ok(!doc.getElementById("phrRecallBtn"), "定着2-3は即タイル");
+    eq(btns().length, words.length, "単語の数だけボタン(v5.15.0)");
+    ok(doc.getElementById("choices").classList.contains("words"), "単語のタイル(小さめ)");
+    words.forEach(t=>btns().find(b=>!b.disabled && b.textContent===t).click());
+    eq(G.phr[p.en][0], 3, "全単語正順=正解でbox2→3");
     ok(doc.getElementById("resultBar").classList.contains("show"), "答え合わせ表示");
+    ok(doc.getElementById("phrBuild").textContent.indexOf(p.en)>=0, "答え合わせで全文");
     // 誤タップあり=完走しても不正解(box0へ)
     G.phr[p.en]=[2, Date.now()-1000, 2, 0, 0, 0, 0];
     W.phrStart(p);
-    const wrongFirst=btns().find(b=>b.textContent!==p.ch[0]);
+    const wrongFirst=btns().find(b=>b.textContent!==words[0]);
     wrongFirst.click(); // 誤タップ(確定しない・ミスに数える)
     ok(!wrongFirst.disabled, "誤タップは確定しない(詰まない)");
-    p.ch.forEach(t=>btns().find(b=>!b.disabled && b.textContent===t).click());
+    words.forEach(t=>btns().find(b=>!b.disabled && b.textContent===t).click());
     eq(G.phr[p.en][0], 0, "ミスありは不正解扱い=box0から立て直し");
     eq(G.phr[p.en][3], 1, "ミス回数を数える");
+    // 定着4=「まず自力で英文を思い出す」→タップで単語のタイル→正順で覚えた(box5)
+    G.phr[p.en]=[4, Date.now()-1000, 4, 0, 0, 0, 0];
+    W.phrStart(p);
+    ok(doc.getElementById("phrRecallBtn") && btns().length===0, "定着4は先に思い出す(タイルはまだ見えない)");
+    ok(doc.getElementById("phrBuild").textContent.indexOf(p.en)<0, "英文は出ない(意図だけ)");
+    doc.getElementById("phrRecallBtn").click();
+    ok(!doc.getElementById("phrRecallBtn") && btns().length===words.length, "タップで単語のタイルが開く");
+    words.forEach(t=>btns().find(b=>!b.disabled && b.textContent===t).click());
+    eq(G.phr[p.en][0], 5, "正解でbox5=覚えた"); eq(G.phr[p.en][4], 1);
+    // 設定オフ=定着4でも即タイル
+    G.opt.preRecall=0;
+    G.phr[p.en]=[4, Date.now()-1000, 4, 0, 0, 0, 0];
+    W.phrStart(p);
+    ok(!doc.getElementById("phrRecallBtn") && btns().length===words.length, "オフは即タイル(テンポ優先)");
+    // ドリル(fmt指定)は従来どおりクローズ4択が出る=コードは残っている
+    G.phr[p.en]=[4, Date.now()-1000, 4, 0, 0, 0, 0]; G.opt.preRecall=0;
+    W.phrStart(p, "mc");
+    eq(doc.querySelectorAll("#choices .choice").length, 4, "fmt指定のクローズ4択は生きている(ドリル用)");
     // 後片付け
-    G.phr=oldPhr; G.opt.qtab=oldQtab; G.combo=oldCb;
-    d.a=da0; pd.a=snap.a; pd.c=snap.c; G.tickets=snap.t; G.xp=snap.xp;
+    G.phr=oldPhr; G.opt.qtab=oldQtab; G.combo=oldCb; G.opt.preRecall=oldPre; G.ach=oldAch; G.set=snap.set;
+    d.a=da0; pd.a=snap.a; pd.c=snap.c; pd.m=snap.m; G.tickets=snap.t; G.xp=snap.xp;
     W.saveG(); W.newQuestion();
   });
   t("学習タブのセグ切替: 単語/フレーズが行き来でき、好みはG.opt.qtabに残る", ()=>{
@@ -3819,7 +3872,7 @@ async function runAsync(W){
     doc.querySelector('#quizSeg [data-q="p"]').click();
     eq(G.opt.qtab, "p", "好みが保存される(端末ローカル優先マージのG.opt)");
     ok(doc.getElementById("promptWord").className.indexOf("ja")>=0, "フレーズは日本語の意図が問題");
-    ok(doc.querySelectorAll("#choices .choice").length===4, "新規=日→英4択");
+    ok(doc.querySelectorAll("#choices .chunkbtn").length>=2 && doc.querySelectorAll("#choices .choice").length===0, "新規=チャンクの並べ替え(v5.15.0)");
     doc.querySelector('#quizSeg [data-q="w"]').click();
     eq(G.opt.qtab, "w", "単語に戻れる");
     ok(["新規","復習","覚えた・復習"].some(s=>doc.getElementById("qBadge").textContent.indexOf(s)>=0), "単語の出題に戻る");
@@ -3834,7 +3887,7 @@ async function runAsync(W){
     eq(W.G.opt.preRecall, oldPre, "既定値の確認用"); // 新規セーブの既定はON
     G.opt.preRecall=1;
     const p=W.PHRASES[0];
-    W.phrStart(p);
+    W.phrStart(p, "mc"); // v5.15.0: クローズ4択はfmt指定(通常の出題は並べ替え)
     ok(doc.getElementById("phrRecallBtn"), "選択肢の代わりに「まず思い出す」");
     eq(doc.querySelectorAll("#choices .choice").length, 1, "この時点で選択肢は見えない(再認で解けない)");
     ok(doc.getElementById("phrBuild").innerHTML.indexOf("＿")>=0, "空欄つきの文脈は見えている");
@@ -3845,13 +3898,13 @@ async function runAsync(W){
     ok(doc.getElementById("resultBar").classList.contains("show"), "答え合わせに進める");
     // オフなら従来どおり即4択
     G.opt.preRecall=0;
-    W.phrStart(p);
+    W.phrStart(p, "mc");
     eq(doc.querySelectorAll("#choices .choice").length, 4, "オフは即4択(テンポ優先)");
     G.phr=oldPhr; G.opt.qtab=oldQtab; G.opt.preRecall=oldPre; G.combo=oldCb;
     d.a=snap.da; pd.a=snap.pa; pd.c=snap.pc; G.tickets=snap.t; G.xp=snap.xp;
     W.saveG(); W.newQuestion();
   });
-  t("口頭の制限時間(v5.3.0・SPEAK_ENABLED=trueで復活=可逆性の確認): カウントダウン表示・時間切れで自動的に答えが開く", ()=>{ W.SPEAK_ENABLED=true; try{
+  t("口頭の制限時間(v5.3.0・SPEAK_ENABLED=trueで復活=可逆性の確認): カウントダウン表示・時間切れで自動的に答えが開く", ()=>{ W.SPEAK_ENABLED=true; W.PHR_REORDER_ALL=false; try{
     const G=W.G, doc=W.document;
     eq(W.spkSecCycle(0), 5000, "オフ→5秒");
     eq(W.spkSecCycle(5000), 8000); eq(W.spkSecCycle(8000), 12000);
@@ -3880,7 +3933,7 @@ async function runAsync(W){
     doc.getElementById("phrSpkOk").click();
     G.phr=oldPhr; G.opt.qtab=oldQtab; G.opt.spkSec=oldSec; G.combo=oldCb;
     d.a=snap.da; pd.a=snap.pa; pd.c=snap.pc; G.tickets=snap.t; G.xp=snap.xp;
-    W.saveG(); W.newQuestion(); }finally{ W.SPEAK_ENABLED=false; }
+    W.saveG(); W.newQuestion(); }finally{ W.SPEAK_ENABLED=false; W.PHR_REORDER_ALL=true; }
   });
   t("動詞の型・無生物主語(v5.4.0): 答え合わせに使い回せる「型の一般形」が出る・専用ドリル2本", ()=>{
     const G=W.G, doc=W.document;
@@ -3892,7 +3945,7 @@ async function runAsync(W){
     ok(W.PHRASES.filter(x=>x.c==="ims").length>=30, "無生物主語は30件以上(v5.5.0拡充)");
     // クローズで解くと結果バーに型の一般形
     const p=W.PHRASES.find(x=>x.k==="enabled her to");
-    W.phrStart(p);
+    W.phrStart(p, "mc"); // v5.15.0: クローズ4択はfmt指定(動詞の型ドリルの形式)
     ok(doc.getElementById("phrBuild").textContent.indexOf("enabled her to")<0, "型の部分が空欄になる");
     const cs=[...doc.querySelectorAll("#choices .choice")];
     ok(cs.filter(b=>b.textContent!==W.phrCloze(p).key).every(b=>{
@@ -3981,7 +4034,7 @@ async function runAsync(W){
     const d=W.dayRec(), pd=W.pdayRec(), snap={da:d.a, pa:pd.a, pc:pd.c, t:G.tickets, xp:G.xp, pre:G.opt.preRecall};
     d.a=1; pd.a=0; G.phr={}; G.opt.qtab="p"; G.opt.preRecall=0; // 4択の中身を直接見る
     const p=W.PHRASES.find(x=>x.k==="poses a serious threat");
-    W.phrStart(p);
+    W.phrStart(p, "mc"); // v5.15.0: クローズ4択はfmt指定
     const bl=doc.getElementById("phrBuild");
     ok(!bl.classList.contains("hidden") && bl.innerHTML.indexOf("＿")>=0, "出題中から文脈行(空欄つき)がある");
     ok(bl.textContent.indexOf("poses a serious threat")<0, "核は隠れている");
@@ -3998,7 +4051,7 @@ async function runAsync(W){
     d.a=snap.da; pd.a=snap.pa; pd.c=snap.pc; G.tickets=snap.t; G.xp=snap.xp;
     W.saveG(); W.newQuestion();
   });
-  t("口頭自己判定(v5.1.0・SPEAK_ENABLED=trueで復活): 「答えを見る」→⭕言えた だけが「覚えた」への最後の階段を進める", ()=>{ W.SPEAK_ENABLED=true; try{
+  t("口頭自己判定(v5.1.0・SPEAK_ENABLED=trueで復活): 「答えを見る」→⭕言えた だけが「覚えた」への最後の階段を進める", ()=>{ W.SPEAK_ENABLED=true; W.PHR_REORDER_ALL=false; try{
     const G=W.G, doc=W.document;
     const oldPhr=G.phr, oldQtab=G.opt.qtab, oldCb=G.combo;
     const d=W.dayRec(), pd=W.pdayRec(), snap={da:d.a, pa:pd.a, pc:pd.c, pm:pd.m, t:G.tickets, xp:G.xp};
@@ -4026,7 +4079,7 @@ async function runAsync(W){
     eq(G.phr[p.en][7], 3, "1段下へ復帰(次の正解でbox3・v5.8.0=単語と同じ規則)");
     G.phr=oldPhr; G.opt.qtab=oldQtab; G.combo=oldCb;
     d.a=snap.da; pd.a=snap.pa; pd.c=snap.pc; pd.m=snap.pm; G.tickets=snap.t; G.xp=snap.xp;
-    W.saveG(); W.newQuestion(); }finally{ W.SPEAK_ENABLED=false; }
+    W.saveG(); W.newQuestion(); }finally{ W.SPEAK_ENABLED=false; W.PHR_REORDER_ALL=true; }
   });
   t("フレーズの同期: SRSは解答回数が多い方・日別はmax(単語と同じ規則)", ()=>{
     const mk=(st,pa)=>({resetAt:0, updatedAt:1, words:{}, inv:{}, chars:{}, dungeons:{},
@@ -4343,9 +4396,9 @@ async function runAsync(W){
     doc.getElementById("navRec").click();
     ok(!doc.getElementById("recView").classList.contains("hidden") && doc.getElementById("navRec").classList.contains("active"), "記録タブへ");
     const rb=doc.getElementById("recBox");
-    ["今日の解答","覚えた単語","覚えたフレーズ","今日の英語","連続学習","知識XP"].forEach(s=>ok(rb.textContent.indexOf(s)>=0, "表: "+s));
+    ["覚えた単語","覚えたフレーズ","今日の英語","連続学習","知識XP","累計正解","学習した日"].forEach(s=>ok(rb.textContent.indexOf(s)>=0, "数字: "+s));
     ["histBtn","paceCfgBtn","phrHistBtn","weakBtn","rlHistBtn2","mywBtn","setDexBtn"].forEach(id=>ok(doc.getElementById(id), "入口: "+id));
-    ok(doc.getElementById("recAch") && doc.querySelectorAll("#recAch .mrow").length===W.LEARN_ACH_DEFS.length, "実績がそのまま並ぶ");
+    ok(doc.getElementById("recAch") && doc.querySelectorAll("#recAch .mrow").length===W.LEARN_ACH_DEFS.length, "実績がそのまま並ぶ(v5.15.0: 折りたたみの中)");
     ok(rb.textContent.indexOf("最長")>=0, "連続学習に最長日数");
     doc.getElementById("histBtn").click(); ok(doc.getElementById("modal").textContent.indexOf("学習のあゆみ")>=0, "あゆみが開く"); W.closeModal();
     // ⚙は設定だけ
@@ -4355,6 +4408,53 @@ async function runAsync(W){
     ok(m.textContent.indexOf("📊 記録")>=0, "記録タブへの案内");
     ok(doc.getElementById("modeToggle") && doc.getElementById("preRecallBtn") && doc.getElementById("updateBtn") && doc.getElementById("resetBtn"), "設定の中身は残る");
     W.closeModal(); W.switchTab("home");
+  });
+  /* ---- v5.15.0: 記録タブの刷新(成長が見える1枚) ---- */
+  t("growthByWeek(v5.15.0・純関数): 週ごとの「覚えた」数(単語w・フレーズp)・8週・最後が今週・7日の窓", ()=>{
+    const base=new Date(2026, 8, 21); // 2026-09-21(月)
+    const g={days:{"2026-09-21":{a:1,c:1,m:3}, "2026-09-15":{a:1,c:1,m:2}, "2026-09-14":{a:1,c:1,m:5}, "2026-07-28":{a:1,c:1,m:1}, "2026-07-27":{a:1,c:1,m:9}},
+             pdays:{"2026-09-20":{a:1,c:1,m:4}, "2026-09-08":{a:1,c:1,m:1}}};
+    const w=W.growthByWeek(g, 8, base);
+    eq(w.length, 8, "8週"); eq(w[7].from, "9/15", "今週の窓は9/15〜9/21");
+    eq(w[7].w, 5, "今週の単語=9/21の3+9/15の2"); eq(w[7].p, 4, "今週のフレーズ=9/20の4");
+    eq(w[6].w, 5, "先週=9/14の5(9/8〜9/14)"); eq(w[6].p, 1, "先週のフレーズ=9/8の1");
+    eq(w[0].from, "7/28", "8週前の窓は7/28〜8/3(56日)"); eq(w[0].w, 1, "7/28は入る");
+    eq(w.reduce((s,x)=>s+x.w,0), 11, "7/27(57日前)は入らない");
+    eq(W.growthByWeek({}, 8, base).every(x=>x.w===0 && x.p===0), true, "記録なしは0");
+  });
+  t("記録タブ(v5.15.0): 成長のヒーロー(覚えた単語・フレーズのバー+今週/先週)→週ごとの伸びグラフ→タイル→入口→実績は折りたたみ", ()=>{
+    const G=W.G, doc=W.document;
+    const oldDays=G.days, oldWords=G.words, oldPhr=G.phr;
+    const dk=W.todayKey();
+    G.days=Object.assign({}, oldDays); G.days[dk]=Object.assign({a:0,c:0,m:0}, G.days[dk]||{}); G.days[dk].m=(G.days[dk].m||0)+2;
+    G.words=Object.assign({}, oldWords); G.words[W.WORDS[0].en]=[5, Date.now()+864e5*30, 5, 0, 1, 0, 0]; G.words[W.WORDS[1].en]=[5, Date.now()+864e5*30, 5, 0, 1, 0, 0];
+    W.switchTab("rec");
+    const rb=doc.getElementById("recBox");
+    const hero=rb.firstElementChild;
+    ok(hero.classList.contains("growhero"), "いちばん上は成長のヒーロー");
+    eq(hero.querySelectorAll(".pbar").length, 2, "覚えた単語・フレーズの2本のバー");
+    ok(hero.textContent.indexOf("/ "+W.fmt(W.WORDS.length)+"語")>=0, "全体に対する到達");
+    ok(hero.textContent.indexOf("今週")>=0 && hero.textContent.indexOf("先週")>=0, "今週・先週の伸び");
+    ok(hero.querySelector(".gplus") && hero.querySelector(".gplus").textContent.indexOf("+")===0, "伸びは+で");
+    ok(!rb.querySelector("table.stt"), "数字の表(9行)は無い");
+    const gr=doc.getElementById("recGrowth");
+    ok(gr && gr.previousElementSibling===hero, "2番目は覚えた数の伸び");
+    eq(gr.querySelectorAll(".hcol").length, 8, "8週の棒"); ok(gr.textContent.indexOf("今週")>=0, "最後の棒は今週");
+    ok(gr.querySelector(".hbar.cur"), "今週の棒は強調");
+    const sg=rb.querySelector(".statgrid");
+    ok(sg && sg.previousElementSibling===gr, "3番目はタイル"); eq(sg.querySelectorAll(".stat").length, 6, "タイルは6枚");
+    ["🔥 連続学習","📅 学習した日","✅ 累計正解","📖 知識XP","📰 今日の英語","🔥 にがて"].forEach(s=>ok(sg.textContent.indexOf(s)>=0, "タイル: "+s));
+    ok(sg.textContent.indexOf("正答率")>=0, "累計正解に正答率");
+    const links=rb.querySelector(".homelinks");
+    ok(links && links.previousElementSibling===sg, "4番目は入口");
+    eq(links.querySelectorAll(".btn").length, 7, "入口は7つ");
+    const fold=doc.getElementById("recAchFold");
+    ok(fold && fold.hidden, "実績は折りたたみ(既定は閉)");
+    const fb=rb.querySelector('[data-fold="recAchFold"]');
+    ok(fb && fb.textContent.indexOf("🏆 実績")>=0 && fb.textContent.indexOf("達成")>=0, "見出しに達成数");
+    eq(fold.querySelectorAll("#recAch .mrow").length, W.LEARN_ACH_DEFS.length, "中身はDOMに常在");
+    fb.click(); ok(!fold.hidden, "タップで開く");
+    G.days=oldDays; G.words=oldWords; G.phr=oldPhr; W.switchTab("home");
   });
   t("目安とセット(v5.14.0): 目安の問数に厳密・端数のセットは短い●・達成は問数で判定", ()=>{
     const G=W.G, doc=W.document;
@@ -4404,6 +4504,8 @@ async function runAsync(W){
     ok(W.allPhrases().some(p=>p.en===item.en), "出題プールに混ざる");
     W.phrStart(item);
     eq(doc.getElementById("promptWord").textContent, "会議をすっかり忘れてた", "自分の日本語が問題になる");
+    eq(doc.querySelectorAll("#choices .chunkbtn").length, item.ch.length, "通常の出題は並べ替え(v5.15.0)・マイフレーズも同じ");
+    W.phrStart(item, "mc"); // クローズ4択(マイフレーズ特訓ドリルの形式)
     ok(doc.getElementById("phrBuild").textContent.indexOf("slipped my mind")<0, "核が空欄になる(クローズ)");
     const cs=[...doc.querySelectorAll("#choices .choice")];
     eq(cs.length, 4, "誤答は内蔵フレーズから自動生成");
