@@ -520,6 +520,7 @@ function rlBindCards(){
       const it=rlChoose(st.items, G.rl); if(!it) return;
       G.rl.done[it.u]={d:todayKey(), k, id:st.src.id, t:it.t.slice(0,80)}; saveG();
       toast(k==="read"? "📖 読んだ! 明日も1本" : "🎧 聴いた! 明日も1本");
+      checkAchievements(); // 学習の実績(v5.13.0)
       rerender();
     };
   });

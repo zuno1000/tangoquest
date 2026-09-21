@@ -460,9 +460,12 @@ function openSettings(){
     '<tr><td>覚えたフレーズ</td><td>'+pmas+' / '+allPhrases().length+'(今日 '+pdayRec().a+'問)</td></tr>'+
     '<tr><td>📰 今日の英語</td><td>📖 '+Object.keys(G.rl.done||{}).filter(u=>G.rl.done[u].k!=="listen").length+'本 ・ 🎧 '+Object.keys(G.rl.done||{}).filter(u=>G.rl.done[u].k==="listen").length+'本</td></tr>'+
     '<tr><td>連続学習</td><td>'+streak+'日(XP×'+(+streakXpMult().toFixed(2))+' ・ 🧊'+(G.frz||0)+'/'+FRZ_MAX+')</td></tr>'+
-    // 正確な残高(v4.31.0: ヘッダーは短縮表記・ガチャ画面の残高行の移設先)
-    '<tr><td>🎫 チケット</td><td>'+fmt(G.tickets)+'(限定召喚用・学習で入手)</td></tr>'+
-    '<tr><td>🪙 ゴールド</td><td>'+fmt(G.gold)+'(恒常召喚用・冒険で入手)</td></tr>'+
+    // 正確な残高(v4.31.0: ヘッダーは短縮表記・ガチャ画面の残高行の移設先)。ゲーム面オフでは実績の行(v5.13.0)
+    (GAME_ENABLED
+      ? '<tr><td>🎫 チケット</td><td>'+fmt(G.tickets)+'(限定召喚用・学習で入手)</td></tr>'+
+        '<tr><td>🪙 ゴールド</td><td>'+fmt(G.gold)+'(恒常召喚用・冒険で入手)</td></tr>'
+      : '<tr><td>📖 知識XP</td><td>'+fmt(G.xp)+'(Lv'+accountLevel()+' ・ 正解と実績で増える)</td></tr>'+
+        '<tr><td>🏆 実績</td><td>'+achSummary().done+' / '+achSummary().all+'段階</td></tr>')+
     '</table>'+
     '<div class="homelinks" style="margin-top:8px">'+
       '<button class="btn" id="histBtn">📊 学習のあゆみ</button>'+
@@ -474,7 +477,9 @@ function openSettings(){
       // マイ単語(v5.11.0): 読んでいて分からなかった単語の登録・一覧
       '<button class="btn" id="mywBtn">📝 マイ単語<span class="hlsub">'+mywList().length+'語'+(mywPending().length? ' ・ 意味待ち'+mywPending().length:'')+'</span></button>'+
       // 任務・図鑑の入口(v5.9.0でホームから移設・実機FB)
-      '<button class="btn" id="setMissionBtn"><span>📜 任務'+(mnClaim? ' <b style="color:var(--accent)">'+mnClaim+'件 受取</b>':'')+'</span></button>'+
+      (GAME_ENABLED
+        ? '<button class="btn" id="setMissionBtn"><span>📜 任務'+(mnClaim? ' <b style="color:var(--accent)">'+mnClaim+'件 受取</b>':'')+'</span></button>'
+        : '<button class="btn" id="setMissionBtn"><span>🏆 実績</span><span class="hlsub">'+achSummary().done+'/'+achSummary().all+'段階</span></button>')+
       '<button class="btn" id="setDexBtn">📕 図鑑</button></div>'+
     foldSec("sfoldLearn", "📖 学習(出題・自動化)", learnInner, false)+
     foldSec("sfoldFx",    "🎨 演出(振動)", fxInner, false)+

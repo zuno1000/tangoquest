@@ -202,6 +202,13 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
 .pacebar.phero .pacetop b{font-size:30px; line-height:1}
 .pacebar.phero .pacetop .ptgt{font-size:14px}
 .pacebar.phero .pbar{height:16px; margin-top:12px}
+/* v5.13.0: 学習の実績(自動付与)の行 */
+.achhead{padding:4px 0 10px; border-bottom:1px solid var(--line); margin-bottom:4px}
+.achstars{display:inline-flex; gap:3px; margin-left:6px; vertical-align:middle}
+.achstars i{display:block; width:9px; height:9px; border-radius:50%; background:var(--bg2)}
+.achstars i.on{background:var(--accent)}
+.mrow.adone .mname{color:var(--ok)}
+body.nogame nav{justify-content:space-around}
 /* v5.12.1: 目安のパネルにセットの●○バーを統合(ヒーロー用に少し大きく) */
 .pacebar.phero .setdots{margin-top:12px; gap:8px}
 .pacebar.phero .setdots .sd{width:34px; height:14px; border-radius:7px}

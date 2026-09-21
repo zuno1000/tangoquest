@@ -154,8 +154,8 @@ function renderDexBody(){
       });
       return {g: g||'<div class="empty" style="grid-column:1/-1">該当する単語がない</div>', n};
     };
-    let h='<div class="small" style="margin-top:8px">カード <b style="color:var(--accent2)">'+st.owned+'</b> / '+st.total+
-      '種 ・ 覚えた <b style="color:var(--ok)">'+st.mastered+'</b>語</div>'+dexProgHTML(st.owned, st.total)+
+    let h='<div class="small" style="margin-top:8px">'+(GAME_ENABLED? "カード":"正解した単語")+' <b style="color:var(--accent2)">'+st.owned+'</b> / '+st.total+
+      (GAME_ENABLED? '種':'語')+' ・ 覚えた <b style="color:var(--ok)">'+st.mastered+'</b>語</div>'+dexProgHTML(st.owned, st.total)+
       '<input id="dexSearch" class="dexsearch" type="search" autocomplete="off" '+
         'placeholder="🔍 単語を検索(英字)" value="'+esc(dexQ)+'">'+
       '<div class="seg" id="dexPosSeg">'+["all","n","adj","v","adv"].map(p=>
@@ -224,8 +224,8 @@ function openDex(mode){
   if(mode) dexMode=mode;
   openModal('<h3>📕 図鑑</h3>'+
     '<div class="seg" id="dexSeg">'+
-      '<button data-m="cards">カード</button>'+
-      '<button data-m="chars">なかま</button>'+
+      '<button data-m="cards">'+(GAME_ENABLED? "カード":"単語")+'</button>'+   // ゲーム面オフでは「単語」の図鑑(★=カードの記録・v5.13.0)
+      (GAME_ENABLED? '<button data-m="chars">なかま</button>':'')+
       '<button data-m="phr">フレーズ</button>'+
     '</div>'+
     '<div id="dexBody"></div>');

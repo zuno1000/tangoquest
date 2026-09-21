@@ -4,6 +4,15 @@
 
 [tango](https://github.com/zuno1000/tango)(英検1級 4択クイズ)の拡張プロジェクト。クイズ部分は tango の忘却曲線SRSをそのまま継承し、ゲームレイヤーを追加した。サーバー不要・完全無料・データは端末内 localStorage のみ。
 
+## いまの姿(v5.13.0〜: 英単語アプリに絞る)
+
+ゲーム面(編成・冒険=サバイバー・ガチャ・カード・任務)は `js/state.js` の **`GAME_ENABLED=false`** で非表示にしている(ユーザー決定「学習タブが洗練されて必要性が薄れた」)。コードとデータ(`G.inv`/`G.chars`/`G.gold`/`G.tickets`/`G.daily`…)はそのまま残り、カードの記録も裏で続くので、`true` に戻せば即復活する(`SLOT_ENABLED`・`SPEAK_ENABLED` と同じ可逆設計)。
+
+- 表示: 下部ナビは **ホーム/学習** の2つ。ヘッダは 📖Lv(知識XP)・🏅覚えた語数・🔥連続日数
+- **実績(任務の代わり)**: `LEARN_ACH_DEFS`(missions.js)=覚えた単語・累計正解・連続学習(最長)・学習した日数・目安達成日・30問セット・にがて克服・覚えたフレーズ・マイ単語(登録/覚えた)・今日の英語(読んだ/聴いた)の12種×段階制。段階に達すると `checkAchievements()` が**自動でXPを付与**(受け取る操作なし)。⚙設定・記録→🏆実績で確認
+- ログインボーナス・旧報酬は `grantReward` がXPに換算(🎫1=30XP・🪙25=1XP)。🧊フリーズはそのまま
+- 以下「遊びかた」以降は `GAME_ENABLED=true` のときの説明
+
 ## 遊びかた(コアループ)
 
 1. **学習**: 4択クイズ(英検1級レベル・忘却曲線で出題)。**正解した単語はアイテムカードになる**
@@ -48,7 +57,7 @@ python -m http.server 8000   # リポジトリ直下で
 
 ```
 python -m http.server 8765
-→ http://localhost:8765/tests/   (284項目。localhost以外では動かないガード付き)
+→ http://localhost:8765/tests/   (286項目。localhost以外では動かないガード付き。ゲーム面の挙動は `tg()` でフラグを一時的にオンにして検証)
 ```
 ヘッドレスでも実行可(`--dump-dom` で `ALL PASS` を確認)。push 前に全実行する。
 
@@ -84,7 +93,7 @@ todaybgm と同方式(GIS + `drive.appdata` = 非機密スコープで審査不�
 | js/chars.js | キャラクター定義・ガチャ |
 | js/battle.js | ステータス合成・オート戦闘シミュレーション |
 | js/dungeon.js | ダンジョン・編成・無限回廊(放置) |
-| js/missions.js | ログインボーナス・任務・実績 |
+| js/missions.js | ログインボーナス・学習の実績(自動付与)・任務(GAME_ENABLED時のみ) |
 | js/td.js | 単語の防衛線(タワーディフェンスβ・冒険タブから) |
 | js/sync.js | 設定・Googleドライブ同期 |
 | js/state.js / util.js / main.js | 状態管理・共通処理・起動 |

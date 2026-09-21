@@ -540,11 +540,11 @@ function phrFinish(ok){
     G.xp+=Math.round((10+(justMastered?40:0))*streakXpMult()*comboXpMult()*abilityXpMult());
     const l1=accountLevel();
     if(justMastered){ toast("🏅 フレーズを覚えた! 7日あけても出てきた"); vibe([30,40,60]); bigT=true; }
-    else if(l1>l0){ toast("📖 レベルアップ! Lv"+l1+" ─ 全ステータス強化"); vibe(40); bigT=true; }
+    else if(l1>l0){ toast("📖 レベルアップ! Lv"+l1+(GAME_ENABLED? " ─ 全ステータス強化":"")); vibe(40); bigT=true; }
   }else{
     G.combo=0;
   }
-  if(bonus5 && !bigT) toast("🎁 5問ごとのボーナス 🎫+"+bonus5);
+  if(GAME_ENABLED && bonus5 && !bigT) toast("🎁 5問ごとのボーナス 🎫+"+bonus5);
   /* 答え合わせ: 常設の文脈行の空欄を核で埋める(核はハイライト)。
      v5.0の「青字の全文を後から差し込む」は廃止 ─ 要素が増えないのでレイアウトが動かない */
   $("phrBuild").innerHTML=phrCtxHTML(p, true);
@@ -559,6 +559,7 @@ function phrFinish(ok){
   $("resultBar").classList.add("show");
   $("promptCard").classList.add("srch"); // タップで核の語を辞書へ(quiz.js側で分岐)
   saveG(); refreshHeader(); refreshQuizCount();
+  checkAchievements(); // 学習の実績(v5.13.0・自動付与)
   if(G.opt && G.opt.autoNext){
     clearTimeout(phrAutoT);
     phrAutoT=setTimeout(()=>{ if(phrAnswered) newQuestion(); }, G.opt.autoNext);

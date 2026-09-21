@@ -5,16 +5,24 @@
    v3.7.0: 毎日最低🎫1=来るだけで毎日1回はガチャが引ける
    v4.13.0: 7日目に🧊フリーズ1個(連続学習の保険・週1ペースで補充) */
 const LOGIN_BONUS=[{t:1,g:200},{t:1,g:300},{t:2},{t:1,g:500},{t:2},{t:1,g:800},{t:3,g:1000,f:1}];
+/* 報酬(v5.13.0): ゲーム面オフのときは🪙🎫を知識XPに換算する(🎫1=30XP・🪙25=1XP)。x=XPそのもの */
+function rewardXp(r){ return (r.x||0)+(GAME_ENABLED? 0 : (r.t||0)*30+Math.round((r.g||0)/25)); }
 function rewardText(r){
   const p=[];
-  if(r.g) p.push("🪙"+r.g);
-  if(r.t) p.push("🎫"+r.t);
+  if(GAME_ENABLED){
+    if(r.g) p.push("🪙"+r.g);
+    if(r.t) p.push("🎫"+r.t);
+  }
+  const x=rewardXp(r); if(x) p.push("📖+"+x+"XP");
   if(r.f) p.push("🧊"+r.f);
   return p.join(" ");
 }
 function grantReward(r){
-  if(r.g) G.gold+=r.g;
-  if(r.t) G.tickets+=r.t;
+  if(GAME_ENABLED){
+    if(r.g) G.gold+=r.g;
+    if(r.t) G.tickets+=r.t;
+  }
+  const x=rewardXp(r); if(x) G.xp+=x;
   if(r.f) G.frz=Math.min(FRZ_MAX, (G.frz||0)+r.f); // フリーズは上限あり(貯め込み防止)
 }
 
@@ -28,7 +36,7 @@ function checkLogin(){
   const gift=!G.gift10;               // 初回プレゼント(10連分チケット)未受取か
   const newDay=G.login.last!==k;
   if(!gift && !newDay) return;
-  if(gift){ G.gift10=1; G.tickets+=10; }
+  if(gift){ G.gift10=1; if(GAME_ENABLED) G.tickets+=10; }
   let r=null;
   if(newDay){
     G.login.last=k;
@@ -38,8 +46,8 @@ function checkLogin(){
     try{ localStorage.removeItem(LOGIN_SEEN_KEY); }catch(e){} // 新しい日のバナーを出す
   }
   saveG(); refreshHeader();
-  toast((gift? "✨ はじめまして記念 🎫10!":"")+
-    (gift&&newDay? " ／ ":"")+
+  toast((gift && GAME_ENABLED? "✨ はじめまして記念 🎫10!":"")+
+    (gift&&newDay&&GAME_ENABLED? " ／ ":"")+
     (newDay? "🎁 ログインボーナス"+G.login.day+"日目: "+rewardText(r):""));
   if(!$("homeView").classList.contains("hidden")) renderHome(); // バナーを即時反映
 }
@@ -92,8 +100,61 @@ const WEEKLY_DEFS=[
   {id:"wl", name:"サバイバーで5回生還する",   target:5,   cur:w=>w.clear, rew:{g:2000}},
   {id:"wp", name:"ガチャを3回引く",           target:3,   cur:w=>w.pull,  rew:{g:1000}},
 ];
-/* 実績(段階制)。学習系(正解・覚えた・カード)は🎫/冒険・ガチャ系は🪙 */
-const ACH_DEFS=[
+/* ---- 学習の実績(v5.13.0・任務の代わり) ----
+   ゲーム面オフの既定ではこれだけが「増える数字」の源泉。段階に達したら自動でXPを付与(受け取る操作なし=
+   「学習」を押すだけでよい方針)。curはすべてG(学習記録)から導出=保存しない・同期の整合が自動。
+   ゲーム面オンのときは従来の実績(GAME_ACH_DEFS)も後ろに続き、従来どおり手動で受け取る */
+function masteredCount(g){ let n=0; for(const en in g.words){ if(g.words[en][0]>=MASTER_BOX) n++; } return n; }
+const LEARN_ACH_DEFS=[
+  {id:"lmas", name:"覚えた単語", unit:"語", cur:()=>masteredCount(G),
+   tiers:[[10,{x:100}],[50,{x:200}],[150,{x:400}],[400,{x:800}],[800,{x:1500}],[1500,{x:3000}],[2500,{x:6000}]]},
+  {id:"lcor", name:"累計正解", unit:"問", cur:()=>G.counters.cor,
+   tiers:[[100,{x:100}],[300,{x:150}],[1000,{x:300}],[3000,{x:600}],[10000,{x:1500}],[30000,{x:4000}]]},
+  {id:"lstk", name:"連続学習(最長)", unit:"日", cur:()=>longestStreak(G),
+   tiers:[[3,{x:100}],[7,{x:200}],[14,{x:400}],[30,{x:800}],[60,{x:1500}],[100,{x:3000}],[365,{x:10000}]]},
+  {id:"ldays", name:"学習した日数", unit:"日", cur:()=>{ let n=0; for(const k in G.days){ if(G.days[k].a>0) n++; } return n; },
+   tiers:[[7,{x:100}],[30,{x:300}],[100,{x:800}],[365,{x:3000}]]},
+  {id:"lpace", name:"今日の目安を達成した日", unit:"日", cur:()=>{ let n=0; for(const k in G.days){ const r=G.days[k]; if(r.t && r.a>=r.t) n++; } return n; },
+   tiers:[[1,{x:100}],[7,{x:300}],[30,{x:800}],[100,{x:2000}]]},
+  {id:"lsets", name:"30問セット", unit:"セット", cur:()=>Math.floor((G.counters.ans||0)/SET_N),
+   tiers:[[1,{x:50}],[10,{x:150}],[50,{x:400}],[200,{x:1000}],[500,{x:2500}]]},
+  {id:"lweak", name:"にがてを克服(ミスしたのに覚えた)", unit:"語", cur:()=>{ let n=0; for(const en in G.words){ const s=G.words[en]; if(s[3]>0 && s[4]) n++; } return n; },
+   tiers:[[10,{x:150}],[50,{x:400}],[150,{x:1000}],[400,{x:2500}]]},
+  {id:"lpmas", name:"覚えたフレーズ", unit:"件", cur:()=>{ let n=0; for(const en in G.phr){ if(G.phr[en][0]>=MASTER_BOX) n++; } return n; },
+   tiers:[[10,{x:100}],[50,{x:300}],[150,{x:800}],[388,{x:3000}]]},
+  {id:"lmyw", name:"マイ単語の登録", unit:"語", cur:()=>mywList().length,
+   tiers:[[5,{x:50}],[20,{x:150}],[50,{x:400}],[150,{x:1000}]]},
+  {id:"lmywm", name:"マイ単語を覚えた", unit:"語", cur:()=>{ let n=0; for(const en in G.words){ if(isMyWord(en) && G.words[en][0]>=MASTER_BOX) n++; } return n; },
+   tiers:[[5,{x:150}],[20,{x:400}],[50,{x:1000}]]},
+  {id:"lread", name:"今日の英語を読んだ", unit:"本", cur:()=>Object.keys(G.rl.done||{}).filter(u=>G.rl.done[u].k!=="listen").length,
+   tiers:[[1,{x:50}],[10,{x:200}],[50,{x:600}],[150,{x:1500}]]},
+  {id:"llis", name:"今日の英語を聴いた", unit:"本", cur:()=>Object.keys(G.rl.done||{}).filter(u=>G.rl.done[u].k==="listen").length,
+   tiers:[[1,{x:50}],[10,{x:200}],[50,{x:600}],[150,{x:1500}]]},
+];
+/* 実績の段階に達していれば自動でXPを付与(ゲーム面オフ)。トーストは他の祝いと重ならないよう少し遅らせる。付与した数を返す */
+function checkAchievements(){
+  if(GAME_ENABLED) return 0;
+  const got=[];
+  LEARN_ACH_DEFS.forEach(a=>{
+    let done=G.ach[a.id]||0;
+    const cur=a.cur();
+    while(done<a.tiers.length && cur>=a.tiers[done][0]){ grantReward(a.tiers[done][1]); got.push(a.name+" "+a.tiers[done][0]+a.unit+"(📖+"+rewardXp(a.tiers[done][1])+"XP)"); done++; }
+    G.ach[a.id]=done;
+  });
+  if(got.length){
+    saveG(); refreshHeader();
+    setTimeout(()=>{ toast("🏆 実績達成! "+got.join(" ／ ")); vibe([20,30,40]); }, 1100);
+  }
+  return got.length;
+}
+/* 実績の達成状況の集計(⚙設定の行・実績画面の見出し) */
+function achSummary(){
+  let done=0, all=0;
+  LEARN_ACH_DEFS.forEach(a=>{ all+=a.tiers.length; done+=Math.min(G.ach[a.id]||0, a.tiers.length); });
+  return {done, all};
+}
+/* 実績(段階制・ゲーム面)。学習系(正解・覚えた・カード)は🎫/冒険・ガチャ系は🪙。GAME_ENABLED=falseでは使わない */
+const GAME_ACH_DEFS=[
   {id:"acor", name:"累計正解",       cur:()=>G.counters.cor,
    tiers:[[25,{g:200}],[100,{t:1}],[300,{t:2}],[1000,{t:3}],[3000,{t:5}],[10000,{t:10}]]},
   {id:"amas", name:"覚えた単語",     cur:()=>{let n=0;for(const en in G.words){if(G.words[en][0]>=MASTER_BOX)n++;}return n;},
@@ -120,9 +181,13 @@ const ACH_DEFS=[
   {id:"adup", name:"突破の合計",     cur:()=>{let n=0;for(const id in G.chars)n+=G.chars[id].dup||0;return n;},
    tiers:[[5,{g:500}],[15,{g:2000}],[40,{g:3000}],[100,{g:5000}],[250,{g:10000}]]},
 ];
+/* 手動で受け取る実績の一覧(ゲーム面オンのときだけ=従来の実績。学習の実績は自動付与なのでここには入れない) */
+const ACH_DEFS=GAME_ACH_DEFS; // 互換(テスト・旧参照)。実際の判定はachDefs()=ゲーム面オンのときだけ
+function achDefs(){ return GAME_ENABLED? GAME_ACH_DEFS : []; }
 
 /* ---- 未受取があるか(ナビの赤点用) ---- */
 function hasClaimable(){
+  if(!GAME_ENABLED) return false; // 任務は廃止・学習の実績は自動付与(v5.13.0)
   const d=dailyRec(), w=weeklyRec();
   for(const m of DAILY_DEFS){ if(!d.cl[m.id] && m.cur(d)>=m.target) return true; }
   for(const m of WEEKLY_DEFS){ if(!w.cl[m.id] && m.cur(w)>=m.target) return true; }
@@ -134,6 +199,7 @@ function hasClaimable(){
 }
 /* 受取可能な報酬の件数(ホームの表示用。実績は現時点で受け取れる段階まで数える) */
 function claimableCount(){
+  if(!GAME_ENABLED) return 0;
   let n=0;
   const d=dailyRec();
   DAILY_DEFS.forEach(m=>{ if(!d.cl[m.id] && m.cur(d)>=m.target) n++; });
@@ -141,7 +207,7 @@ function claimableCount(){
   const w=weeklyRec();
   WEEKLY_DEFS.forEach(m=>{ if(!w.cl[m.id] && m.cur(w)>=m.target) n++; });
   if(!w.cl.all && WEEKLY_DEFS.every(m=>w.cl[m.id])) n++;
-  ACH_DEFS.forEach(a=>{
+  achDefs().forEach(a=>{
     let done=G.ach[a.id]||0;
     while(done<a.tiers.length && a.cur()>=a.tiers[done][0]){ n++; done++; }
   });
@@ -179,7 +245,7 @@ function claimAllCurrent(){
   const w=weeklyRec();
   WEEKLY_DEFS.forEach(m=>{ if(!w.cl[m.id] && m.cur(w)>=m.target){ w.cl[m.id]=1; add(m.rew); } });
   if(!w.cl.all && WEEKLY_DEFS.every(m=>w.cl[m.id])){ w.cl.all=1; add({t:3}); }
-  ACH_DEFS.forEach(a=>{
+  achDefs().forEach(a=>{
     let done=G.ach[a.id]||0;
     while(done<a.tiers.length && a.cur()>=a.tiers[done][0]){ add(a.tiers[done][1]); done++; }
     G.ach[a.id]=done;
@@ -200,7 +266,7 @@ function claimableWeekly(){
     (!w.cl.all && WEEKLY_DEFS.every(m=>w.cl[m.id]));
 }
 function claimableAch(){
-  return ACH_DEFS.some(a=>{
+  return achDefs().some(a=>{
     const done=G.ach[a.id]||0;
     return done<a.tiers.length && a.cur()>=a.tiers[done][0];
   });
@@ -212,9 +278,36 @@ function refreshMissionSegDots(){
   $("segDotA").classList.toggle("hidden", !claimableAch());
 }
 
+/* 学習の実績の画面(ゲーム面オフ・v5.13.0): 段階ごとに達成✓/次の段階の進み。受け取る操作はない(自動付与) */
+function renderLearnAch(box){
+  const s=achSummary();
+  const head=document.createElement("div");
+  head.className="achhead";
+  head.innerHTML='<div class="pacetop"><span>🏆 実績 <span class="small">達成した段階</span></span><b>'+s.done+' <span class="ptgt">/ '+s.all+'</span></b></div>'+
+    '<div class="small" style="margin-top:4px">段階に達すると自動で📖XPが入る(受け取る操作はない)。数字はすべて学習の記録から</div>';
+  box.appendChild(head);
+  LEARN_ACH_DEFS.forEach(a=>{
+    const done=G.ach[a.id]||0, cur=a.cur();
+    const row=document.createElement("div");
+    row.className="mrow"+(done>=a.tiers.length? " adone":"");
+    const next=done<a.tiers.length? a.tiers[done] : null;
+    row.innerHTML='<div class="grow"><div class="mname">'+a.name+
+        ' <span class="achstars">'+a.tiers.map((t,i)=>'<i class="'+(i<done?"on":"")+'" title="'+t[0]+a.unit+'"></i>').join("")+'</span></div>'+
+      (next
+        ? '<div class="mprog">'+fmt(Math.min(cur,next[0]))+' / '+fmt(next[0])+a.unit+' <span class="small">─ 次の段階で '+rewardText(next[1])+'</span></div>'+
+          '<div class="mbar"><i style="width:'+Math.min(100,100*cur/next[0])+'%"></i></div>'
+        : '<div class="mprog">'+fmt(cur)+a.unit+' ─ 全段階達成 🎊</div>')+
+      '</div>'+
+      '<div class="mrew">'+(done? '<span class="done">'+done+'段階</span>':'')+'</div>';
+    box.appendChild(row);
+  });
+}
 function renderMissions(){
   refreshMissionSegDots();
   const box=$("missionList"); box.innerHTML="";
+  // セグは.hiddenクラスで消す(hidden属性は.segのdisplay:flexに負ける)
+  $("missionSeg").classList.toggle("hidden", !GAME_ENABLED);
+  if(!GAME_ENABLED){ renderLearnAch(box); return; }
   if(hasClaimable()){
     const r=document.createElement("div");
     r.style.cssText="padding:4px 0 10px; border-bottom:1px solid var(--line)";
@@ -250,7 +343,7 @@ function renderMissions(){
         toast("🎫3 を受け取った");
       }));
   }else{
-    ACH_DEFS.forEach(a=>{
+    achDefs().forEach(a=>{
       const done=G.ach[a.id]||0;
       const cur=a.cur();
       if(done>=a.tiers.length){

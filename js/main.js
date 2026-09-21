@@ -23,6 +23,13 @@ function switchTab(name){
   document.body.classList.toggle("svplay", name==="sv"||name==="slot");
   TABS[name].on();
 }
+/* ゲーム面の表示フラグ(v5.13.0・state.jsのGAME_ENABLED): オフなら下部ナビの3タブとヘッダの🪙🎫を隠す。
+   ビュー・コードは残す(trueに戻せば即復活) */
+function applyGameFlag(){
+  ["navParty","navAdv","navGacha"].forEach(id=>$(id).classList.toggle("hidden", !GAME_ENABLED));
+  document.body.classList.toggle("nogame", !GAME_ENABLED);
+}
+applyGameFlag();
 $("navHome").onclick=()=>switchTab("home");
 $("navQuiz").onclick=()=>switchTab("quiz");
 $("navParty").onclick=()=>switchTab("party");
@@ -36,6 +43,7 @@ const EVENTS=[
   // {d:"2026-08-03", t:"..."} 形式でバナー以外のイベント告知を書く
 ];
 const NEWS=[
+  {d:"2026-09-21", t:"🏆 v5.13.0 英単語アプリとして絞り込みました。①編成・冒険(サバイバー)・ガチャのタブ、🪙🎫、カードの演出を非表示に(データは残しています) ②任務(デイリー/ウィークリー)を廃止し、代わりに「実績」: 覚えた単語・累計正解・連続学習・学習した日数・目安達成日・30問セット・にがて克服・フレーズ・マイ単語・今日の英語(読んだ/聴いた)の12種×段階制。段階に達すると自動で📖XPが入り、受け取る操作はありません(⚙設定・記録→🏆実績で確認) ③ヘッダは📖Lv・🏅覚えた語数・🔥連続日数に。ログインボーナスの報酬もXPに"},
   {d:"2026-09-21", t:"🏠 v5.12.1 ホームの「今日の目安」と「今日のセット」を1枚に統合しました。数字は目安(今日の問数)、バーはセット(30問ごとの●○)、脚注に「このセット n/30問」。「学習をはじめる」ボタンの「5問ごとに🎫+5」の表記は外しました"},
   {d:"2026-09-21", t:"🧠 v5.12.0 「学習」を押すだけで効率よく覚えられるように、既定の出題そのものを見直しました(新しいモードやボタンは増えていません)。①復習の単語は、選択肢を開く前に「まず自力で思い出す」ワンクッション(新規・にがて特訓・サバイバーでは出ない。⚙設定でオフ可) ②4択の誤答に「以前に取り違えた相手」と「同じ語根の語」を優先して混ぜ、消去法で解けないように ③ミスの直後は取り違えた相手を数問以内に出して、区別をその場で固める(にがてノートに「⇄ 取り違え: 〜」) ④マイ単語の新規は1セットに6語まで(まとめて登録した日も復習を押しのけない) ⑤マイ単語に「出会った英文」を添えられ、答え合わせで表示(今日の英語②の語彙一覧に用例が付くようにしたので、貼るだけ)"},
   {d:"2026-09-21", t:"🔧 v5.11.1 マイ単語に句動詞・慣用表現も登録できるようにしました(what if・in tandem・put up with・rule of thumb など6語まで)。品詞は先頭の語から推定します: 動詞+小辞(look into)=動詞/前置詞句・つなぎの表現(in tandem・what if)=副詞/名詞句(rule of thumb)=名詞。合わなければチップをタップで変更。意味の自動取得も表現に対応(例: in tandem→並行して)"},
@@ -128,6 +136,7 @@ const NEWS=[
 ];
 function newsEvents(){
   const t=todayKey(), ev=[];
+  if(!GAME_ENABLED) return ev; // ガチャの告知はゲーム面オフでは出さない(v5.13.0)
   const fmtSpan=b=>b.start.slice(5).replace("-","/")+"〜"+b.end.slice(5).replace("-","/");
   // 一回きりの特別開催(BANNERS)は開催中も予告も出す
   BANNERS.forEach(b=>{
@@ -244,9 +253,15 @@ $("partySeg").querySelectorAll("button").forEach(b=>{
 
 function refreshHeader(){
   $("resLv").textContent="Lv"+accountLevel();
-  // 桁が増えても⚙や🔔を押し出さないよう短縮表記(30万など)。正確な残高はガチャ画面で
-  $("resGold").textContent=fmtShort(G.gold);
-  $("resTicket").textContent=fmtShort(G.tickets);
+  if(GAME_ENABLED){
+    // 桁が増えても⚙や🔔を押し出さないよう短縮表記(30万など)。正確な残高はガチャ画面で
+    $("resGold").previousElementSibling.textContent="🪙"; $("resGold").textContent=fmtShort(G.gold);
+    $("resTicket").previousElementSibling.textContent="🎫"; $("resTicket").textContent=fmtShort(G.tickets);
+  }else{
+    // ゲーム面オフ(v5.13.0): 学習で増える数字=📖Lv・🏅覚えた語数・🔥連続日数
+    $("resGold").previousElementSibling.textContent="🏅"; $("resGold").textContent=fmtShort(masteredCount(G))+"語";
+    $("resTicket").previousElementSibling.textContent="🔥"; $("resTicket").textContent=studyStreak()+"日";
+  }
   refreshMissionDot();
 }
 
@@ -370,6 +385,7 @@ window.DAILY_DEFS=DAILY_DEFS; window.WEEKLY_DEFS=WEEKLY_DEFS; window.DAILY_CORE=
 window.MASTER_BOX=MASTER_BOX; window.INTERVALS=INTERVALS; window.FRZ_MAX=FRZ_MAX;
 window.byEn=byEn; window.MYW_ENDPOINTS=MYW_ENDPOINTS; window.RL_FLOW=RL_FLOW; // v5.11.0(マイ単語・進め方)
 window.setCurFromTest=w=>{ cur={word:w, choices:buildChoices(w)}; renderQuestion(); }; window.pairQueueGet=()=>pairQueue; // v5.12.0
+window.LEARN_ACH_DEFS=LEARN_ACH_DEFS; window.GAME_ACH_DEFS=GAME_ACH_DEFS; // v5.13.0(GAME_ENABLEDはvar=windowに載る)
 window.SV_STAGE_SEC=SV_STAGE_SEC; window.SV_REACH=SV_REACH; window.SV_TOUCH_CD=SV_TOUCH_CD;
 window.SV_CD=SV_CD; window.SV_UPGRADES=SV_UPGRADES; window.SV_AUTO=SV_AUTO; window.SV_BURST=SV_BURST;
 window.SV_HEAL_CAP=SV_HEAL_CAP; window.SV_MAXFOES=SV_MAXFOES; window.SV_SPAWN0=SV_SPAWN0; window.SV_SPAWN1=SV_SPAWN1;

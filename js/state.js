@@ -1,7 +1,12 @@
 "use strict";
 /* ================= 状態管理 ================= */
 const KEY="tangoquest_v1";
-const APP_VERSION="5.12.1"; // リリースごとに更新(設定表示・更新確認のリモート版比較に使う)
+const APP_VERSION="5.13.0";
+/* ゲーム面(編成・冒険=サバイバー・ガチャ・カード・任務)の表示フラグ(v5.13.0・ユーザー決定「必要性が薄れた」)。
+   false=下部ナビの3タブ・ヘッダの🪙🎫・カードドロップの演出・デイリー/ウィークリー任務・ガチャ告知を隠し、
+   ヘッダは📖Lv/🏅覚えた語数/🔥連続日数、任務タブは学習の実績(自動付与・XP)だけになる。
+   コードとデータ(G.inv/G.chars/G.gold/G.tickets/G.daily…)はそのまま残す=trueに戻せば即復活(SLOT_ENABLEDと同じ型) */
+var GAME_ENABLED=false; // リリースごとに更新(設定表示・更新確認のリモート版比較に使う)
 
 /* ---- iOSスタンドアロン起動時の灰色帯対策(v4.5.0→v4.13.0で拡張) ----
    インストール直後の初回起動に加え、日をまたいだ最初のコールドスタート
@@ -200,6 +205,22 @@ function studyStreak(){
     else break;
   }
   return n;
+}
+
+/* 最長の連続学習日数(純関数・v5.13.0の実績用): 学習した日(a>0)が連続した最長の長さ。
+   フリーズが守った日(fz)は途切れないが数えない(studyStreakと同じ扱い) */
+function longestStreak(g){
+  const keys=Object.keys(g.days||{}).sort();
+  let best=0, run=0, prev=null;
+  for(const k of keys){
+    const r=g.days[k]; if(!r || !(r.a>0 || r.fz)) { run=0; prev=null; continue; }
+    const t=new Date(k+"T00:00:00").getTime();
+    if(prev!==null && t-prev>864e5*1.5) run=0; // 日付が飛んだら切れる
+    if(r.a>0) run++;
+    if(run>best) best=run;
+    prev=t;
+  }
+  return best;
 }
 
 /* ---- 連続学習フリーズ(v4.13.0・abceedのフリーズ参考) ----

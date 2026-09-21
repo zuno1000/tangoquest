@@ -29,6 +29,15 @@ function t(name, fn){
 }
 function eq(a,b,msg){ if(a!==b) throw new Error((msg||"")+" expected="+b+" got="+a); }
 function ok(v,msg){ if(!v) throw new Error(msg||"falsy"); }
+/* v5.13.0: ゲーム面(編成・冒険・ガチャ・任務)の挙動を検証するテストは、フラグを一時的にオンにして走らせる
+   (既定=オフ。コードとデータは残っているので、オンにすれば従来どおり動くことの確認も兼ねる) */
+let W_=null;
+function tg(name, fn){
+  t(name, ()=>{
+    const W=W_; W.GAME_ENABLED=true; W.applyGameFlag(); W.refreshHeader();
+    try{ fn(); } finally{ W.GAME_ENABLED=false; W.applyGameFlag(); W.refreshHeader(); }
+  });
+}
 
 localStorage.removeItem("tangoquest_v1"); // 毎回まっさらな状態で起動させる
 
@@ -42,7 +51,7 @@ frame.onload=()=>setTimeout(run, 300);
 const keepalive=setInterval(()=>{}, 25);
 
 function run(){
-  const W=frame.contentWindow;
+  const W=frame.contentWindow; W_=W;
   try{
   /* v5.12.0: 単語の復習にも「先に思い出す」ステップ(既定ON)が入ったため、4択を直接クリックする既存テストのために
      既定はオフで走らせる。ステップ自体は専用テストでONにして検証する */
@@ -163,7 +172,7 @@ function run(){
     eq(G.counters.cor, before+1);
     eq(W.dailyRec().c, d0+1);
   });
-  t("正解10問でデイリー任務が受取可能になる", ()=>{
+  tg("正解10問でデイリー任務が受取可能になる", ()=>{
     const d=W.dailyRec();
     d.c=10; d.cl={};
     ok(W.hasClaimable(), "claimable");
@@ -598,7 +607,7 @@ function run(){
   });
 
   /* ---- 任務の一括受取(ホーム) ---- */
-  t("claimableCountは受取可能件数を数え、一括受取で0件になる", ()=>{
+  tg("claimableCountは受取可能件数を数え、一括受取で0件になる", ()=>{
     const d=W.dailyRec();
     d.cl={}; d.c=0;
     const n0=W.claimableCount();
@@ -829,7 +838,7 @@ function run(){
   });
 
   /* ---- デイリー報酬(2日目以降) ---- */
-  t("ログインボーナスは2日目も付与され7日で一周する", ()=>{
+  tg("ログインボーナスは2日目も付与され7日で一周する", ()=>{
     const G=W.G;
     const yd=new Date(Date.now()-864e5);
     const yk=yd.getFullYear()+"-"+String(yd.getMonth()+1).padStart(2,"0")+"-"+String(yd.getDate()).padStart(2,"0");
@@ -1053,7 +1062,7 @@ function run(){
     ok(W.DAILY_DEFS.some(m=>m.id==="dc2"), "dc2");
     ok(W.WEEKLY_DEFS.some(m=>m.id==="wc2"), "wc2");
   });
-  t("お知らせ: イベントとアップデートが分かれ、イベントが上", ()=>{
+  tg("お知らせ: イベントとアップデートが分かれ、イベントが上", ()=>{
     const ev=W.newsEvents();
     ok(ev.length>=1, "開催中/予告のバナーがイベント化 n="+ev.length);
     ok(ev.every(x=>x.t.indexOf("開催中")>=0 || x.t.indexOf("予告")>=0), "状態表示");
@@ -1078,7 +1087,7 @@ function run(){
     ok(cs.owned>=1 && cs.total===W.CHARS.length, "なかま集計 owned="+cs.owned);
     G.inv=oldInv;
   });
-  t("図鑑モーダル: 空き枠は窪み・切替でなかま図鑑(未加入は???)", ()=>{
+  tg("図鑑モーダル: 空き枠は窪み・切替でなかま図鑑(未加入は???)", ()=>{
     const G=W.G;
     const oldInv=G.inv;
     G.inv={};
@@ -1617,7 +1626,7 @@ function run(){
     eq(G.frz, 2);
     G.days=oldDays; G.frz=oldFrz;
   });
-  t("ログボ7日目で🧊フリーズを入手(所持上限2)", ()=>{
+  tg("ログボ7日目で🧊フリーズを入手(所持上限2)", ()=>{
     const G=W.G, f0=G.frz;
     ok(W.LOGIN_BONUS[6].f>=1, "7日目の報酬に🧊");
     G.frz=0; W.grantReward({f:1}); eq(G.frz, 1, "付与");
@@ -2802,7 +2811,7 @@ function run(){
     d.a=a0;
     W.switchTab("home");
   });
-  t("ログインボーナスは起動モーダルを開かない(灰色の根治)+バナー導線", ()=>{
+  tg("ログインボーナスは起動モーダルを開かない(灰色の根治)+バナー導線", ()=>{
     const G=W.G, doc=W.document, LS=W.localStorage;
     LS.removeItem("tq_lgSeen");
     const yd=new Date(Date.now()-864e5);
@@ -3622,7 +3631,7 @@ async function runAsync(W){
     ok(!doc.getElementById("sfoldLearn").hidden, "タップで開く");
     W.closeModal();
   });
-  t("お知らせ(v4.30.0): タブでイベント/アップデート切替・過去分は開閉", ()=>{
+  tg("お知らせ(v4.30.0): タブでイベント/アップデート切替・過去分は開閉", ()=>{
     const doc=W.document;
     W.openNews();
     ok(doc.getElementById("newsSeg"), "先頭にタブ(心得のmetaTabsと同じ型)");
@@ -3637,7 +3646,7 @@ async function runAsync(W){
     W.closeModal();
     W.localStorage.removeItem("tq_newsSeen");
   });
-  t("ガチャ(v4.31.0): 100連ボタン・🎫注記と残高行の廃止(残高は設定・記録へ)", ()=>{
+  tg("ガチャ(v4.31.0): 100連ボタン・🎫注記と残高行の廃止(残高は設定・記録へ)", ()=>{
     const doc=W.document;
     W.renderGacha();
     ok(!doc.querySelector("#gachaBox .gbal"), "残高行は廃止");
@@ -4267,6 +4276,66 @@ async function runAsync(W){
     // 後始末
     W.mywDelete("zzexword"); W.mywDelete("zzcapword"); delete G.words.zzexword;
     G.myw=oldMyw; G.set=oldSet; G.opt.qtab=oldQtab; dr.a=snap.a; dr.c=snap.c; pd.a=snap.pa; W.saveG(); W.switchTab("home");
+  });
+  /* ---- v5.13.0: ゲーム面オフ(GAME_ENABLED=false)・任務→学習の実績(自動付与) ---- */
+  t("ゲーム面オフ(v5.13.0): ナビは2タブ・ヘッダは📖Lv/🏅覚えた語数/🔥連続・🪙🎫の演出と告知は出ない・trueに戻せば復活", ()=>{
+    const G=W.G, doc=W.document;
+    eq(W.GAME_ENABLED, false, "既定はオフ");
+    ok(doc.getElementById("navParty").classList.contains("hidden") && doc.getElementById("navAdv").classList.contains("hidden") && doc.getElementById("navGacha").classList.contains("hidden"), "編成・冒険・ガチャのタブは隠れる");
+    ok(!doc.getElementById("navHome").classList.contains("hidden") && !doc.getElementById("navQuiz").classList.contains("hidden"), "ホーム・学習は残る");
+    W.refreshHeader();
+    eq(doc.getElementById("resGold").previousElementSibling.textContent, "🏅", "2つ目は覚えた語数");
+    eq(doc.getElementById("resTicket").previousElementSibling.textContent, "🔥", "3つ目は連続日数");
+    ok(doc.getElementById("resGold").textContent.indexOf("語")>=0 && doc.getElementById("resTicket").textContent.indexOf("日")>=0);
+    eq(W.newsEvents().length, 0, "ガチャの告知は出ない");
+    eq(W.hasClaimable(), false); eq(W.claimableCount(), 0, "任務の受取は無い");
+    eq(W.rewardText({t:1, g:200}), "📖+38XP", "🎫🪙はXPに換算(🎫1=30・🪙25=1)");
+    eq(W.rewardText({x:100, f:1}), "📖+100XP 🧊1");
+    const xp0=G.xp, tk0=G.tickets; W.grantReward({t:2, g:50}); eq(G.xp, xp0+62, "XPが増える"); eq(G.tickets, tk0, "🎫は増えない");
+    G.xp=xp0;
+    // ⚙設定: 🎫🪙の行は無く、実績の行と🏆実績の入口
+    W.openSettings();
+    const m=doc.getElementById("modal");
+    ok(m.textContent.indexOf("🎫 チケット")<0 && m.textContent.indexOf("知識XP")>=0 && m.textContent.indexOf("🏆 実績")>=0, "設定の行");
+    ok(doc.getElementById("setMissionBtn").textContent.indexOf("実績")>=0, "任務の入口は実績に");
+    W.closeModal();
+    // 図鑑: なかまは無く、カード→単語
+    W.openDex("cards");
+    ok(!doc.querySelector('#dexSeg [data-m="chars"]') && doc.querySelector('#dexSeg [data-m="cards"]').textContent==="単語", "図鑑のセグ");
+    W.closeModal();
+    // 復活: trueに戻すとタブが戻る(コード・データは残っている)
+    W.GAME_ENABLED=true; W.applyGameFlag();
+    ok(!doc.getElementById("navGacha").classList.contains("hidden"), "trueで復活");
+    ok(typeof W.svStart==="function" && typeof W.renderGacha==="function" && W.GAME_ACH_DEFS.length>=10, "ゲーム側のコードは残る");
+    W.GAME_ENABLED=false; W.applyGameFlag();
+  });
+  t("学習の実績(v5.13.0): 12種×段階制・段階に達すると自動でXP・受け取る操作なし・画面は達成状況だけ・最長連続は純関数", ()=>{
+    const G=W.G, doc=W.document;
+    eq(W.LEARN_ACH_DEFS.length, 12, "12種");
+    ok(W.LEARN_ACH_DEFS.every(a=>a.tiers.length>=3 && a.tiers.every(t=>t[1].x>0) && a.unit), "段階制・報酬はXP・単位");
+    // 最長連続(純関数)
+    const g={days:{"2026-01-01":{a:3},"2026-01-02":{a:1},"2026-01-03":{a:0,fz:1},"2026-01-04":{a:2},"2026-01-10":{a:5}}};
+    eq(W.longestStreak(g), 3, "フリーズの日は途切れないが数えない(1/1〜1/4=3日)");
+    eq(W.longestStreak({days:{}}), 0);
+    // 自動付与
+    const oldAch=JSON.parse(JSON.stringify(G.ach)), oldCnt=JSON.parse(JSON.stringify(G.counters)), xp0=G.xp;
+    W.LEARN_ACH_DEFS.forEach(a=>{ G.ach[a.id]=a.tiers.length; }); // いったん全達成扱いにして他の実績が動かないように
+    G.ach.lcor=0; G.counters.cor=350; // 累計正解: 100と300の2段階に達している
+    const n=W.checkAchievements();
+    eq(n, 2, "2段階ぶん自動付与"); eq(G.ach.lcor, 2, "達成段階が記録される"); eq(G.xp, xp0+250, "100+150XP");
+    eq(W.checkAchievements(), 0, "二重に付与しない");
+    G.counters.cor=1000; eq(W.checkAchievements(), 1, "次の段階に達したらまた付与"); eq(G.ach.lcor, 3);
+    // 画面(任務タブの中身=実績だけ・セグなし・受け取るボタンなし)
+    W.switchTab("mission");
+    ok(doc.getElementById("missionSeg").classList.contains("hidden") && W.getComputedStyle(doc.getElementById("missionSeg")).display==="none", "デイリー/ウィークリーのセグは無い(表示上も)");
+    const list=doc.getElementById("missionList");
+    ok(list.querySelector(".achhead") && list.querySelectorAll(".mrow").length===12, "12行");
+    ok(!list.querySelector(".claimbtn"), "受け取るボタンは無い");
+    ok(list.textContent.indexOf("累計正解")>=0 && list.textContent.indexOf("1,000 / 3,000問")>=0, "次の段階の進み");
+    eq(list.querySelector(".mrow .achstars").querySelectorAll("i.on").length, W.LEARN_ACH_DEFS[0].tiers.length, "全達成の行は全部点灯");
+    const s=W.achSummary(); ok(s.done>=3 && s.all===W.LEARN_ACH_DEFS.reduce((n,a)=>n+a.tiers.length,0), "集計");
+    W.switchTab("home");
+    G.ach=oldAch; G.counters=oldCnt; G.xp=xp0; W.saveG();
   });
   t("マイフレーズ登録: 内蔵と同じ出題・帳簿に乗る(誤答は内蔵から自動生成=手間ゼロ)", ()=>{
     const G=W.G, doc=W.document;

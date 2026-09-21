@@ -296,7 +296,7 @@ function openSetDone(){
         '<span>⬆ 定着が進んだ <b>'+s.up+'</b></span>'+
         '<span>🏅 覚えた <b>'+s.mas+'</b></span>'+
         (s.phr? '<span>💬 フレーズ <b>'+s.phr+'</b>問</span>':'')+'</div>'+
-      '<div style="font-weight:800; color:var(--accent2); margin-top:8px">🎫 このセットで +'+s.tk+'</div>'+
+      (GAME_ENABLED? '<div style="font-weight:800; color:var(--accent2); margin-top:8px">🎫 このセットで +'+s.tk+'</div>':'')+
       setDotsHTML(p)+
       '<div class="small" style="margin-top:6px">'+line+'</div></div>'+
     (missN? '<button class="btn setnext2" id="setWeak"><span>🔥 このセットのミス <b>'+missN+'</b>語をすぐ立て直す</span><span class="hlsub">にがて特訓 ─ 正解の選択肢タップでサクサク進める</span></button>':'')+
@@ -637,16 +637,16 @@ function answer(chosen, btn){
   if(ok){
     let rar=dropRarity(preSt);
     if(Math.random()<comboDropBonus()) rar=Math.min(5, rar+1); // コンボ中は★+1のチャンス
-    const drop=addCard(w.en, rar);
+    const drop=addCard(w.en, rar); // カードの記録はゲーム面オフでも続ける(戻したとき欠けない・演出だけ隠す=v5.13.0)
     // 「覚えた」の瞬間がいちばん大事なお祝い(v4.13.0)。次点でレベルアップ・★アップ
     if(justMastered){ toast("🏅 "+w.en+" を覚えた! 7日あけても思い出せた"); vibe([30,40,60]); bigT=true; }
-    else if(lvUp){ toast("📖 レベルアップ! Lv"+lvUp+" ─ 全ステータス強化"); vibe(40); bigT=true; }
-    else if(drop.rarUp){ toast("🎉 "+w.en+" のカードが★"+drop.rar+"にランクアップ!"); vibe(30); bigT=true; }
-    else if(rar>=3) vibe(30);
+    else if(lvUp){ toast("📖 レベルアップ! Lv"+lvUp+(GAME_ENABLED? " ─ 全ステータス強化":"")); vibe(40); bigT=true; }
+    else if(GAME_ENABLED && drop.rarUp){ toast("🎉 "+w.en+" のカードが★"+drop.rar+"にランクアップ!"); vibe(30); bigT=true; }
+    else if(GAME_ENABLED && rar>=3) vibe(30);
     // 🎫は毎正解なのでトースト・結果バー表示は出さない(残高は設定・記録とガチャ画面で確認)
   }
   // 5問ごとのボーナスの通知(v4.31.0)。より大事なお祝いがあるときは譲る
-  if(bonus5 && !bigT) toast("🎁 5問ごとのボーナス 🎫+"+bonus5);
+  if(GAME_ENABLED && bonus5 && !bigT) toast("🎁 5問ごとのボーナス 🎫+"+bonus5);
   $("qStats").innerHTML=qStatsHTML(st); // 定着ステップの変化(上がった/戻った)を見せる
   // ミスの直後は手がかり(選んだ誤答・同じ語根の覚えた仲間)を先頭に出す(v5.10.0)
   if(!ok) meta.unshift(missHintHTML(G, w, chosen, e2j));
@@ -660,6 +660,7 @@ function answer(chosen, btn){
   saveG();
   refreshHeader();
   refreshQuizCount(); // 解答数・セットの進捗を即時反映
+  checkAchievements(); // 学習の実績(v5.13.0・自動付与)
   /* 自動で次へ(v4.26.0設定): タイマー発火時にまだ確認中(answered)のときだけ進む。
      手動の「次へ」はnewQuestion冒頭のclearTimeoutで先取りされる */
   if(G.opt && G.opt.autoNext){
