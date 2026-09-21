@@ -57,6 +57,11 @@ function pickWord(){
   }
   const fresh=a=>{ const f=a.filter(w=>!recentEns.includes(w.en)); return f.length? f : a; };
   const d=fresh(due), u=fresh(unseen);
+  /* マイ単語(v5.11.0): 登録した(または内蔵で「学びたい」印を付けた)未出題の語は、新規の中で優先して出す。
+     登録した直後に会えるように2問に1問の確率で先取り(復習の渋滞ガードより優先=本人の意思が最優先)。
+     1度出れば通常のSRSに乗る(=優先は自然に消える) */
+  const mu=fresh(unseen.filter(w=>mywWanted(w.en)));
+  if(mu.length && Math.random()<0.5) return mu[Math.floor(Math.random()*mu.length)];
   /* 新規を混ぜる確率: 目標があれば「1日の新規目安」を消化するまで30%、消化後は復習に専念
      (復習が尽きたら新規は無制限)。目標なしは従来どおり20% */
   let pNew=0.2;
@@ -272,19 +277,35 @@ function openSetDone(){
    ④にがて特訓: そのリスト(またはセットのミス)だけを連続で出す短いセッション。
      解答はふつうの学習として計上(SRSは期限前の先取り=階段は上がらないが、想起の回数が増える) */
 var FOCUS=null; // {list:[en], i, res:[ok...]}
-/* にがてリスト(純関数): ミス1回以上でまだ覚えていない語。連続ミス→ミス回数→期限の近さ、の順 */
-function weakWords(g){
+/* にがてリスト(純関数): ミス1回以上でまだ覚えていない語。
+   並び(sort・v5.11.0実機FB「基準が分かりにくい」→画面で選べる明示の基準に):
+   miss=ミス回数が多い順(既定)/streak=いま連続でミス中の語から/box=定着が低い順/due=次の復習が近い順。
+   同点の決着はどれも「ミス回数→連続ミス→期限の近さ」 */
+var WEAK_SORTS={miss:"ミスが多い", streak:"連続ミス中", box:"定着が低い", due:"復習が近い"};
+function weakWords(g, sort){
   const out=[];
   for(const en in g.words){
     const st=g.words[en];
     if(!st || !(st[3]>0) || st[0]>=MASTER_BOX || !byEn[en]) continue;
     out.push(en);
   }
+  sort=WEAK_SORTS[sort]? sort : "miss";
+  const tie=(x,y)=>(y[3]-x[3]) || ((y[5]||0)-(x[5]||0)) || (x[1]-y[1]);
   out.sort((a,b)=>{
     const x=g.words[a], y=g.words[b];
-    return ((y[5]||0)-(x[5]||0)) || (y[3]-x[3]) || (x[1]-y[1]);
+    if(sort==="streak") return ((y[5]||0)-(x[5]||0)) || tie(x,y);
+    if(sort==="box") return (x[0]-y[0]) || tie(x,y);
+    if(sort==="due") return (x[1]-y[1]) || tie(x,y);
+    return tie(x,y);
   });
   return out;
+}
+/* 並びの基準になっている値を、各行の先頭に太字で見せる(=なぜこの順かが読める) */
+function weakKeyText(st, sort, now){
+  if(sort==="streak") return "🔥連続ミス "+(st[5]||0);
+  if(sort==="box") return "定着 "+st[0]+"/"+MASTER_BOX;
+  if(sort==="due"){ const h=(st[1]-now)/36e5; return "復習 "+(h<=0? "期限切れ" : h<24? "あと"+Math.ceil(h)+"時間" : "あと"+Math.ceil(h/24)+"日"); }
+  return "ミス "+st[3]+"回";
 }
 /* 同じ語根を持つ「学習ずみ(定着2以上)」の仲間(純関数・最大n語)。定着の高い語を先に */
 function rootKin(g, en, n){
@@ -298,17 +319,16 @@ function rootKin(g, en, n){
   kin.sort((a,b)=>(g.words[b][0]-g.words[a][0]));
   return kin.slice(0, n||2);
 }
-/* ミスの直後の手がかり(結果バーのチップ) */
+/* ミスの直後の手がかり(結果バーのチップ)。「選んだのは〜」はv5.11.0で誤答の選択肢そのものに移した(markWrongChoice) */
 function missHintHTML(g, w, chosen, e2j){
   const h=[];
-  if(chosen && chosen.en!==w.en) h.push('<span class="rmeta ngm">✗ 選んだのは「'+esc(e2j? chosen.en : chosen.ja)+'」</span>');
   const kin=rootKin(g, w.en, 2);
   if(kin.length) h.push('<span class="rmeta kin">🧬 覚えた仲間: '+kin.map(esc).join("・")+'</span>');
   return h.join(" ");
 }
 var FOCUS_N=10;
 function startFocus(list){
-  list=(list && list.length)? list.filter(en=>byEn[en]) : weakWords(G).slice(0, FOCUS_N);
+  list=(list && list.length)? list.filter(en=>byEn[en]) : weakWords(G, G.opt.weakSort).slice(0, FOCUS_N); // 特訓はノートの並びに従う
   if(!list.length){ toast("いま立て直す「にがて」はない ─ いい調子!"); return; }
   closeModal();
   if(typeof PDRILL!=="undefined") PDRILL=null;
@@ -339,23 +359,33 @@ function openFocusDone(){
 }
 /* にがてノート(⚙設定・記録から): リストの上位と、特訓の入口 */
 function openWeakModal(){
-  const list=weakWords(G);
+  const sort=WEAK_SORTS[G.opt.weakSort]? G.opt.weakSort : "miss";
+  const list=weakWords(G, sort), now=Date.now();
   openModal('<h3>🔥 にがてノート '+helpBtn("hlp-weak")+'</h3>'+
-    helpNote("hlp-weak", 'ミスしたことがあり、まだ「覚えた」に届いていない単語。連続ミス・ミス回数の多い順。'+
-      '「にがて特訓」は上位'+FOCUS_N+'語だけを連続で出す短いセッション(解答はふつうの学習として記録・🎫も入る)。'+
-      'ミスの直後には「選んだ誤答」と「同じ語根の覚えた仲間」が手がかりとして出る')+
-    '<div class="small">'+list.length+'語</div>'+
+    helpNote("hlp-weak", 'ミスしたことがあり、まだ「覚えた」に届いていない単語。<b>並びは上のボタンで選ぶ</b>: '+
+      'ミスが多い(累計のミス回数)/連続ミス中(直近で続けて外している数)/定着が低い(忘却曲線の段)/復習が近い(次の期限)。'+
+      '各行の先頭の太字が、その並びの基準の値。同点は「ミス回数→連続ミス→期限」で決める。<br>'+
+      '「にがて特訓」はいまの並びの上位'+FOCUS_N+'語を連続で出す短いセッション(解答はふつうの学習として記録・🎫も入る)。'+
+      'ミスの直後には誤答の選択肢に「その意味の単語」、結果バーに「同じ語根の覚えた仲間」が手がかりとして出る')+
+    '<div class="seg weakseg" id="weakSeg">'+Object.keys(WEAK_SORTS).map(k=>'<button data-s="'+k+'"'+(k===sort?' class="active"':'')+'>'+WEAK_SORTS[k]+'</button>').join("")+'</div>'+
+    '<div class="small">'+list.length+'語 ─ '+WEAK_SORTS[sort]+'順</div>'+
     (list.length
       ? '<div class="panel" style="margin-top:8px">'+list.slice(0, 30).map(en=>{
           const w=byEn[en], st=G.words[en];
           return '<div class="myrow weakrow"><div class="grow"><b style="font-size:14px">'+esc(en)+'</b>'+
             ' <span class="small">'+esc(w.ja)+'</span><br><span class="small">'+
-            '<span class="qx">ミス '+st[3]+'</span>'+((st[5]||0)>=2? ' ・ 🔥連続'+st[5]:'')+' ・ 定着 '+st[0]+'/'+MASTER_BOX+
+            '<span class="wkey">'+weakKeyText(st, sort, now)+'</span>'+
+            (sort!=="miss"? ' ・ <span class="qx">ミス '+st[3]+'</span>':'')+
+            (sort!=="streak" && (st[5]||0)>=2? ' ・ 🔥連続'+st[5]:'')+
+            (sort!=="box"? ' ・ 定着 '+st[0]+'/'+MASTER_BOX:'')+
             (rootText(en)? ' ・ 🧬'+esc(rootText(en)):'')+'</span></div>'+
             '<button class="btn mydel wdict" data-en="'+esc(en)+'">🔍</button></div>';
         }).join("")+(list.length>30? '<div class="small" style="margin-top:6px">…ほか'+(list.length-30)+'語</div>':'')+'</div>'
       : '<div class="empty">いま立て直す「にがて」はない ─ いい調子!</div>')+
-    '<div class="row" style="margin-top:12px"><button class="btn primary grow" id="weakGo"'+(list.length?'':' disabled')+'>🔥 にがて特訓('+Math.min(FOCUS_N, list.length)+'問)</button></div>');
+    '<div class="row" style="margin-top:12px"><button class="btn primary grow" id="weakGo"'+(list.length?'':' disabled')+'>🔥 にがて特訓(上位'+Math.min(FOCUS_N, list.length)+'語)</button></div>');
+  $("weakSeg").querySelectorAll("button").forEach(b=>{
+    b.onclick=()=>{ G.opt.weakSort=b.dataset.s; saveG(); openWeakModal(); };
+  });
   $("modal").querySelectorAll(".wdict").forEach(b=>{
     b.onclick=()=>window.open("https://ejje.weblio.jp/content/"+encodeURIComponent(b.dataset.en), "_blank", "noopener");
   });
@@ -460,6 +490,15 @@ function armCorrectNext(sel, onNext){
   });
 }
 
+/* 選んだ誤答の選択肢に「その意味を持つ単語」を右端に出す(v5.11.0実機FB)。
+   正解側の「次へ ▶」と同じ位置・流儀=取り違えた相手をその場で名指しする。
+   EN→日本語では誤答(訳)の英単語、日本語→ENでは誤答(英単語)の訳。CSSの::after(data-said)で描く */
+function markWrongChoice(b, chosen, e2j){
+  b.classList.add("wrong");
+  const said=e2j? chosen.en : String(chosen.ja||"").split(/[、。／]/)[0];
+  if(said){ b.classList.add("said"); b.dataset.said=said; }
+}
+
 function answer(chosen, btn){
   if(answered) return;
   answered=true;
@@ -471,7 +510,7 @@ function answer(chosen, btn){
     b.disabled=true;
     const isCorrect = b.textContent === (e2j? w.ja : w.en);
     if(isCorrect) b.classList.add("correct");
-    else if(b===btn) b.classList.add("wrong");
+    else if(b===btn) markWrongChoice(b, chosen, e2j);
     else b.classList.add("dim");
   });
   // SRS更新
@@ -518,6 +557,7 @@ function answer(chosen, btn){
   const rt=rootText(w.en), meta=[];
   if(rt) rt.split("・").forEach((tag,i)=>meta.push('<span class="rmeta">'+(i? '':'🧬 ')+esc(tag)+'</span>'));
   if(isWild(w.en)) meta.push('<span class="rmeta wildm">🐺 野生語 Lv'+memBox(w.en)+'</span>');
+  if(isMyWord(w.en)) meta.push('<span class="rmeta myw">📝 マイ単語</span>'); // 自分で登録した語(v5.11.0)
   let bigT=false; // 大事なお祝いのトーストを出したか(5問ボーナスの通知で上書きしない)
   if(ok){
     let rar=dropRarity(preSt);

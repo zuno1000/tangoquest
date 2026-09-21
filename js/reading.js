@@ -258,9 +258,23 @@ function rlChoose(items, rl){
 /* ---- LLMへの依頼プロンプト(コピペ用) ----
    方針(実機FB): 解説・日本語訳・内容正誤問題はアプリでは作らず、ユーザーが使うLLMに頼む。
    その依頼文を素材の題名・URL・出典つきで用意し、そのまま貼れるようにする */
+/* 学習の流れ(v5.11.0実機FB「プロンプトをどう活用して学習すればよいか不明瞭」):
+   プロンプトは「いつ使うか」の順(①→②→③→④)で並べ、各型にwhen=使いどき、を持たせる。
+   読む: 通読(辞書なし) → ①正誤問題で理解を確かめる → ②解説で語彙・構文を拾う → 分からなかった語を📝マイ単語へ
+         → ③要約を書いて添削 → ④意見を英語で言う(二次対策) → ✓読んだ
+   聴く: 字幕なしで1回 → ①正誤問題 → ②教材化(スクリプト・語彙・キーセンテンス)→ シャドーイング → 📝
+         → ③ディクテーション採点 → ④意見を英語で → ✓聴いた
+   ②の語彙一覧は「単語 — 日本語」の1行1語で返してもらう=📝マイ単語にそのまま貼れる */
+const RL_VOCAB_FMT="最後に、3の語彙15個を「単語 — 日本語訳」の形式(1行1語・記号や番号なし)でまとめて一覧にしてください(単語帳アプリにそのまま貼り付けます)。";
 const RL_PROMPTS={
   read:[
-    {id:"full", name:"📚 解説フルセット", tpl:(s,it)=>
+    {id:"tf", step:"①", name:"✅ 内容正誤問題", when:"読み終えた直後に。辞書なしで通読してから、理解できたかを問題で確かめる", tpl:(s,it)=>
+      "次の英語記事について、英検1級の読解問題に近い形式で「内容正誤問題」を作ってください。\n"+
+      "\n記事: "+it.t+"\n出典: "+s.name+"\nURL: "+it.u+"\n"+
+      "\n・True / False / Not Given の3択で8問\n・最初は問題だけを出し、私が答えたら解答・解説(根拠の該当箇所の引用と日本語での説明)を示してください\n"+
+      "・細部の言い換え(paraphrase)を含む、本文の精読が必要な問題にしてください\n"+
+      "\nURLを開けない場合はそう伝えてください。本文を貼り付けます。"},
+    {id:"full", step:"②", name:"📚 解説フルセット", when:"答え合わせの後に。要約・語彙・構文の解説を読み、語彙一覧を📝マイ単語に貼り付ける", tpl:(s,it)=>
       "英検1級(CEFR C1)を目指す日本人学習者として、次の英語記事を教材にしたいです。記事を読んだうえで、以下を作ってください。\n"+
       "\n記事: "+it.t+"\n出典: "+s.name+"\nURL: "+it.u+"\n"+
       "\n1. 英語150語程度の要約と、その日本語訳\n"+
@@ -269,21 +283,27 @@ const RL_PROMPTS={
       "4. 読解上つまずきやすい構文を3つ、文の骨格を示して解説\n"+
       "5. 内容正誤問題(True / False / Not Given)を5問、解答と根拠の該当箇所つき\n"+
       "6. この記事のテーマで英検1級二次の2分スピーチをするときの、主張と理由2つの例(英語)\n"+
-      "\nURLを開けない場合はそう伝えてください。本文を貼り付けます。"},
-    {id:"tf", name:"✅ 内容正誤問題だけ", tpl:(s,it)=>
-      "次の英語記事について、英検1級の読解問題に近い形式で「内容正誤問題」を作ってください。\n"+
-      "\n記事: "+it.t+"\n出典: "+s.name+"\nURL: "+it.u+"\n"+
-      "\n・True / False / Not Given の3択で8問\n・最初は問題だけを出し、私が答えたら解答・解説(根拠の該当箇所の引用と日本語での説明)を示してください\n"+
-      "・細部の言い換え(paraphrase)を含む、本文の精読が必要な問題にしてください\n"+
-      "\nURLを開けない場合はそう伝えてください。本文を貼り付けます。"},
-    {id:"sum", name:"✍️ 要約の添削", tpl:(s,it)=>
+      "\n"+RL_VOCAB_FMT+"\n\nURLを開けない場合はそう伝えてください。本文を貼り付けます。"},
+    {id:"sum", step:"③", name:"✍️ 要約の添削", when:"仕上げに。自分で英語の要約を書いて送り、添削してもらう(書く力)", tpl:(s,it)=>
       "次の英語記事を読み、私が英語で要約を書きます。まず私の要約を待ってください。\n"+
       "\n記事: "+it.t+"\n出典: "+s.name+"\nURL: "+it.u+"\n"+
       "\n私が要約を送ったら、①内容の抜け・誤読 ②文法・語法の誤り ③より自然で高度な表現への言い換え(英検1級レベル) の3点で添削し、"+
       "最後に模範要約(120語)を示してください。\n\nURLを開けない場合はそう伝えてください。本文を貼り付けます。"},
+    {id:"talk", step:"④", name:"🗣 意見を言う(二次対策)", when:"余裕があれば。記事のテーマについて英語で意見を述べ、質問と添削を受ける(話す力)", tpl:(s,it)=>
+      "次の英語記事のテーマについて、英検1級二次試験(スピーチ+質疑)の練習をしたいです。あなたは面接官役です。\n"+
+      "\n記事: "+it.t+"\n出典: "+s.name+"\nURL: "+it.u+"\n"+
+      "\nまず、記事のテーマから二次試験風のトピック(賛否が分かれる問い)を1つ出してください。私が英語で2分程度の意見(主張+理由2つ)を書いて送ります。"+
+      "その後、面接官として英語で質問を2つずつ、計3往復してください。最後に、私の英語について ①論理の組み立て ②文法・語法 ③より高度な表現への言い換え の3点で講評してください。"+
+      "\n\nURLを開けない場合はそう伝えてください。本文を貼り付けます。"},
   ],
   listen:[
-    {id:"full", name:"🎧 リスニング教材化", tpl:(s,it)=>
+    {id:"tf", step:"①", name:"✅ 内容正誤問題", when:"字幕なしで1回聴いた直後に。聞き取れたかを問題で確かめる", tpl:(s,it)=>
+      "次の英語の音声/動画について、英検1級のリスニング問題に近い形式で「内容正誤問題」を作ってください。"+
+      "トランスクリプトを取得できない場合はそう伝えてください。貼り付けます。\n"+
+      "\n題名: "+it.t+"\n出典: "+s.name+"\nURL: "+it.u+"\n"+
+      "\n・True / False の2択で8問。最初は問題だけを出し、私が答えたら解答・解説(根拠の発言の引用と日本語での説明)を示してください\n"+
+      "・話者の主張と根拠、数字や固有名詞、言い換えを問う問題を混ぜてください"},
+    {id:"full", step:"②", name:"🎧 リスニング教材化", when:"答え合わせの後に。要約・語彙・キーセンテンスをもらい、シャドーイング。語彙一覧は📝マイ単語へ", tpl:(s,it)=>
       "英検1級(CEFR C1)を目指す日本人学習者として、次の英語の音声/動画をリスニング教材にしたいです。"+
       "内容(トランスクリプトや字幕)を取得できるなら、それを読んだうえで以下を作ってください。取得できない場合はそう伝えてください。トランスクリプトを貼り付けます。\n"+
       "\n題名: "+it.t+"\n出典: "+s.name+"\nURL: "+it.u+"\n"+
@@ -292,19 +312,37 @@ const RL_PROMPTS={
       "3. 重要語彙・表現を15個(英語の定義・日本語訳・音声中の用例)\n"+
       "4. リスニング内容正誤問題(True / False)を5問、解答と根拠つき\n"+
       "5. シャドーイング用のキーセンテンス10文(短く・使い回せる言い回しを優先)\n"+
-      "6. 音のつながり・弱形・脱落など、聞き取りにくい箇所があれば指摘"},
-    {id:"tf", name:"✅ 内容正誤問題だけ", tpl:(s,it)=>
-      "次の英語の音声/動画について、英検1級のリスニング問題に近い形式で「内容正誤問題」を作ってください。"+
-      "トランスクリプトを取得できない場合はそう伝えてください。貼り付けます。\n"+
-      "\n題名: "+it.t+"\n出典: "+s.name+"\nURL: "+it.u+"\n"+
-      "\n・True / False の2択で8問。最初は問題だけを出し、私が答えたら解答・解説(根拠の発言の引用と日本語での説明)を示してください\n"+
-      "・話者の主張と根拠、数字や固有名詞、言い換えを問う問題を混ぜてください"},
-    {id:"dict", name:"✍️ ディクテーション採点", tpl:(s,it)=>
+      "6. 音のつながり・弱形・脱落など、聞き取りにくい箇所があれば指摘\n"+
+      "\n"+RL_VOCAB_FMT},
+    {id:"dict", step:"③", name:"✍️ ディクテーション採点", when:"仕上げに。一部を書き起こして送り、聞き落としの原因を教えてもらう", tpl:(s,it)=>
       "次の英語の音声/動画で、私はディクテーション(聞き取って書き起こす練習)をします。まず私の書き起こしを待ってください。\n"+
       "\n題名: "+it.t+"\n出典: "+s.name+"\nURL: "+it.u+"\n"+
       "\n私が書き起こしを送ったら、正しいトランスクリプトと比較して、①聞き落とし・聞き違い ②その原因(弱形・連結・脱落・未知語など) ③復習用の言い回し10個 を示してください。"+
       "トランスクリプトを取得できない場合はそう伝えてください。貼り付けます。"},
+    {id:"talk", step:"④", name:"🗣 意見を言う(二次対策)", when:"余裕があれば。話の内容について英語で意見を述べ、質問と添削を受ける(話す力)", tpl:(s,it)=>
+      "次の英語の音声/動画のテーマについて、英検1級二次試験(スピーチ+質疑)の練習をしたいです。あなたは面接官役です。\n"+
+      "\n題名: "+it.t+"\n出典: "+s.name+"\nURL: "+it.u+"\n"+
+      "\nまず、内容から二次試験風のトピック(賛否が分かれる問い)を1つ出してください。私が英語で2分程度の意見(主張+理由2つ)を書いて送ります。"+
+      "その後、面接官として英語で質問を2つずつ、計3往復してください。最後に、私の英語について ①論理の組み立て ②文法・語法 ③より高度な表現への言い換え の3点で講評してください。"+
+      "\n\nトランスクリプトを取得できない場合はそう伝えてください。貼り付けます。"},
   ],
+};
+/* 学習の流れ(モーダルの案内・カード下の1行) */
+const RL_FLOW={
+  read:{line:"通読 → ①正誤 → ②解説 → 📝単語 → ③要約 → ✓",
+    steps:["<b>通読</b>: 🔗開いて辞書なしで最後まで読む(10〜15分)。要点を3行で頭に置く",
+      "<b>① 内容正誤問題</b>: 📋プロンプトをLLMに貼り、問題に答える。理解の穴がここで見える",
+      "<b>② 解説フルセット</b>: 答え合わせのあと、語彙・構文・論旨の解説を読む。<b>語彙一覧を📝マイ単語に貼る</b>と、翌日から4択に混ざる",
+      "<b>③ 要約の添削</b>(余裕があれば): 英語で120語の要約を書いて送る。二次・英作文の練習になる",
+      "<b>④ 意見を言う</b>(余裕があれば): 面接官役のLLMに英語で意見を述べ、講評をもらう",
+      "<b>✓ 読んだ</b>: 記録に残る(今週の記録の📖)。目安は1日1本・30〜40分"]},
+  listen:{line:"通し → ①正誤 → ②教材化 → シャドーイング → 📝 → ✓",
+    steps:["<b>通し</b>: 🔗開いて字幕なしで1回聴く(10〜20分の1本、長ければ前半だけでよい)",
+      "<b>① 内容正誤問題</b>: 📋プロンプトをLLMに貼り、問題に答える(トランスクリプトが取れないLLMには字幕を貼る)",
+      "<b>② 教材化</b>: 要約・語彙・キーセンテンス10文をもらい、キーセンテンスをシャドーイング。<b>語彙一覧は📝マイ単語へ</b>",
+      "<b>③ ディクテーション採点</b>(余裕があれば): 1〜2分ぶんを書き起こして送る。聞き落としの原因が分かる",
+      "<b>④ 意見を言う</b>(余裕があれば): 面接官役のLLMに英語で意見を述べ、講評をもらう",
+      "<b>✓ 聴いた</b>: 記録に残る(今週の記録の🎧)。目安は1日1本・20〜30分"]},
 };
 function rlPromptText(kind, promptId, src, item){
   const list=RL_PROMPTS[kind]||[];
@@ -387,8 +425,15 @@ function openRLModal(){
       '日付で決まる順番なので同じ日に何度開いても同じおすすめ。合わないソースは「外す」で二度と出ない。<br><br>'+
       '<b>📋 LLMプロンプト</b>: 解説・語彙・内容正誤問題・要約の添削などを、あなたが使うLLM(ChatGPT・Claude・Gemini等)に頼むための依頼文。'+
       '題名とURLが入っているのでそのまま貼り付けるだけ。URLを開けないLLMには本文/トランスクリプトを続けて貼る。'+
-      'このアプリは日本語訳や問題を自分では作らない(=無料・サーバーなし)')+
+      'このアプリは日本語訳や問題を自分では作らない(=無料・サーバーなし)。<b>学習の流れ</b>は下の「📘 進め方」に')+
     '<div id="rlModal"><div id="rlCards"></div>'+
+    // 学習の流れ(v5.11.0実機FB): プロンプトをどの順で使うか
+    foldSec("rlFlow", "📘 進め方(プロンプトをどう使うか)",
+      '<div class="rlflow"><b>📖 読む(1日1本・30〜40分)</b><ol>'+RL_FLOW.read.steps.map(s=>'<li>'+s+'</li>').join("")+'</ol>'+
+      '<b>🎧 聴く(1日1本・20〜30分)</b><ol>'+RL_FLOW.listen.steps.map(s=>'<li>'+s+'</li>').join("")+'</ol>'+
+      '<div class="small">忙しい日は「通読(通し) → ①正誤 → ✓」だけでも十分。②以降は余裕のある日に。'+
+      '分からなかった単語は<b>📝マイ単語</b>に貼るだけで、翌日から4択の学習に混ざる(意味は自動で取り込む)</div></div>', !G.rl.flowSeen)+
+    '<button class="btn" id="rlMywBtn" style="margin-top:10px; width:100%">📝 分からなかった単語を登録<span class="hlsub">マイ単語 '+mywList().length+'語</span></button>'+
     foldSec("rlTopics", "🎛 興味のあるテーマ("+Object.keys(G.rl.topics||{}).filter(t=>G.rl.topics[t]).length+")",
       '<div class="small" style="margin-bottom:6px">選んだテーマに合うソースを優先する(未選択=全ソースから)</div>'+
       '<div class="rlchips">'+Object.keys(RL_TOPICS).map(t=>'<button class="wchip rltop'+(G.rl.topics[t]? " ksel":"")+'" data-t="'+t+'">'+RL_TOPICS[t]+'</button>').join("")+'</div>', false)+
@@ -398,6 +443,8 @@ function openRLModal(){
     '<div class="small" style="margin-top:10px">ソース '+RL_SOURCES.filter(s=>s.kind==="read").length+'誌 ・ '+RL_SOURCES.filter(s=>s.kind==="listen").length+'番組。'+
       'すべて無料で読める・聴けるものだけ</div></div>');
   $("rlHistBtn").onclick=openRLHistory;
+  $("rlMywBtn").onclick=()=>openMywAdd();
+  if(!G.rl.flowSeen){ G.rl.flowSeen=1; saveG(); } // 進め方は初回だけ開いた状態で見せる(端末の好み)
   render();
   rlEnsureLoaded(()=>{ render(); rlFillHome(); });
   $("modal").querySelectorAll(".rltop").forEach(b=>{
@@ -437,7 +484,8 @@ function rlCardHTML(kind){
       (it
         ? '<a class="rltitle" href="'+esc(it.u)+'" target="_blank" rel="noopener">'+esc(it.t)+'</a>'+
           '<div class="rlmeta">'+(rlDateText(it.d)? rlDateText(it.d)+' ・ ':'')+(s.yt? "YouTube" : kind==="read"? "記事" : "ポッドキャスト")+(done? ' ・ <span class="qmas">✓ '+(kind==="read"?"読んだ":"聴いた")+'</span>':'')+'</div>'+
-          (it.s? '<div class="rldesc">'+esc(it.s)+'</div>':'')
+          (it.s? '<div class="rldesc">'+esc(it.s)+'</div>':'')+
+          '<div class="rlmeta rlflowline">流れ: '+RL_FLOW[kind].line+'</div>'
         : st.err
           ? '<div class="rlmeta">最新の一覧を取得できなかった(通信・中継の都合)。サイトを直接開いて、気になる1本を選ぼう</div>'
           : '<div class="rlmeta">最新の一覧を取得中…</div>')+
@@ -489,15 +537,22 @@ function openRLPrompt(kind, src, item){
   let curId=list[0].id;
   openModal('<h3>📋 LLMに頼む '+helpBtn("hlp-rlp")+'</h3>'+
     helpNote("hlp-rlp", 'あなたが使うLLM(ChatGPT・Claude・Gemini等)に貼り付ける依頼文。題名・出典・URLが入っている。'+
-      'URLを開けないLLMには、続けて本文(またはトランスクリプト・字幕)を貼り付ける。文面は自由に書き換えてよい')+
-    '<div class="seg metaseg" id="rlpSeg">'+list.map((p,i)=>'<button data-p="'+p.id+'"'+(i===0?' class="active"':'')+'>'+p.name+'</button>').join("")+'</div>'+
+      'URLを開けないLLMには、続けて本文(またはトランスクリプト・字幕)を貼り付ける。文面は自由に書き換えてよい。<br>'+
+      '①→②→③→④は使う順(流れ: '+RL_FLOW[kind].line+')。②の語彙一覧は「単語 — 日本語」で返るので、📝マイ単語にそのまま貼れる')+
+    '<div class="seg metaseg rlpseg" id="rlpSeg">'+list.map((p,i)=>'<button data-p="'+p.id+'"'+(i===0?' class="active"':'')+'>'+p.step+' '+p.name.replace(/^\S+\s/,"")+'</button>').join("")+'</div>'+
+    '<div class="small rlpwhen" id="rlpWhen"></div>'+
     '<div class="small" style="margin-bottom:6px">'+esc(src.name)+' ─ '+esc(item.t)+'</div>'+
-    '<textarea id="rlpText" class="myta" rows="11"></textarea>'+
+    '<textarea id="rlpText" class="myta" rows="10"></textarea>'+
     '<div class="row" style="gap:10px; margin-top:12px">'+
     '<button class="btn" id="rlpBack">◀ 今日の英語</button>'+
+    '<button class="btn" id="rlpMyw" title="LLMの語彙一覧を貼り付けて登録">📝 単語登録</button>'+
     '<button class="btn primary grow" id="rlpCopy">📋 コピー</button></div>');
   const ta=$("rlpText");
-  const fill=()=>{ ta.value=rlPromptText(kind, curId, src, item); };
+  const fill=()=>{
+    ta.value=rlPromptText(kind, curId, src, item);
+    const p=list.find(x=>x.id===curId)||list[0];
+    $("rlpWhen").innerHTML='<b>'+p.step+' '+p.name+'</b> ─ '+p.when;
+  };
   fill();
   $("rlpSeg").querySelectorAll("button").forEach(b=>{
     b.onclick=()=>{
@@ -508,4 +563,5 @@ function openRLPrompt(kind, src, item){
   });
   $("rlpCopy").onclick=()=>rlCopy(ta.value, ta);
   $("rlpBack").onclick=openRLModal;
+  $("rlpMyw").onclick=()=>openMywAdd();
 }

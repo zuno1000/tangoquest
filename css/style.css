@@ -1138,6 +1138,19 @@ body.svplay #slotView{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
 .choice.correct.gonext:active{transform:scale(.97)}
 /* ミスの手がかりチップ */
 .rmeta.ngm{color:var(--ng)}
+/* v5.11.0: 選んだ誤答の選択肢に、その意味を持つ単語を右端に表示(正解の「次へ ▶」と同じ位置・流儀) */
+.choice.wrong.said::after{content:attr(data-said); margin-left:auto; padding-left:8px; flex:0 0 auto;
+  font-size:12px; font-weight:800; opacity:.85; max-width:46%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.choice.wrong.said{justify-content:flex-start}
+.btn .hlsub{font-size:11px; font-weight:700; color:var(--sub); margin-left:6px}
+.rmeta.myw{color:var(--accent2)}
+/* マイ単語の一覧: 意味はタップで手直し(テキスト風ボタン・点線下線で「押せる」を示す) */
+.mywja{border:none; background:none; font:inherit; font-size:13px; font-weight:700; color:var(--ink); padding:0 2px; cursor:pointer;
+  text-decoration:underline dotted var(--sub); text-underline-offset:3px; text-align:left; word-break:break-word}
+/* にがてノートの並び替えセグ(v5.11.0) */
+.weakseg{margin:8px 0 6px}
+.weakseg button{font-size:12px; padding:7px 4px}
+.weakrow .wkey{color:var(--ink); font-weight:800}
 .rmeta.kin{color:var(--ok)}
 /* 全文4択(フレーズ・box4〜/グラフ描写ドリル): 英文は長いので小さめの文字で複数行 */
 .choice.fs{font-size:14px; line-height:1.35; padding:6px 14px; max-height:none; min-height:44px; word-break:normal; overflow-wrap:anywhere}
@@ -1165,6 +1178,14 @@ body.svplay #slotView{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
 .rlcard .rldesc{font-size:12px; font-weight:700; color:var(--sub); line-height:1.55; margin-top:6px;
   display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; word-break:auto-phrase}
 .rlbtns{display:flex; flex-wrap:wrap; gap:8px; margin-top:10px}
+/* v5.11.0: 学習の流れ(カード下の1行・進め方の手順・プロンプトの使いどき) */
+.rlflowline{color:var(--accent2); margin-top:6px}
+.rlflow{font-size:13px; line-height:1.6}
+.rlflow ol{margin:4px 0 10px; padding-left:20px}
+.rlflow li{margin:3px 0}
+.rlpseg{flex-wrap:wrap}
+.rlpseg button{font-size:12px; padding:7px 4px; min-width:45%}
+.rlpwhen{margin-bottom:8px; line-height:1.5; color:var(--sub)}
 .rlbtns .btn{padding:8px 12px; min-height:38px; font-size:12px; text-decoration:none; display:inline-flex; align-items:center}
 .rlchips{display:flex; flex-wrap:wrap; gap:6px}
 .rlchip{display:inline-block; margin-right:4px; padding:1px 7px; border-radius:8px; font-size:10px; font-weight:800;

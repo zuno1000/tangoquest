@@ -36,6 +36,8 @@ const EVENTS=[
   // {d:"2026-08-03", t:"..."} 形式でバナー以外のイベント告知を書く
 ];
 const NEWS=[
+  {d:"2026-09-21", t:"📝 v5.11.0 「マイ単語」が登場! 記事を読んでいて分からなかった単語を、貼り付けるだけで登録できます(学習タブの➕・今日の英語・⚙設定から)。意味は後から自動で取り込み(取れない語は「意味待ち」として残り、あとで再挑戦・LLMに頼む道もあり)、登録した語は未出題のうち優先して4択に出ます。内蔵の単語と同じ復習・カード・図鑑に乗ります。「単語 — 日本語」と書けば意味も同時に登録でき、今日の英語の②解説プロンプトが返す語彙一覧をそのまま貼るとまとめて登録できます"},
+  {d:"2026-09-21", t:"🔧 v5.11.0 実機FB3件に対応: ①ミスしたとき、選んだ誤答の選択肢の右端に「その意味を持つ単語」を表示(正解側の「次へ ▶」と同じ位置。結果バーの「選んだのは〜」は廃止) ②🔥にがてノートの並びを明示: ミスが多い/連続ミス中/定着が低い/復習が近い、をボタンで選べ、各行の先頭に基準の値を太字で表示(特訓もその並びに従う) ③今日の英語に「📘 進め方」: プロンプトを①正誤→②解説→③要約/ディクテーション→④意見の順に並べ直し、使いどきを表示。カードにも流れの1行。②の語彙一覧は📝マイ単語に貼れる形式に"},
   {d:"2026-09-21", t:"📚 v5.10.3 今日の英語の記録を「読んだ📖」「聴いた🎧」に分けて表示するようにしました(今週の記録のマス・パネルの右上)。さらに「読んだ・聴いたの記録」で、これまでに✓した記事・番組を日付ごとに一覧できます(題名から開き直せます。今日の英語の画面と⚙設定・記録から)"},
   {d:"2026-09-21", t:"📅 v5.10.2 今日の英語を✓(読んだ/聴いた)した日は、ホームの「今週の記録」のマスに📰の印が付きます。パネルの右上にも「✓ 今日 n本」"},
   {d:"2026-09-21", t:"🔧 v5.10.1 「今日の英語」のソースを、全文を無料で読める・全編を無料で視聴できるものだけに絞りました。有料・閲読制限のあるメディア(The Economist・The Atlantic・NYT・WIRED・New Scientist・MIT Technology Review・Scientific American・Nautilus・Project Syndicate・Foreign Policy・Nature)と更新の止まった番組・外部の有料記事へ飛ぶ集約サイトを外し、記事25誌・番組45本に。開いたら読めない、が起きません"},
@@ -376,6 +378,7 @@ window.ROOT_DEFS=ROOT_DEFS; window.PREFIX_DEFS=PREFIX_DEFS; window.APP_VERSION=A
 window.LOGIN_BONUS=LOGIN_BONUS; window.ACH_DEFS=ACH_DEFS;
 window.DAILY_DEFS=DAILY_DEFS; window.WEEKLY_DEFS=WEEKLY_DEFS; window.DAILY_CORE=DAILY_CORE;
 window.MASTER_BOX=MASTER_BOX; window.INTERVALS=INTERVALS; window.FRZ_MAX=FRZ_MAX;
+window.byEn=byEn; window.MYW_ENDPOINTS=MYW_ENDPOINTS; window.RL_FLOW=RL_FLOW; // v5.11.0(マイ単語・進め方)
 window.SV_STAGE_SEC=SV_STAGE_SEC; window.SV_REACH=SV_REACH; window.SV_TOUCH_CD=SV_TOUCH_CD;
 window.SV_CD=SV_CD; window.SV_UPGRADES=SV_UPGRADES; window.SV_AUTO=SV_AUTO; window.SV_BURST=SV_BURST;
 window.SV_HEAL_CAP=SV_HEAL_CAP; window.SV_MAXFOES=SV_MAXFOES; window.SV_SPAWN0=SV_SPAWN0; window.SV_SPAWN1=SV_SPAWN1;

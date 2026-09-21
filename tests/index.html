@@ -2891,9 +2891,10 @@ function run(){
     wrong.click(); // ミス
     ok(right.classList.contains("correct") && right.classList.contains("gonext") && !right.disabled, "正解の選択肢だけ押せるまま(gonext)");
     ok(wrong.disabled && cs.filter(b=>b!==right).every(b=>b.disabled), "他の選択肢は無効");
-    // ミスの手がかり(v5.10.0): 選んだ誤答の単語を名指し
+    // ミスの手がかり(v5.11.0): 選んだ誤答の選択肢そのものに、その意味を持つ単語(正解側の「次へ ▶」と同じ位置)
     const chosen=W.WORDS.find(x=>x.ja===wrong.textContent);
-    ok(doc.getElementById("resultCard").textContent.indexOf("選んだのは「"+chosen.en+"」")>=0, "「選んだのは〜」が出る");
+    ok(wrong.classList.contains("said") && wrong.dataset.said===chosen.en, "誤答の選択肢に「その単語」が出る");
+    ok(doc.getElementById("resultCard").textContent.indexOf("選んだのは")<0, "結果バーの「選んだのは〜」は廃止");
     right.click(); // 正解タップで次へ
     ok(!doc.getElementById("resultBar").classList.contains("show"), "結果バーが消えて次の問題");
     ok(doc.getElementById("promptWord").textContent.length>0, "次の問題が出ている");
@@ -2914,10 +2915,10 @@ function run(){
     g.words[fam[1]]=[1,0,1,0,0,0,0]; // 定着1=まだ仲間に数えない
     eq(W.rootKin(g, fam[0], 2).length, 1, "定着2未満は手がかりにしない");
     eq(W.rootKin(g, "abate", 2).length, 0, "語根が無い語は空");
-    // ミスの手がかりHTML
+    // ミスの手がかりHTML(v5.11.0: 「選んだのは」は誤答の選択肢そのものへ移した=結果バーには仲間だけ)
     const h=W.missHintHTML(g, W.WORDS.find(w=>w.en===fam[0]), W.WORDS.find(w=>w.en===fam[2]), true);
-    ok(h.indexOf("選んだのは「"+fam[2]+"」")>=0 && h.indexOf("覚えた仲間")>=0, "選んだ誤答+仲間の両方");
-    // にがてリスト: ミスあり・未習得だけ。連続ミス→ミス回数の順
+    ok(h.indexOf("選んだのは")<0 && h.indexOf("覚えた仲間")>=0, "結果バーは仲間だけ");
+    // にがてリスト: ミスあり・未習得だけ。既定=ミス回数→連続ミス→期限の順
     const g2={words:{}};
     g2.words[W.WORDS[0].en]=[1, 9, 3, 2, 0, 0, 0];   // ミス2・連続0
     g2.words[W.WORDS[1].en]=[0, 5, 1, 3, 0, 2, 0];   // ミス3・連続2 → 先頭
@@ -2926,7 +2927,35 @@ function run(){
     g2.words[W.WORDS[4].en]=[1, 3, 3, 2, 0, 0, 0];   // ミス2・連続0・期限が早い → WORDS[0]より前
     const wl=W.weakWords(g2);
     eq(wl.length, 3, "ミスあり・未習得の3語");
-    eq(wl[0], W.WORDS[1].en, "連続ミスが先頭"); eq(wl[1], W.WORDS[4].en, "同じミス数なら期限の早い方"); eq(wl[2], W.WORDS[0].en);
+    eq(wl[0], W.WORDS[1].en, "ミスが多い語が先頭"); eq(wl[1], W.WORDS[4].en, "同じミス数なら期限の早い方"); eq(wl[2], W.WORDS[0].en);
+  });
+  t("にがてノートの並び(v5.11.0): 4つの基準を選べる・行の先頭に基準の値・特訓は並びに従う", ()=>{
+    const G=W.G, doc=W.document;
+    const g2={words:{}};
+    g2.words[W.WORDS[0].en]=[3, 9e15, 3, 2, 0, 0, 0];  // ミス2・連続0・定着3・期限遠い
+    g2.words[W.WORDS[1].en]=[0, 5e15, 1, 3, 0, 2, 0];  // ミス3・連続2・定着0
+    g2.words[W.WORDS[4].en]=[1, 1, 3, 1, 0, 1, 0];     // ミス1・連続1・定着1・期限切れ
+    g2.words[W.WORDS[5].en]=[2, 2, 3, 2, 0, 0, 0];     // ミス2・連続0・定着2・期限が近い
+    eq(W.weakWords(g2, "miss")[0], W.WORDS[1].en, "ミスが多い");
+    eq(W.weakWords(g2, "streak")[0], W.WORDS[1].en, "連続ミス中"); eq(W.weakWords(g2, "streak")[1], W.WORDS[4].en, "連続1が次");
+    eq(W.weakWords(g2, "box")[0], W.WORDS[1].en, "定着が低い"); eq(W.weakWords(g2, "box")[3], W.WORDS[0].en, "定着3は最後");
+    eq(W.weakWords(g2, "due")[0], W.WORDS[4].en, "復習が近い(期限切れが先頭)"); eq(W.weakWords(g2, "due")[1], W.WORDS[5].en);
+    eq(W.weakWords(g2, "nope").join(), W.weakWords(g2, "miss").join(), "未知の基準は既定(ミスが多い)");
+    // 同点の決着はどの基準でも「ミス→連続→期限」: 定着が同じ2語(WORDS[0]と[5]は定着3/2で違うので、期限で決まるdueを検証)
+    ok(W.weakKeyText(g2.words[W.WORDS[4].en], "due", 1e15).indexOf("期限切れ")>=0, "期限切れの表記");
+    ok(W.weakKeyText(g2.words[W.WORDS[1].en], "miss").indexOf("ミス 3回")>=0, "ミス回数の表記");
+    // モーダル: セグで切り替わり、G.opt.weakSortに残る
+    const oldWords=G.words, oldSort=G.opt.weakSort;
+    G.words=g2.words; G.opt.weakSort="miss";
+    W.openWeakModal();
+    const seg=doc.getElementById("weakSeg"); ok(seg && seg.querySelectorAll("button").length===4, "4つの基準");
+    ok(doc.querySelector("#modal .weakrow .wkey").textContent.indexOf("ミス 3回")>=0, "先頭行の基準値=ミス3回");
+    seg.querySelector('[data-s="due"]').click();
+    eq(G.opt.weakSort, "due", "選んだ基準が残る");
+    ok(doc.querySelector("#modal .weakrow b").textContent===W.WORDS[4].en, "復習が近い順に並び替わる");
+    ok(doc.querySelector("#modal .weakrow .wkey").textContent.indexOf("復習")>=0, "先頭行の基準値=復習");
+    W.closeModal();
+    G.words=oldWords; G.opt.weakSort=oldSort;
   });
   t("にがて特訓(v5.10.0): リストの語だけを連続で出し、完了モーダル・設定にノートの入口", ()=>{
     const doc=W.document, G=W.G;
@@ -3132,14 +3161,41 @@ function run(){
     const y=W.rlParseXml(atom);
     eq(y.length, 1); eq(y[0].t, "V1"); eq(y[0].u, "https://www.youtube.com/watch?v=abc", "Atomのlink href"); eq(y[0].s, "desc1", "YouTubeのmedia:description");
     eq(W.rlParseXml("<not xml"), null, "壊れたXMLはnull");
-    // プロンプト: 題名・URL・出典が入る・3種類ずつ
+    // プロンプト: 題名・URL・出典が入る・4種類ずつ(v5.11.0: 使う順①〜④・使いどき・語彙一覧の形式指定)
     const src=W.RL_SOURCES[0], it={t:"Test Title", u:"https://t/x", d:"", s:""};
-    eq(W.RL_PROMPTS.read.length, 3); eq(W.RL_PROMPTS.listen.length, 3);
+    eq(W.RL_PROMPTS.read.length, 4); eq(W.RL_PROMPTS.listen.length, 4);
     const p=W.rlPromptText("read", "full", src, it);
     ok(p.indexOf("Test Title")>=0 && p.indexOf("https://t/x")>=0 && p.indexOf(src.name)>=0, "題名・URL・出典");
     ok(p.indexOf("英検1級")>=0 && p.indexOf("正誤")>=0, "英検1級レベルの解説と内容正誤問題を頼む");
+    ok(p.indexOf("単語 — 日本語訳")>=0 && W.rlPromptText("listen", "full", src, it).indexOf("単語 — 日本語訳")>=0, "語彙一覧はマイ単語に貼れる形式で");
     ok(W.rlPromptText("listen", "dict", src, it).indexOf("ディクテーション")>=0, "リスニングはディクテーション採点も");
-    ok(W.rlPromptText("read", "nope", src, it)===W.rlPromptText("read", "full", src, it), "未知のidは先頭の型");
+    ok(W.rlPromptText("read", "talk", src, it).indexOf("面接官")>=0 && W.rlPromptText("listen", "talk", src, it).indexOf("面接官")>=0, "④意見を言う(二次対策)");
+    ok(W.rlPromptText("read", "nope", src, it)===W.rlPromptText("read", "tf", src, it), "未知のidは先頭の型(①正誤)");
+    ["read","listen"].forEach(k=>{
+      eq(W.RL_PROMPTS[k].map(x=>x.step).join(""), "①②③④", k+": 使う順に並ぶ");
+      ok(W.RL_PROMPTS[k].every(x=>x.when && x.when.length>8), k+": 使いどきの説明がある");
+      ok(W.RL_FLOW[k].line && W.RL_FLOW[k].steps.length>=5, k+": 学習の流れ");
+    });
+  });
+  t("今日の英語の進め方(v5.11.0): モーダルに📘進め方(初回は開いた状態)・カードに流れの1行・プロンプト画面に使いどきと📝単語登録", ()=>{
+    const G=W.G, doc=W.document;
+    const oldSeen=G.rl.flowSeen; G.rl.flowSeen=0;
+    W.openRLModal();
+    const fb=doc.getElementById("rlFlow"); ok(fb && !fb.hidden, "初回は進め方が開いている");
+    ok(fb.textContent.indexOf("内容正誤問題")>=0 && fb.textContent.indexOf("マイ単語")>=0, "手順にプロンプトの順とマイ単語");
+    ok(doc.getElementById("rlMywBtn"), "分からなかった単語を登録の入口");
+    eq(G.rl.flowSeen, 1, "一度見たら閉じた状態になる");
+    W.closeModal();
+    W.openRLModal(); ok(doc.getElementById("rlFlow").hidden, "2回目は畳まれている"); W.closeModal();
+    const src=W.RL_SOURCES[0], it={t:"Test Title", u:"https://t/x", d:"", s:""};
+    W.openRLPrompt("read", src, it);
+    ok(doc.getElementById("rlpWhen").textContent.indexOf("読み終えた直後")>=0, "①の使いどき");
+    doc.querySelector('#rlpSeg [data-p="full"]').click();
+    ok(doc.getElementById("rlpWhen").textContent.indexOf("マイ単語")>=0, "②の使いどき(語彙一覧→マイ単語)");
+    ok(doc.getElementById("rlpText").value.indexOf("解説")>=0 || doc.getElementById("rlpText").value.indexOf("要約")>=0, "本文が切り替わる");
+    ok(doc.getElementById("rlpMyw"), "📝単語登録の入口");
+    W.closeModal();
+    G.rl.flowSeen=oldSeen;
   });
   t("今日の英語: 同期はdone=和集合・mute=操作時刻LWW(戻すも伝播)・部分リセットでも残る", ()=>{
     const mk=(rl)=>({resetAt:0, updatedAt:1, words:{}, inv:{}, chars:{}, dungeons:{}, days:{}, rl});
@@ -3975,6 +4031,116 @@ async function runAsync(W){
     ok(ch.length>=2 && ch.every(c=>c.split(" ").length<=4), "2チャンク以上・1チャンク最大4語");
     eq(en.split(" ")[W.myphrSuggestKey(en)], "slipped", "核の候補はストップワード以外の語");
   });
+  /* ---- v5.11.0: マイ単語(読んでいて分からなかった単語の登録・意味の自動取り込み・優先出題) ---- */
+  t("マイ単語解析(v5.11.0): 1行1語・カンマ区切り・「単語 — 日本語」「(v)」「番号・記号」を読み取る", ()=>{
+    const r=W.mywParse("1. abate — 和らぐ\n- Ubiquitous: どこにでもある\n**well-being** — (n) 幸福\nappease — v — なだめる\nbolster, allay ; put up with\n日本語だけの行\n");
+    eq(r.map(x=>x.en).join(","), "abate,ubiquitous,well-being,appease,bolster,allay,put up with", "英単語だけを小文字で取り出す");
+    eq(r[0].ja, "和らぐ"); eq(r[1].ja, "どこにでもある", "コロン区切り"); eq(r[2].ja, "幸福", "語中のハイフンは区切らない"); eq(r[2].pos, "n", "(n)を品詞に");
+    eq(r[3].pos, "v", "「— v —」を品詞に"); eq(r[3].ja, "なだめる");
+    eq(r[4].ja, "", "意味なし=意味待ち"); eq(r[6].pos, "v", "複数語は動詞扱い");
+    eq(W.mywParse("abate\nabate\nAbate").length, 1, "重複は1つ");
+    eq(W.mywParse("").length, 0);
+    eq(W.mywGuessPos("alleviate"), "v"); eq(W.mywGuessPos("ubiquitous"), "adj"); eq(W.mywGuessPos("resilience"), "n"); eq(W.mywGuessPos("inadvertently"), "adv");
+    eq(W.mywNorm("  Serendipity! "), "serendipity"); eq(W.mywNorm("123"), "", "英単語でなければ空"); eq(W.mywNorm("a b c d e"), "", "5語以上は弾く");
+    // 翻訳エンドポイントの応答の読み取り
+    eq(W.MYW_ENDPOINTS[0].pick(["軽減する"]), "軽減する", "Google(辞書拡張用)は配列");
+    eq(W.MYW_ENDPOINTS[1].pick({responseData:{translatedText:"和らぐ"}}), "和らぐ", "MyMemory");
+    eq(W.mywJaOk("abate", "abate"), "", "英語のまま返ったら失敗扱い"); eq(W.mywJaOk("和らぐ", "abate"), "和らぐ");
+    ok(W.mywPromptText([{en:"abate"},{en:"allay"}]).indexOf("abate\nallay")>=0 && W.mywPromptText([{en:"x"}]).indexOf("単語 — 品詞 — 日本語")>=0, "LLMへの依頼文は貼り戻せる形式を指定");
+  });
+  t("マイ単語登録: 意味ありは即WORDSに合流・意味なしは意味待ち・内蔵語は優先印・削除で後片付け・同期LWW・部分リセットでも残る", ()=>{
+    const G=W.G;
+    const oldMyw=G.myw, n0=W.WORDS.length;
+    G.myw={};
+    const r=W.mywAdd("Zzquixotry", "テスト用の意味", "n");
+    ok(!r.err && r.en==="zzquixotry", "登録できる(正規化)");
+    ok(W.byEn.zzquixotry && W.byEn.zzquixotry.my && W.WORDS.length===n0+1, "WORDS/byEnに合流(内蔵と同じ出題・カード・図鑑に乗る)");
+    ok(W.isMyWord("zzquixotry") && W.mywWanted("zzquixotry"), "マイ単語・優先出題の対象");
+    ok(W.mywAdd("zzquixotry", "dup", "n").err, "重複は弾く");
+    ok(W.mywAdd("", "x", "n").err, "空は弾く");
+    const p=W.mywAdd("zzpending", "", "");
+    ok(!p.err && p.pending && !W.byEn.zzpending, "意味なし=意味待ち(まだ出題されない)");
+    eq(W.mywPending().length, 1); eq(W.mywList().length, 2);
+    ok(W.mywAdd("zzpending", "あとから", "adj").en && W.byEn.zzpending && W.byEn.zzpending.pos==="adj", "意味を足すと合流する");
+    eq(W.mywPending().length, 0);
+    const ref=W.mywAdd("abate", "", "");
+    ok(ref.ref && !W.byEn.abate.my && W.mywWanted("abate") && !W.isMyWord("abate"), "内蔵語は優先印だけ(定義は内蔵のまま)");
+    ok(W.mywAdd("abate", "", "").err, "内蔵語の優先印も重複は弾く");
+    eq(W.mywList().length, 2, "一覧は自作の語だけ");
+    ok(W.mywUpdate("zzquixotry", "直した意味", "v") && W.byEn.zzquixotry.ja==="直した意味" && W.byEn.zzquixotry.pos==="v", "意味・品詞の手直しが反映");
+    // 4択の誤答は同じ品詞の内蔵語から
+    const ch=W.buildChoices(W.byEn.zzquixotry);
+    eq(ch.length, 4); ok(ch.some(c=>c.en==="zzquixotry") && ch.filter(c=>c.pos==="v").length===4, "同じ品詞の4択");
+    // 削除: WORDSから外れ、SRS・カード・編成も掃除
+    G.words.zzquixotry=[1,0,1,0,0,0,0]; G.inv["zzquixotry|2|0"]=1;
+    const oldSent=G.party.sentence; G.party.sentence=["zzquixotry|2|0"];
+    W.mywDelete("zzquixotry");
+    ok(!W.byEn.zzquixotry && W.WORDS.length===n0+1 && !G.words.zzquixotry && !G.inv["zzquixotry|2|0"] && G.party.sentence.length===0, "後片付け");
+    ok(G.myw.zzquixotry.del, "トンボストーン(同期で削除が伝播)");
+    G.party.sentence=oldSent;
+    // 同期: 項目ごとの操作時刻LWW
+    const mk=(myw)=>({resetAt:0, updatedAt:1, words:{}, inv:{}, chars:{}, dungeons:{}, days:{}, myw});
+    const m=W.mergeData(mk({a:{ja:"古い", at:1}, b:{ja:"ローカルだけ", at:5}}), mk({a:{ja:"新しい", at:9}, c:{del:1, at:3}}));
+    eq(m.myw.a.ja, "新しい", "新しい操作が勝つ"); eq(m.myw.b.ja, "ローカルだけ"); ok(m.myw.c.del, "他端末の削除も入る");
+    ok(W.partialResetData({myw:{x:{ja:"y", at:1}}}, 1).myw.x, "部分リセットでも残る");
+    // 後始末
+    W.mywDelete("zzpending"); G.myw=oldMyw; W.saveG();
+  });
+  t("マイ単語の出題(v5.11.0): 未出題のマイ単語は優先して出る・結果バーに📝・誤答の選択肢にその単語(②)・設定/➕/今日の英語に入口", ()=>{
+    const G=W.G, doc=W.document;
+    const oldMyw=G.myw, oldQtab=G.opt.qtab, oldMode=G.mode;
+    const dr=W.dayRec(), pd=W.pdayRec(), snap={a:dr.a, c:dr.c, pa:pd.a, t:G.tickets, xp:G.xp, cb:G.combo, set:G.set};
+    G.myw={}; G.opt.qtab="w"; G.mode="e2j"; dr.a=1; pd.a=0;
+    W.mywAdd("zzprioritas", "優先テスト", "n");
+    delete G.words.zzprioritas;
+    let hit=0;
+    for(let i=0;i<40;i++){ if(W.pickWord().en==="zzprioritas") hit++; }
+    ok(hit>=5, "未出題のマイ単語は優先して出る(40回中 "+hit+"回)");
+    // 学習タブで解く: ミス→誤答の選択肢に単語・結果バーに📝マイ単語・正解は次へ
+    W.startFocus(["zzprioritas"]);
+    eq(doc.getElementById("promptWord").textContent, "zzprioritas");
+    const cs=[...doc.querySelectorAll("#choices .choice")];
+    const wrongBtn=cs.find(b=>b.textContent!=="優先テスト");
+    const wrongEn=W.WORDS.find(w=>w.ja===wrongBtn.textContent && w.pos==="n").en;
+    wrongBtn.click();
+    ok(wrongBtn.classList.contains("wrong") && wrongBtn.classList.contains("said"), "誤答の選択肢に印");
+    eq(wrongBtn.dataset.said, wrongEn, "誤答の選択肢に「その意味を持つ単語」");
+    ok(cs.find(b=>b.textContent==="優先テスト").classList.contains("gonext"), "正解はタップで次へ");
+    ok(doc.getElementById("resultCard").textContent.indexOf("マイ単語")>=0, "結果バーに📝マイ単語");
+    ok(doc.getElementById("resultCard").textContent.indexOf("選んだのは")<0, "結果バーの「選んだのは」は廃止");
+    ok(G.words.zzprioritas && G.words.zzprioritas[3]===1, "SRSは内蔵と同じ台帳");
+    W.newQuestion(); if(doc.getElementById("focusEnd")) doc.getElementById("focusEnd").click();
+    // 日本語→ENでは誤答(英単語)の訳を出す
+    G.mode="j2e"; W.startFocus(["zzprioritas"]);
+    const cs2=[...doc.querySelectorAll("#choices .choice")];
+    const wb2=cs2.find(b=>b.textContent!=="zzprioritas"); wb2.click();
+    eq(wb2.dataset.said, W.byEn[wb2.textContent].ja.split(/[、。／]/)[0], "訳の先頭のかたまり");
+    W.newQuestion(); if(doc.getElementById("focusEnd")) doc.getElementById("focusEnd").click();
+    // 入口: ⚙設定・➕(単語/フレーズの切替)・今日の英語
+    W.openSettings(); ok(doc.getElementById("mywBtn") && doc.getElementById("mywBtn").textContent.indexOf("1語")>=0, "設定に📝マイ単語");
+    doc.getElementById("mywBtn").click(); ok(doc.getElementById("modal").textContent.indexOf("zzprioritas")>=0, "一覧に出る");
+    doc.getElementById("mywAddBtn").click(); ok(doc.getElementById("mywText") && doc.getElementById("addSeg"), "登録画面(単語/フレーズの切替つき)");
+    doc.getElementById("mywText").value="zzserendip — 幸運な偶然\nzzprioritas\nabate"; doc.getElementById("mywText").dispatchEvent(new W.Event("input"));
+    const pv=doc.getElementById("mywPrev").textContent;
+    ok(pv.indexOf("登録済み")>=0 && pv.indexOf("幸運な偶然")>=0 && pv.indexOf("内蔵にある")>=0, "プレビュー(登録済み/意味/内蔵にある)");
+    doc.querySelector('#addSeg [data-a="p"]').click(); ok(doc.getElementById("myphrText"), "フレーズ登録へ切替");
+    doc.querySelector('#addSeg [data-a="w"]').click(); ok(doc.getElementById("mywText"), "単語登録へ戻る");
+    W.closeModal();
+    doc.querySelector('#quizSeg [data-q="add"]').click(); ok(doc.getElementById("mywText"), "➕はマイ単語登録から"); W.closeModal();
+    // 後始末
+    W.mywDelete("zzprioritas"); G.myw=oldMyw; G.opt.qtab=oldQtab; G.mode=oldMode;
+    dr.a=snap.a; dr.c=snap.c; pd.a=snap.pa; G.tickets=snap.t; G.xp=snap.xp; G.combo=snap.cb; G.set=snap.set;
+    W.saveG(); W.switchTab("home");
+  });
+  t("サバイバーの誤答(v5.11.0): 選んだ誤答の選択肢にその単語(学習タブと同じ)", ()=>{
+    const doc=W.document, b=doc.createElement("button"); b.className="choice";
+    W.markWrongChoice(b, {en:"abate", ja:"和らぐ、弱まる"}, true);
+    ok(b.classList.contains("wrong") && b.classList.contains("said") && b.dataset.said==="abate", "EN→日本語: 英単語");
+    const b2=doc.createElement("button"); b2.className="choice";
+    W.markWrongChoice(b2, {en:"abate", ja:"（嵐・痛みなどが）和らぐ、弱まる"}, false);
+    eq(b2.dataset.said, "（嵐・痛みなどが）和らぐ", "日本語→EN: 訳の先頭のかたまり");
+    ok(W.svAnswer && String(W.svAnswer).indexOf("markWrongChoice")>=0, "サバイバーも同じ関数");
+  });
   t("マイフレーズ登録: 内蔵と同じ出題・帳簿に乗る(誤答は内蔵から自動生成=手間ゼロ)", ()=>{
     const G=W.G, doc=W.document;
     const oldMy=G.myphr, oldPhr=G.phr, oldQtab=G.opt.qtab, oldPre=G.opt.preRecall, oldCb=G.combo;
@@ -4025,6 +4191,7 @@ async function runAsync(W){
     G.myphr={}; G.phr={}; W.myphrInvalidate();
     W.switchTab("quiz");
     doc.querySelector('#quizSeg [data-q="add"]').click();
+    doc.querySelector('#addSeg [data-a="p"]').click(); // ➕はマイ単語から開く(v5.11.0)→フレーズへ切替
     ok(doc.getElementById("myphrText") && doc.getElementById("myphrSave").disabled, "登録モーダル(貼り付け前は登録不可)");
     ok(doc.getElementById("hlp-my"), "プライバシーの説明がある(端末+本人のDriveのみ)");
     const ta=doc.getElementById("myphrText");

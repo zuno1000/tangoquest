@@ -644,12 +644,14 @@ function openMyphrAdd(){
       '核(🔑=覚えたい部分)の候補を自動で読み取る。登録後は内蔵フレーズと同じ復習・出題・報酬に乗る。<br><br>'+
       '<b>プライバシー</b>: 登録内容は<b>この端末と、同期を使う場合はあなた自身のGoogleドライブの非公開領域にだけ</b>保存される。'+
       'このアプリはサーバー処理のない静的サイトなので、開発者や他の利用者に内容が送られる経路は存在しない')+
+    addSegHTML("p")+
     '<textarea id="myphrText" class="myta" rows="3" placeholder="英文を貼り付け(2行目に日本語があれば自動で取り込む)"></textarea>'+
     '<button class="btn" id="myphrPaste" style="margin-top:8px; width:100%">📋 クリップボードから貼り付け</button>'+
     '<div id="myphrPrev" style="margin-top:10px"></div>'+
     '<div class="row" style="gap:10px; margin-top:12px">'+
     '<button class="btn" id="myphrListBtn">📚 登録済み '+myphrList().length+'件</button>'+
     '<button class="btn primary grow" id="myphrSave" disabled>登録する</button></div>');
+  bindAddSeg();
   const ta=$("myphrText");
   let cur=null; // {en, words[], kf, kt}
   const kString=()=>{
@@ -727,7 +729,7 @@ function phrSyncSeg(){
 $("quizSeg").querySelectorAll("button").forEach(b=>{
   b.onclick=()=>{
     if(b.dataset.q==="dr"){ openDrillMenu(); return; } // 実戦は「入口」(モードではない=v5.2.0)
-    if(b.dataset.q==="add"){ openMyphrAdd(); return; } // ➕マイフレーズ登録も入口(v5.6.0)
+    if(b.dataset.q==="add"){ openMywAdd(); return; } // ➕=マイ単語(v5.11.0)/マイフレーズ(v5.6.0)の登録入口(モーダル内で切替)
     PDRILL=null; // モード(ミックス/単語/フレーズ)への切替でドリル・にがて特訓は中断
     if(typeof FOCUS!=="undefined") FOCUS=null;
     if(quizTarget()===b.dataset.q) return; // 同状態への切替は無視(冪等)

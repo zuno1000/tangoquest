@@ -899,7 +899,7 @@ function svAnswer(chosen, btn){
     b.disabled=true;
     const isCorrect = b.textContent === (e2j? w.ja : w.en);
     if(isCorrect) b.classList.add("correct");
-    else if(b===btn) b.classList.add("wrong");
+    else if(b===btn) markWrongChoice(b, chosen, e2j); // 誤答の選択肢にその単語を表示(v5.11.0・学習タブと同じ)
     else b.classList.add("dim");
   });
   svApplyAnswer(w, ok);

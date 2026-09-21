@@ -138,6 +138,12 @@ function mergeData(a, b){
     const x=m.myphr[en], y=b.myphr[en];
     if(!x || (y.at||0)>(x.at||0)) m.myphr[en]=y;
   }
+  // マイ単語(v5.11.0): マイフレーズと同じ項目ごとの操作時刻LWW(追加・意味の取り込み・削除が伝播)
+  m.myw=m.myw||{};
+  for(const en in b.myw||{}){
+    const x=m.myw[en], y=b.myw[en];
+    if(!x || (y.at||0)>(x.at||0)) m.myw[en]=y;
+  }
   /* 今日の英語(v5.10.0): done(読んだ・聴いた)は和集合/mute(合わないソース)は項目ごとの操作時刻LWW
      (「戻す」も伝播する=アイコン・マイフレーズと同じ型)/topics・lastは端末の好み=ローカル起点のまま */
   m.rl=Object.assign({topics:{}, mute:{}, done:{}, last:{}}, m.rl||{});
@@ -376,6 +382,7 @@ function partialResetData(g, t){
         endless:(g.sv&&g.sv.endless)||null}, // サバイバーの記録・心得・荒野は冒険の記録として残す
     slot:{meta:(g.slot&&g.slot.meta)||{}}, // スロットの心得も冒険の記録として残す(v4.28.0)
     myphr:g.myphr||{}, // マイフレーズの定義はユーザーの資産=部分リセットでも残す(SRS記録だけやり直し・v5.6.0)
+    myw:g.myw||{},     // マイ単語の定義も同じく資産(v5.11.0)
     rl:g.rl||{topics:{}, mute:{}, done:{}, last:{}}, // 今日の英語の好み・記録も資産として残す(v5.10.0)
     daily:g.daily||{}, weekly:g.weekly||{}, counters:g.counters||{}, ach:g.ach||{},
     login:g.login||{last:null,day:0}, gift10:g.gift10||0,
@@ -456,6 +463,8 @@ function openSettings(){
       // にがてノート(v5.10.0): ミスした単語の一覧と「にがて特訓」の入口
       '<button class="btn" id="weakBtn">🔥 にがてノート<span class="hlsub">'+weakWords(G).length+'語 ・ 特訓へ</span></button>'+
       '<button class="btn" id="rlHistBtn2">📚 読んだ・聴いた<span class="hlsub">今日の英語の記録</span></button>'+
+      // マイ単語(v5.11.0): 読んでいて分からなかった単語の登録・一覧
+      '<button class="btn" id="mywBtn">📝 マイ単語<span class="hlsub">'+mywList().length+'語'+(mywPending().length? ' ・ 意味待ち'+mywPending().length:'')+'</span></button>'+
       // 任務・図鑑の入口(v5.9.0でホームから移設・実機FB)
       '<button class="btn" id="setMissionBtn"><span>📜 任務'+(mnClaim? ' <b style="color:var(--accent)">'+mnClaim+'件 受取</b>':'')+'</span></button>'+
       '<button class="btn" id="setDexBtn">📕 図鑑</button></div>'+
@@ -489,6 +498,7 @@ function openSettings(){
   };
   $("weakBtn").onclick=openWeakModal;
   $("rlHistBtn2").onclick=openRLHistory;
+  $("mywBtn").onclick=openMywList;
   $("phrHistBtn").onclick=()=>openPhrHistoryModal(0);
   $("setMissionBtn").onclick=()=>switchTab("mission"); // switchTabがモーダルを閉じる
   $("setDexBtn").onclick=()=>openDex();
