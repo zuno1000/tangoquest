@@ -17,7 +17,7 @@
      (マイフレーズと同じ型)。部分リセットでも残す(ユーザーの資産)。
    可逆設計: このファイル+pickWordの優先1点+入口(➕/今日の英語/設定)で完結 */
 
-const MYW_MAX_WORDS=4; // 句動詞などの複数語も許す上限
+const MYW_MAX_WORDS=6; // 句動詞・慣用表現(at the end of the day 等)も許す上限
 const MYW_POS_CYCLE=["v","n","adj","adv"];
 
 /* 単語の正規化(記録キー): 小文字・前後の記号を落とす・空白は1つに。単語でなければ "" */
@@ -28,10 +28,35 @@ function mywNorm(s){
   if(s.split(" ").length>MYW_MAX_WORDS) return "";
   return s;
 }
+/* 複数語の表現(句動詞・慣用句)の品詞推定(v5.11.1実機FB「what if / in tandem のような句動詞も登録したい」)。
+   このアプリの品詞は v/n/adj/adv の4つ(カードの役割・4択の誤答プール)なので、表現の「文中での働き」で振り分ける:
+   ・動詞+小辞/前置詞(put up with・look into・take for granted)=v  … 先頭が句動詞によくある動詞
+   ・前置詞句・副詞句(in tandem・by and large・at stake・on the fly)=adv … 先頭が前置詞
+   ・接続・疑問の表現(what if・as if・even though・no matter what)=adv … 文をつなぐ働き=副詞の枠
+   ・名詞句(rule of thumb・red tape・a blessing in disguise)=n … 上記以外の既定
+   ・形容詞的(state of the art・up to date・well off)は語尾で拾えないので既定のn→タップで変更 */
+const MYW_PREP=new Set("in on at by out off over under with without for from to of up down beyond behind across against along among around before between into through throughout till until upon within above below after".split(" "));
+const MYW_CONJ=new Set("what as even if so no not that whether how why when where while though although whatever whenever wherever however once unless lest".split(" "));
+const MYW_VERB_HEADS=new Set(("put take get go come look make give turn bring call carry set run hold keep break pull back bear stand fall figure work pick cut hand let live pass pay play point rule see show sort stick tell think throw try wear wind do drop end face fill find hang head lay lead leave lie move own phase rely resort sign step talk tear walk wrap zero account add boil catch check close count deal die dwell opt pin press push read reach roll settle shrug single speak spell stem tie touch weigh write "+
+  "act bank bring brush build burn buy chip clear cling cool crack crop draw drift ease eat fend fit fold follow gear grow hit hold iron jump kick knock lash latch lay live log lose map mull narrow nod open pan pare pass peter piece play plow pore prop rack ramp rein rope rub scale scrape screw seal shake shell shoot shut sit size slip smooth snap spring square stack stamp stave stir string strip stumble tag tamper tap tease tide tip toe top toss track trade trail trip tune usher wade ward wash water wave weed whip win wipe work zone").split(" "));
+function mywGuessPosMulti(en){
+  const ws=en.split(" "), first=ws[0], last=ws[ws.length-1];
+  // 「X of Y」(rule of thumb・state of the art・piece of cake)は名詞句。ただし get rid of / take care of は動詞
+  if(ws.length>=3 && ws[1]==="of" && !/^(get|take|make|have|be|keep|lose|run)$/.test(first)) return "n";
+  if(MYW_VERB_HEADS.has(first)) return "v";
+  if(/^(be|being|get|make|take|have|keep|go|come|put|set|turn|give|bring|let|call|hold|look)$/.test(first)) return "v";
+  if(/(ate|ize|ise|ify)$/.test(first) && first.length>5) return "v";   // alleviate the pressure 等
+  if(MYW_PREP.has(first)) return "adv";                                   // 前置詞句(in tandem・at stake)
+  if(MYW_CONJ.has(first)) return "adv";                                   // 接続・疑問の表現(what if・as if)
+  if(/^(a|an|the)$/.test(first)) return "n";                              // 名詞句(a blessing in disguise)
+  if(ws.length===2 && /(ly)$/.test(first) && first.length>4) return "adj"; // 副詞+形容詞(highly regarded)
+  if(ws.length===2 && MYW_PREP.has(last)) return "v";                    // 動詞+小辞(pore over 等・先頭が辞書外でも)
+  return "n";
+}
 /* 品詞の推定(語尾)。分からなければ名詞 */
 function mywGuessPos(en){
   const w=en.split(" ")[0];
-  if(en.indexOf(" ")>0) return "v";               // 句動詞・複数語は動詞扱い
+  if(en.indexOf(" ")>0) return mywGuessPosMulti(en); // 句動詞・慣用表現(v5.11.1)
   if(/ly$/.test(w) && w.length>4) return "adv";
   if(/(ate|ize|ise|ify|fy|en|ish)$/.test(w) && w.length>5) return "v";
   if(/(ous|ive|al|ful|less|ic|ical|able|ible|ant|ent|ary|ory|ish|like|some)$/.test(w)) return "adj";
@@ -205,9 +230,9 @@ function mywFillPending(done){
 }
 /* 意味待ちの語をLLMに頼む依頼文(貼り付けて戻すだけで登録できる形式を指定) */
 function mywPromptText(list){
-  return "次の英単語について、英検1級レベルの学習者向けに「日本語の意味」と「品詞」を教えてください。\n"+
+  return "次の英単語・表現(句動詞や慣用句を含む)について、英検1級レベルの学習者向けに「日本語の意味」と「品詞」を教えてください。\n"+
     "出力は1行1語で、必ず次の形式だけにしてください(アプリにそのまま貼り付けて登録します):\n"+
-    "単語 — 品詞 — 日本語の意味(簡潔に、区切りは「、」)\n品詞は v / n / adj / adv のいずれか。\n\n"+
+    "単語 — 品詞 — 日本語の意味(簡潔に、区切りは「、」)\n品詞は v / n / adj / adv のいずれか(句動詞は v、前置詞句・つなぎの表現は adv、名詞句は n)。\n\n"+
     list.map(m=>m.en).join("\n");
 }
 
@@ -229,7 +254,8 @@ function openMywAdd(prefill){
       '意味は<b>あとから自動で取り込む</b>(無料の翻訳エンドポイントに単語だけを送る。取れない日は「意味待ち」として残り、次に開いたとき再挑戦)。'+
       '「単語 — 日本語」と書けば意味も同時に登録でき、LLMの語彙一覧(今日の英語のプロンプト)をそのまま貼るとまとめて登録できる。<br><br>'+
       '登録した語は内蔵の単語と同じ復習・カード・図鑑に乗り、<b>未出題のうちは新規の中で優先して出る</b>。内蔵の2,500語に同じ語があれば、その語を優先出題にする。'+
-      '品詞は語尾から推定(4択の誤答は同じ品詞の内蔵語から自動生成)。タップで変更できる。<br><br>'+
+      '<b>句動詞・慣用表現も登録できる</b>(put up with・in tandem・what if・rule of thumb など6語まで)。品詞は語尾や先頭の語から推定'+
+      '(動詞+小辞=動詞/前置詞句・つなぎの表現=副詞/名詞句=名詞。4択の誤答は同じ品詞の内蔵語から自動生成)。タップで変更できる。<br><br>'+
       '<b>プライバシー</b>: 登録内容はこの端末と、同期を使う場合はあなた自身のGoogleドライブの非公開領域にだけ保存される。意味の取得で外部に送るのは単語だけ')+
     addSegHTML("w")+
     '<textarea id="mywText" class="myta" rows="4" placeholder="単語を1行ずつ(例: abate)\n意味も書くなら「abate — 和らぐ」">'+esc(prefill||"")+'</textarea>'+

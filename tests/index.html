@@ -4037,11 +4037,19 @@ async function runAsync(W){
     eq(r.map(x=>x.en).join(","), "abate,ubiquitous,well-being,appease,bolster,allay,put up with", "英単語だけを小文字で取り出す");
     eq(r[0].ja, "和らぐ"); eq(r[1].ja, "どこにでもある", "コロン区切り"); eq(r[2].ja, "幸福", "語中のハイフンは区切らない"); eq(r[2].pos, "n", "(n)を品詞に");
     eq(r[3].pos, "v", "「— v —」を品詞に"); eq(r[3].ja, "なだめる");
-    eq(r[4].ja, "", "意味なし=意味待ち"); eq(r[6].pos, "v", "複数語は動詞扱い");
+    eq(r[4].ja, "", "意味なし=意味待ち"); eq(r[6].pos, "v", "句動詞(put up with)は動詞");
+    // 複数語の表現の品詞(v5.11.1): 文中での働きでv/n/adj/advに振り分ける
+    eq(W.mywGuessPos("what if"), "adv", "つなぎの表現=副詞"); eq(W.mywGuessPos("as if"), "adv"); eq(W.mywGuessPos("no matter what"), "adv");
+    eq(W.mywGuessPos("in tandem"), "adv", "前置詞句=副詞"); eq(W.mywGuessPos("by and large"), "adv"); eq(W.mywGuessPos("at stake"), "adv"); eq(W.mywGuessPos("on the fly"), "adv");
+    eq(W.mywGuessPos("look into"), "v", "動詞+小辞"); eq(W.mywGuessPos("take for granted"), "v"); eq(W.mywGuessPos("pore over"), "v"); eq(W.mywGuessPos("get rid of"), "v");
+    eq(W.mywGuessPos("rule of thumb"), "n", "名詞句"); eq(W.mywGuessPos("red tape"), "n"); eq(W.mywGuessPos("a blessing in disguise"), "n");
+    eq(W.mywGuessPos("highly regarded"), "adj", "副詞+形容詞");
+    eq(W.mywNorm("at the end of the day"), "at the end of the day", "6語まで"); eq(W.mywNorm("a b c d e f g"), "", "7語は弾く");
+    eq(W.mywParse("what if — もしも\nin tandem: 並行して").map(x=>x.en+"/"+x.pos+"/"+x.ja).join(","), "what if/adv/もしも,in tandem/adv/並行して", "表現の解析");
     eq(W.mywParse("abate\nabate\nAbate").length, 1, "重複は1つ");
     eq(W.mywParse("").length, 0);
     eq(W.mywGuessPos("alleviate"), "v"); eq(W.mywGuessPos("ubiquitous"), "adj"); eq(W.mywGuessPos("resilience"), "n"); eq(W.mywGuessPos("inadvertently"), "adv");
-    eq(W.mywNorm("  Serendipity! "), "serendipity"); eq(W.mywNorm("123"), "", "英単語でなければ空"); eq(W.mywNorm("a b c d e"), "", "5語以上は弾く");
+    eq(W.mywNorm("  Serendipity! "), "serendipity"); eq(W.mywNorm("123"), "", "英単語でなければ空");
     // 翻訳エンドポイントの応答の読み取り
     eq(W.MYW_ENDPOINTS[0].pick(["軽減する"]), "軽減する", "Google(辞書拡張用)は配列");
     eq(W.MYW_ENDPOINTS[1].pick({responseData:{translatedText:"和らぐ"}}), "和らぐ", "MyMemory");
