@@ -469,9 +469,12 @@ function buildChoices(word){
   const okc=c=>c && c.en!==word.en && c.pos===word.pos && !overlaps(c,word);
   const picks=[], has=en=>picks.some(p=>p.en===en);
   const add=en=>{ const c=byEn[en]; if(okc(c) && !has(en) && picks.length<3) picks.push(c); };
+  /* 熟語(v5.18.0・enに空白を含む)の誤答は熟語から、単語の誤答は単語から選ぶ(形が違うと消去法で解けてしまう)。語根の枠は熟語では使わない */
+  const multi=word.en.indexOf(" ")>=0;
   if(Math.random()<0.75) confusedWith(G, word.en, 2).forEach(add);
-  if(Math.random()<0.75) rootMates(word.en, 1).forEach(add);
-  const pool=WORDS.filter(c=>okc(c) && !has(c.en));
+  if(!multi && Math.random()<0.75) rootMates(word.en, 1).forEach(add);
+  let pool=WORDS.filter(c=>okc(c) && !has(c.en) && (c.en.indexOf(" ")>=0)===multi);
+  if(pool.length<3) pool=WORDS.filter(c=>okc(c) && !has(c.en));
   shuffle(pool);
   while(picks.length<3 && pool.length) picks.push(pool.pop());
   return shuffle([word, ...picks]);

@@ -64,6 +64,20 @@ function run(){
     W.WORDS.forEach(w=>ok(okPos.has(w.pos), w.en));
   });
 
+  t("熟語(v5.18.0): 1,000件以上・enは小文字と空白・品詞あり・4択の誤答は熟語には熟語、単語には単語", ()=>{
+    const idioms=W.WORDS.filter(w=>w.en.indexOf(" ")>=0);
+    ok(idioms.length>=1000, "熟語="+idioms.length);
+    idioms.forEach(w=>ok(/^[a-z][a-z0-9' -]*[a-z0-9]$/.test(w.en) && w.en.indexOf("  ")<0 && w.ja, w.en));
+    const pv=W.byEn["chip away at"]; ok(pv && pv.pos==="v", "リストの句動詞");
+    ok(W.byEn["load up on"] && W.byEn["rifle through"], "OCRの欠けを補正(oad up on→load up on・ifle through→rifle through)");
+    for(let i=0;i<5;i++){
+      const cs=W.buildChoices(pv);
+      eq(cs.length, 4); ok(cs.filter(c=>c.en!==pv.en).every(c=>c.en.indexOf(" ")>=0 && c.pos==="v"), "熟語の誤答は熟語");
+      const w=W.WORDS.find(x=>x.en==="abate");
+      ok(W.buildChoices(w).filter(c=>c.en!==w.en).every(c=>c.en.indexOf(" ")<0), "単語の誤答は単語");
+    }
+  });
+
   /* ---- カード生成 ---- */
   t("カード生成は決定的", ()=>{
     const a=W.cardOf("abate|3|2"), b=W.cardOf("abate|3|2");
@@ -471,13 +485,14 @@ function run(){
   });
   t("語根カバレッジ: 5割以上の単語に語源タグが付く", ()=>{
     let any=0, root=0;
-    W.WORDS.forEach(w=>{
+    const single=W.WORDS.filter(w=>w.en.indexOf(" ")<0); // 熟語(v5.18.0)は語根の対象外
+    single.forEach(w=>{
       const tags=W.wordRoots(w.en);
       if(tags.length) any++;
       if(tags.some(t=>t.kind==="R")) root++;
     });
-    ok(any/W.WORDS.length>=0.50, "any="+any);
-    ok(root/W.WORDS.length>=0.32, "root="+root);
+    ok(any/single.length>=0.50, "any="+any);
+    ok(root/single.length>=0.32, "root="+root);
   });
   t("語源の正しさ(レビュー済み代表例)", ()=>{
     const rootsOf=en=>W.wordRoots(en).filter(t=>t.kind==="R").map(t=>W.ROOT_DEFS[t.i].t);
