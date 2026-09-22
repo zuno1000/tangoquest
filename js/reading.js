@@ -54,14 +54,14 @@ const RL_SOURCES=[
   {id:"harvard-gaz", kind:"read", name:"The Harvard Gazette", url:"https://news.harvard.edu/gazette/", feed:"https://news.harvard.edu/gazette/feed/", t:["sci","soc","med"], lv:1},
   /* ---- 聴く: ポッドキャスト ---- */
   {id:"ted-audio", kind:"listen", name:"TED Talks Daily", url:"https://www.ted.com/podcasts/ted-talks-daily", feed:"https://feeds.feedburner.com/TEDTalks_audio", t:["cul","sci","soc"], lv:1},
-  {id:"ted-radio", kind:"listen", name:"TED Radio Hour (NPR)", url:"https://www.npr.org/programs/ted-radio-hour/", feed:"https://feeds.npr.org/510298/podcast.xml", t:["cul","sci","soc"], lv:1},
-  {id:"hiddenbrain", kind:"listen", name:"Hidden Brain", url:"https://hiddenbrain.org", feed:"https://feeds.npr.org/510308/podcast.xml", t:["cul","med","soc"], lv:1},
+  {id:"ted-radio", long:1, kind:"listen", name:"TED Radio Hour (NPR)", url:"https://www.npr.org/programs/ted-radio-hour/", feed:"https://feeds.npr.org/510298/podcast.xml", t:["cul","sci","soc"], lv:1},
+  {id:"hiddenbrain", long:1, kind:"listen", name:"Hidden Brain", url:"https://hiddenbrain.org", feed:"https://feeds.npr.org/510308/podcast.xml", t:["cul","med","soc"], lv:1},
   {id:"planetmoney", kind:"listen", name:"Planet Money (NPR)", url:"https://www.npr.org/podcasts/510289/planet-money", feed:"https://feeds.npr.org/510289/podcast.xml", t:["eco"], lv:1},
-  {id:"freakonomics", kind:"listen", name:"Freakonomics Radio", url:"https://freakonomics.com/series/freakonomics-radio/", feed:"https://feeds.simplecast.com/Y8lFbOT4", t:["eco","soc"], lv:1},
+  {id:"freakonomics", long:1, kind:"listen", name:"Freakonomics Radio", url:"https://freakonomics.com/series/freakonomics-radio/", feed:"https://feeds.simplecast.com/Y8lFbOT4", t:["eco","soc"], lv:1},
   {id:"bbc-global", kind:"listen", name:"BBC Global News Podcast", url:"https://www.bbc.co.uk/programmes/p02nq0gn", feed:"https://podcasts.files.bbci.co.uk/p02nq0gn.rss", t:["pol"], lv:1},
   {id:"bbc-doc", kind:"listen", name:"BBC The Documentary", url:"https://www.bbc.co.uk/programmes/p02nq0lx", feed:"https://podcasts.files.bbci.co.uk/p02nq0lx.rss", t:["soc","pol","cul"], lv:1},
-  {id:"bbc-reith", kind:"listen", name:"BBC The Reith Lectures", url:"https://www.bbc.co.uk/programmes/b00729d9", feed:"https://podcasts.files.bbci.co.uk/b00729d9.rss", t:["cul","pol"], lv:2},
-  {id:"bbc-inourtime", kind:"listen", name:"BBC In Our Time", url:"https://www.bbc.co.uk/programmes/b006qykl", feed:"https://podcasts.files.bbci.co.uk/b006qykl.rss", t:["his","cul","sci"], lv:2},
+  {id:"bbc-reith", long:1, kind:"listen", name:"BBC The Reith Lectures", url:"https://www.bbc.co.uk/programmes/b00729d9", feed:"https://podcasts.files.bbci.co.uk/b00729d9.rss", t:["cul","pol"], lv:2},
+  {id:"bbc-inourtime", long:1, kind:"listen", name:"BBC In Our Time", url:"https://www.bbc.co.uk/programmes/b006qykl", feed:"https://podcasts.files.bbci.co.uk/b006qykl.rss", t:["his","cul","sci"], lv:2},
   {id:"bbc-bizdaily", kind:"listen", name:"BBC Business Daily", url:"https://www.bbc.co.uk/programmes/p002vsxs", feed:"https://podcasts.files.bbci.co.uk/p002vsxs.rss", t:["eco"], lv:1},
   {id:"bbc-moreorless", kind:"listen", name:"BBC More or Less", url:"https://www.bbc.co.uk/programmes/p02nrss1", feed:"https://podcasts.files.bbci.co.uk/p02nrss1.rss", t:["eco","soc"], lv:1},
   {id:"bbc-inquiry", kind:"listen", name:"BBC The Inquiry", url:"https://www.bbc.co.uk/programmes/p029399x", feed:"https://podcasts.files.bbci.co.uk/p029399x.rss", t:["pol","soc"], lv:1},
@@ -77,27 +77,27 @@ const RL_SOURCES=[
   {id:"yt-economist", kind:"listen", yt:1, name:"The Economist (YouTube)", url:"https://www.youtube.com/@TheEconomist", feed:YT_FEED+"UC0p5jTq6Xx_DosDFxVXnWaQ", t:["eco","pol"], lv:2},
   {id:"yt-bigthink", kind:"listen", yt:1, name:"Big Think (YouTube)", url:"https://www.youtube.com/@bigthink", feed:YT_FEED+"UCvQECJukTDE2i6aCoMnS-Vg", t:["cul","sci"], lv:1},
   {id:"yt-crashcourse", kind:"listen", yt:1, name:"CrashCourse (YouTube)", url:"https://www.youtube.com/@crashcourse", feed:YT_FEED+"UCX6b17PVsYBQ0ip5gyeme-Q", t:["his","sci","eco"], lv:1},
-  {id:"yt-dwdoc", kind:"listen", yt:1, name:"DW Documentary (YouTube)", url:"https://www.youtube.com/@DWDocumentary", feed:YT_FEED+"UCW39zufHfsuGgpLviKh297Q", t:["soc","pol","env"], lv:1},
-  {id:"yt-pbs", kind:"listen", yt:1, name:"PBS NewsHour (YouTube)", url:"https://www.youtube.com/@PBSNewsHour", feed:YT_FEED+"UC6ZFN9Tx6xh-skXCuRHCDpQ", t:["pol","soc"], lv:1},
+  {id:"yt-dwdoc", long:1, kind:"listen", yt:1, name:"DW Documentary (YouTube)", url:"https://www.youtube.com/@DWDocumentary", feed:YT_FEED+"UCW39zufHfsuGgpLviKh297Q", t:["soc","pol","env"], lv:1},
+  {id:"yt-pbs", long:1, kind:"listen", yt:1, name:"PBS NewsHour (YouTube)", url:"https://www.youtube.com/@PBSNewsHour", feed:YT_FEED+"UC6ZFN9Tx6xh-skXCuRHCDpQ", t:["pol","soc"], lv:1},
   {id:"yt-bloomberg-orig", kind:"listen", yt:1, name:"Bloomberg Originals (YouTube)", url:"https://www.youtube.com/@business", feed:YT_FEED+"UCUMZ7gohGI9HcU9VNsr2FJQ", t:["eco","tec"], lv:1},
   {id:"yt-wsj", kind:"listen", yt:1, name:"The Wall Street Journal (YouTube)", url:"https://www.youtube.com/@wsj", feed:YT_FEED+"UCK7tptUDHh-RYDsdxO1-5QQ", t:["eco","pol","tec"], lv:1},
   {id:"yt-johnnyharris", kind:"listen", yt:1, name:"Johnny Harris (YouTube)", url:"https://www.youtube.com/@johnnyharris", feed:YT_FEED+"UCmGSJVG3mCRXVOP4yZrU1Dw", t:["pol","his"], lv:1},
   {id:"yt-wendover", kind:"listen", yt:1, name:"Wendover Productions (YouTube)", url:"https://www.youtube.com/@Wendoverproductions", feed:YT_FEED+"UC9RM-iSvTu1uPJb8X5yp3EQ", t:["eco","tec"], lv:1},
   {id:"yt-polymatter", kind:"listen", yt:1, name:"PolyMatter (YouTube)", url:"https://www.youtube.com/@PolyMatter", feed:YT_FEED+"UCgNg3vwj3xt7QOrcIDaHdFg", t:["eco","pol"], lv:1},
   {id:"yt-asianometry", kind:"listen", yt:1, name:"Asianometry (YouTube)", url:"https://www.youtube.com/@Asianometry", feed:YT_FEED+"UC1LpsuAUaKoMzzJSEt5WImw", t:["tec","eco"], lv:2},
-  {id:"yt-cnbc", kind:"listen", yt:1, name:"CNBC (YouTube)", url:"https://www.youtube.com/@CNBC", feed:YT_FEED+"UCvJJ_dzjViJCoLf5uKUTwoA", t:["eco"], lv:1},
+  {id:"yt-cnbc", long:1, kind:"listen", yt:1, name:"CNBC (YouTube)", url:"https://www.youtube.com/@CNBC", feed:YT_FEED+"UCvJJ_dzjViJCoLf5uKUTwoA", t:["eco"], lv:1},
   {id:"yt-schooloflife", kind:"listen", yt:1, name:"The School of Life (YouTube)", url:"https://www.youtube.com/@theschooloflifetv", feed:YT_FEED+"UC7IcJI8PUf5Z3zKxnZvTBog", t:["cul"], lv:1},
   {id:"yt-scishow", kind:"listen", yt:1, name:"SciShow (YouTube)", url:"https://www.youtube.com/@SciShow", feed:YT_FEED+"UCZYTClx2T1of7BRZ86-8fow", t:["sci","med"], lv:1},
   {id:"yt-realeng", kind:"listen", yt:1, name:"Real Engineering (YouTube)", url:"https://www.youtube.com/@RealEngineering", feed:YT_FEED+"UCR1IuLEqb6UEA_zQ81kwXfg", t:["tec","sci"], lv:1},
   {id:"yt-vsauce", kind:"listen", yt:1, name:"Vsauce (YouTube)", url:"https://www.youtube.com/@Vsauce", feed:YT_FEED+"UC6nSFpj9HTCZ5t-N3Rm3-HA", t:["sci","cul"], lv:1},
-  {id:"yt-bbcnews", kind:"listen", yt:1, name:"BBC News (YouTube)", url:"https://www.youtube.com/@BBCNews", feed:YT_FEED+"UC16niRr50-MSBwiO3YDb3RA", t:["pol"], lv:1},
-  {id:"yt-aljazeera", kind:"listen", yt:1, name:"Al Jazeera English (YouTube)", url:"https://www.youtube.com/@aljazeeraenglish", feed:YT_FEED+"UCNye-wNBqNL5ZzHSJj3l8Bg", t:["pol"], lv:1},
+  {id:"yt-bbcnews", long:1, kind:"listen", yt:1, name:"BBC News (YouTube)", url:"https://www.youtube.com/@BBCNews", feed:YT_FEED+"UC16niRr50-MSBwiO3YDb3RA", t:["pol"], lv:1},
+  {id:"yt-aljazeera", long:1, kind:"listen", yt:1, name:"Al Jazeera English (YouTube)", url:"https://www.youtube.com/@aljazeeraenglish", feed:YT_FEED+"UCNye-wNBqNL5ZzHSJj3l8Bg", t:["pol"], lv:1},
   {id:"yt-guardian", kind:"listen", yt:1, name:"The Guardian (YouTube)", url:"https://www.youtube.com/@guardian", feed:YT_FEED+"UCHpw8xwDNhU9gdohEcJu4aA", t:["soc","pol"], lv:1},
   {id:"yt-ft", kind:"listen", yt:1, name:"Financial Times (YouTube)", url:"https://www.youtube.com/@FinancialTimes", feed:YT_FEED+"UCoUxsWakJucWg46KW5RsvPw", t:["eco","pol"], lv:2},
-  {id:"yt-bloombergtv", kind:"listen", yt:1, name:"Bloomberg Television (YouTube)", url:"https://www.youtube.com/@markets", feed:YT_FEED+"UCIALMKvObZNtJ6AmdCLP7Lg", t:["eco"], lv:1},
+  {id:"yt-bloombergtv", long:1, kind:"listen", yt:1, name:"Bloomberg Television (YouTube)", url:"https://www.youtube.com/@markets", feed:YT_FEED+"UCIALMKvObZNtJ6AmdCLP7Lg", t:["eco"], lv:1},
   {id:"yt-hbr", kind:"listen", yt:1, name:"Harvard Business Review (YouTube)", url:"https://www.youtube.com/@harvardbusinessreview", feed:YT_FEED+"UCWo4IA01TXzBeGJJKWHOG9g", t:["eco"], lv:1},
   {id:"yt-quanta", kind:"listen", yt:1, name:"Quanta Magazine (YouTube)", url:"https://www.youtube.com/@QuantaScienceChannel", feed:YT_FEED+"UCTpmmkp1E4nmZqWPS-dl5bg", t:["sci"], lv:2},
-  {id:"yt-stanfordgsb", kind:"listen", yt:1, name:"Stanford GSB (YouTube)", url:"https://www.youtube.com/@stanfordgsb", feed:YT_FEED+"UCGwuxdEeCf0TIA2RbPOj-8g", t:["eco"], lv:1},
+  {id:"yt-stanfordgsb", long:1, kind:"listen", yt:1, name:"Stanford GSB (YouTube)", url:"https://www.youtube.com/@stanfordgsb", feed:YT_FEED+"UCGwuxdEeCf0TIA2RbPOj-8g", t:["eco"], lv:1},
   {id:"yt-mit", kind:"listen", yt:1, name:"MIT (YouTube)", url:"https://www.youtube.com/@mit", feed:YT_FEED+"UCFe-pfe0a9bDvWy74Jd7vFg", t:["sci","tec"], lv:1},
 ];
 const byRl={}; RL_SOURCES.forEach(s=>byRl[s.id]=s);
@@ -110,13 +110,15 @@ const byRl={}; RL_SOURCES.forEach(s=>byRl[s.id]=s);
 function rlDaysBetween(a, b){ // ymd文字列の差(日)
   return Math.round((new Date(b+"T00:00:00")-new Date(a+"T00:00:00"))/864e5);
 }
+/* v5.19.0: long(1回がほぼ常に30分超の番組・長い動画が混ざるチャンネル)は候補にしない(実機FB「30分以上のポッドキャストは勉強しづらい」)。
+   「直近に出した」の減点は昨日・一昨日だけ(同じ日は減点しない=以前は今日出した瞬間に減点され、開き直すと別のソースに変わっていた) */
 function rlCandidates(sources, kind, rl, ymd){
   rl=rl||{}; const topics=rl.topics||{}, mute=rl.mute||{}, last=rl.last||{};
   const want=Object.keys(topics).filter(t=>topics[t]);
-  return sources.filter(s=>s.kind===kind && !(mute[s.id] && mute[s.id].on)).map(s=>{
+  return sources.filter(s=>s.kind===kind && !s.long && !(mute[s.id] && mute[s.id].on)).map(s=>{
     let sc=1;
     if(want.length) sc+=2*s.t.filter(t=>topics[t]).length;
-    if(last[s.id] && rlDaysBetween(last[s.id], ymd)>=0 && rlDaysBetween(last[s.id], ymd)<3) sc-=3;
+    if(last[s.id] && rlDaysBetween(last[s.id], ymd)>0 && rlDaysBetween(last[s.id], ymd)<3) sc-=3;
     return {s, sc, h:hashStr(ymd+"|"+s.id)};
   }).sort((a,b)=>(b.sc-a.sc) || (a.h-b.h)).map(x=>x.s);
 }
@@ -140,11 +142,23 @@ function rlPlain(s, n){
   const t=(d.textContent||"").replace(/\s+/g," ").trim();
   return t.length>n? t.slice(0,n-1)+"…" : t;
 }
-/* rss2jsonのJSON → 共通形 [{t:題名, u:URL, d:日付(ISO), s:要約}] */
+/* 番組の長さ(v5.19.0): 聴くは30分以内の回だけおすすめする(実機FB)。sec=0は「長さ不明」(YouTubeのAtomには長さがない)=通す */
+const RL_MAX_SEC=30*60;
+/* itunes:duration の値 → 秒(純関数)。"1620"・"27:00"・"1:02:30"・数値。解釈できなければ0 */
+function rlDurSec(v){
+  if(v==null || v==="") return 0;
+  if(typeof v==="number") return v>0? Math.round(v) : 0;
+  const s=String(v).trim(); if(!s) return 0;
+  if(/^\d+(\.\d+)?$/.test(s)) return Math.round(+s);
+  if(!/^\d+(:\d+)+$/.test(s)) return 0;
+  return s.split(":").reduce((a,b)=>a*60+(+b), 0);
+}
+/* rss2jsonのJSON → 共通形 [{t:題名, u:URL, d:日付(ISO), s:要約, sec:長さ(秒・不明は0)}] */
 function rlParseJson(j){
   if(!j || j.status!=="ok" || !Array.isArray(j.items)) return null;
   return j.items.map(it=>({t:rlPlain(it.title, 160), u:it.link||(it.enclosure&&it.enclosure.link)||"",
-    d:it.pubDate||"", s:rlPlain(it.description||it.content||"", 240)})).filter(x=>x.t && x.u);
+    d:it.pubDate||"", s:rlPlain(it.description||it.content||"", 240),
+    sec:rlDurSec(it.enclosure && it.enclosure.duration)})).filter(x=>x.t && x.u);
 }
 /* RSS 2.0 / Atom(YouTube含む)のXML → 共通形 */
 function rlParseXml(text){
@@ -160,7 +174,9 @@ function rlParseXml(text){
     let s=desc? desc.textContent : "";
     if(desc && desc.localName==="group"){ const md=[...desc.children].find(x=>x.localName==="description"); s=md? md.textContent : ""; }
     const dt=pick(it,["pubDate","published","updated","date"]);
-    return {t:rlPlain(title? title.textContent : "", 160), u:(u||"").trim(), d:dt? dt.textContent.trim() : "", s:rlPlain(s, 240)};
+    const dur=pick(it,["duration"]); // itunes:duration(ポッドキャスト)
+    return {t:rlPlain(title? title.textContent : "", 160), u:(u||"").trim(), d:dt? dt.textContent.trim() : "", s:rlPlain(s, 240),
+            sec:rlDurSec(dur? dur.textContent : "")};
   }).filter(x=>x.t && x.u);
 }
 /* 端末キャッシュ(当日分・同期対象外)。ソースごとの最新10件 */
@@ -249,10 +265,12 @@ function openRLHistory(){
     '<div class="row" style="margin-top:12px"><button class="btn" id="rlhBack">◀ 今日の英語</button></div>');
   $("rlhBack").onclick=openRLModal;
 }
-/* おすすめの1本: ソースの最新から「読んだ・聴いた」ものを飛ばした先頭 */
-function rlChoose(items, rl){
+/* おすすめの1本: ソースの最新から「読んだ・聴いた」ものを飛ばした先頭。
+   聴く(kind="listen")は30分を超える回を除く(v5.19.0)。該当がなければnull(呼び元が次の候補へ進む) */
+function rlChoose(items, rl, kind){
   const done=(rl&&rl.done)||{};
-  return items.find(it=>!done[it.u]) || items[0] || null;
+  const c=(items||[]).filter(it=>!(kind==="listen" && it.sec>RL_MAX_SEC));
+  return c.find(it=>!done[it.u]) || c[0] || null;
 }
 
 /* ---- LLMへの依頼プロンプト(コピペ用) ----
@@ -337,7 +355,7 @@ const RL_FLOW={
       "<b>④ 意見を言う</b>(余裕があれば): 面接官役のLLMに英語で意見を述べ、講評をもらう",
       "<b>✓ 読んだ</b>: 記録に残る(今週の記録の📖)。目安は1日1本・30〜40分"]},
   listen:{line:"通し → ①正誤 → ②教材化 → シャドーイング → 📝 → ✓",
-    steps:["<b>通し</b>: 🔗開いて字幕なしで1回聴く(10〜20分の1本、長ければ前半だけでよい)",
+    steps:["<b>通し</b>: 🔗開いて字幕なしで1回聴く(おすすめは30分以内の回だけ。長く感じたら前半だけでよい)",
       "<b>① 内容正誤問題</b>: 📋プロンプトをLLMに貼り、問題に答える(トランスクリプトが取れないLLMには字幕を貼る)",
       "<b>② 教材化</b>: 要約・語彙・キーセンテンス10文をもらい、キーセンテンスをシャドーイング。<b>語彙一覧は📝マイ単語へ</b>",
       "<b>③ ディクテーション採点</b>(余裕があれば): 1〜2分ぶんを書き起こして送る。聞き落としの原因が分かる",
@@ -372,22 +390,53 @@ function rlDateText(d){
   const days=Math.floor((Date.now()-t)/864e5);
   return days<=0? "今日" : days===1? "昨日" : days<7? days+"日前" : (t.getMonth()+1)+"/"+t.getDate();
 }
-/* ソースのおすすめを解決して状態に入れる(非同期)。done=描き直しのコールバック */
-function rlLoad(kind, done){
-  const src=rlPick(kind, G.rl, todayKey(), rlAlt[kind]);
-  const st=rlState[kind]={src, items:null, err:null, loading:!!src};
+/* ---- 今日の1本の固定(v5.19.0・実機FB「更新は1日1回(初めて開いたとき)で十分。閉じても同じものを・別の端末でも同じものを」) ----
+   G.rl.pick[kind]={d:日付, id:ソース, alt:「別の候補」で進めた回数, it:{t,u,d,s,sec}=決めた素材, at:決めた時刻}(同期: sync.js rlPickNewer)。
+   その日はじめて開いたときに決めて保存し、以後は開き直しても(端末を変えても)同じ1本。日付が変われば引き直す。
+   以前は「今日出した」がその瞬間に減点されて開き直すと別のソースに変わり、素材も取得ごとに変わり得た(=実機FB) */
+function rlPickSaved(kind){
+  const p=G.rl.pick && G.rl.pick[kind];
+  if(!p || p.d!==todayKey() || !byRl[p.id] || byRl[p.id].long) return null;
+  const mu=G.rl.mute && G.rl.mute[p.id]; if(mu && mu.on) return null;
+  return p;
+}
+function rlSavePick(kind, src, alt, it){
+  G.rl.pick=G.rl.pick||{};
+  G.rl.pick[kind]={d:todayKey(), id:src.id, alt:alt|0, it:it? {t:it.t, u:it.u, d:it.d||"", s:it.s||"", sec:it.sec||0} : null, at:Date.now()};
+  saveG();
+}
+/* ソースのおすすめを解決して状態に入れる(非同期)。done=描き直しのコールバック。
+   opt.force=保存した今日の1本を使わず引き直す(別の候補・外す・テーマ変更)/opt.hops=30分以内の回がなく次の候補へ進んだ回数 */
+function rlLoad(kind, done, opt){
+  opt=opt||{};
+  const today=todayKey();
+  const saved=opt.force? null : rlPickSaved(kind);
+  if(saved && saved.it){ // 今日の1本が決まっている: 取得なしでそのまま出す
+    rlAlt[kind]=saved.alt||0;
+    rlState[kind]={src:byRl[saved.id], it:saved.it, items:null, err:null, loading:false, d:today};
+    done(); return;
+  }
+  if(saved) rlAlt[kind]=saved.alt||0;
+  const src=saved? byRl[saved.id] : rlPick(kind, G.rl, today, rlAlt[kind]);
+  const st=rlState[kind]={src, it:null, items:null, err:null, loading:!!src, d:today};
   if(!src){ done(); return; }
   G.rl.last=G.rl.last||{};
-  if(G.rl.last[src.id]!==todayKey()){ G.rl.last[src.id]=todayKey(); saveG(); } // 「直近に出した」の記録
+  G.rl.last[src.id]=today; // 「直近に出した」の記録(明日・明後日の減点)
+  rlSavePick(kind, src, rlAlt[kind], null); // 素材が決まるまでソースだけ保存(saveG込み)
   done();
   rlFetch(src).then(items=>{
     if(rlState[kind]!==st) return; // 別の候補に進んでいたら捨てる
-    st.items=items; st.loading=false; done();
+    const it=rlChoose(items, G.rl, kind);
+    if(!it && (opt.hops|0)<6){ rlAlt[kind]++; rlLoad(kind, done, {force:true, hops:(opt.hops|0)+1}); return; } // 30分以内の回がない番組は飛ばす
+    st.items=items; st.it=it; st.loading=false;
+    if(it) rlSavePick(kind, src, rlAlt[kind], it);
+    done();
   }).catch(e=>{
     if(rlState[kind]!==st) return;
     st.err=String(e&&e.message||e); st.loading=false; done();
   });
 }
+function rlDurText(sec){ return sec>0? Math.max(1, Math.round(sec/60))+"分" : ""; }
 /* ホームのパネル(2行: 読む/聴く)。タップでモーダル */
 function rlFillHome(){
   const el=$("homeRL"); if(!el) return;
@@ -395,18 +444,19 @@ function rlFillHome(){
     const st=rlState[k];
     let body;
     if(!st || !st.src) body='<span class="small">候補がない(⚙で「合わない」を見直す)</span>';
-    else if(st.items){ const it=rlChoose(st.items, G.rl); body='<span class="rlt">'+esc(it? it.t : st.src.name)+'</span><span class="rls">'+esc(st.src.name)+'</span>'; }
+    else if(st.it) body='<span class="rlt">'+esc(st.it.t)+'</span><span class="rls">'+esc(st.src.name)+(st.it.sec? ' ・ '+rlDurText(st.it.sec):'')+'</span>';
+    else if(st.items) body='<span class="rlt">'+esc(st.src.name)+'</span><span class="rls">30分以内の回が見つからない ─ タップしてサイトへ</span>';
     else if(st.err) body='<span class="rlt">'+esc(st.src.name)+'</span><span class="rls">最新の一覧を取れなかった ─ タップしてサイトへ</span>';
     else body='<span class="rlt">'+esc(st.src.name)+'</span><span class="rls">最新の記事を取得中…</span>';
     return '<div class="rlrow"><span class="rlk">'+rlKindLabel(k)+'</span>'+body+'</div>';
   };
   el.querySelector(".rlrows").innerHTML=row("read")+row("listen");
 }
-/* 未解決の種類だけ読み込む(解決済み・取得中・候補なし確定はそのまま)。doneは状態が進むたびに呼ばれる */
+/* 未解決の種類だけ読み込む(解決済み・取得中・候補なし確定はそのまま。日付が変わっていれば引き直す)。doneは状態が進むたびに呼ばれる */
 function rlEnsureLoaded(done){
   ["read","listen"].forEach(k=>{
     const st=rlState[k];
-    if(st && (st.items || st.err || st.loading || st.src===null)) return;
+    if(st && st.d===todayKey() && (st.it || st.items || st.err || st.loading || st.src===null)) return;
     rlLoad(k, done);
   });
   done();
@@ -431,8 +481,12 @@ function openRLModal(){
     foldSec("rlFlow", "📘 進め方(プロンプトをどう使うか)",
       '<div class="rlflow"><b>📖 読む(1日1本・30〜40分)</b><ol>'+RL_FLOW.read.steps.map(s=>'<li>'+s+'</li>').join("")+'</ol>'+
       '<b>🎧 聴く(1日1本・20〜30分)</b><ol>'+RL_FLOW.listen.steps.map(s=>'<li>'+s+'</li>').join("")+'</ol>'+
-      '<div class="small">忙しい日は「通読(通し) → ①正誤 → ✓」だけでも十分。②以降は余裕のある日に。'+
-      '分からなかった単語は<b>📝マイ単語</b>に貼るだけで、翌日から4択の学習に混ざる(意味は自動で取り込む)</div></div>', !G.rl.flowSeen)+
+      '<div class="small"><b>⏱ 時間がない日の最低限</b>(v5.19.0): '+
+      '<b>10分</b>=読む・聴くのどちらか1本だけ。記事なら冒頭3段落(結論が出るところまで)を辞書なしで読む/音声なら前半10分を字幕なしで通す → ✓。正誤問題は省く。'+
+      '<b>15〜20分</b>=通読(通し) → ①正誤問題(8問)だけ → ✓。'+
+      'どちらの日も、分からなかった語を<b>1〜2個だけ📝マイ単語</b>へ(翌日から4択に混ざる)。'+
+      '②解説・③添削・④意見は余裕のある日(週1回でよい)にまとめて。<b>毎日ゼロにしない</b>ことが完走より効く。'+
+      'おすすめは<b>今日はじめて開いたときに決まり</b>、閉じても・別の端末でも同じ1本(日付が変わると更新)</div></div>', !G.rl.flowSeen)+
     '<button class="btn" id="rlMywBtn" style="margin-top:10px; width:100%">📝 分からなかった単語を登録<span class="hlsub">マイ単語 '+mywList().length+'語</span></button>'+
     foldSec("rlTopics", "🎛 興味のあるテーマ("+Object.keys(G.rl.topics||{}).filter(t=>G.rl.topics[t]).length+")",
       '<div class="small" style="margin-bottom:6px">選んだテーマに合うソースを優先する(未選択=全ソースから)</div>'+
@@ -449,10 +503,11 @@ function openRLModal(){
   rlEnsureLoaded(()=>{ render(); rlFillHome(); });
   $("modal").querySelectorAll(".rltop").forEach(b=>{
     b.onclick=()=>{
-      G.rl.topics[b.dataset.t]=G.rl.topics[b.dataset.t]? 0:1; saveG();
+      G.rl.topics[b.dataset.t]=G.rl.topics[b.dataset.t]? 0:1; G.rl.topicsAt=Date.now(); saveG(); // topicsAt=同期で新しい操作が勝つ(v5.19.0)
       b.classList.toggle("ksel", !!G.rl.topics[b.dataset.t]);
-      rlAlt={read:0, listen:0}; rlState={read:null, listen:null};
-      rlEnsureLoaded(()=>{ render(); rlFillHome(); });
+      rlAlt={read:0, listen:0};
+      const cb=()=>{ render(); rlFillHome(); };
+      ["read","listen"].forEach(k=>rlLoad(k, cb, {force:true})); // テーマを変えたら今日の1本も引き直す
     };
   });
   rlBindMuteList();
@@ -478,16 +533,19 @@ function rlCardHTML(kind){
     inner='<div class="empty">おすすめできるソースがない ─ 「外したソース」を戻すか、テーマを広げよう</div>';
   }else{
     const s=st.src;
-    const it=st.items? rlChoose(st.items, G.rl) : null;
+    const it=st.it||null;
     const done=it && G.rl.done && G.rl.done[it.u];
     inner='<div class="rlsrc">'+esc(s.name)+' '+rlSrcChips(s)+'</div>'+
       (it
         ? '<a class="rltitle" href="'+esc(it.u)+'" target="_blank" rel="noopener">'+esc(it.t)+'</a>'+
-          '<div class="rlmeta">'+(rlDateText(it.d)? rlDateText(it.d)+' ・ ':'')+(s.yt? "YouTube" : kind==="read"? "記事" : "ポッドキャスト")+(done? ' ・ <span class="qmas">✓ '+(kind==="read"?"読んだ":"聴いた")+'</span>':'')+'</div>'+
+          '<div class="rlmeta">'+(rlDateText(it.d)? rlDateText(it.d)+' ・ ':'')+(s.yt? "YouTube" : kind==="read"? "記事" : "ポッドキャスト")+
+            (it.sec? ' ・ '+rlDurText(it.sec):'')+(done? ' ・ <span class="qmas">✓ '+(kind==="read"?"読んだ":"聴いた")+'</span>':'')+'</div>'+
           (it.s? '<div class="rldesc">'+esc(it.s)+'</div>':'')+
           '<div class="rlmeta rlflowline">流れ: '+RL_FLOW[kind].line+'</div>'
         : st.err
           ? '<div class="rlmeta">最新の一覧を取得できなかった(通信・中継の都合)。サイトを直接開いて、気になる1本を選ぼう</div>'
+          : st.items
+          ? '<div class="rlmeta">この番組の最新回は30分を超えるものばかり。サイトで短い回を選ぶか、「別の候補」へ</div>'
           : '<div class="rlmeta">最新の一覧を取得中…</div>')+
       '<div class="rlbtns">'+
         '<a class="btn primary" href="'+esc(it? it.u : s.url)+'" target="_blank" rel="noopener">🔗 開く</a>'+
@@ -503,21 +561,21 @@ function rlBindCards(){
   const m=$("modal");
   const rerender=()=>{ if($("rlCards")){ $("rlCards").innerHTML=rlCardHTML("read")+rlCardHTML("listen"); rlBindCards(); } rlFillHome(); };
   m.querySelectorAll(".rlalt").forEach(b=>{
-    b.onclick=()=>{ const k=b.dataset.k; rlAlt[k]++; rlLoad(k, rerender); };
+    b.onclick=()=>{ const k=b.dataset.k; rlAlt[k]++; rlLoad(k, rerender, {force:true}); }; // 進めた先も今日の1本として保存される
   });
   m.querySelectorAll(".rlmute").forEach(b=>{
     b.onclick=()=>{
       const k=b.dataset.k, st=rlState[k]; if(!st||!st.src) return;
       G.rl.mute[st.src.id]={on:1, at:Date.now()}; saveG();
       toast("🔕 "+st.src.name+" を今後のおすすめから外した");
-      rlLoad(k, rerender);
+      rlLoad(k, rerender, {force:true});
       if($("rlMuteList")){ $("rlMuteList").innerHTML=rlMuteListHTML(); rlBindMuteList(); }
     };
   });
   m.querySelectorAll(".rldone").forEach(b=>{
     b.onclick=()=>{
-      const k=b.dataset.k, st=rlState[k]; if(!st||!st.src||!st.items) return;
-      const it=rlChoose(st.items, G.rl); if(!it) return;
+      const k=b.dataset.k, st=rlState[k]; if(!st||!st.src||!st.it) return;
+      const it=st.it;
       G.rl.done[it.u]={d:todayKey(), k, id:st.src.id, t:it.t.slice(0,80)}; saveG();
       toast(k==="read"? "📖 読んだ! 明日も1本" : "🎧 聴いた! 明日も1本");
       checkAchievements(); // 学習の実績(v5.13.0)
@@ -527,7 +585,7 @@ function rlBindCards(){
   m.querySelectorAll(".rlprompt").forEach(b=>{
     b.onclick=()=>{
       const k=b.dataset.k, st=rlState[k]; if(!st||!st.src) return;
-      const it=(st.items && rlChoose(st.items, G.rl)) || {t:"(サイトで選んだ記事の題名)", u:st.src.url};
+      const it=st.it || {t:"(サイトで選んだ記事の題名)", u:st.src.url};
       openRLPrompt(k, st.src, it);
     };
   });

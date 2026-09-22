@@ -3520,6 +3520,89 @@ function run(){
     ok(b.sats.length===1, "召喚後は保証なし(35%の差し替えのみ)に戻る前提の確認");
   });
 
+
+  /* ---- v5.19.0: 実機FB4件(2026-09-23) ---- */
+  t("v5.19.0①: 訳(ja)に英語が混ざらない ─ 4択の正解が訳の中の英語で分からない。括弧内の熟語は熟語の項目に独立(pertain to・unwed mother…)", ()=>{
+    W.WORDS.forEach(w=>ok(!/[A-Za-z]/.test(w.ja), w.en+": "+w.ja));
+    ["pertain to","unwed mother","in spite of","taken aback","contend with","vicious circle","in the midst of","martial law","run amok"].forEach(en=>ok(W.byEn[en] && W.byEn[en].en.indexOf(" ")>0, en));
+    eq(W.byEn["pertain"].ja, "（〜に）関係する、付随する"); eq(W.byEn["unwed"].ja, "未婚の");
+    ok(W.WORDS.filter(w=>w.en.indexOf(" ")>=0).length>=1200, "熟語1,200件以上"); ok(W.WORDS.length>=8000, "合計8,000項目以上");
+    const w=W.byEn["pertain to"]; W.buildChoices(w).forEach(c=>ok(!/[A-Za-z]/.test(c.ja), c.en));
+    eq(new Set(W.WORDS.map(x=>x.en)).size, W.WORDS.length, "enは一意");
+  });
+  t("v5.19.0②: 目安が端末で食い違わない ─ 推定ログは時刻つきの記録を合流(mergePaceLog)・今日の目安は先に固定した端末の値(mergeQd)", ()=>{
+    const la=[[1,1,0,100],[0,1,2,200],[0,0,3,300]], lb=[[0,1,2,200],[1,0,0,250],[0,1,4,400]];
+    const m=W.mergePaceLog(la, lb);
+    eq(m.length, 5, "和集合(同じ記録は1回)"); eq(m.map(e=>e[3]).join(","), "100,200,250,300,400", "時刻順");
+    eq(W.mergePaceLog(lb, la).map(e=>e[3]).join(","), "100,200,250,300,400", "対称");
+    const o=W.mergePaceLog([[0,1],[0,1],[0,1],[1,1,0,900]], [[1,1],[0,0,2,800]]);
+    eq(o.length, 5, "旧版(時刻なし)は長い方+時刻つきの和集合"); eq(o[0].length, 2, "時刻なしが先"); eq(o[4][3], 900);
+    const big=[]; for(let i=0;i<120;i++) big.push([0,1,2,1000+i]);
+    eq(W.mergePaceLog(big, []).length, 100, "直近100問"); eq(W.mergePaceLog(big, [])[0][3], 1020, "古い方から落とす");
+    eq(W.mergeQd({d:"2026-09-23",per:183,at:5}, {d:"2026-09-23",per:258,at:9}).per, 183, "同じ日は先に固定した方");
+    eq(W.mergeQd({d:"2026-09-23",per:258,at:9}, {d:"2026-09-23",per:183,at:5}).per, 183, "対称");
+    eq(W.mergeQd({d:"2026-09-22",per:100,at:1}, {d:"2026-09-23",per:258,at:9}).per, 258, "新しい日が勝つ");
+    eq(W.mergeQd(null, {d:"2026-09-23",per:258,at:9}).per, 258); eq(W.mergeQd(null,null), null);
+    const base=()=>({resetAt:0, updatedAt:1, words:{}, inv:{}, chars:{}, dungeons:{}, days:{}});
+    const a=Object.assign(base(),{pace:{goal:"2027-01-01", setAt:1, qd:{d:"2026-09-23",per:183,at:5}, log:[[0,1,2,200]]}});
+    const b=Object.assign(base(),{pace:{goal:"2027-01-01", setAt:1, qd:{d:"2026-09-23",per:258,at:9}, log:[[1,1,0,100]]}});
+    const md=W.mergeData(a,b); eq(md.pace.qd.per, 183, "mergeData経由"); eq(md.pace.log.length, 2, "ログは合流");
+    eq(W.mergeData(b,a).pace.qd.per, 183, "起点を入れ替えても同じ");
+    const G=W.G, old=JSON.parse(JSON.stringify(G.pace)), oldW=G.words;
+    G.pace.log=[]; W.paceLog(1,1,0); ok(G.pace.log[0][3]>0, "paceLogは解答時刻を記録");
+    G.words={}; G.pace={goal:W.addDays(W.todayKey(),120), setAt:1, log:[], qd:null}; W.paceToday(G); ok(G.pace.qd.at>0, "固定した時刻(at)を残す");
+    G.pace=old; G.words=oldW;
+  });
+  t("v5.19.0③: 自動同期の判断(純関数) ─ トークンあり+ホーム表示中=静かに同期/トークンなし・学習中=次の学習タップで/未設定・未認証・5分以内・オフライン=何もしない", ()=>{
+    const s=(o)=>Object.assign({clientId:true, authed:true, online:true, now:10*60e3+1, lastSync:0, hasToken:true, onHome:true}, o);
+    eq(W.autoSyncDecision(s({})), "silent");
+    eq(W.autoSyncDecision(s({hasToken:false})), "gesture", "トークンなし=操作なしのポップアップは止められる→次のタップで");
+    eq(W.autoSyncDecision(s({onHome:false})), "gesture", "学習の途中には割り込まない");
+    eq(W.autoSyncDecision(s({clientId:false})), "none"); eq(W.autoSyncDecision(s({authed:false})), "none", "一度も同期していない端末は自動で認証を出さない");
+    eq(W.autoSyncDecision(s({online:false})), "none"); eq(W.autoSyncDecision(s({lastSync:10*60e3-1000})), "none", "最終同期から5分以内");
+    eq(W.autoSyncDecision(s({lastSync:10*60e3+1-W.AUTO_SYNC_GAP})), "silent", "5分ちょうどは同期");
+    const g=JSON.parse(JSON.stringify(W.G));
+    ok(!W.syncChanges(g, JSON.parse(JSON.stringify(g))), "同じ内容=変化なし(リロードしない)");
+    ok(!W.syncChanges(g, {}), "空のリモート=変化なし");
+    const r=JSON.parse(JSON.stringify(g)); r.words["zzz-test"]=[3,1,2,0,0,0,1,0,5]; ok(W.syncChanges(g, r), "別端末の記録がある=変化あり");
+    eq(W.stableJSON({b:1,a:[2,{d:1,c:2}]}), '{"a":[2,{"c":2,"d":1}],"b":1}', "キー順を揃える");
+    W.autoSyncPendingSet(false); let called=0; W.autoSyncOnGesture(()=>called++); eq(called, 1, "pendingなし=即続行");
+    ok(W.document.getElementById("homeStudy") && W.document.getElementById("navQuiz"), "入口はホームのCTAと下部ナビ");
+    ok(typeof W.syncResumeAfterReload==="function" && typeof W.autoSyncOnOpen==="function", "起動時のフック");
+  });
+  t("v5.19.0④: 今日の英語 ─ 長さの解析(rlDurSec)・30分超の回は聴くの候補から外す(rlChoose)・長い番組(long)は候補にしない・同じ日は減点しない・同期の勝敗", ()=>{
+    eq(W.rlDurSec("1620"), 1620); eq(W.rlDurSec(1942), 1942); eq(W.rlDurSec("27:00"), 1620); eq(W.rlDurSec("1:02:30"), 3750); eq(W.rlDurSec(""), 0); eq(W.rlDurSec(null), 0); eq(W.rlDurSec("abc"), 0);
+    eq(W.RL_MAX_SEC, 1800);
+    const items=[{t:"A",u:"u1",sec:2919},{t:"B",u:"u2",sec:1085},{t:"C",u:"u3",sec:0}];
+    eq(W.rlChoose(items, {}, "listen").u, "u2", "30分超(48分)は飛ばす"); eq(W.rlChoose(items, {}, "read").u, "u1", "読むは長さで絞らない");
+    eq(W.rlChoose(items, {done:{u2:{}}}, "listen").u, "u3", "長さ不明(0)は通す");
+    eq(W.rlChoose([{t:"A",u:"u1",sec:3000}], {}, "listen"), null, "全部30分超ならnull=次の候補へ");
+    const S=W.RL_SOURCES;
+    ok(S.filter(s=>s.long).length>=8, "long=1回がほぼ30分超の番組・長い動画が混ざるチャンネル("+S.filter(s=>s.long).length+")");
+    ["ted-radio","hiddenbrain","freakonomics","bbc-inourtime","yt-pbs","yt-dwdoc"].forEach(id=>ok(S.find(s=>s.id===id).long, id+"はlong"));
+    ok(W.rlCandidates(S, "listen", {}, "2026-09-23").every(s=>!s.long), "候補にlongは出ない");
+    ok(W.rlCandidates(S, "listen", {}, "2026-09-23").length>=20, "それでも聴くの候補は20以上");
+    const a=W.rlCandidates(S, "read", {}, "2026-09-23");
+    eq(W.rlCandidates(S, "read", {last:{[a[0].id]:"2026-09-23"}}, "2026-09-23")[0].id, a[0].id, "今日出したソースは減点しない(開き直しても同じ1本)");
+    eq(W.rlParseJson({status:"ok", items:[{title:"T", link:"https://x/1", enclosure:{duration:"1620"}}]})[0].sec, 1620, "rss2jsonのenclosure.duration");
+    const rss='<?xml version="1.0"?><rss xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd"><channel><item><title>R1</title><link>https://r/1</link><itunes:duration>27:00</itunes:duration></item></channel></rss>';
+    eq(W.rlParseXml(rss)[0].sec, 1620, "itunes:duration");
+    eq(W.rlPickNewer({d:"2026-09-23",id:"a",alt:0,it:{u:"1"},at:5}, {d:"2026-09-23",id:"b",alt:0,it:{u:"2"},at:9}).id, "a", "同じ日・同じalt=先に決めた方");
+    eq(W.rlPickNewer({d:"2026-09-23",id:"a",alt:0,it:{u:"1"},at:5}, {d:"2026-09-23",id:"b",alt:1,it:{u:"2"},at:9}).id, "b", "別の候補に進めた方が勝つ");
+    eq(W.rlPickNewer({d:"2026-09-22",id:"a",alt:3,it:{u:"1"},at:5}, {d:"2026-09-23",id:"b",alt:0,it:null,at:9}).id, "b", "新しい日が勝つ");
+    eq(W.rlPickNewer({d:"2026-09-23",id:"a",alt:0,it:null,at:1}, {d:"2026-09-23",id:"a",alt:0,it:{u:"2"},at:9}).it.u, "2", "素材が決まっている方");
+    eq(W.rlPickNewer(null, {d:"x"}).d, "x");
+    const mk=(rl)=>({resetAt:0, updatedAt:1, words:{}, inv:{}, chars:{}, dungeons:{}, days:{}, rl});
+    const m=W.mergeData(mk({topics:{env:1}, topicsAt:1, mute:{}, done:{}, last:{aeon:"2026-09-20"}, pick:{read:{d:"2026-09-23",id:"aeon",alt:0,it:{u:"1"},at:5}}}),
+                        mk({topics:{sci:1}, topicsAt:9, mute:{}, done:{}, last:{aeon:"2026-09-22", vox:"2026-09-21"}, pick:{read:{d:"2026-09-23",id:"vox",alt:0,it:{u:"2"},at:9}, listen:{d:"2026-09-23",id:"99pi",alt:0,it:null,at:3}}}));
+    ok(m.rl.topics.sci && !m.rl.topics.env, "テーマは操作時刻が新しい側"); eq(m.rl.topicsAt, 9);
+    eq(m.rl.last.aeon, "2026-09-22", "lastは新しい日付"); eq(m.rl.last.vox, "2026-09-21", "片側だけのlastも残る");
+    eq(m.rl.pick.read.id, "aeon", "読むの1本は先に決めた端末"); eq(m.rl.pick.listen.id, "99pi", "片側だけの1本も残る");
+    W.openRLModal();
+    const txt=W.document.getElementById("modal").textContent;
+    ok(txt.indexOf("時間がない日の最低限")>=0 && txt.indexOf("10分")>=0, "進め方に時間がない日の最低限"); W.closeModal();
+  });
+
   /* ---- 起動状態 ---- */
   t("起動時に問題が出題されている", ()=>{
     ok(W.document.getElementById("promptWord").textContent.length>0);
@@ -4782,6 +4865,50 @@ async function runAsync(W){
       await W.caches.delete("tq-selftest");
     }
   });
+  await ta("v5.19.0④: 今日の1本は「その日はじめて開いたとき」に決めて保存(G.rl.pick)・開き直しても取得せず同じ・別の候補も保持・日付が変われば引き直す・30分超しかない番組は飛ばす", async()=>{
+    const G=W.G, oldRl=JSON.parse(JSON.stringify(G.rl));
+    const clearCache=()=>{ try{ W.localStorage.removeItem("tq_rlCache"); }catch(e){} };
+    const wait=ms=>new Promise(r=>setTimeout(r, ms));
+    const settle=async()=>{ for(let i=0;i<60;i++){ const st=W.rlStateGet(); if(st.read && st.listen && !st.read.loading && !st.listen.loading) break; await wait(20); } };
+    try{
+      clearCache();
+      G.rl.pick={}; G.rl.last={}; G.rl.mute={}; G.rl.topics={};
+      const today=W.todayKey();
+      const readFirst=W.rlPick("read", G.rl, today, 0).id, lisFirst=W.rlPick("listen", G.rl, today, 0).id, lisSecond=W.rlPick("listen", G.rl, today, 1).id;
+      const calls=[];
+      W.setRlFetchImpl(async src=>{ calls.push(src.id);
+        if(src.id===lisFirst) return [{t:"LONG",u:"https://l/"+src.id,d:"",s:"",sec:3000}]; // 30分超の回だけ
+        return [{t:"T-"+src.id,u:"https://x/"+src.id,d:"",s:"",sec:900}]; });
+      W.rlStateReset();
+      W.rlEnsureLoaded(()=>{}); await settle();
+      const st=W.rlStateGet();
+      eq(st.read.src.id, readFirst); eq(st.read.it.u, "https://x/"+readFirst, "読むの1本が決まる");
+      eq(G.rl.pick.read.id, readFirst, "保存される"); eq(G.rl.pick.read.it.u, "https://x/"+readFirst); eq(G.rl.pick.read.d, today);
+      ok(calls.indexOf(lisFirst)>=0, "30分超だけの番組は取得したうえで飛ばす");
+      eq(st.listen.src.id, lisSecond, "次の候補へ進む"); eq(G.rl.pick.listen.alt, 1, "進めた回数を保持"); eq(G.rl.pick.listen.it.sec, 900);
+      ok(!!G.rl.last[readFirst] && !!G.rl.last[lisFirst], "出したソースはlastに");
+      // 開き直し(状態を捨てて再読み込み): 取得せず同じ1本
+      calls.length=0; clearCache(); W.rlStateReset();
+      W.rlEnsureLoaded(()=>{}); await settle();
+      eq(W.rlStateGet().read.it.u, "https://x/"+readFirst, "同じ1本"); eq(W.rlStateGet().listen.src.id, lisSecond);
+      eq(calls.length, 0, "取得は走らない(1日1回)");
+      // 別の候補: 進めた先が保存される
+      W.rlAltGet().read++; W.rlLoad("read", ()=>{}, {force:true}); await settle();
+      const readNext=W.rlStateGet().read.src.id;
+      ok(readNext!==readFirst, "別のソース"); eq(G.rl.pick.read.alt, 1); eq(G.rl.pick.read.id, readNext);
+      calls.length=0; W.rlStateReset(); W.rlEnsureLoaded(()=>{}); await settle();
+      eq(W.rlStateGet().read.src.id, readNext, "開き直しても進めた先のまま"); eq(calls.length, 0);
+      // 日付が変わっていれば引き直す
+      G.rl.pick.read.d="2000-01-01"; W.rlStateReset(); W.rlEnsureLoaded(()=>{}); await settle();
+      eq(G.rl.pick.read.d, today, "今日の日付で引き直し"); ok(calls.length>=1, "取得が走る");
+      // 外したソースの1本は使わない
+      G.rl.mute[G.rl.pick.read.id]={on:1, at:Date.now()}; W.rlStateReset(); W.rlEnsureLoaded(()=>{}); await settle();
+      ok(!G.rl.mute[W.rlStateGet().read.src.id], "外したソースではない");
+    }finally{
+      W.setRlFetchImpl(null); clearCache(); G.rl=oldRl; W.saveG(); W.rlStateReset();
+    }
+  });
+
 }
 
 function report(){

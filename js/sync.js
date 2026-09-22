@@ -39,7 +39,7 @@ function fmtSyncTime(ts){
       ポップアップがユーザー操作由来と見なされずブロックされていた)
    2. 一度同意した端末は prompt:"" で再確認なし(ポップアップは自動で閉じる)
    3. トークンは有効期限までsessionStorageに保持(同期後のリロードをまたいで再利用) */
-let gisLoaded=false, gisLoading=false, tokenClient=null, tokenCb=null;
+let gisLoaded=false, gisLoading=false, tokenClient=null, tokenCb=null, tokenErrCb=null;
 const AUTHED_KEY="tq_gAuthed", TOKEN_KEY="tq_gTok";
 function savedToken(){
   try{
@@ -64,7 +64,7 @@ function initTokenClient(){
     client_id: syncClientId(),
     scope: "https://www.googleapis.com/auth/drive.appdata",
     callback: r=>{
-      const cb=tokenCb; tokenCb=null;
+      const cb=tokenCb, ecb=tokenErrCb; tokenCb=null; tokenErrCb=null;
       if(r && r.access_token){
         const exp=Date.now()+Math.max(60,(+r.expires_in||3600)-60)*1000;
         try{
@@ -72,17 +72,23 @@ function initTokenClient(){
           localStorage.setItem(AUTHED_KEY,"1");
         }catch(e){}
         if(cb) cb(r.access_token);
-      }else toast("認証がキャンセルされた");
+      }else if(ecb) ecb("cancel");
+      else toast("認証がキャンセルされた");
     },
-    error_callback: e=>{ tokenCb=null; toast("認証できなかった("+((e&&e.type)||"error")+")"); }
+    error_callback: e=>{
+      const ecb=tokenErrCb; tokenCb=null; tokenErrCb=null;
+      if(ecb) ecb((e&&e.type)||"error");
+      else toast("認証できなかった("+((e&&e.type)||"error")+")");
+    }
   });
 }
-function getToken(cb){
+/* errCb(v5.19.0・自動同期用): 認証できなかったときに、トーストではなく呼び元へ返す(学習を止めない) */
+function getToken(cb, errCb){
   const t=savedToken();
   if(t){ cb(t); return; }
   ensureGis(()=>{
     initTokenClient();
-    tokenCb=cb;
+    tokenCb=cb; tokenErrCb=errCb||null;
     // 同意済みの端末は確認画面を出さない(ポップアップが開いてもすぐ閉じる)
     tokenClient.requestAccessToken(localStorage.getItem(AUTHED_KEY)? {prompt:""} : {});
   });
@@ -169,6 +175,16 @@ function mergeData(a, b){
     const x=m.rl.mute[id], y=b.rl.mute[id];
     if(!x || (y.at||0)>(x.at||0)) m.rl.mute[id]=y;
   }
+  /* v5.19.0(実機FB「今日の英語は端末で同じものを」): 今日の1本(pick)は種類ごとにrlPickNewer・
+     ソースを最後に出した日(last)は新しい日付・興味のテーマは操作時刻(topicsAt)が新しい側(旧版どうし=0はローカル優先のまま) */
+  m.rl.last=Object.assign({}, (a.rl&&a.rl.last)||{});
+  for(const id in (b.rl&&b.rl.last)||{}){ const x=m.rl.last[id], y=b.rl.last[id]; if(!x || y>x) m.rl.last[id]=y; }
+  {
+    const ta=(a.rl&&a.rl.topicsAt)||0, tb=(b.rl&&b.rl.topicsAt)||0;
+    if(tb>ta){ m.rl.topics=Object.assign({}, (b.rl&&b.rl.topics)||{}); m.rl.topicsAt=tb; }
+  }
+  m.rl.pick=Object.assign({}, (a.rl&&a.rl.pick)||{});
+  for(const k in (b.rl&&b.rl.pick)||{}) m.rl.pick[k]=rlPickNewer(m.rl.pick[k], b.rl.pick[k]);
   // フレーズSRS(v5.0.0): 単語と同じ規則(v5.16.0: 最後に解いた時刻→解答回数)
   m.phr=m.phr||{};
   for(const en in b.phr||{}){
@@ -267,15 +283,47 @@ function mergeData(a, b){
      setAt同士が同じ(旧版=0)なら目標あり側を優先。推定ログは長い方(結合すると重複計上になる) */
   {
     const pa=a.pace, pb=b.pace;
-    if(!pa || !pb) m.pace=pa||pb||m.pace;
+    if(!pa || !pb){ const p=pa||pb; m.pace=p? {goal:p.goal||null, setAt:p.setAt||0, qd:p.qd||null, log:p.log||[]} : m.pace; } // 片側だけでも同じ形に揃える(syncChangesの比較のため)
     else{
       const w=(pb.setAt||0)>(pa.setAt||0)? pb : (pa.setAt||0)>(pb.setAt||0)? pa : (pa.goal? pa : pb);
-      m.pace={goal:w.goal||null, setAt:w.setAt||0, qd:w.qd||null,
-              log:(((pa.log||[]).length>=(pb.log||[]).length? pa.log : pb.log)||[])};
+      /* v5.19.0(実機FB「端末で1日の目安が違う」): 推定ログは時刻つきの記録を合流(mergePaceLog)・
+         今日の目安(qd)は同じ日なら先に固定した端末の値(mergeQd)=全端末で同じ数字 */
+      m.pace={goal:w.goal||null, setAt:w.setAt||0, qd:mergeQd(pa.qd, pb.qd), log:mergePaceLog(pa.log, pb.log)};
     }
   }
   m.resetAt=a.resetAt||0;
   return m;
+}
+/* 学習ペースの推定ログの合流(v5.19.0・純関数): 時刻つきの記録(entry[3])は両端末の和集合を時刻順に・
+   旧版の時刻なし記録は従来どおり長い方(結合すると重複計上になる)。直近100問だけ残す。
+   → 両端末の推定材料が同じになり、「残り約◯問」「1日の目安」が端末で食い違わない */
+function mergePaceLog(la, lb){
+  la=la||[]; lb=lb||[];
+  const oldA=la.filter(e=>!e[3]), oldB=lb.filter(e=>!e[3]);
+  const old=oldA.length>=oldB.length? oldA : oldB;
+  const seen={}, nw=[];
+  la.concat(lb).forEach(e=>{ if(!e[3]) return; const k=e.join(","); if(seen[k]) return; seen[k]=1; nw.push(e); });
+  nw.sort((x,y)=>x[3]-y[3]);
+  const out=old.concat(nw);
+  return out.slice(Math.max(0, out.length-100));
+}
+/* 今日の目安の固定値(qd={d,per,at})の合流(純関数): 新しい日の方→同じ日は先に固定した方(at小)。
+   「その日はじめて計算した値で固定」(pace.js paceToday)の思想を端末をまたいで守る=同期で目安が途中に増えない */
+function mergeQd(x, y){
+  if(!x || !y) return x||y||null;
+  if(x.d!==y.d) return x.d>y.d? x : y;
+  return (x.at||0)<=(y.at||0)? x : y;
+}
+
+/* 今日の英語の「今日の1本」({d,id,alt,it,at})の勝敗(v5.19.0・純関数): 新しい日 → 「別の候補」を多く進めた方(alt大=意図した変更) →
+   素材(it)が決まっている方 → 同じなら先に決めた方(at小)=その日はじめて開いた端末の1本が全端末に揃う */
+function rlPickNewer(x, y){
+  if(!x) return y||null;
+  if(!y) return x;
+  if(x.d!==y.d) return x.d>y.d? x : y;
+  if((x.alt|0)!==(y.alt|0)) return (x.alt|0)>(y.alt|0)? x : y;
+  if(!!x.it!==!!y.it) return x.it? x : y;
+  return (x.at||0)<=(y.at||0)? x : y;
 }
 
 /* セット完了・にがて特訓完了の画面に置く「同期」ボタン(v5.16.0・実機FB「セット終了時の画面に同期ボタンを用意するのが最も手間がなく確実」)。
@@ -290,29 +338,109 @@ function syncBtnHTML(){
 }
 function bindSyncBtn(){ const b=$("setSync"); if(b) b.onclick=()=>{ b.disabled=true; syncNow(); }; }
 
-async function syncNow(){
-  if(!syncClientId()){ toast("同期は未設定(READMEの手順でクライアントIDを設定)"); return; }
-  toast("同期中…");
+/* キー順を揃えたJSON(純関数): マージ結果どうしの比較用(Object.assignでキー順が変わっても同じ文字列になる) */
+function stableJSON(v){
+  if(Array.isArray(v)) return "["+v.map(stableJSON).join(",")+"]";
+  if(v && typeof v==="object") return "{"+Object.keys(v).sort().map(k=>JSON.stringify(k)+":"+stableJSON(v[k])).join(",")+"}";
+  return JSON.stringify(v);
+}
+/* リモートを取り込むと手元の状態が変わるか(v5.19.0・純関数)。
+   「自分自身とのマージ」を基準にするので、マージが補う既定キー(resetAt=0等)の差は「変化」に数えない。updatedAtは除く */
+function syncChanges(local, remote){
+  const strip=o=>{ const c=Object.assign({}, o); delete c.updatedAt; return c; };
+  const norm=x=>mergeData(x, JSON.parse(JSON.stringify(x))); // 自分自身とマージ=既定キー(日別記録のn/na…=0等)を補って形を揃える
+  return stableJSON(strip(norm(local)))!==stableJSON(strip(norm(mergeData(local, remote||{}))));
+}
+
+/* ---- 自動同期(v5.19.0・実機FB「アプリを開いたタイミングで自動で同期。できなければセットのつづきを押したときに」) ----
+   方針: ①開いた直後=手元にトークン(1時間有効・sessionStorage)があれば静かに同期。リモートに変化がなければリロードせず、
+   変化があればマージ→リロード(ホームのまま)。②トークンがない(ふつうは日をまたいだ起動)=ユーザー操作なしのポップアップは
+   ブラウザに止められるので、次の「学習/セットのつづき」タップ(=操作あり)で同期し、リロード後に学習タブへ自動で戻る(RESUME_KEY)。
+   ③失敗(オフライン・認証不可)は学習を止めない。連発防止=最終同期から5分は再同期しない・学習の途中(学習タブ表示中)は割り込まない */
+const AUTO_SYNC_GAP=5*60e3, RESUME_KEY="tq_resume", SYNCED_MSG_KEY="tq_syncedMsg";
+let autoSyncPending=false; // 開いたときに静かに同期できなかった → 次の学習タップで
+/* 自動同期の判断(純関数): "silent"=いま静かに同期 / "gesture"=次のタップで / "none"=不要 */
+function autoSyncDecision(s){
+  if(!s.clientId || !s.authed || s.online===false) return "none";
+  if(s.now-(s.lastSync||0)<AUTO_SYNC_GAP) return "none";
+  if(s.hasToken && s.onHome) return "silent";
+  return "gesture";
+}
+function autoSyncState(){
+  return {clientId:!!syncClientId(), authed:!!localStorage.getItem(AUTHED_KEY), online:navigator.onLine,
+          now:Date.now(), lastSync:lastSyncAt(), hasToken:!!savedToken(),
+          onHome:!$("homeView").classList.contains("hidden")};
+}
+function autoSyncOnOpen(){
+  let d="none";
+  try{ d=autoSyncDecision(autoSyncState()); }catch(e){}
+  if(d==="none") return;
+  if(d==="silent"){ autoSyncPending=false; syncNow({auto:true}); return; }
+  autoSyncPending=true;
+  ensureGis(()=>{ try{ initTokenClient(); }catch(e){} }); // タップ時にポップアップが止められないよう先読み
+}
+/* 学習をはじめる/セットのつづきのタップ(ユーザー操作あり)。同期が要れば同期してから、要らなければすぐ then() */
+function autoSyncOnGesture(then){
+  let d="none";
+  try{ d=autoSyncPending? autoSyncDecision(Object.assign(autoSyncState(), {onHome:true, hasToken:true})) : "none"; }catch(e){}
+  if(d==="none"){ then(); return; }
+  autoSyncPending=false;
+  syncNow({auto:true, resume:"quiz", then});
+}
+/* リロード後の復帰(起動時にmain.jsが呼ぶ): 学習タブへ戻す・同期完了のトースト */
+function syncResumeAfterReload(){
+  let r=null, msg=null;
+  try{ r=sessionStorage.getItem(RESUME_KEY); msg=sessionStorage.getItem(SYNCED_MSG_KEY); sessionStorage.removeItem(RESUME_KEY); sessionStorage.removeItem(SYNCED_MSG_KEY); }catch(e){}
+  if(r==="quiz") switchTab("quiz");
+  if(msg) toast(msg);
+}
+
+/* opts(v5.19.0): auto=自動同期(失敗を短く・変化なしはリロードしない)/resume=リロード後に戻るタブ/then=同期後(または不要・失敗時)に続ける処理 */
+async function syncNow(opts){
+  opts=opts||{};
+  const then=()=>{ if(typeof opts.then==="function") opts.then(); };
+  if(!syncClientId()){ if(!opts.auto) toast("同期は未設定(READMEの手順でクライアントIDを設定)"); then(); return; }
+  toast(opts.auto? "📥 自動同期中…" : "同期中…");
   getToken(async token=>{
     try{
       const f=await driveFind(token);
       if(f){
         const remote=await driveDownload(token, f.id);
+        const changed=syncChanges(G, remote);
         const merged=mergeData(G, remote||{});
         merged.updatedAt=Date.now();
+        if(!changed){
+          /* リモートに新しいものがない: 手元の変更だけ上げて終わり(リロード不要=学習の流れを切らない) */
+          let dirty=true; try{ dirty=!!localStorage.getItem(SYNC_DIRTY_KEY); }catch(e){}
+          if(dirty || !opts.auto) await driveUpload(token, f.id, merged);
+          markSynced();
+          toast(opts.auto? "✓ 同期済み(この端末が最新)" : "同期完了(他の端末に新しい記録はなかった)");
+          then(); return;
+        }
         localStorage.setItem(KEY, JSON.stringify(merged));
         await driveUpload(token, f.id, merged);
         markSynced();
+        try{
+          if(opts.resume) sessionStorage.setItem(RESUME_KEY, opts.resume);
+          sessionStorage.setItem(SYNCED_MSG_KEY, "✓ 同期完了 ─ 別の端末の記録を取り込んだ");
+        }catch(e){}
         toast("同期完了。再読み込みします");
-        setTimeout(()=>location.reload(), 800);
+        setTimeout(()=>location.reload(), opts.auto? 400 : 800);
       }else{
         await driveUpload(token, null, G);
         markSynced();
         toast("初回アップロード完了");
+        then();
       }
     }catch(e){
-      toast("同期に失敗: "+e.message);
+      toast((opts.auto? "自動同期できなかった: " : "同期に失敗: ")+e.message);
+      then();
     }
+  }, err=>{
+    /* 認証できなかった(ポップアップが止められた・キャンセル): 自動同期は静かに諦めて学習へ。次の起動でまた試す */
+    if(opts.auto){ autoSyncPending=false; toast("同期は次の機会に(⚙の「今すぐ同期」でいつでも)"); }
+    else toast(err==="cancel"? "認証がキャンセルされた" : "認証できなかった("+err+")");
+    then();
   });
 }
 
@@ -526,7 +654,7 @@ function openSettings(){
     if(off){ try{ navigator.vibrate([80,50,80]); }catch(e){} }
   };
   const sb=$("syncBtn");
-  if(sb && !sb.disabled){ ensureGis(()=>{}); sb.onclick=syncNow; } // GIS先読み=タップ時にポップアップがブロックされない
+  if(sb && !sb.disabled){ ensureGis(()=>{}); sb.onclick=()=>syncNow(); } // GIS先読み=タップ時にポップアップがブロックされない
   $("updateBtn").onclick=appUpdate;
   $("resetLearnBtn").onclick=()=>{
     openModal('<h3>学習記録とカードをリセットする？</h3>'+

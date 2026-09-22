@@ -361,7 +361,7 @@ function openMywList(){
 /* 今日の英語から開くときの出典(いま出ている記事/番組の題名)。無ければ空 */
 function rlCurrentTitle(kind){
   const st=(typeof rlState!=="undefined") && rlState[kind];
-  const it=st && st.items? rlChoose(st.items, G.rl) : null;
+  const it=st && st.it; // 今日の1本(v5.19.0: rlLoadが決めて保存した素材)
   return it? it.t : "";
 }
 /* 意味待ちの語をLLMに頼む(コピー→答えを貼り付けて登録) */

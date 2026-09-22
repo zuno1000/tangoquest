@@ -32,7 +32,8 @@ function applyGameFlag(){
 }
 applyGameFlag();
 $("navHome").onclick=()=>switchTab("home");
-$("navQuiz").onclick=()=>switchTab("quiz");
+/* 学習タブへの入口(v5.19.0): 起動時に静かに同期できなかった端末は、このタップ(ユーザー操作あり)で同期してから学習へ(sync.js autoSyncOnGesture) */
+$("navQuiz").onclick=()=>autoSyncOnGesture(()=>switchTab("quiz"));
 $("navRec").onclick=()=>switchTab("rec");
 $("navParty").onclick=()=>switchTab("party");
 $("navAdv").onclick=()=>switchTab("adv");
@@ -45,6 +46,7 @@ const EVENTS=[
   // {d:"2026-08-03", t:"..."} 形式でバナー以外のイベント告知を書く
 ];
 const NEWS=[
+  {d:"2026-09-23", t:"🔧 v5.19.0 実機FB4件に対応: ①訳に英語(熟語の用例)が混ざっていた294語を日本語だけに書き直し、括弧内の熟語186件(pertain to・unwed mother・in spite of…)は熟語の項目として独立(4択の正解が訳の英語で分からなくなる問題の解消。合計8,034項目) ②1日の目安が端末で違う不具合を修正(推定ログと今日の目安を同期で揃える=どの端末でも同じ数字) ③自動同期: アプリを開いた直後に静かに同期(できない場合は「学習/セットのつづき」のタップで同期し、学習タブへ自動で戻る)。別の端末に新しい記録がなければリロードしない ④今日の英語: 30分を超える回は出さない(番組の長さで絞り、長い番組はカタログから外した)・今日の1本は「その日はじめて開いたとき」に決めて閉じても変わらない(別の候補に進めた場合も保持・日付が変われば更新)・同期で別の端末にも同じ1本が出る・時間がない日の最低限の進め方を「進め方」に追記"},
   {d:"2026-09-22", t:"🔗 v5.18.0 熟語1,033件を収録しました(単語集の熟語リスト320件+同レベルの拡充713件=句動詞・前置詞句・イディオム)。熟語は単語と同じ4択で出題され、誤答も熟語から選ばれます。図鑑では単語と同じ一覧に並びます(スペースを含むので検索で見つけられます)"},
   {d:"2026-09-22", t:"📚 v5.17.0 単語を3,561語追加しました(3,254→6,815語)。OANC_37k(CEFRレベル付きの3.7万語リスト)を参考に、英検1級の合格に必要で未収録だった語を補充(専門用語・活用形は除外。難度はv5.16.1の672語と同程度)。訳はすべて書き直しています。今日の目安の分母(未習の語数)が増えるため、目標日を据え置くと1日の目安が上がります。目安がきつければ⚙設定の学習ペース管理で目標日を後ろにずらしてください"},
   {d:"2026-09-22", t:"📚 v5.16.1 単語を672語追加しました(2,582→3,254語)。英検1級単語集のさくいんから、まだ収録していなかった語だけを取り込み(既存の語はそのまま)。図鑑・目安の分母・ペース計算は自動で新しい語数になります。今日の目安は明日の最初の表示で引き直されます"},
@@ -225,7 +227,7 @@ function renderHome(){
     (syncReminderNeeded()?
       '<div class="panel syncnag" id="homeSync">📥 最終同期から'+
         Math.floor((Date.now()-lastSyncAt())/864e5)+'日 ─ タップして同期</div>':'');
-  $("homeStudy").onclick=()=>switchTab("quiz");
+  $("homeStudy").onclick=()=>autoSyncOnGesture(()=>switchTab("quiz")); // 同期が要れば同期→リロード後に学習タブへ(v5.19.0)
   $("homeRL").onclick=openRLModal;
   rlFillHome(); rlEnsureLoaded(rlFillHome); // 今日の英語(v5.10.0): キャッシュがあれば即・なければ取得して埋める
   const lg=$("homeLogin");
@@ -238,7 +240,7 @@ function renderHome(){
   $("homeWeek").onclick=()=>openHistoryModal(0);
   if(mn) $("homeClaim").onclick=()=>{ claimAllCurrent(); renderHome(); };
   const sn=$("homeSync");
-  if(sn){ ensureGis(()=>{}); sn.onclick=syncNow; } // GIS事前ロード=タップ時のポップアップブロック防止
+  if(sn){ ensureGis(()=>{}); sn.onclick=()=>syncNow(); } // GIS事前ロード=タップ時のポップアップブロック防止
 }
 
 /* ---- 編成タブ(そうび / カード / なかま) ---- */
@@ -346,6 +348,8 @@ renderHome();           // ホームがランディング
    「一瞬出てすぐ消える」ため)。未受取のままなのでリロード後に改めて出る */
 if(!TQ_REBOOTING) checkLogin();
 saveG();
+/* 自動同期(v5.19.0・sync.js): 同期後のリロードなら学習タブへ復帰+完了トースト → 開いた直後の同期(静かに/次のタップで) */
+if(!TQ_REBOOTING){ syncResumeAfterReload(); autoSyncOnOpen(); }
 
 /* PWAを閉じずに日をまたいだ場合: 復帰時に日付が変わっていたらログインボーナスを付与。
    フリーズも復帰時に精算する */
@@ -356,6 +360,8 @@ document.addEventListener("visibilitychange", ()=>{
     checkLogin();
     refreshHeader();
   }
+  autoSyncOnOpen(); // アプリに戻ったときも(最終同期から5分以内・学習の途中なら何もしない)
+  if(!$("homeView").classList.contains("hidden")){ rlEnsureLoaded(rlFillHome); } // 日付が変わっていれば今日の英語を引き直す(v5.19.0)
 });
 
 /* iOS(ホーム画面起動): 外部リンクのアプリ内ブラウザや通知シェードから戻った直後、
@@ -385,6 +391,8 @@ window.G=G; window.WORDS=WORDS; window.DUNGEONS=DUNGEONS; window.BANNERS=BANNERS
 window.PHRASES=PHRASES; window.PHR_CATS=PHR_CATS; window.PHR_DRILLS=PHR_DRILLS;
 window.RL_SOURCES=RL_SOURCES; window.RL_TOPICS=RL_TOPICS; window.RL_PROMPTS=RL_PROMPTS; window.RL_PROXIES=RL_PROXIES;
 window.setRlFetchImpl=f=>{ rlFetchImpl=f; }; window.rlStateGet=()=>rlState; window.rlAltGet=()=>rlAlt; // テスト用(let/varはwindowに載らない)
+window.rlStateReset=()=>{ rlState={read:null, listen:null}; rlAlt={read:0, listen:0}; }; window.RL_MAX_SEC=RL_MAX_SEC; // v5.19.0
+window.autoSyncPendingGet=()=>autoSyncPending; window.autoSyncPendingSet=v=>{ autoSyncPending=!!v; }; window.AUTO_SYNC_GAP=AUTO_SYNC_GAP; // v5.19.0
 window.setFocusFromTest=f=>{ FOCUS=f; }; window.focusGet=()=>FOCUS; window.pdrillGet=()=>PDRILL;
 window.LTD_SLOTS=LTD_SLOTS;
 window.ROOT_DEFS=ROOT_DEFS; window.PREFIX_DEFS=PREFIX_DEFS; window.APP_VERSION=APP_VERSION;

@@ -9,10 +9,13 @@
 /* 直近100問のクイズ結果を記録する。entry=[新規なら1, 正解なら1, 解答時のbox(v5.8.0)]。
    boxは「間隔をあけた復習(box2以上)」と「1分/10分の再挑戦(box0-1)」を分けて正答率を測るため
    (再挑戦はほぼ正解するので、混ぜると復習の実力を高く見誤る。旧記録はboxなし=復習扱い) */
+/* v5.19.0: entry[3]=解答時刻(ms)。同期でログを端末間で合流させる鍵(sync.js mergePaceLog)。
+   以前は「長い方のログ」を採用していたため、端末ごとに推定(既知語率・復習正答率)が別々になり、
+   同じ日でも端末ごとに1日の目安が違っていた(実機FB: PC183問・スマホ258問) */
 function paceLog(isNew, ok, box){
   if(!G.pace) G.pace={goal:null, log:[]};
   const l=G.pace.log=G.pace.log||[];
-  l.push([isNew?1:0, ok?1:0, box|0]);
+  l.push([isNew?1:0, ok?1:0, box|0, Date.now()]);
   if(l.length>100) l.splice(0, l.length-100);
 }
 
@@ -166,10 +169,13 @@ function paceQuota(g, now){
    やる気を削ぐため。翌日の最初の表示で昨日までの結果を織り込んで引き直す。
    目標を設定/解除した瞬間だけは即時に引き直す(qd=nullにして呼ぶ) */
 function paceToday(g, now){
+  now=now||Date.now();
   const q=paceQuota(g, now);
   if(!q || q.done) return q;
   const d=todayKey();
-  if(!g.pace.qd || g.pace.qd.d!==d) g.pace.qd={d, per:q.perDay};
+  /* at=固定した時刻(v5.19.0): 同期では同じ日の目安は「先に固定した端末の値」に揃える(sync.js mergeQd)=
+     どの端末で見ても今日の目安は同じ数字になる */
+  if(!g.pace.qd || g.pace.qd.d!==d) g.pace.qd={d, per:q.perDay, at:now};
   q.perDay=g.pace.qd.per;
   // その日の目安を日別記録にも残す(「学習のあゆみ」の達成判定に使う)
   if(g.days){
