@@ -10,19 +10,19 @@
          ⑤🏆実績は折りたたみ(12種×段階の行は長いので、見出しに達成数だけ出す。中身はDOMに常在=テスト互換) */
 
 /* 週ごとに「覚えた」数(単語 w・フレーズ p)を数える純関数。n週分・古い週が先・最後の要素が今週(今日を末日とする7日の窓)。
-   「覚えた」=7日あけて思い出せた語(G.days[k].m / G.pdays[k].m はその日に覚えた数) */
+   v5.16.0(実機FB「覚えた単語2語なのに今週+3」): 数え方を日別記録の到達回数(days.m)から「いま覚えている語の覚えた日時(st[9])」に変更。
+   到達回数は、覚えた後にミスして学習中に戻っても減らないため、ヒーローの「覚えた語数」(いまbox5以上)と食い違った。
+   これで「今週+n」は「今週覚えて、いまも覚えている語」=ヒーローの数字と常に整合する(忘れた語はその週の棒からも消える) */
 function growthByWeek(g, n, base){
   const out=[]; base=base||new Date();
+  const collect=tbl=>{ const r=[]; for(const en in tbl||{}){ const s=tbl[en]; if(s && s[0]>=MASTER_BOX && s[9]) r.push(s[9]); } return r; };
+  const wm=collect(g.words), pm=collect(g.phr);
   for(let w=n-1; w>=0; w--){
-    let wd=0, pd=0, from="";
-    for(let i=6;i>=0;i--){
-      const dt=new Date(base.getFullYear(), base.getMonth(), base.getDate()-(w*7+i));
-      const k=dt.getFullYear()+"-"+String(dt.getMonth()+1).padStart(2,"0")+"-"+String(dt.getDate()).padStart(2,"0");
-      if(!from) from=(dt.getMonth()+1)+"/"+dt.getDate();
-      wd+=(((g.days||{})[k]||{}).m)||0;
-      pd+=(((g.pdays||{})[k]||{}).m)||0;
-    }
-    out.push({from, w:wd, p:pd});
+    const from=new Date(base.getFullYear(), base.getMonth(), base.getDate()-(w*7+6)).getTime();
+    const to=new Date(base.getFullYear(), base.getMonth(), base.getDate()-(w*7)+1).getTime(); // 窓の末日の翌0時(排他)
+    const fd=new Date(from);
+    out.push({from:(fd.getMonth()+1)+"/"+fd.getDate(),
+              w:wm.filter(t=>t>=from && t<to).length, p:pm.filter(t=>t>=from && t<to).length});
   }
   return out;
 }
@@ -63,7 +63,7 @@ function renderRecords(){
           '<div class="hbarw"><div class="hbar'+(i===wk.length-1? ' cur':'')+'" style="height:'+bh+'px"></div></div>'+
           '<div class="hday">'+(i===wk.length-1? '今週' : x.from)+'</div></div>';
       }).join("")+'</div>'+
-      '<div class="pacefoot">単語+フレーズ ─ 7日あけても思い出せた語が「覚えた」に加わる</div>'+
+      '<div class="pacefoot">単語+フレーズ ─ 7日あけても思い出せた語が「覚えた」に加わる(忘れて学習中に戻った語は数えない)</div>'+
     '</div>'+
     // ③ 習慣と累計のタイル
     '<div class="panel statgrid" style="margin-top:12px">'+

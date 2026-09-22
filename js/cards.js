@@ -241,6 +241,8 @@ function quickEquip(key){
   return null; // 文が満杯
 }
 function openCardModal(key){
+  // ゲーム面オフ(v5.16.0・実機FB「図鑑の詳細に重ねる・呪文に置くが残っている」): カードではなく単語の詳細を開く
+  if(!GAME_ENABLED){ openWordModal(parseKey(key).en); return; }
   // どのレアのキーで開かれても、その単語の正規カード(最高レア・合計Lv)を見せる
   const en=parseKey(key).en;
   key=canonKeyOf(en)||key;

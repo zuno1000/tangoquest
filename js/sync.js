@@ -119,6 +119,13 @@ async function driveUpload(token, id, data){
 /* 端末間マージ: 進捗を失わない方向(大きい方・和集合)に寄せる。冪等。
    例外=リセット世代(resetAt)が異なるときは新しい世代が丸ごと勝つ:
    「データをすべてリセット」が他端末・リモートから復活しない&全端末に伝播する */
+/* SRS状態の勝敗(v5.16.0・純関数): yを採用すべきならtrue。最後に解いた時刻(st[8])が新しい方→同時刻・旧版は解答回数が多い方 */
+function srsNewer(x, y){
+  if(!x) return true;
+  const tx=x[8]||0, ty=y[8]||0;
+  if(tx!==ty) return ty>tx;
+  return (y[2]+y[3])>(x[2]+x[3]);
+}
 function mergeData(a, b){
   b=b||{};
   if((a.resetAt||0)!==(b.resetAt||0)){
@@ -127,10 +134,13 @@ function mergeData(a, b){
   }
   // 未知キー(将来のバージョンが追加するフィールド)も保持する=前方互換(既知キーはローカル起点)
   const m=JSON.parse(JSON.stringify(Object.assign({}, b, a)));
-  // 単語SRS: 解答回数(正解+ミス)が多い方を採用
+  /* 単語SRS(v5.16.0): 「最後に解いた時刻」(st[8])が新しい方を採用=記憶の真実は最新のテスト結果。
+     旧版の記録(st[8]なし)どうし・同時刻は従来どおり解答回数(正解+ミス)が多い方。
+     以前は回数だけで決めていたため、3問で覚えた語(既知語の早回し)が、別端末の回数の多い古い状態に上書きされて
+     「覚えた」が消えることがあった(実機FB「覚えた語数と今週の伸びが合わない」の一因) */
   for(const en in b.words||{}){
     const x=m.words[en], y=b.words[en];
-    if(!x || (y[2]+y[3])>(x[2]+x[3])) m.words[en]=y;
+    if(srsNewer(x,y)) m.words[en]=y;
   }
   // マイフレーズ(v5.6.0): 項目ごとに操作時刻(at)が新しい方=追加も削除(トンボストーン)も伝播する
   m.myphr=m.myphr||{};
@@ -159,11 +169,11 @@ function mergeData(a, b){
     const x=m.rl.mute[id], y=b.rl.mute[id];
     if(!x || (y.at||0)>(x.at||0)) m.rl.mute[id]=y;
   }
-  // フレーズSRS(v5.0.0): 単語と同じ「解答回数(正解+ミス)が多い方」
+  // フレーズSRS(v5.0.0): 単語と同じ規則(v5.16.0: 最後に解いた時刻→解答回数)
   m.phr=m.phr||{};
   for(const en in b.phr||{}){
     const x=m.phr[en], y=b.phr[en];
-    if(!x || (y[2]+y[3])>(x[2]+x[3])) m.phr[en]=y;
+    if(srsNewer(x,y)) m.phr[en]=y;
   }
   // フレーズの日別記録(v5.0.0): daysと同じ日ごとmax
   m.pdays=m.pdays||{};
@@ -176,9 +186,17 @@ function mergeData(a, b){
   for(const k in b.days||{}){
     const x=m.days[k], y=b.days[k];
     if(!x) m.days[k]=y;
-    else ["a","c","m","n","t","na","nc","ra","rc","fz","qk"].forEach(f=>{ // qk=サクッと完了回数(v4.30.0)
-      x[f]=Math.max(x[f]||0, y[f]||0);
-    });
+    else{
+      /* 目安(t)だけはmaxにしない(v5.16.0・実機FB「同期すると昨日の目安が増えて未達成になる」):
+         目安は端末ごとに「残り÷残り日数」で計算するため、同期が遅れた端末ほど進捗が古く、大きな目安を残す。
+         maxだと「学習した端末のa」と「開いただけの端末の大きなt」が組み合わさって未達成に見えた。
+         → その日に多く解いた端末のt・同数なら小さい方(進捗を多く知っている側の見積もり)・片側だけならそれ */
+      const t=(x.t&&y.t)? ((x.a||0)>(y.a||0)? x.t : (y.a||0)>(x.a||0)? y.t : Math.min(x.t,y.t)) : (x.t||y.t||0);
+      ["a","c","m","n","na","nc","ra","rc","fz","qk"].forEach(f=>{ // qk=サクッと完了回数(v4.30.0)
+        x[f]=Math.max(x[f]||0, y[f]||0);
+      });
+      if(t) x.t=t;
+    }
   }
   // カード在庫: キーごとに多い方
   for(const k in b.inv||{}) m.inv[k]=Math.max(m.inv[k]||0, b.inv[k]);
@@ -259,6 +277,18 @@ function mergeData(a, b){
   m.resetAt=a.resetAt||0;
   return m;
 }
+
+/* セット完了・にがて特訓完了の画面に置く「同期」ボタン(v5.16.0・実機FB「セット終了時の画面に同期ボタンを用意するのが最も手間がなく確実」)。
+   自動同期はしない: iOS PWAではユーザー操作なしの認証ポップアップが止められる・学習の途中のリロードを避ける。
+   学習の区切り(セット完了・特訓完了)で1タップ=別端末との連携が習慣に乗る。未設定の端末(クライアントID無し)では出さない */
+function syncBtnHTML(){
+  if(!syncClientId()) return "";
+  const last=lastSyncAt();
+  let dirty=false; try{ dirty=!!localStorage.getItem(SYNC_DIRTY_KEY); }catch(e){}
+  const sub=last? "最終同期 "+fmtSyncTime(last)+(dirty? " ・ この端末に未同期の変更あり":" ・ 変更なし") : "まだ同期していない ─ 別の端末とつなぐ";
+  return '<button class="btn setnext2" id="setSync"><span>📥 いま同期する</span><span class="hlsub">'+sub+'</span></button>';
+}
+function bindSyncBtn(){ const b=$("setSync"); if(b) b.onclick=()=>{ b.disabled=true; syncNow(); }; }
 
 async function syncNow(){
   if(!syncClientId()){ toast("同期は未設定(READMEの手順でクライアントIDを設定)"); return; }

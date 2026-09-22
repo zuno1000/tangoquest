@@ -4,6 +4,42 @@
    カード図鑑=全単語の取得状況(未取得も単語は見せる=学習アプリなので隠す理由がない)。
    なかま図鑑=未加入はシルエット+???(こちらは出会いの楽しみを残す) */
 
+/* 単語の詳細(v5.16.0・ゲーム面オフ・実機FB): 図鑑「単語」から。カード詳細(重ねる・呪文に置く)の代わりに学習の情報だけを見せる:
+   意味・品詞・定着の階段・正解とミス・次の復習・語根・取り違えた相手・マイ単語の用例・辞書。GAME_ENABLED=trueなら従来のカード詳細 */
+function fmtDueIn(ms){
+  if(ms<3600e3) return Math.max(1, Math.round(ms/60e3))+"分後";
+  if(ms<864e5) return Math.round(ms/3600e3)+"時間後";
+  return Math.round(ms/864e5)+"日後";
+}
+function openWordModal(en){
+  const w=byEn[en]; if(!w) return;
+  const st=G.words[en], now=Date.now();
+  const conf=(G.conf&&G.conf[en])||{};
+  const pairs=Object.keys(conf).filter(o=>byEn[o]).sort((a,b)=>conf[b]-conf[a]).slice(0,3);
+  let due="";
+  if(st){
+    if(st[0]>=MASTER_BOX){ const d=st[9]? new Date(st[9]) : null; due="✓ 覚えた(7日あけても思い出せた)"+(d? " ・ "+(d.getMonth()+1)+"/"+d.getDate()+"に到達":""); }
+    else if(st[1]<=now) due="⏳ 復習どき ─ 次の学習で出る";
+    else due="次の復習 "+fmtDueIn(st[1]-now);
+  }
+  const ex=(typeof mywExampleHTML==="function")? (mywExampleHTML(en)||"") : "";
+  openModal('<h3>単語の詳細</h3>'+
+    '<div class="wdetail">'+
+      '<div class="wden">'+esc(w.en)+' <span class="poschip pos'+w.pos+'">'+POS_LABEL[w.pos]+'</span></div>'+
+      '<div class="wdja">'+esc(w.ja)+'</div>'+
+      (st? '<div class="small" style="margin-top:8px">'+qStatsHTML(st)+'</div><div class="small">'+due+'</div>'
+         : '<div class="small" style="margin-top:8px">まだ出題されていない</div>')+
+      (rootText(en)? '<div class="small" style="margin-top:7px">🧬 '+rootText(en)+'</div>':'')+
+      (pairs.length? '<div class="small" style="margin-top:7px">⇄ 取り違え: '+pairs.map(o=>esc(o)+'('+conf[o]+')').join("・")+'</div>':'')+
+      (ex? '<div class="small" style="margin-top:7px">'+ex+'</div>':'')+
+    '</div>'+
+    '<div class="row" style="margin-top:12px; gap:8px">'+
+      '<button class="btn grow" id="wdDict">📖 辞書で確かめる</button>'+
+      '<button class="btn primary grow" id="wdClose">閉じる</button></div>');
+  $("wdDict").onclick=()=>window.open("https://ejje.weblio.jp/content/"+encodeURIComponent(en), "_blank", "noopener");
+  $("wdClose").onclick=closeModal;
+}
+
 /* en -> 所持している最高レア度(0=未取得) */
 function cardDexMap(){
   const m={};
@@ -147,6 +183,14 @@ function renderDexBody(){
         n++;
         const rar=m[w.en]||0;
         const stw=G.words[w.en], mas=stw && stw[0]>=MASTER_BOX;
+        if(!GAME_ENABLED){
+          /* v5.16.0: ★(カードの記録)ではなく定着を見せる。学習した語はタップで単語の詳細 */
+          g+= stw
+            ? '<div class="dexcell own" data-en="'+esc(w.en)+'"><div class="den">'+esc(w.en)+'</div>'+
+              (mas? '<div class="dmas">✓覚えた</div>' : '<div class="dst dstep">定着 '+stw[0]+'/'+MASTER_BOX+'</div>')+'</div>'
+            : '<div class="dexcell miss"><div class="den">'+esc(w.en)+'</div></div>';
+          return;
+        }
         g+= rar
           ? '<div class="dexcell own" data-k="'+esc(keyOf(w.en,rar,0))+'"><div class="den">'+esc(w.en)+'</div>'+
             '<div class="dst rc'+rar+'">'+RAR_STARS[rar-1]+'</div>'+(mas? '<div class="dmas">✓覚えた</div>':'')+'</div>'
@@ -154,8 +198,9 @@ function renderDexBody(){
       });
       return {g: g||'<div class="empty" style="grid-column:1/-1">該当する単語がない</div>', n};
     };
-    let h='<div class="small" style="margin-top:8px">'+(GAME_ENABLED? "カード":"正解した単語")+' <b style="color:var(--accent2)">'+st.owned+'</b> / '+st.total+
-      (GAME_ENABLED? '種':'語')+' ・ 覚えた <b style="color:var(--ok)">'+st.mastered+'</b>語</div>'+dexProgHTML(st.owned, st.total)+
+    const ownN=GAME_ENABLED? st.owned : Object.keys(G.words).length; // ゲーム面オフは「学習した(出題された)単語」(v5.16.0)
+    let h='<div class="small" style="margin-top:8px">'+(GAME_ENABLED? "カード":"学習した単語")+' <b style="color:var(--accent2)">'+ownN+'</b> / '+st.total+
+      (GAME_ENABLED? '種':'語')+' ・ 覚えた <b style="color:var(--ok)">'+st.mastered+'</b>語</div>'+dexProgHTML(ownN, st.total)+
       '<input id="dexSearch" class="dexsearch" type="search" autocomplete="off" '+
         'placeholder="🔍 単語を検索(英字)" value="'+esc(dexQ)+'">'+
       '<div class="seg" id="dexPosSeg">'+["all","n","adj","v","adv"].map(p=>
@@ -184,7 +229,8 @@ function renderDexBody(){
     // クリックは委譲1本(セルごとのリスナー2,500個を作らない=軽量化)
     $("dexGrid").onclick=e=>{
       const cell=e.target.closest(".dexcell.own");
-      if(cell) openCardModal(cell.dataset.k);
+      if(!cell) return;
+      if(GAME_ENABLED) openCardModal(cell.dataset.k); else openWordModal(cell.dataset.en); // v5.16.0
     };
   }else{
     const st=charDexStats();

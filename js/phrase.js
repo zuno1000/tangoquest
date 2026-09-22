@@ -38,7 +38,8 @@ function phrFormat(st){
 }
 /* 並べ替えの粒度(v5.15.0): "ch"=チャンク(定着0-1) / "w"=単語(定着2〜)。フラグoffの従来の並べ替え(定着2-3)はチャンク */
 function phrGrain(st){ return (PHR_REORDER_ALL && st && st[0]>=2)? "w" : "ch"; }
-/* 並べ替えの片(タイル): チャンクまたは単語。join(" ")===en を保つ(enはch.join(" ")で導出しているため) */
+/* 並べ替えの片(タイル): チャンクまたは単語。join(" ")===en を保つ(enはch.join(" ")で導出しているため)。
+   単語の片は最大16(v5.16.0・論述・根拠の10〜16語文。それ以外のカテゴリは12以下)。同じ表層形の片が2つあっても判定は文字列比較=どちらでも正解 */
 function phrTiles(p, grain){ return grain==="w"? p.en.split(" ") : p.ch.slice(); }
 /* 定着4〜の単語並べ替えは、片を見る前に英文全体の自力想起を1回挟む(先に思い出すステップ・設定共有)。
    片を見ると語順は「見れば分かる」に寄るため。チャンク段階・ドリル(fmt固定)では出ない */
@@ -244,7 +245,7 @@ function openDrillMenu(){
   const today=todayDrillKind(todayKey(), myphrList().length>0);
   openModal('<h3>🎯 実戦ドリル '+helpBtn("hlp-drill")+'</h3>'+
     helpNote("hlp-drill", '定着段階に関わらず、テーマを1つに絞って5問連続で出す実戦形式(すべて選択式)。'+
-      '解いた分はふつうのフレーズ学習として記録される(復習スケジュール・🎫・任務すべて共通)。'+
+      '解いた分はふつうのフレーズ学習として記録される(復習スケジュール'+(GAME_ENABLED? '・🎫・任務':'・実績')+'すべて共通)。'+
       '「今日のドリル」は日替わり ─ 30問セットの完了画面からも1タップで始められる')+
     drillKinds().map(k=>{
       const d=PHR_DRILLS[k];
@@ -502,7 +503,7 @@ function phrSay(en){
 /* 並べ替えの片を開く(v5.15.0: 「先に思い出す」の後、または即時)。片はシャッフル(偶然正順になったら混ぜ直す) */
 function phrShowTiles(){
   const box=$("choices"); box.innerHTML="";
-  box.className="choices chunks"+(phrCur.grain==="w"? " words":"");
+  box.className="choices chunks"+(phrCur.grain==="w"? " words":"")+(phrCur.tiles.length>12? " many":""); // 13片以上は小さめ(v5.16.0・論述の長文)
   let arr=shuffle(phrCur.tiles.slice());
   if(arr.length>2 && arr.join(" ")===phrCur.tiles.join(" ")) arr=shuffle(arr);
   arr.forEach(t=>{
@@ -554,13 +555,14 @@ function phrFinish(ok){
   if(!st) st=G.phr[p.en]=[0,0,0,0,0,0,0];
   const preBox=st[0];
   srsApply(st, ok, now);
+  st[8]=now; // 最後に解いた時刻(v5.16.0・同期は新しい方が勝つ)
   const pd=pdayRec(); pd.a++; if(ok) pd.c++;   // 目安・あゆみとは別台帳(G.pdays)
   const bonus5=ansBonus();                      // 5問ボーナスは単語+フレーズの合算
   track("ans"); if(ok) track("cor");            // 任務・実績のクイズ系は共有
   phrNoteRecent(p.en);
   if(PDRILL) PDRILL.res.push(ok); // 実戦ドリルの進行(v5.2.0)
   let justMastered=false;
-  if(ok && st[0]>=MASTER_BOX && !st[4]){ st[4]=1; pd.m++; justMastered=true; }
+  if(ok && st[0]>=MASTER_BOX && !st[4]){ st[4]=1; st[9]=now; pd.m++; justMastered=true; }
   /* 30問セットの帳簿(v5.10.0): フレーズの解答もセットの進みに数える(単語+フレーズの合算)。
      境界に達したら「次へ」で完了モーダル(ドリル中は終わってから) */
   const tk=(ok? corTicketGain():0)+bonus5;
@@ -581,12 +583,16 @@ function phrFinish(ok){
   /* 答え合わせ: 常設の文脈行の空欄を核で埋める(核はハイライト)。
      v5.0の「青字の全文を後から差し込む」は廃止 ─ 要素が増えないのでレイアウトが動かない */
   $("phrBuild").innerHTML=phrCtxHTML(p, true);
+  /* 論述・根拠(v5.16.0)の型は長い(例: Although X has a merit, a single Y can Z(譲歩→反論))ので、
+     結果バーの狭い枠ではなく英文の直下に全文を出し、結果バーには末尾の日本語ラベル(譲歩→反論)だけを出す */
+  const ptLabel=(p.c==="es" && p.pt)? (p.pt.match(/[(（]([^()（）]+)[)）]\s*$/)||[])[1] : null;
+  if(ptLabel) $("phrBuild").innerHTML+='<div class="ptline">🧩 '+esc(p.pt)+'</div>';
   $("qStats").innerHTML=qStatsHTML(st);
   /* pt(型の一般形・v5.4.0)があれば核の代わりに型を見せる: 1文の暗記を
      「enable 人 to do」のような使い回せる型の獲得につなげる */
   $("resultCard").innerHTML='<span class="poschip phrcat">'+(PHR_CATS[p.c]||"")+'</span>'+
     (p.pt
-      ? '<span class="rmeta">🧩 <b class="pkey">'+esc(p.pt)+'</b></span>'
+      ? '<span class="rmeta">🧩 <b class="pkey">'+esc(ptLabel||p.pt)+'</b></span>'
       : '<span class="rmeta">🔑 <b class="pkey">'+esc(p.k)+'</b></span>'+
         '<span class="rmeta small"> '+(p.ty==="s"? "🧩 型":"🔗 連語")+' ・ 単語タップで辞書</span>');
   $("resultBar").classList.add("show");

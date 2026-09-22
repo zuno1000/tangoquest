@@ -239,6 +239,13 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
 .settop{gap:10px; margin-top:4px}
 /* v5.15.0: 単語単位の並べ替え(片が3〜12個)はタイルを少し小さく */
 #choices.chunks.words{gap:7px}
+#choices.chunks.words.many{ gap:6px }
+#choices.chunks.words.many .chunkbtn{ padding:7px 10px; min-height:36px; font-size:13px; border-radius:10px } /* 13〜16片(論述・根拠) v5.16.0 */
+.dexcell .dst.dstep{ color:var(--sub) }
+.wdetail{ text-align:center; padding:6px 2px }
+.ptline{ margin-top:6px; padding-bottom:14px; font-size:12px; font-weight:700; color:var(--accent2); line-height:1.45 } /* 下の余白=辞書ヒント(::after absolute)と重ねない */ /* 論の運びの型(v5.16.0) */
+.wdetail .wden{ font-size:24px; font-weight:900; letter-spacing:.01em; display:flex; align-items:center; justify-content:center; gap:8px; flex-wrap:wrap }
+.wdetail .wdja{ font-size:16px; font-weight:700; margin-top:4px; color:var(--ink) }
 #choices.chunks.words .chunkbtn{padding:9px 12px; min-height:40px; font-size:14px; border-radius:12px}
 /* 直近7日のあゆみ(タップで全期間) */
 .weekpanel{margin-top:12px; padding:12px 14px; cursor:pointer}

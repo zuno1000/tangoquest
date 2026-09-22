@@ -769,10 +769,11 @@ function svApplyAnswer(w, ok){
   if(!st) st=G.words[w.en]=[0,0,0,0,0,0,0];
   const preSt=st.slice();
   srsApply(st, ok, now, {fast:true}); // 学習タブと同じ規則(既知語の早回し・v5.8.0)
+  st[8]=now; // 最後に解いた時刻(v5.16.0)
   const d=dayRec(); recordDayAnswer(d, wasNew, ok);
   const bonus5=ansBonus(); // 5問ごとの🎫ボーナス(v4.31.0・上限なし・学習タブと同じ=入口で損得が出ない)
   let justMastered=false;
-  if(ok && st[0]>=MASTER_BOX && !st[4]){ st[4]=1; d.m++; justMastered=true; }
+  if(ok && st[0]>=MASTER_BOX && !st[4]){ st[4]=1; st[9]=now; d.m++; justMastered=true; }
   track("ans"); if(ok) track("cor");
   paceLog(wasNew, ok, preSt[0]);
   noteRecent(w.en);
@@ -793,7 +794,7 @@ function svApplyAnswer(w, ok){
     G.combo=0;
   }
   const pq=paceToday(G);
-  if(pq && !pq.done && d.a===pq.perDay){ toast("🎉 今日の目安 "+pq.perDay+"問を達成! 任務でドカンと報酬を受け取ろう"); vibe(40); }
+  if(pq && !pq.done && d.a===pq.perDay){ toast("🎉 今日の目安 "+pq.perDay+"問を達成!"+(GAME_ENABLED? " 任務でドカンと報酬を受け取ろう":"")); vibe(40); }
   return {ok, wasNew, justMastered};
 }
 

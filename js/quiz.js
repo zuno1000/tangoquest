@@ -42,7 +42,10 @@ function noteRecent(en){ recentEns.push(en); if(recentEns.length>3) recentEns.sh
    ②誤答の生成: 4択の誤答は「取り違えた相手」→「同じ語根の語」→ 無作為、の順(=消去法で解けない・弁別を毎回練習)
    ③追い出題: ミスの直後、取り違えた相手を数問以内に出す(pairQueue)=ペアを続けて見比べて区別を固める
    新しいモードやボタンは足さない(にがてノートには「取り違え: 相手」の情報だけ出す) */
-let pairQueue=[]; // 追い出題の待ち行列(en)
+/* 追い出題の間隔(v5.16.0・実機FB「すぐ次に出るのは仕様か」): ミスの手がかりで相手の意味を見た直後に出すと数秒前の記憶を写すだけになるため、
+   1問おいて出す(PAIR_GAP=1)=10〜20秒あけて本当に思い出す。忘れていれば1分後の再出題に落ちるだけで損はない(結び付きの弱さが分かる) */
+var PAIR_GAP=1;
+let pairQueue=[]; // 追い出題の待ち行列({en, wait}: waitはあと何問おくか)
 function noteConfusion(g, en, other){
   if(!en || !other || en===other) return;
   g.conf=g.conf||{};
@@ -87,8 +90,10 @@ function pickWord(){
   const now=Date.now(); const due=[], unseen=[];
   // 取り違えた相手の追い出題(v5.12.0): ミスの直後の数問以内に、区別すべき相手を出す
   while(pairQueue.length){
-    const en=pairQueue.shift();
-    if(byEn[en] && !recentEns.includes(en)) return byEn[en];
+    const q=pairQueue[0];
+    if(q.wait>0){ q.wait--; break; } // まだ間をおく(この1問はふつうの出題・v5.16.0)
+    pairQueue.shift();
+    if(byEn[q.en] && !recentEns.includes(q.en)) return byEn[q.en];
   }
   for(const w of WORDS){
     const st=G.words[w.en];
@@ -187,7 +192,7 @@ function qStatsHTML(st){
   if(!st) return "";
   return 'これまで <span class="qo">正解 '+st[2]+'</span> ・ <span class="qx">ミス '+st[3]+'</span>'+
     masteryHTML(st)+
-    ((st[5]||0)>=3? ' <span class="qfire">🔥連続ミス'+st[5]+'(正解で強カード!)</span>':"");
+    ((st[5]||0)>=3? ' <span class="qfire">🔥連続ミス'+st[5]+(GAME_ENABLED? '(正解で強カード!)':'')+'</span>':"");
 }
 
 /* 「今日 X/Y問」の共通表記(学習タブ#qCount・サバイバー#svCountで共用)。
@@ -311,9 +316,11 @@ function openSetDone(){
       '<div class="small" style="margin-top:6px">'+line+'</div></div>'+
     (missN? '<button class="btn setnext2" id="setWeak"><span>🔥 このセットのミス <b>'+missN+'</b>語をすぐ立て直す</span><span class="hlsub">にがて特訓 ─ 正解の選択肢タップでサクサク進める</span></button>':'')+
     (drillK? '<button class="btn setnext2" id="setDrill"><span>'+PHR_DRILLS[drillK].icon+' 今日の実戦ドリル: <b>'+PHR_DRILLS[drillK].name+'</b></span><span class="hlsub">選択式で5問 ─ フレーズを実戦の型で</span></button>':'')+
+    syncBtnHTML()+ // 区切りで同期(v5.16.0・実機FB)
     '<div class="row" style="gap:10px; margin-top:10px">'+
     '<button class="btn grow" id="setHome">ひと休み(ホームへ)</button>'+
     '<button class="btn primary grow" id="setNext">🧩 次のセットへ</button></div>');
+  bindSyncBtn();
   $("setNext").onclick=()=>{ closeModal(); newQuestion(); };
   $("setHome").onclick=()=>{ closeModal(); switchTab("home"); };
   if(missN) $("setWeak").onclick=()=>{ closeModal(); startFocus(s.miss.slice()); };
@@ -402,9 +409,11 @@ function openFocusDone(){
     '<div class="giftbox">正解 <b style="font-size:20px">'+okN+' / '+n+'</b>'+(okN>=n? ' ─ 全部立て直した! 🎉':'')+
       (still.length? '<br><span class="small">まだ手ごわい: '+still.map(esc).join("・")+'</span>':'')+
       '<br><span class="small">ミスした語は1分後・10分後にまた出る ─ 今日のうちに2回思い出せれば明日につながる</span></div>'+
-    '<div class="row" style="gap:10px">'+
+    syncBtnHTML()+ // 区切りで同期(v5.16.0・実機FB)
+    '<div class="row" style="gap:10px; margin-top:10px">'+
     (still.length? '<button class="btn grow" id="focusAgain">🔥 まだ手ごわい'+still.length+'語をもう一度</button>':'')+
     '<button class="btn primary grow" id="focusEnd">学習にもどる</button></div>');
+  bindSyncBtn();
   const a=$("focusAgain"); if(a) a.onclick=()=>startFocus(still);
   $("focusEnd").onclick=()=>{ closeModal(); newQuestion(); };
 }
@@ -416,7 +425,7 @@ function openWeakModal(){
     helpNote("hlp-weak", 'ミスしたことがあり、まだ「覚えた」に届いていない単語。<b>並びは上のボタンで選ぶ</b>: '+
       'ミスが多い(累計のミス回数)/連続ミス中(直近で続けて外している数)/定着が低い(忘却曲線の段)/復習が近い(次の期限)。'+
       '各行の先頭の太字が、その並びの基準の値。同点は「ミス回数→連続ミス→期限」で決める。<br>'+
-      '「にがて特訓」はいまの並びの上位'+FOCUS_N+'語を連続で出す短いセッション(解答はふつうの学習として記録・🎫も入る)。'+
+      '「にがて特訓」はいまの並びの上位'+FOCUS_N+'語を連続で出す短いセッション(解答はふつうの学習として記録'+(GAME_ENABLED? '・🎫も入る':'')+')。'+
       'ミスの直後には誤答の選択肢に「その意味の単語」、結果バーに「同じ語根の覚えた仲間」が手がかりとして出る')+
     '<div class="seg weakseg" id="weakSeg">'+Object.keys(WEAK_SORTS).map(k=>'<button data-s="'+k+'"'+(k===sort?' class="active"':'')+'>'+WEAK_SORTS[k]+'</button>').join("")+'</div>'+
     '<div class="small">'+list.length+'語 ─ '+WEAK_SORTS[sort]+'順</div>'+
@@ -600,10 +609,11 @@ function answer(chosen, btn){
   if(!st) st=G.words[w.en]=[0,0,0,0,0,0,0];
   const preSt=st.slice(); // ドロップ判定は解答前の状態で
   srsApply(st, ok, now, {fast:true}); // 単語は既知語の早回しあり(v5.8.0)
+  st[8]=now; // 最後に解いた時刻(v5.16.0・同期は新しい方が勝つ)
   const d=dayRec(); recordDayAnswer(d, wasNew, ok);
   const bonus5=ansBonus(); // 5問ごとの🎫ボーナス(v4.31.0・上限なし・全入口共通/v5.0.0からフレーズと合算)
   let justMastered=false;
-  if(ok && st[0]>=MASTER_BOX && !st[4]){ st[4]=1; d.m++; justMastered=true; }
+  if(ok && st[0]>=MASTER_BOX && !st[4]){ st[4]=1; st[9]=now; d.m++; justMastered=true; }
   track("ans"); if(ok) track("cor");
   paceLog(wasNew, ok, preSt[0]); // 学習ペース推定の材料(直近100問・boxで間隔ありの復習と1分/10分の再挑戦を区別)
   noteRecent(w.en);
@@ -621,7 +631,7 @@ function answer(chosen, btn){
   if(setRecord(G, todayTotal(), {ok, wasNew, up:ok && st[0]>preSt[0], mas:justMastered, tk:tkGain+bonus5, en:w.en, my:wasNew && isMyWord(w.en)})) setDonePending=true;
   if(FOCUS) FOCUS.res.push(ok); // にがて特訓の進行(v5.10.0)
   // 取り違えの記録と追い出題(v5.12.0): 選んだ誤答の単語を相手として数え、数問以内に出す
-  if(!ok && chosen.en!==w.en){ noteConfusion(G, w.en, chosen.en); if(!FOCUS && pairQueue.indexOf(chosen.en)<0) pairQueue.push(chosen.en); }
+  if(!ok && chosen.en!==w.en){ noteConfusion(G, w.en, chosen.en); if(!FOCUS && !pairQueue.some(q=>q.en===chosen.en)) pairQueue.push({en:chosen.en, wait:PAIR_GAP}); }
   // マイ単語の用例(v5.12.0): 出会った文があれば単語カードの下に
   const exh=mywExampleHTML(w.en);
   if(exh){ const pb=$("phrBuild"); pb.innerHTML=exh; pb.classList.remove("hidden"); }
@@ -666,7 +676,7 @@ function answer(chosen, btn){
   $("promptCard").classList.add("srch"); // 単語タップで辞書へ(意味の裏取り)
   // 今日の目安にちょうど到達した瞬間だけ祝う(毎問出る表示はノイズ=v4.6.2の知見)
   const pq=paceToday(G);
-  if(pq && !pq.done && d.a===pq.perDay){ toast("🎉 今日の目安 "+pq.perDay+"問を達成! 任務でドカンと報酬を受け取ろう"); vibe(40); }
+  if(pq && !pq.done && d.a===pq.perDay){ toast("🎉 今日の目安 "+pq.perDay+"問を達成!"+(GAME_ENABLED? " 任務でドカンと報酬を受け取ろう":"")); vibe(40); }
   saveG();
   refreshHeader();
   refreshQuizCount(); // 解答数・セットの進捗を即時反映
