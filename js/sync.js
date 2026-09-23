@@ -366,6 +366,17 @@ function syncChanges(local, remote){
    ③失敗(オフライン・認証不可)は学習を止めない。連発防止=最終同期から5分は再同期しない・学習の途中(学習タブ表示中)は割り込まない */
 const AUTO_SYNC_GAP=5*60e3, RESUME_KEY="tq_resume", SYNCED_MSG_KEY="tq_syncedMsg";
 let autoSyncPending=false; // 開いたときに静かに同期できなかった → 次の学習タップで
+/* 今日の目安の固定待ち(v5.20.0): 起動時に同期が控えている間は目安を固定しない(pace.js paceToday)。
+   同期の完了・不要・失敗(paceHoldRelease)または最初の解答(paceLog)で固定する。
+   =先に開いた端末が、別端末の前回同期ぶんまで取り込んだうえで今日の目安を決める(端末の順番でぶれない) */
+let paceHold=false;
+function syncHoldsPace(){ return paceHold; }
+function paceHoldSet(v){ paceHold=!!v; }
+function paceHoldRelease(){
+  if(!paceHold) return;
+  paceHold=false;
+  try{ if(G.pace && G.pace.goal){ paceToday(G); saveG(); } }catch(e){}
+}
 /* 自動同期の判断(純関数): "silent"=いま静かに同期 / "gesture"=次のタップで / "none"=不要 */
 function autoSyncDecision(s){
   if(!s.clientId || !s.authed || s.online===false) return "none";
@@ -382,6 +393,7 @@ function autoSyncOnOpen(){
   let d="none";
   try{ d=autoSyncDecision(autoSyncState()); }catch(e){}
   if(d==="none") return;
+  if(!(G.pace && G.pace.qd && G.pace.qd.d===todayKey())) paceHold=true; // まだ今日の目安を固定していなければ同期を待つ(v5.20.0)
   if(d==="silent"){ autoSyncPending=false; syncNow({auto:true}); return; }
   autoSyncPending=true;
   ensureGis(()=>{ try{ initTokenClient(); }catch(e){} }); // タップ時にポップアップが止められないよう先読み
@@ -405,7 +417,7 @@ function syncResumeAfterReload(){
 /* opts(v5.19.0): auto=自動同期(失敗を短く・変化なしはリロードしない)/resume=リロード後に戻るタブ/then=同期後(または不要・失敗時)に続ける処理 */
 async function syncNow(opts){
   opts=opts||{};
-  const then=()=>{ if(typeof opts.then==="function") opts.then(); };
+  const then=()=>{ paceHoldRelease(); if(typeof opts.then==="function") opts.then(); }; // 同期が済んだ/不要/失敗 → 今日の目安を固定(v5.20.0)
   if(!syncClientId()){ if(!opts.auto) toast("同期は未設定(READMEの手順でクライアントIDを設定)"); then(); return; }
   toast(opts.auto? "📥 自動同期中…" : "同期中…");
   getToken(async token=>{

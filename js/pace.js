@@ -14,6 +14,7 @@
    同じ日でも端末ごとに1日の目安が違っていた(実機FB: PC183問・スマホ258問) */
 function paceLog(isNew, ok, box){
   if(!G.pace) G.pace={goal:null, log:[]};
+  if(typeof paceHoldRelease==="function") paceHoldRelease(); // 最初の解答で今日の目安を固定(v5.20.0: 同期待ちより先に解き始めた場合)
   const l=G.pace.log=G.pace.log||[];
   l.push([isNew?1:0, ok?1:0, box|0, Date.now()]);
   if(l.length>100) l.splice(0, l.length-100);
@@ -164,18 +165,36 @@ function paceQuota(g, now){
           expired: daysLeft<0 && rem.mastered<WORDS.length};
 }
 
+/* 目安の日ごとの変化の上限(v5.20.0・実機FB「その日はじめて開いた端末によって目安が日ごとに大きくぶれる」)。
+   推定の材料が直近100問(=ほぼ1日分)なので、調子の良い日の翌日は下がり・ミスが多い日の翌日は上がる。
+   前日に固定した値から±10%の範囲に収める=数字は毎日じわじわ追従し、分析のゆらぎだけを吸う。
+   目標日の変更(qd=null)や初回は上限なし(意図した変更は即時)。純関数 */
+var PACE_DAMP=0.10;
+function paceDamp(prev, next){
+  if(!(prev>0)) return next;
+  const lo=Math.ceil(prev*(1-PACE_DAMP)), hi=Math.max(prev+1, Math.floor(prev*(1+PACE_DAMP)));
+  return Math.max(10, Math.min(hi, Math.max(lo, next)));
+}
 /* 今日の目安は「その日はじめて計算した値」で固定する(v4.9.0)。
    表示のたびに再計算すると、ミスで残り問題数が増えて目安が途中で膨らみ
    やる気を削ぐため。翌日の最初の表示で昨日までの結果を織り込んで引き直す。
-   目標を設定/解除した瞬間だけは即時に引き直す(qd=nullにして呼ぶ) */
-function paceToday(g, now){
+   目標を設定/解除した瞬間だけは即時に引き直す(qd=nullにして呼ぶ)
+   v5.20.0: 起動時の自動同期が控えている間(sync.js syncHoldsPace)は固定せず仮の値を出し、
+   同期が済んだ(または不要・失敗した)とき、あるいは最初の解答のとき(paceLog)に固定する=
+   別端末が前回の同期で上げた記録まで織り込んだ値で固定される(1台しか開かない日でも機能する) */
+function paceToday(g, now, opts){
   now=now||Date.now();
   const q=paceQuota(g, now);
   if(!q || q.done) return q;
   const d=todayKey();
   /* at=固定した時刻(v5.19.0): 同期では同じ日の目安は「先に固定した端末の値」に揃える(sync.js mergeQd)=
      どの端末で見ても今日の目安は同じ数字になる */
-  if(!g.pace.qd || g.pace.qd.d!==d) g.pace.qd={d, per:q.perDay, at:now};
+  if(!g.pace.qd || g.pace.qd.d!==d){
+    const per=paceDamp(g.pace.qd? g.pace.qd.per : 0, q.perDay); // 直前に固定した値(ふつう前日)から±10%以内
+    const hold=!(opts&&opts.fix) && typeof syncHoldsPace==="function" && syncHoldsPace();
+    if(hold){ q.perDay=per; q.provisional=true; if(g.days){ const r=g.days[d]=g.days[d]||{a:0,c:0,m:0}; if(r.t!==per) r.t=per; } return q; }
+    g.pace.qd={d, per, at:now};
+  }
   q.perDay=g.pace.qd.per;
   // その日の目安を日別記録にも残す(「学習のあゆみ」の達成判定に使う)
   if(g.days){
@@ -322,7 +341,8 @@ function openPaceModal(){
     '<div id="paceSimOut" class="small" style="margin-top:6px; line-height:1.6"></div>';
   openModal('<h3>🎯 学習ペース管理 '+helpBtn("hlp-pace")+'</h3>'+
     helpNote("hlp-pace", '目標日を決めると、全'+fmt(total)+'語を覚え切るのに必要な「1日の問題数」を毎日逆算して案内する。'+
-      '目安は直近100問の分析(既知語率・復習の正答率)から見積もり、学習を進めるほど自動で更新される')+
+      '目安は直近100問の分析(既知語率・復習の正答率)から見積もり、学習を進めるほど自動で更新される。'+
+      '日ごとの変化は前日の±10%以内に抑える(分析のゆらぎで数字が跳ねないように)')+
     hero+
     foldSec("pfoldGoal", "📅 目標日を"+(goal? "変更":"決める"), goalInner, !goal)+
     foldSec("pfoldSim", "🎚 もしものペース試算", simInner, false)+

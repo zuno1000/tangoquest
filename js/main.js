@@ -46,6 +46,7 @@ const EVENTS=[
   // {d:"2026-08-03", t:"..."} 形式でバナー以外のイベント告知を書く
 ];
 const NEWS=[
+  {d:"2026-09-23", t:"🔧 v5.20.0 ①今日の目安の日ごとのぶれを抑える: 前日に固定した値から±10%以内で調整する(推定の材料が直近100問なので、調子の良し悪しで翌日の数字が跳ねていた。目標日を変えたときは即時に引き直す) ②今日の目安は、起動時の自動同期が済んでから固定する(別の端末が前回の同期で上げた記録まで織り込んだ値になる。1台しか開かない日でも機能し、同期できない・不要なときや最初の解答で固定) ③お知らせの「イベント」タブを廃止(ガチャの告知はなくなったため。アップデートだけの1枚に)"},
   {d:"2026-09-23", t:"🔧 v5.19.1 「何度同期しても今日の目安が揃わない」を修正: 更新前の版が固定した今日の目安どうしは同期で手元の値が勝ってしまい揃わなかった。同点のときは目安の小さい方を採る規則にし、どちらの端末で同期しても同じ数字に収束する(推定ログの旧記録も同様)。今日すでにずれている端末は、次の同期で小さい方に揃う"},
   {d:"2026-09-23", t:"🔧 v5.19.0 実機FB4件に対応: ①訳に英語(熟語の用例)が混ざっていた294語を日本語だけに書き直し、括弧内の熟語186件(pertain to・unwed mother・in spite of…)は熟語の項目として独立(4択の正解が訳の英語で分からなくなる問題の解消。合計8,034項目) ②1日の目安が端末で違う不具合を修正(推定ログと今日の目安を同期で揃える=どの端末でも同じ数字) ③自動同期: アプリを開いた直後に静かに同期(できない場合は「学習/セットのつづき」のタップで同期し、学習タブへ自動で戻る)。別の端末に新しい記録がなければリロードしない ④今日の英語: 30分を超える回は出さない(番組の長さで絞り、長い番組はカタログから外した)・今日の1本は「その日はじめて開いたとき」に決めて閉じても変わらない(別の候補に進めた場合も保持・日付が変われば更新)・同期で別の端末にも同じ1本が出る・時間がない日の最低限の進め方を「進め方」に追記"},
   {d:"2026-09-22", t:"🔗 v5.18.0 熟語1,033件を収録しました(単語集の熟語リスト320件+同レベルの拡充713件=句動詞・前置詞句・イディオム)。熟語は単語と同じ4択で出題され、誤答も熟語から選ばれます。図鑑では単語と同じ一覧に並びます(スペースを含むので検索で見つけられます)"},
@@ -296,6 +297,18 @@ function openNews(){
   refreshBellDot();
   const ev=newsEvents();
   const tab=ev.length? "ev":"up"; // イベントが無いときはアップデートを開く
+  const upInner=
+      '<div class="panel">'+newsRows(NEWS.slice(0, NEWS_RECENT))+'</div>'+
+      (NEWS.length>NEWS_RECENT
+        ? foldSec("newsOld", "🗂 過去のアップデート("+(NEWS.length-NEWS_RECENT)+"件)",
+            '<div class="panel">'+newsRows(NEWS.slice(NEWS_RECENT))+'</div>', false)
+        : '');
+  /* v5.20.0(ユーザー決定): ゲーム面オフではイベント(ガチャ告知)のタブを出さない=アップデートだけの1枚。
+     タブの仕組みはGAME_ENABLED=trueで戻る(方針=隠すだけ・削除しない) */
+  if(!GAME_ENABLED){
+    openModal('<h3>🔔 お知らせ</h3><div id="newsUp">'+upInner+'</div>');
+    return;
+  }
   openModal('<h3>🔔 お知らせ</h3>'+
     '<div class="seg metaseg" id="newsSeg">'+
       '<button data-nt="ev"'+(tab==="ev"?' class="active"':'')+'>📅 イベント</button>'+
@@ -303,12 +316,7 @@ function openNews(){
     '<div id="newsEv"'+(tab==="ev"?'':' hidden')+'>'+
       (ev.length? '<div class="panel evpanel">'+newsRows(ev)+'</div>'
                 : '<div class="empty">いま開催中のイベントはない</div>')+'</div>'+
-    '<div id="newsUp"'+(tab==="up"?'':' hidden')+'>'+
-      '<div class="panel">'+newsRows(NEWS.slice(0, NEWS_RECENT))+'</div>'+
-      (NEWS.length>NEWS_RECENT
-        ? foldSec("newsOld", "🗂 過去のアップデート("+(NEWS.length-NEWS_RECENT)+"件)",
-            '<div class="panel">'+newsRows(NEWS.slice(NEWS_RECENT))+'</div>', false)
-        : '')+'</div>');
+    '<div id="newsUp"'+(tab==="up"?'':' hidden')+'>'+upInner+'</div>');
   $("newsSeg").querySelectorAll("[data-nt]").forEach(b=>{
     b.onclick=()=>{
       $("newsSeg").querySelectorAll("button").forEach(x=>x.classList.toggle("active", x===b));

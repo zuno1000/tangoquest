@@ -58,7 +58,7 @@ python -m http.server 8000   # リポジトリ直下で
 
 ```
 python -m http.server 8765
-→ http://localhost:8765/tests/   (303項目。localhost以外では動かないガード付き。ゲーム面の挙動は `tg()` でフラグを一時的にオンにして検証)
+→ http://localhost:8765/tests/   (306項目。localhost以外では動かないガード付き。ゲーム面の挙動は `tg()` でフラグを一時的にオンにして検証)
 ```
 ヘッドレスでも実行可(`--dump-dom` で `ALL PASS` を確認)。push 前に全実行する。
 

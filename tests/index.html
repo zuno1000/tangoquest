@@ -3574,6 +3574,50 @@ function run(){
     eq(W.mergeData(a,b).pace.qd.per, 183);
     ok(W.syncChanges(a, b) || W.syncChanges(b, a), "少なくとも一方の端末では取り込みが起きる(=揃う)");
   });
+  t("v5.20.0①: 目安の日ごとの変化は前日の±10%以内(paceDamp・純関数)・目標変更(前日なし)は上限なし", ()=>{
+    eq(W.paceDamp(100, 130), 110, "上へは+10%まで"); eq(W.paceDamp(100, 70), 90, "下へは-10%まで");
+    eq(W.paceDamp(100, 105), 105, "範囲内はそのまま"); eq(W.paceDamp(0, 130), 130, "前日なし(初回・目標変更)は即時");
+    eq(W.paceDamp(10, 8), 10, "下限10"); eq(W.paceDamp(15, 40), 16, "小さい目安でも1問は動ける(prev+1)");
+    eq(W.paceDamp(258, 183), 233, "実機の例: 258→183は1日では233まで");
+    const G=W.G, old=JSON.parse(JSON.stringify(G.pace)), oldW=G.words;
+    G.words={}; G.pace={goal:W.addDays(W.todayKey(),120), setAt:1, log:[], qd:{d:"2000-01-01", per:1000}};
+    const q=W.paceToday(G);
+    ok(q.perDay>=900 && q.perDay<=1100, "前日1000問なら今日は900〜1100の範囲に収まる(生の見込みは"+W.paceQuota(G).perDay+")");
+    eq(G.pace.qd.d, W.todayKey(), "固定される");
+    G.pace={goal:W.addDays(W.todayKey(),120), setAt:1, log:[], qd:null};
+    eq(W.paceToday(G).perDay, W.paceQuota(G).perDay, "目標変更(qd=null)は上限なしで即時");
+    G.pace=old; G.words=oldW;
+  });
+  t("v5.20.0②: 起動時の同期を待ってから今日の目安を固定 ─ 待ち中は仮の値(固定しない)・同期の完了/不要/失敗(paceHoldRelease)か最初の解答(paceLog)で固定", ()=>{
+    const G=W.G, old=JSON.parse(JSON.stringify(G.pace)), oldW=G.words, dk=W.todayKey();
+    G.words={}; G.pace={goal:W.addDays(dk,120), setAt:1, log:[], qd:null};
+    W.paceHoldSet(true);
+    const q=W.paceToday(G);
+    ok(q && q.perDay>0 && q.provisional, "仮の値が出る"); eq(G.pace.qd, null, "固定しない");
+    ok(G.days[dk] && G.days[dk].t===q.perDay, "日別記録のtは仮の値で埋める(達成判定用)");
+    eq(W.paceToday(G).perDay, q.perDay, "待ち中は同じ材料なら同じ仮の値");
+    ok(W.syncHoldsPace(), "まだ待ち中");
+    W.paceHoldRelease();
+    ok(!W.syncHoldsPace(), "解除"); ok(G.pace.qd && G.pace.qd.d===dk && G.pace.qd.at>0, "解除時に固定(at付き)"); eq(G.pace.qd.per, q.perDay, "仮の値と同じ数字で固定");
+    // 待ち中に解き始めた場合は最初の解答(paceLog)で固定
+    G.pace={goal:W.addDays(dk,120), setAt:1, log:[], qd:null}; W.paceHoldSet(true);
+    W.paceToday(G); eq(G.pace.qd, null);
+    W.paceLog(1,1,0);
+    ok(!W.syncHoldsPace() && G.pace.qd && G.pace.qd.d===dk, "最初の解答で固定");
+    // 同期を待つ判断: 今日の目安がすでに固定済みなら待たない(autoSyncOnOpenの条件と同じ式)
+    ok(!!(G.pace.qd && G.pace.qd.d===W.todayKey()), "固定済み=待たない条件が真");
+    W.paceHoldRelease(); // 念のため
+    G.pace=old; G.words=oldW; W.paceToday(G);
+  });
+  t("v5.20.0③: お知らせはゲーム面オフではイベントタブなし(アップデートだけの1枚)", ()=>{
+    const doc=W.document;
+    W.openNews();
+    ok(!doc.getElementById("newsSeg") && !doc.getElementById("newsEv"), "タブもイベント欄もない");
+    ok(doc.getElementById("newsUp"), "アップデートの中身はある");
+    eq(doc.querySelectorAll("#newsUp .newsrow").length, W.newsCount(), "全件がDOMにある(直近+過去の開閉)");
+    ok(doc.querySelector("#newsUp").textContent.indexOf("v5.20.0")>=0, "最新の項がある");
+    W.closeModal();
+  });
   t("v5.19.0③: 自動同期の判断(純関数) ─ トークンあり+ホーム表示中=静かに同期/トークンなし・学習中=次の学習タップで/未設定・未認証・5分以内・オフライン=何もしない", ()=>{
     const s=(o)=>Object.assign({clientId:true, authed:true, online:true, now:10*60e3+1, lastSync:0, hasToken:true, onHome:true}, o);
     eq(W.autoSyncDecision(s({})), "silent");
