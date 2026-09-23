@@ -284,7 +284,9 @@ function renderLearnAch(box){
   const head=document.createElement("div");
   head.className="achhead";
   head.innerHTML='<div class="pacetop"><span>🏆 実績 <span class="small">達成した段階</span></span><b>'+s.done+' <span class="ptgt">/ '+s.all+'</span></b></div>'+
-    '<div class="small" style="margin-top:4px">段階に達すると自動で📖XPが入る(受け取る操作はない)。数字はすべて学習の記録から</div>';
+    '<div class="small" style="margin-top:4px">段階に達すると自動で📖XPが入る(受け取る操作はない)。数字はすべて学習の記録から</div>'+
+    // v5.22.0: Lv/XPの居場所はここだけ(ヘッダ・記録タブは語彙力=見込み語数に)
+    '<div class="small achlv" style="margin-top:4px">📖 Lv'+accountLevel()+' ・ '+fmt(G.xp)+' XP</div>';
   box.appendChild(head);
   LEARN_ACH_DEFS.forEach(a=>{
     const done=G.ach[a.id]||0, cur=a.cur();

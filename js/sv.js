@@ -768,9 +768,11 @@ function svApplyAnswer(w, ok){
   const wasNew=!st;
   if(!st) st=G.words[w.en]=[0,0,0,0,0,0,0];
   const preSt=st.slice();
+  const d=dayRec(), vPre=vocabScore(G); // 語彙力の日別記録(v5.22.0・学習タブと同じ)
   srsApply(st, ok, now, {fast:true}); // 学習タブと同じ規則(既知語の早回し・v5.8.0)
   st[8]=now; // 最後に解いた時刻(v5.16.0)
-  const d=dayRec(); recordDayAnswer(d, wasNew, ok);
+  recordDayAnswer(d, wasNew, ok);
+  vocabSnap(d, vPre, vocabScore(G));
   const bonus5=ansBonus(); // 5問ごとの🎫ボーナス(v4.31.0・上限なし・学習タブと同じ=入口で損得が出ない)
   let justMastered=false;
   if(ok && st[0]>=MASTER_BOX && !st[4]){ st[4]=1; st[9]=now; d.m++; justMastered=true; }

@@ -46,6 +46,7 @@ const EVENTS=[
   // {d:"2026-08-03", t:"..."} 形式でバナー以外のイベント告知を書く
 ];
 const NEWS=[
+  {d:"2026-09-23", t:"📖 v5.22.0 「語彙力」を新設: 覚えた語数は7日あけた復習に正解して初めて増える遅い指標だったので、すべての単語を定着の段階に応じて数えた「見込み◯◯語」(覚えた=1語・定着4=0.8・3=0.6・2=0.4・1=0.2)を主役にしました。1問正解するごとに必ず動き、忘れると1段ぶんだけ下がります。ヘッダの📖はLvから語彙力に、記録タブのいちばん上は語彙力の2色バー(濃=覚えた・薄=見込み・1級レベル語彙に対する%)と「今日+n・今週+n」に、週ごとのグラフは語彙力の伸びに。フレーズも同じ物差し。100語の節目を越えるとお祝い。Lv/XPは🏆実績(タイルは実績に)の中で見られます。伸びの記録はこの版から"},
   {d:"2026-09-23", t:"🔧 v5.21.0 記録タブを整理: タイル(連続学習・学習した日・累計正解・知識XP・今日の英語・にがて)をタップすると詳細が開く。新設の📅学習カレンダーは月ごとの色塗り(金=目安達成・青=学習した日・🧊フリーズ・📖🎧)と累計の問数・正答率、日をタップでその日の記録。覚えた単語/フレーズの行からあゆみへ。重複していた入口(あゆみ・フレーズのあゆみ・にがて・読んだ聴いた・ペース管理と実戦メニューのあゆみボタン)を撤去し、実績は知識XPのタイルから。ホームの今週の記録のタップもカレンダーに。マイ単語: 品詞や意味を直しても並びが変わらない(登録順で固定)"},
   {d:"2026-09-23", t:"🔧 v5.20.1 今日の英語の見た目を整理: 「📘 進め方」を読む/聴く/時間がない日の3区画に分け、手順は番号つきで見出しと説明を分けた(スマホで読みやすく)。「分からなかった単語を登録」「読んだ・聴いたの記録」は他の行と同じ左寄せの1行に"},
   {d:"2026-09-23", t:"🔧 v5.20.0 ①今日の目安の日ごとのぶれを抑える: 前日に固定した値から±10%以内で調整する(推定の材料が直近100問なので、調子の良し悪しで翌日の数字が跳ねていた。目標日を変えたときは即時に引き直す) ②今日の目安は、起動時の自動同期が済んでから固定する(別の端末が前回の同期で上げた記録まで織り込んだ値になる。1台しか開かない日でも機能し、同期できない・不要なときや最初の解答で固定) ③お知らせの「イベント」タブを廃止(ガチャの告知はなくなったため。アップデートだけの1枚に)"},
@@ -266,14 +267,15 @@ $("partySeg").querySelectorAll("button").forEach(b=>{
 });
 
 function refreshHeader(){
-  $("resLv").textContent="Lv"+accountLevel();
+  // 📖=ゲーム面オンならLv(強さ)・オフなら語彙力(見込み語数・v5.22.0。Lv/XPは🏆実績の中だけ)
+  $("resLv").textContent=GAME_ENABLED? "Lv"+accountLevel() : fmtShort(Math.round(vocabScore(G)))+"語";
   if(GAME_ENABLED){
     // 桁が増えても⚙や🔔を押し出さないよう短縮表記(30万など)。正確な残高はガチャ画面で
     $("resGold").previousElementSibling.textContent="🪙"; $("resGold").textContent=fmtShort(G.gold);
     $("resTicket").previousElementSibling.textContent="🎫"; $("resTicket").textContent=fmtShort(G.tickets);
   }else{
-    // ゲーム面オフ(v5.13.0): 学習で増える数字=📖Lv・🏅覚えた語数・🔥連続日数
-    $("resGold").previousElementSibling.textContent="🏅"; $("resGold").textContent=fmtShort(masteredCount(G))+"語";
+    // ゲーム面オフ(v5.13.0): 学習で増える数字=📖語彙力(v5.22.0・以前はLv)・🏅覚えた語数・🔥連続日数
+    $("resGold").previousElementSibling.textContent="🏅"; $("resGold").textContent=fmtShort(masteredCount(G));
     $("resTicket").previousElementSibling.textContent="🔥"; $("resTicket").textContent=studyStreak()+"日";
   }
   refreshMissionDot();

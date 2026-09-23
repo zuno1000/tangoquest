@@ -4390,7 +4390,7 @@ async function runAsync(W){
     eq(m.pdays["2026-01-01"].a, 7, "日別はmaxマージ");
     // 記録タブにフレーズの行がある
     W.switchTab("rec");
-    ok(W.document.getElementById("recBox").textContent.indexOf("覚えたフレーズ")>=0, "記録タブに表示");
+    ok(W.document.getElementById("recBox").textContent.indexOf("💬 フレーズ")>=0, "記録タブに表示(v5.22.0: 見込みの数字)");
     W.closeModal();
   });
 
@@ -4634,7 +4634,7 @@ async function runAsync(W){
     G.myw=oldMyw; G.set=oldSet; G.opt.qtab=oldQtab; dr.a=snap.a; dr.c=snap.c; pd.a=snap.pa; W.saveG(); W.switchTab("home");
   });
   /* ---- v5.13.0: ゲーム面オフ(GAME_ENABLED=false)・任務→学習の実績(自動付与) ---- */
-  t("ゲーム面オフ(v5.13.0): ナビは2タブ・ヘッダは📖Lv/🏅覚えた語数/🔥連続・🪙🎫の演出と告知は出ない・trueに戻せば復活", ()=>{
+  t("ゲーム面オフ(v5.13.0): ナビは2タブ・ヘッダは📖語彙力(v5.22.0・以前はLv)/🏅覚えた語数/🔥連続・🪙🎫の演出と告知は出ない・trueに戻せば復活", ()=>{
     const G=W.G, doc=W.document;
     eq(W.GAME_ENABLED, false, "既定はオフ");
     ok(doc.getElementById("navParty").classList.contains("hidden") && doc.getElementById("navAdv").classList.contains("hidden") && doc.getElementById("navGacha").classList.contains("hidden"), "編成・冒険・ガチャのタブは隠れる");
@@ -4642,7 +4642,8 @@ async function runAsync(W){
     W.refreshHeader();
     eq(doc.getElementById("resGold").previousElementSibling.textContent, "🏅", "2つ目は覚えた語数");
     eq(doc.getElementById("resTicket").previousElementSibling.textContent, "🔥", "3つ目は連続日数");
-    ok(doc.getElementById("resGold").textContent.indexOf("語")>=0 && doc.getElementById("resTicket").textContent.indexOf("日")>=0);
+    ok(doc.getElementById("resLv").textContent.indexOf("語")>=0 && doc.getElementById("resLv").textContent.indexOf("Lv")<0 && doc.getElementById("resTicket").textContent.indexOf("日")>=0, "📖は語彙力(◯語・v5.22.0)・🔥は日数");
+    eq(doc.getElementById("resGold").textContent, W.fmtShort(W.masteredCount(G)), "🏅は覚えた数");
     eq(W.newsEvents().length, 0, "ガチャの告知は出ない");
     eq(W.hasClaimable(), false); eq(W.claimableCount(), 0, "任務の受取は無い");
     eq(W.rewardText({t:1, g:200}), "📖+38XP", "🎫🪙はXPに換算(🎫1=30・🪙25=1)");
@@ -4652,7 +4653,7 @@ async function runAsync(W){
     // 📊記録: 🎫🪙の行は無く、知識XPの行と🏆実績が直接並ぶ・任務の入口は無い
     W.switchTab("rec");
     const m=doc.getElementById("recBox");
-    ok(m.textContent.indexOf("🎫 チケット")<0 && m.textContent.indexOf("知識XP")>=0 && m.textContent.indexOf("🏆 実績")>=0, "記録タブの行");
+    ok(m.textContent.indexOf("🎫 チケット")<0 && m.textContent.indexOf("知識XP")<0 && m.textContent.indexOf("🏆 実績")>=0 && m.textContent.indexOf("Lv")>=0, "記録タブの行(v5.22.0: 知識XPのタイル→実績・Lvは添え書き)");
     ok(!doc.getElementById("setMissionBtn"), "任務の入口は無い"); doc.getElementById("statXP").click(); eq(doc.querySelectorAll("#modal #recAch .mrow").length, 12, "知識XPのタイルから実績12種"); W.closeModal();
     W.switchTab("home");
     // 図鑑: なかまは無く、カード→単語
@@ -4701,7 +4702,7 @@ async function runAsync(W){
     doc.getElementById("navRec").click();
     ok(!doc.getElementById("recView").classList.contains("hidden") && doc.getElementById("navRec").classList.contains("active"), "記録タブへ");
     const rb=doc.getElementById("recBox");
-    ["覚えた単語","覚えたフレーズ","今日の英語","連続学習","知識XP","累計正解","学習した日"].forEach(s=>ok(rb.textContent.indexOf(s)>=0, "数字: "+s));
+    ["語彙力","フレーズ","今日の英語","連続学習","実績","累計正解","学習した日"].forEach(s=>ok(rb.textContent.indexOf(s)>=0, "数字: "+s));
     ["paceCfgBtn","mywBtn","setDexBtn"].forEach(id=>ok(doc.getElementById(id), "入口: "+id));
     ["statStreak","statDays","statCor","statXP","statRL","statWeak","heroWords","heroPhr"].forEach(id=>ok(doc.getElementById(id), "タップできる: "+id));
     ["histBtn","phrHistBtn","weakBtn","rlHistBtn2","recAchFold","recAch"].forEach(id=>ok(!doc.getElementById(id), "重複した入口は無い: "+id));
@@ -4716,22 +4717,138 @@ async function runAsync(W){
     W.closeModal(); W.switchTab("home");
   });
   /* ---- v5.15.0: 記録タブの刷新(成長が見える1枚) ---- */
-  t("growthByWeek(v5.16.0・純関数): 週ごとの「いま覚えている語の覚えた日時(st[9])」・8週・最後が今週・7日の窓・忘れた語は数えない", ()=>{
+  t("growthByWeek(v5.22.0・純関数): 週ごとの語彙力の伸び=日別記録(days/pdays)のv-v0の合計・8週・最後が今週・7日の窓・記録のない日は0", ()=>{
     const base=new Date(2026, 8, 21); // 2026-09-21(月)
-    const at=(m,d,h)=>new Date(2026, m-1, d, h||12).getTime();
-    const M=(t)=>[5, 9e12, 6, 0, 1, 0, t, 0, t, t];        // 覚えている(box5)・覚えた日時t
-    const L=(t)=>[0, 0, 6, 1, 1, 1, t, 4, t, t];           // 覚えた後にミスして学習中に戻った(st[4]=1のまま・box0)
-    const g={words:{a:M(at(9,21,23)), b:M(at(9,21,0)), c:M(at(9,15,0)), d:L(at(9,15,12)), e:M(at(9,14,23)), f:M(at(7,28,0)), h:M(at(7,27,23)), i:[2,0,1,0,0,0,0]},
-             phr:{p1:M(at(9,20,9)), p2:M(at(9,8,9)), p3:L(at(9,20,10))}};
+    const g={days:{"2026-09-21":{a:30,c:20,v0:10,v:12.5}, "2026-09-15":{a:30,c:20,v0:100,v:101}, "2026-09-14":{a:30,c:20,v0:100,v:103},
+                   "2026-07-28":{a:1,c:1,v0:0,v:1}, "2026-07-27":{a:1,c:1,v0:0,v:7}, "2026-09-10":{a:30,c:20}},
+             pdays:{"2026-09-20":{a:6,c:5,v0:3,v:3.5}, "2026-09-01":{a:6,c:5,v0:3,v:2}}};
     const w=W.growthByWeek(g, 8, base);
     eq(w.length, 8, "8週"); eq(w[7].from, "9/15", "今週の窓は9/15〜9/21");
-    eq(w[7].w, 3, "今週の単語=9/21の2+9/15の1(忘れたdは数えない)"); eq(w[7].p, 1, "今週のフレーズ=p1(忘れたp3は数えない)");
-    eq(w[6].w, 1, "先週=9/14 23時のe(9/8〜9/14)"); eq(w[6].p, 1, "先週のフレーズ=9/8のp2");
-    eq(w[0].from, "7/28", "8週前の窓は7/28〜8/3(56日)"); eq(w[0].w, 1, "7/28 0時は入る");
-    eq(w.reduce((s,x)=>s+x.w,0), 5, "7/27(57日前)のhは入らない・学習中のiは入らない");
+    eq(w[7].w, 3.5, "今週の単語=9/21の+2.5と9/15の+1"); eq(w[7].p, 0.5, "今週のフレーズ=9/20の+0.5");
+    eq(w[6].w, 3, "先週=9/14の+3(9/8〜9/14)"); eq(w[6].p, 0, "v0/vのない日(9/10)は0");
+    eq(w[0].from, "7/28", "8週前の窓は7/28〜8/3(56日)"); eq(w[0].w, 1, "7/28は入る・7/27(57日前)は入らない");
+    eq(w.reduce((s,x)=>s+x.w,0), 7.5, "合計");
+    eq(w[5].p, -1, "忘れて下がった週は負(9/1のフレーズ 3→2・窓は9/1〜9/7)"); eq(w[4].p, 0, "8/25〜8/31は記録なし");
     eq(W.growthByWeek({}, 8, base).every(x=>x.w===0 && x.p===0), true, "記録なしは0");
-    // 日別記録の到達回数(days.m)が多くても、ヒーローの覚えた数(box5以上)と食い違わない
-    eq(W.growthByWeek({days:{"2026-09-21":{a:1,c:1,m:3}}, words:{}}, 8, base)[7].w, 0, "days.mは使わない");
+    eq(W.growthByWeek({days:{"2026-09-21":{a:1,c:1,m:3}}, words:{a:[5,9e12,6,0,1,0,0,0,0,Date.now()]}}, 8, base)[7].w, 0, "覚えた日時(st[9])・days.mは使わない(v5.22.0)");
+  });
+  t("語彙力(v5.22.0・純関数): vocabWeight=定着の段階の重み(覚えた1.0・4=0.8・3=0.6・2=0.4・1=0.2・未着手0)・ミスは復帰先(st[7])の段で数える・knowScoreは合計", ()=>{
+    eq(W.vocabWeight(null), 0, "記録なし=0"); eq(W.vocabWeight([0,0,0,0,0,0,0]), 0, "box0=0");
+    eq(W.vocabWeight([1,0,1,0,0,0,0]), 0.2, "box1"); eq(W.vocabWeight([2,0,1,0,0,0,0]), 0.4, "box2(既知語の初見正解)");
+    eq(W.vocabWeight([3,0,2,0,0,0,0]), 0.6, "box3"); eq(W.vocabWeight([4,0,2,0,0,0,0]), 0.8, "box4");
+    eq(W.vocabWeight([5,0,3,0,1,0,0]), 1, "box5=覚えた"); eq(W.vocabWeight([7,0,9,0,1,0,0]), 1, "box7も1(上限)");
+    eq(W.vocabWeight([0,0,3,1,0,1,0,3]), 0.6, "box4でミス→box0・復帰先3=1段ぶんだけ下がる");
+    eq(W.vocabWeight([0,0,0,2,0,2,0,0]), 0, "box1でミス→復帰先0");
+    eq(W.vocabWeight([3,0,4,1,0,0,0,0]), 0.6, "復帰した後(st[7]=0)はいまのbox");
+    eq(W.knowScore({a:[5,0,3,0,1,0,0], b:[2,0,1,0,0,0,0], c:[0,0,0,0,0,0,0], d:[0,0,3,1,0,1,0,3]}), 2, "1+0.4+0+0.6");
+    eq(W.knowScore({}), 0, "空=0"); eq(W.knowScore(null), 0, "nullも0");
+    eq(W.knowScore({a:[1,0,1,0,0,0,0], b:[1,0,1,0,0,0,0], c:[1,0,1,0,0,0,0]}), 0.6, "小数1桁に丸める(0.6000000000000001にならない)");
+    eq(W.vocabScore({words:{a:[4,0,2,0,0,0,0]}}), 0.8, "vocabScore=G.words(引数のgでも)");
+    eq(W.gainText(3.5), "+4", "伸びの表記は四捨五入"); eq(W.gainText(0), "+0", "0は+0"); eq(W.gainText(-1.2), "−1", "負はマイナス");
+  });
+  t("vocabSnap/dayGain/todayGain(v5.22.0・純関数): 日別記録にv0(その日はじめて解く前・一度だけ)とv(最後)・100語の節目を越えたら返す", ()=>{
+    const r={a:0,c:0,m:0};
+    eq(W.vocabSnap(r, 99.8, 100.2), 100, "99.8→100.2で100の節目"); eq(r.v0, 99.8, "v0=はじめて解く前の値"); eq(r.v, 100.2, "v=最後の値");
+    eq(W.vocabSnap(r, 100.2, 100.4), 0, "節目を越えなければ0"); eq(r.v0, 99.8, "v0は一度だけ(上書きしない)"); eq(r.v, 100.4, "vは更新");
+    eq(W.vocabSnap(r, 100.4, 99.8), 0, "下がっても0(お祝いなし)"); eq(r.v, 99.8);
+    eq(W.vocabSnap({}, 199, 301), 300, "2つ越えたら越えた方の節目(300)"); eq(W.vocabSnap({}, 5, 5), 0, "同じ値は0");
+    eq(W.vocabSnap({}, 0, 0.4), 0, "0→0.4は節目ではない(floor 0→0)");
+    eq(W.vocabSnap({}, 48, 52, 50), 50, "stepを指定できる");
+    eq(W.dayGain(r), 0, "99.8→99.8=0"); eq(W.dayGain({v0:10, v:12.5}), 2.5, "伸び"); eq(W.dayGain({v0:10, v:9}), -1, "下がれば負");
+    eq(W.dayGain({a:5}), 0, "記録前の日(v5.22.0より前)は0"); eq(W.dayGain(undefined), 0, "無い日も0"); eq(W.dayGain({v:5}), 0, "v0だけ無ければ0");
+    eq(W.dayGain({v0:0.1, v:0.3}), 0.2, "小数の丸め(0.19999にならない)");
+    const g={days:{"2026-09-21":{v0:1, v:3}}, pdays:{"2026-09-21":{v0:0, v:0.4}}};
+    eq(W.todayGain(g, "2026-09-21").w, 2, "今日の単語の伸び"); eq(W.todayGain(g, "2026-09-21").p, 0.4, "今日のフレーズの伸び");
+    eq(W.todayGain(g, "2026-09-22").w, 0, "記録のない日は0");
+  });
+  t("同期(v5.22.0): 日別記録の語彙力はv0=小さい方(先に解き始めた側)・v=大きい方・無いもの同士は作らない(days/pdays・対称)", ()=>{
+    const base=()=>({words:{},days:{},pdays:{},inv:{},chars:{},dungeons:{},counters:{},ach:{},inf:{best:0},gold:0,tickets:0,shards:0,xp:0});
+    const a=Object.assign(base(),{days:{"2026-09-21":{a:30,c:20,v0:100,v:104}, "2026-09-20":{a:5,c:5}, "2026-09-19":{a:5,c:5,v0:90,v:91}}, pdays:{"2026-09-21":{a:6,c:5,v0:3,v:3.5}}});
+    const b=Object.assign(base(),{days:{"2026-09-21":{a:20,c:15,v0:102,v:106}, "2026-09-20":{a:8,c:5}, "2026-09-19":{a:5,c:5}}, pdays:{"2026-09-21":{a:6,c:5,v0:2,v:3}}});
+    const m=W.mergeData(a,b), n=W.mergeData(b,a);
+    eq(m.days["2026-09-21"].v0, 100, "v0は小さい方"); eq(m.days["2026-09-21"].v, 106, "vは大きい方"); eq(m.days["2026-09-21"].a, 30, "他はmax");
+    eq(n.days["2026-09-21"].v0, 100, "対称(v0)"); eq(n.days["2026-09-21"].v, 106, "対称(v)");
+    eq(m.days["2026-09-20"].v, undefined, "無いもの同士はvを作らない"); eq(m.days["2026-09-20"].v0, undefined, "v0も作らない");
+    eq(m.days["2026-09-19"].v0, 90, "片側にしかなければそれ(v0)"); eq(m.days["2026-09-19"].v, 91, "片側にしかなければそれ(v)");
+    eq(n.days["2026-09-19"].v, 91, "起点を入れ替えても保持");
+    eq(m.pdays["2026-09-21"].v0, 2, "pdaysも同じ(v0)"); eq(m.pdays["2026-09-21"].v, 3.5, "pdaysも同じ(v)");
+    eq(W.dayGain(m.days["2026-09-21"]), 6, "合流後の伸び=大きい方の最後−小さい方の始まり");
+    const x={v0:0, v:0}, y={}; W.mergeVocabSnap(x, y); eq(x.v0, 0, "0は『ある』扱い(v0)"); eq(x.v, 0, "0は『ある』扱い(v)");
+  });
+  t("解答で語彙力の日別記録(v5.22.0): 正解でdays[today]のv0(解く前)とv(解いた後)・伸び=定着1段ぶん・ヘッダの📖は語彙力(◯語)・🏅は覚えた数", ()=>{
+    const G=W.G, doc=W.document;
+    const oldQtab=G.opt.qtab; G.opt.qtab="w";
+    const dr=W.dayRec(), pd=W.pdayRec(), snap={a:dr.a, c:dr.c, m:dr.m, pa:pd.a, t:G.tickets, xp:G.xp, cb:G.combo, set:G.set, v0:dr.v0, v:dr.v};
+    W.switchTab("quiz"); W.newQuestion();
+    const en=doc.getElementById("promptWord").textContent, w=W.WORDS.find(x=>x.en===en);
+    const oldSt=JSON.parse(JSON.stringify(G.words[w.en]||null));
+    G.words[w.en]=[3, Date.now()-1000, 4, 0, 0, 0, Date.now()-864e5*3]; // 定着3・期限が来ている→正解で定着4
+    delete dr.v0; delete dr.v;
+    W.setCurFromTest(w);
+    const pre=W.vocabScore(G);
+    [...doc.querySelectorAll("#choices .choice")].find(b=>b.textContent===w.ja).click();
+    eq(G.words[w.en][0], 4, "定着4へ");
+    eq(dr.v0, pre, "v0=解く前の語彙力"); eq(dr.v, W.vocabScore(G), "v=解いた後の語彙力");
+    eq(Math.round((dr.v-dr.v0)*10)/10, 0.2, "伸び=0.6→0.8の+0.2語ぶん");
+    eq(W.todayGain(G).w, 0.2, "今日の伸び");
+    // 2問目: v0は据え置き・vだけ動く
+    W.newQuestion(); const en2=doc.getElementById("promptWord").textContent, w2=W.WORDS.find(x=>x.en===en2);
+    const oldSt2=JSON.parse(JSON.stringify(G.words[w2.en]||null));
+    G.words[w2.en]=[4, Date.now()-1000, 4, 0, 0, 0, Date.now()-864e5*7]; W.setCurFromTest(w2);
+    const pre2=W.vocabScore(G);
+    [...doc.querySelectorAll("#choices .choice")].find(b=>b.textContent!==w2.ja).click(); // ミス→復帰先3
+    eq(G.words[w2.en][0], 0, "ミスでbox0"); eq(G.words[w2.en][7], 3, "復帰先3");
+    eq(dr.v0, pre, "v0は一度だけ"); eq(Math.round((dr.v-pre2)*10)/10, -0.2, "ミスは1段ぶん(0.8→0.6)だけ下がる");
+    // ヘッダ(ゲーム面オフ)
+    W.refreshHeader();
+    eq(doc.getElementById("resLv").textContent, W.fmtShort(Math.round(W.vocabScore(G)))+"語", "📖=語彙力(◯語)");
+    eq(doc.getElementById("resGold").textContent, W.fmtShort(W.masteredCount(G)), "🏅=覚えた数(単位なし)");
+    ok(doc.getElementById("resLv").textContent.indexOf("Lv")<0, "Lvはヘッダに出さない");
+    // 後片づけ
+    if(oldSt) G.words[w.en]=oldSt; else delete G.words[w.en];
+    if(oldSt2) G.words[w2.en]=oldSt2; else delete G.words[w2.en];
+    dr.a=snap.a; dr.c=snap.c; dr.m=snap.m; pd.a=snap.pa; G.tickets=snap.t; G.xp=snap.xp; G.combo=snap.cb; G.set=snap.set;
+    if(snap.v0!=null){ dr.v0=snap.v0; dr.v=snap.v; } else { delete dr.v0; delete dr.v; }
+    G.opt.qtab=oldQtab; W.saveG(); W.refreshHeader(); W.switchTab("home");
+  });
+  t("記録タブ(v5.22.0): ヒーロー=語彙力とフレーズの2色バー(薄=見込み・濃=覚えた)+今日/今週/先週・グラフは語彙力の伸び・タイルは🏆実績(Lv/XPは添え書き)・あゆみと実績にも語彙力/Lv", ()=>{
+    const G=W.G, doc=W.document;
+    const oldDays=G.days, oldWords=G.words, dk=W.todayKey();
+    G.days=Object.assign({}, oldDays); G.days[dk]=Object.assign({a:0,c:0,m:0}, G.days[dk]||{}, {v0:10, v:12.5});
+    G.words=Object.assign({}, oldWords);
+    G.words[W.WORDS[0].en]=[5, 9e12, 5, 0, 1, 0, 0, 0, Date.now(), Date.now()]; G.words[W.WORDS[1].en]=[2, 0, 1, 0, 0, 0, 0];
+    W.switchTab("rec");
+    const rb=doc.getElementById("recBox"), hero=rb.firstElementChild;
+    ok(hero.textContent.indexOf("📖 語彙力")>=0, "見出しは語彙力");
+    ok(hero.textContent.indexOf(W.fmt(Math.round(W.vocabScore(G)))+"語 / "+W.fmt(W.WORDS.length)+"語(")>=0, "見込み語数 / 全体(◯%)");
+    ok(hero.textContent.indexOf("今日 +3")>=0 || hero.textContent.indexOf("今日 +2")>=0, "今日の伸び(12.5-10=2.5→四捨五入)");
+    ok(hero.textContent.indexOf("今週 +")>=0 && hero.textContent.indexOf("先週 +")>=0, "今週・先週");
+    ok(hero.textContent.indexOf("🏅 覚えた "+W.fmt(W.masteredCount(G))+"語")>=0, "覚えた数は添え書きに残る");
+    eq(hero.querySelectorAll(".pbar.dual").length, 2, "2色バーが2本(単語・フレーズ)");
+    hero.querySelectorAll(".pbar.dual").forEach(p=>{ ok(p.querySelector("i.est") && p.querySelectorAll("i").length===2, "薄い見込み+濃い覚えたの2本のi"); });
+    const est=hero.querySelector(".pbar.dual i.est"), mas=hero.querySelector(".pbar.dual i:not(.est)");
+    ok(parseFloat(est.style.width)>=parseFloat(mas.style.width), "見込みの幅≧覚えたの幅");
+    ok(parseFloat(est.style.width)>0, "1語ぶんでも0%に丸めない");
+    ok(hero.textContent.indexOf("💬 フレーズ")>=0 && hero.textContent.indexOf("覚えたフレーズ")<0, "フレーズも見込みの数字");
+    ok(rb.querySelector(".vfoot") && rb.querySelector(".vfoot").textContent.indexOf("覚えた1.0")>=0, "数え方の脚注");
+    const gr=doc.getElementById("recGrowth");
+    ok(gr.textContent.indexOf("語彙力の伸び")>=0 && gr.textContent.indexOf("覚えた数の伸び")<0, "グラフは語彙力の伸び");
+    ok(gr.textContent.indexOf("v5.22.0")>=0, "記録の始まりを脚注に");
+    const sg=rb.querySelector(".statgrid");
+    ok(sg.textContent.indexOf("🏆 実績")>=0 && sg.textContent.indexOf("知識XP")<0, "タイルは実績(知識XPの名は消える)");
+    const tile=doc.getElementById("statXP");
+    ok(tile.textContent.indexOf("Lv"+W.accountLevel())>=0 && tile.textContent.indexOf("XP")>=0, "Lv/XPは実績タイルの添え書き");
+    tile.click(); ok(doc.querySelector("#modal .achlv") && doc.querySelector("#modal .achlv").textContent.indexOf("Lv"+W.accountLevel())>=0, "実績モーダルにLv/XP"); W.closeModal();
+    doc.getElementById("heroWords").click();
+    const m=doc.getElementById("modal");
+    ok(m.textContent.indexOf("語彙力(見込み語数)")>=0 && m.textContent.indexOf("この期間 +")>=0 && m.textContent.indexOf("いま "+W.fmt(Math.round(W.vocabScore(G)))+"語")>=0, "あゆみに語彙力の行(この期間の伸び・いま)");
+    W.closeModal();
+    // カレンダーの日タップに伸び
+    W.openCalendarModal(0);
+    const cell=[...doc.querySelectorAll("#modal .cd")].find(c=>c.classList.contains("today"));
+    if(cell){ cell.click(); ok(doc.getElementById("toast").textContent.indexOf("語彙力+")>=0 || doc.body.textContent.indexOf("語彙力+")>=0, "日タップに語彙力の伸び"); }
+    W.closeModal();
+    G.days=oldDays; G.words=oldWords; W.switchTab("home");
   });
   t("覚えた日時(v5.16.0): 答えてbox5に到達した瞬間にst[9]、解くたびにst[8]・以前に覚えた語は移行で最後の正解時刻を入れる", ()=>{
     const G=W.G, doc=W.document;
@@ -4749,10 +4866,8 @@ async function runAsync(W){
     // 移行: st[4]=1 で st[9] なし → 最後の正解時刻で近似(冪等)
     const legacy=[5, 9e12, 6, 0, 1, 0, 1.6e12], legacyP=[5, 9e12, 6, 0, 1, 0, 1.5e12], learning=[2, 0, 3, 1, 0, 0, 1.6e12];
     const gg={words:{x:legacy, y:learning}, phr:{p:legacyP}};
-    eq(W.growthByWeek(gg, 8, new Date(1.6e12)).reduce((s,x)=>s+x.w,0), 0, "st[9]がなければ数えない(移行前)");
     W.migMasteredAt(gg);
     eq(legacy[9], 1.6e12, "覚えた語はst[6]で近似"); eq(legacyP[9], 1.5e12, "フレーズも"); eq(learning[9], undefined, "学習中の語には入れない");
-    eq(W.growthByWeek(gg, 8, new Date(1.6e12)).reduce((s,x)=>s+x.w,0), 1, "移行後は数える");
     W.migMasteredAt(gg); eq(legacy[9], 1.6e12, "冪等");
     if(oldSt) G.words[w.en]=oldSt; else delete G.words[w.en];
     dr.a=snap.a; dr.c=snap.c; dr.m=snap.m; pd.a=snap.pa; G.tickets=snap.t; G.xp=snap.xp; G.combo=snap.cb; G.set=snap.set;
@@ -4769,27 +4884,27 @@ async function runAsync(W){
     const rb=doc.getElementById("recBox");
     const hero=rb.firstElementChild;
     ok(hero.classList.contains("growhero"), "いちばん上は成長のヒーロー");
-    ok(hero.querySelector(".gplus").textContent.indexOf("+1語")===0, "今週+1語=今日覚えて、いまも覚えている語だけ(v5.16.0・days.mの+2や忘れた語は数えない)");
-    ok(hero.textContent.indexOf("忘れて学習中に戻った語は数えない")<0 && rb.textContent.indexOf("忘れて学習中に戻った語は数えない")>=0, "脚注に数え方");
-    eq(hero.querySelectorAll(".pbar").length, 2, "覚えた単語・フレーズの2本のバー");
+    ok(hero.querySelector(".gplus").textContent.indexOf("+")===0, "伸びは語彙力(v5.22.0: 覚えた数ではなく日別記録のv-v0)");
+    ok(rb.textContent.indexOf("忘れると1段ぶん下がる")>=0, "脚注に数え方");
+    eq(hero.querySelectorAll(".pbar").length, 2, "語彙力・フレーズのバー");
     ok(hero.textContent.indexOf("/ "+W.fmt(W.WORDS.length)+"語")>=0, "全体に対する到達");
     ok(hero.textContent.indexOf("今週")>=0 && hero.textContent.indexOf("先週")>=0, "今週・先週の伸び");
     ok(hero.querySelector(".gplus") && hero.querySelector(".gplus").textContent.indexOf("+")===0, "伸びは+で");
     ok(!rb.querySelector("table.stt"), "数字の表(9行)は無い");
     const gr=doc.getElementById("recGrowth");
-    ok(gr && gr.previousElementSibling===hero, "2番目は覚えた数の伸び");
+    ok(gr && gr.previousElementSibling===hero, "2番目は語彙力の伸び");
     eq(gr.querySelectorAll(".hcol").length, 8, "8週の棒"); ok(gr.textContent.indexOf("今週")>=0, "最後の棒は今週");
     ok(gr.querySelector(".hbar.cur"), "今週の棒は強調");
     const sg=rb.querySelector(".statgrid");
     ok(sg && sg.previousElementSibling===gr, "3番目はタイル"); eq(sg.querySelectorAll(".stat").length, 6, "タイルは6枚");
-    ["🔥 連続学習","📅 学習した日","✅ 累計正解","📖 知識XP","📰 今日の英語","🔥 にがて"].forEach(s=>ok(sg.textContent.indexOf(s)>=0, "タイル: "+s));
+    ["🔥 連続学習","📅 学習した日","✅ 累計正解","🏆 実績","📰 今日の英語","🔥 にがて"].forEach(s=>ok(sg.textContent.indexOf(s)>=0, "タイル: "+s));
     ok(sg.textContent.indexOf("正答率")>=0, "累計正解に正答率");
     const links=rb.querySelector(".homelinks");
     ok(links && links.previousElementSibling===sg, "4番目は入口");
     eq(links.querySelectorAll(".btn").length, 3, "入口は3つ(ペース管理・マイ単語・図鑑)=重複した4つは撤去(v5.21.0)");
     eq(sg.querySelectorAll("button.stat.tap").length, 6, "タイルは6枚ともタップできる(v5.21.0)");
     ok(!doc.getElementById("recAchFold"), "実績の折りたたみは無い(知識XPのタイルから・v5.21.0)");
-    ok(sg.textContent.indexOf("🏆 実績")>=0, "知識XPのタイルに実績の達成数");
+    ok(sg.textContent.indexOf("🏆 実績")>=0 && sg.textContent.indexOf("Lv")>=0, "実績のタイルに達成数とLv(v5.22.0)");
     G.days=oldDays; G.words=oldWords; G.phr=oldPhr; W.switchTab("home");
   });
   t("目安とセット(v5.14.0): 目安の問数に厳密・端数のセットは短い●・達成は問数で判定", ()=>{

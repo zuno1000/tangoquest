@@ -243,6 +243,11 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
 .stathint{grid-column:1/-1; font-size:11px; font-weight:700; color:var(--sub); text-align:center; padding-top:2px}
 .herorow{cursor:pointer; border-radius:12px}
 .herorow:active{opacity:.8}
+/* v5.22.0: 語彙力の2色バー=薄い色(est)が見込み・濃い色が覚えた。見込みは下に敷いて重ねる */
+.pbar.dual{position:relative}
+.pbar.dual i{position:absolute; left:0; top:0}
+.pbar.dual i.est{opacity:.35}
+.growhero .vfoot{margin-top:12px; border-top:1px solid var(--bg2); padding-top:8px}
 .calwd{display:grid; grid-template-columns:repeat(7,1fr); gap:4px; margin-top:10px; text-align:center; font-size:10px; font-weight:800; color:var(--sub)}
 .calgrid{display:grid; grid-template-columns:repeat(7,1fr); gap:4px; margin-top:4px}
 .cd{aspect-ratio:1; display:flex; flex-direction:column; align-items:center; justify-content:center; border:none; padding:0; border-radius:10px;

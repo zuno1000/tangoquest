@@ -611,9 +611,12 @@ function answer(chosen, btn){
   const wasNew=!st;
   if(!st) st=G.words[w.en]=[0,0,0,0,0,0,0];
   const preSt=st.slice(); // ドロップ判定は解答前の状態で
+  const d=dayRec();
+  const vPre=vocabScore(G); // 語彙力(v5.22.0): 解く前の値。日別記録にv0(その日の始まり)とv(最後)を残す
   srsApply(st, ok, now, {fast:true}); // 単語は既知語の早回しあり(v5.8.0)
   st[8]=now; // 最後に解いた時刻(v5.16.0・同期は新しい方が勝つ)
-  const d=dayRec(); recordDayAnswer(d, wasNew, ok);
+  recordDayAnswer(d, wasNew, ok);
+  const vMile=vocabSnap(d, vPre, vocabScore(G)); // 100語の節目を越えたらお祝い(ゲーム面オフのレベルアップの代わり)
   const bonus5=ansBonus(); // 5問ごとの🎫ボーナス(v4.31.0・上限なし・全入口共通/v5.0.0からフレーズと合算)
   let justMastered=false;
   if(ok && st[0]>=MASTER_BOX && !st[4]){ st[4]=1; st[9]=now; d.m++; justMastered=true; }
@@ -663,7 +666,8 @@ function answer(chosen, btn){
     const drop=addCard(w.en, rar); // カードの記録はゲーム面オフでも続ける(戻したとき欠けない・演出だけ隠す=v5.13.0)
     // 「覚えた」の瞬間がいちばん大事なお祝い(v4.13.0)。次点でレベルアップ・★アップ
     if(justMastered){ toast("🏅 "+w.en+" を覚えた! 7日あけても思い出せた"); vibe([30,40,60]); bigT=true; }
-    else if(lvUp){ toast("📖 レベルアップ! Lv"+lvUp+(GAME_ENABLED? " ─ 全ステータス強化":"")); vibe(40); bigT=true; }
+    else if(!GAME_ENABLED && vMile){ toast("📖 語彙力 "+fmt(vMile)+"語に到達! 見込みの語数が節目を越えた"); vibe(40); bigT=true; } // v5.22.0
+    else if(GAME_ENABLED && lvUp){ toast("📖 レベルアップ! Lv"+lvUp+" ─ 全ステータス強化"); vibe(40); bigT=true; }
     else if(GAME_ENABLED && drop.rarUp){ toast("🎉 "+w.en+" のカードが★"+drop.rar+"にランクアップ!"); vibe(30); bigT=true; }
     else if(GAME_ENABLED && rar>=3) vibe(30);
     // 🎫は毎正解なのでトースト・結果バー表示は出さない(残高は設定・記録とガチャ画面で確認)

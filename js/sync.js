@@ -132,6 +132,13 @@ function srsNewer(x, y){
   if(tx!==ty) return ty>tx;
   return (y[2]+y[3])>(x[2]+x[3]);
 }
+/* 語彙力の日別記録(v5.22.0・days/pdaysのv0/v)の合流(純関数・xを更新): v0=その日の始まりの値は小さい方(先に解き始めた側)・
+   v=最後の値は大きい方。片側にしかなければそれ。無いもの同士は作らない(v=0を生んでしまうと伸びの計算が濁る) */
+function mergeVocabSnap(x, y){
+  if(x.v0!=null || y.v0!=null) x.v0=(x.v0!=null && y.v0!=null)? Math.min(x.v0, y.v0) : (x.v0!=null? x.v0 : y.v0);
+  if(x.v!=null || y.v!=null) x.v=Math.max(x.v!=null? x.v : -Infinity, y.v!=null? y.v : -Infinity);
+  return x;
+}
 function mergeData(a, b){
   b=b||{};
   if((a.resetAt||0)!==(b.resetAt||0)){
@@ -196,7 +203,7 @@ function mergeData(a, b){
   for(const k in b.pdays||{}){
     const x=m.pdays[k], y=b.pdays[k];
     if(!x) m.pdays[k]=y;
-    else ["a","c","m"].forEach(f=>{ x[f]=Math.max(x[f]||0, y[f]||0); });
+    else{ ["a","c","m"].forEach(f=>{ x[f]=Math.max(x[f]||0, y[f]||0); }); mergeVocabSnap(x, y); }
   }
   // 日別学習記録: 日ごとに大きい方(fz=フリーズが守った日も「守られた」側を保持)
   for(const k in b.days||{}){
@@ -212,6 +219,7 @@ function mergeData(a, b){
         x[f]=Math.max(x[f]||0, y[f]||0);
       });
       if(t) x.t=t;
+      mergeVocabSnap(x, y);
     }
   }
   // カード在庫: キーごとに多い方

@@ -469,7 +469,9 @@ function openHistoryModal(page){
       'アプリを使いはじめてからのすべての記録(リセットしない限り残り続ける)。'+
       '日付は端末の時計基準(0時で翌日に切り替わる)。'+
       '複数の端末で<b>同じ日</b>に学習して同期した場合、その日の記録は多い方の端末の数になる(合算はされない)。'+
-      '新規/復習別の全期間集計は内訳の記録を始めた日(v4.12.0)以降が対象')+
+      '新規/復習別の全期間集計は内訳の記録を始めた日(v4.12.0)以降が対象<br><br>'+
+      '📖 <b>語彙力(見込み語数)</b>: すべての単語を定着の段階に応じて数えた合計(覚えた=1語・定着4=0.8・3=0.6・2=0.4・1=0.2)。'+
+      '正解して定着が進むごとに増え、忘れると1段ぶん下がる。伸びの記録はv5.22.0から')+
     '<div class="row histnav" style="gap:8px; margin-top:6px">'+
       '<button class="btn hnav" id="histPrev"'+(hasPrev?'':' disabled')+'>◀</button>'+
       '<div class="grow" style="text-align:center; font-weight:800">'+h[0].md+' 〜 '+h[13].md+
@@ -488,6 +490,8 @@ function openHistoryModal(page){
           '</td></tr>'
         : '')+
       (tgtDays? '<tr><td>この期間の目安達成</td><td>'+hitDays+' / '+tgtDays+'日</td></tr>':'')+
+      // 語彙力(v5.22.0): この期間の伸び(日別記録のv-v0の合計)といまの値
+      '<tr><td>語彙力(見込み語数)</td><td>この期間 <b>'+gainText(h.reduce((s,x)=>s+dayGain(G.days[x.k]), 0))+'</b> ・ いま '+fmt(Math.round(vocabScore(G)))+'語</td></tr>'+
     '</table>'+ // v5.21.0: 学習した日数・連続・覚えた単語の行は撤去(📅カレンダー・記録タブのヒーローに集約)
     '<button class="btn rlentry" id="histCal"><span class="grow">📅 学習カレンダー</span><span class="hlsub">月ごとの色塗り・連続・累計 ›</span></button>');
   $("histCal").onclick=()=>openCalendarModal(0);

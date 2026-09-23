@@ -552,9 +552,12 @@ function phrFinish(ok){
   const wasNew=!st;
   if(!st) st=G.phr[p.en]=[0,0,0,0,0,0,0];
   const preBox=st[0];
+  const pd=pdayRec();
+  const vPre=knowScore(G.phr); // 語彙力(v5.22.0): フレーズも同じ物差しでpdaysにv0/vを残す
   srsApply(st, ok, now);
   st[8]=now; // 最後に解いた時刻(v5.16.0・同期は新しい方が勝つ)
-  const pd=pdayRec(); pd.a++; if(ok) pd.c++;   // 目安・あゆみとは別台帳(G.pdays)
+  pd.a++; if(ok) pd.c++;   // 目安・あゆみとは別台帳(G.pdays)
+  vocabSnap(pd, vPre, knowScore(G.phr));
   const bonus5=ansBonus();                      // 5問ボーナスは単語+フレーズの合算
   track("ans"); if(ok) track("cor");            // 任務・実績のクイズ系は共有
   phrNoteRecent(p.en);
@@ -573,7 +576,7 @@ function phrFinish(ok){
     G.xp+=Math.round((10+(justMastered?40:0))*streakXpMult()*comboXpMult()*abilityXpMult());
     const l1=accountLevel();
     if(justMastered){ toast("🏅 フレーズを覚えた! 7日あけても出てきた"); vibe([30,40,60]); bigT=true; }
-    else if(l1>l0){ toast("📖 レベルアップ! Lv"+l1+(GAME_ENABLED? " ─ 全ステータス強化":"")); vibe(40); bigT=true; }
+    else if(GAME_ENABLED && l1>l0){ toast("📖 レベルアップ! Lv"+l1+" ─ 全ステータス強化"); vibe(40); bigT=true; } // v5.22.0: ゲーム面オフではLvは実績の中だけ
   }else{
     G.combo=0;
   }
