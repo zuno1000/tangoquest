@@ -353,9 +353,8 @@ function openPaceModal(){
           ' ・ 間隔をあけた復習の正答率 '+Math.round(est.recall*100)+'%'+
             (est.sampledR? '':'(標準値: 直近に復習の出題が少ない)')+
           ' ・ 1語を覚え切るまで 約'+(Math.round(srsCostUnseen(est)*10)/10)+'問'
-        : 'まだ分析中(新規・復習をそれぞれ8問以上解くと精度が上がる。いまは標準値で計算)')+'</div>'+
-    '<button class="btn" id="paceHist" style="margin-top:12px">📊 学習のあゆみ(これまでの記録)</button>');
-  $("paceHist").onclick=openHistoryModal;
+        : 'まだ分析中(新規・復習をそれぞれ8問以上解くと精度が上がる。いまは標準値で計算)')+'</div>');
+  // v5.21.0: 「📊 学習のあゆみ」ボタンは撤去(記録タブのタイルに集約=重複の解消)
   const upd=()=>{
     const v=$("goalDate").value, box=$("paceCalc");
     if(!v || v<=today){ box.innerHTML='<div class="small">明日以降の日付を選ぶと計算結果が出る</div>'; return; }
@@ -436,9 +435,8 @@ function openHistoryModal(page){
   for(const k in G.days){ const r=G.days[k]; if((r.a||0)>0 && (!oldest || k<oldest)) oldest=k; }
   const hasPrev=!!(oldest && oldest<h[0].k);
   // 累計(全期間・G.daysは消さずに残している)
-  let daysN=0, tot=0, totC=0;
-  for(const k in G.days){ const r=G.days[k]; if(r.a>0){ daysN++; tot+=r.a; totC+=r.c; } }
-  let mastered=0; for(const en in G.words){ if(G.words[en][0]>=MASTER_BOX) mastered++; }
+  let tot=0, totC=0;
+  for(const k in G.days){ const r=G.days[k]; if(r.a>0){ tot+=r.a; totC+=r.c; } }
   const tgtDays=h.filter(x=>x.t>0).length;
   const hitDays=h.filter(x=>x.t>0 && x.a>=x.t).length;
   const periodA=h.reduce((s,x)=>s+x.a, 0);
@@ -489,10 +487,10 @@ function openHistoryModal(page){
             '新規 '+(sNa? Math.round(100*sNc/sNa)+'%':'−')+' ・ 復習 '+(sRa? Math.round(100*sRc/sRa)+'%':'−')+
           '</td></tr>'
         : '')+
-      '<tr><td>学習した日数</td><td>'+daysN+'日(連続 '+studyStreak()+'日 ・ 🧊'+(G.frz||0)+'/'+FRZ_MAX+')</td></tr>'+
       (tgtDays? '<tr><td>この期間の目安達成</td><td>'+hitDays+' / '+tgtDays+'日</td></tr>':'')+
-      '<tr><td>覚えた単語</td><td>'+fmt(mastered)+' / '+fmt(WORDS.length)+'語</td></tr>'+
-    '</table>');
+    '</table>'+ // v5.21.0: 学習した日数・連続・覚えた単語の行は撤去(📅カレンダー・記録タブのヒーローに集約)
+    '<button class="btn rlentry" id="histCal"><span class="grow">📅 学習カレンダー</span><span class="hlsub">月ごとの色塗り・連続・累計 ›</span></button>');
+  $("histCal").onclick=()=>openCalendarModal(0);
   $("histPrev").onclick=()=>{ if(hasPrev) openHistoryModal(page+1); };
   $("histNext").onclick=()=>{ if(page>0) openHistoryModal(page-1); };
 }

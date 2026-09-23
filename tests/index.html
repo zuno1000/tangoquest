@@ -1606,10 +1606,10 @@ function run(){
   });
   t("あゆみへの導線: 学習ペース管理モーダルと設定の両方にある", ()=>{
     W.openPaceModal();
-    ok(W.document.getElementById("paceHist"), "ペースモーダルにボタン");
+    ok(!W.document.getElementById("paceHist"), "ペースモーダルの「あゆみ」ボタンは撤去(v5.21.0: 記録タブに集約)");
     W.closeModal();
     W.switchTab("rec");
-    ok(W.document.getElementById("histBtn"), "記録タブにボタン");
+    ok(W.document.getElementById("statCor") && W.document.getElementById("heroWords"), "記録タブの累計正解タイル・覚えた単語の行からあゆみへ(v5.21.0)");
     W.openSettings();
     ok(W.document.getElementById("updateBtn").textContent.indexOf("🔄")<0, "更新ボタンにアイコンなし");
     W.closeModal(); W.switchTab("home");
@@ -2346,12 +2346,13 @@ function run(){
     ok(W.document.querySelector("#homeWeek .wc.today.did") && !W.document.querySelector("#homeWeek .wc.today.hit"), "学習しただけの日は青");
     dr.a=snap.a; if(snap.t===undefined) delete dr.t; else dr.t=snap.t; W.renderHome();
     W.document.getElementById("homeWeek").click();
-    ok(W.document.querySelector("#modal .histchart"), "カレンダーのタップで学習のあゆみが開く");
+    ok(W.document.querySelector("#modal .calgrid"), "カレンダーのタップで月の学習カレンダーが開く(v5.21.0)");
     W.closeModal();
     // 実績・図鑑は📊記録タブから(v5.14.0: ⚙設定・記録→記録タブへ移設)
     W.switchTab("rec");
-    ok(W.document.getElementById("recAch") && W.document.getElementById("setDexBtn"), "記録タブに実績・図鑑の入口");
-    ok(W.document.querySelectorAll("#recAch .mrow").length===W.LEARN_ACH_DEFS.length, "実績は記録タブに直接並ぶ");
+    ok(W.document.getElementById("statXP") && W.document.getElementById("setDexBtn"), "記録タブに実績(知識XPのタイル)・図鑑の入口");
+    W.document.getElementById("statXP").click();
+    ok(W.document.querySelectorAll("#modal #recAch .mrow").length===W.LEARN_ACH_DEFS.length, "知識XPのタイルで実績が開く(v5.21.0)"); W.closeModal();
     W.document.getElementById("setDexBtn").click();
     ok(W.document.getElementById("dexSeg"), "記録タブの入口から図鑑が開く");
     W.closeModal(); W.switchTab("home");
@@ -3056,8 +3057,8 @@ function run(){
     ok(doc.getElementById("promptWord").textContent.length>0, "通常の出題に戻る");
     // 📊記録タブの入口と、にがてノートのモーダル
     W.switchTab("rec");
-    ok(doc.getElementById("weakBtn"), "記録タブに🔥にがてノート");
-    doc.getElementById("weakBtn").click();
+    ok(doc.getElementById("statWeak"), "記録タブの🔥にがてタイル");
+    doc.getElementById("statWeak").click();
     ok(doc.getElementById("modal").textContent.indexOf("にがてノート")>=0 && doc.getElementById("weakGo"), "ノートと特訓ボタン");
     W.closeModal();
     list.forEach((en,i)=>{ if(olds[i]) G.words[en]=olds[i]; else delete G.words[en]; });
@@ -3316,7 +3317,7 @@ function run(){
     ok(doc.getElementById("rlhBack"), "◀今日の英語");
     W.closeModal();
     W.openRLModal(); ok(doc.getElementById("rlHistBtn"), "今日の英語に記録の入口"); W.closeModal();
-    W.switchTab("rec"); ok(doc.getElementById("rlHistBtn2"), "記録タブにも入口"); W.switchTab("home");
+    W.switchTab("rec"); ok(doc.getElementById("statRL"), "記録タブの今日の英語タイルからも(v5.21.0)"); W.switchTab("home");
     G.rl.done=oldDone; W.renderHome();
   });
   t("ペース試算: 1日の問題数を増やすほど習得見込みが伸び、全語で頭打ち", ()=>{
@@ -3627,6 +3628,57 @@ function run(){
     eq(W.getComputedStyle(doc.getElementById("rlHistBtn")).textAlign, "left", "記録の入口も左寄せ");
     ok(doc.getElementById("rlHistBtn").textContent.indexOf("本")>=0, "件数は右端に");
     W.closeModal(); G.rl.flowSeen=oldSeen;
+  });
+  t("v5.21.0①: マイ単語の並びは登録順で固定 ─ 品詞・意味を直しても順番が変わらない(ca=登録時刻・atは同期用)", ()=>{
+    const G=W.G, old=G.myw; G.myw={};
+    const r1=W.mywAdd("zzfirstword", "最初", "n"); const r2=W.mywAdd("zzsecondword", "二番目", "n");
+    ok(!r1.err && !r2.err, "登録"); ok(G.myw.zzfirstword.ca>0, "登録時刻caを持つ");
+    G.myw.zzfirstword.ca=1000; G.myw.zzfirstword.at=1000; G.myw.zzsecondword.ca=2000; G.myw.zzsecondword.at=2000;
+    eq(W.mywList().map(m=>m.en).join(","), "zzsecondword,zzfirstword", "新しい登録が先");
+    W.mywUpdate("zzfirstword", "", "v");
+    ok(G.myw.zzfirstword.at>1000, "操作時刻atは進む(同期の勝敗用)"); eq(G.myw.zzfirstword.ca, 1000, "登録時刻caは変わらない");
+    eq(W.mywList().map(m=>m.en).join(","), "zzsecondword,zzfirstword", "品詞を変えても並びは同じ(以前は先頭へ跳んだ)");
+    W.mywUpdate("zzfirstword", "いちばん", "");
+    eq(W.mywList().map(m=>m.en).join(","), "zzsecondword,zzfirstword", "意味を直しても同じ");
+    // 旧記録(caなし): 最初の手直しでcaを固定するので、以後は動かない
+    G.myw.zzold={ja:"古い", pos:"n", at:1500}; W.mywUpdate("zzold", "", "adj");
+    eq(G.myw.zzold.ca, 1500, "旧記録は元のatを登録時刻として固定");
+    eq(W.mywList().map(m=>m.en).join(","), "zzsecondword,zzold,zzfirstword", "旧記録も元の位置のまま");
+    W.openMywList(); ok(W.document.querySelectorAll("#modal .mywpos2").length===3, "一覧に3語"); W.closeModal();
+    ["zzfirstword","zzsecondword","zzold"].forEach(en=>W.mywUnmount(en)); G.myw=old; W.saveG();
+  });
+  t("v5.21.0②: 学習カレンダー(calendarMonth・純関数) ─ 月初の空白・学習した日/目安達成/フリーズ/未来/今日・合計", ()=>{
+    const G=W.G, old=G.days, oldRl=G.rl.done;
+    G.days={"2026-09-05":{a:30,c:20,t:20}, "2026-09-06":{a:5,c:3,t:20}, "2026-09-07":{a:0,fz:1}, "2026-08-31":{a:9,c:9}};
+    G.rl.done={"u1":{d:"2026-09-06", k:"read"}, "u2":{d:"2026-09-06", k:"listen"}};
+    const cal=W.calendarMonth(G, 2026, 9, "2026-09-23");
+    eq(cal.cells.length, 2+30, "2026年9月1日は火曜=空白2+30日"); ok(cal.cells[0]===null && cal.cells[1]===null && cal.cells[2].d===1, "空白の後に1日");
+    const by=d=>cal.cells[1+d];
+    ok(by(5).hit && by(5).did, "9/5=目安達成"); ok(by(6).did && !by(6).hit, "9/6=学習しただけ"); ok(by(7).fz && !by(7).did, "9/7=フリーズ");
+    ok(by(25).future && !by(23).future && by(23).today, "未来と今日");
+    eq(by(6).rl.r, 1); eq(by(6).rl.l, 1, "📖🎧の印");
+    eq(cal.daysN, 2); eq(cal.tot, 35); eq(cal.totC, 23); eq(cal.hitN, 1);
+    eq(W.calendarMonth(G, 2026, 8, "2026-09-23").tot, 9, "前月は別に数える");
+    G.days=old; G.rl.done=oldRl;
+  });
+  t("v5.21.0③: 記録タブのタイルで詳細が開く ─ 連続/学習した日→📅カレンダー(日タップ・◀▶・あゆみへ)・累計正解→あゆみ・知識XP→実績・今日の英語→記録・にがて→ノート・ホームの今週の記録→カレンダー", ()=>{
+    const G=W.G, doc=W.document, old=JSON.parse(JSON.stringify(G.days));
+    const dk=W.todayKey(); G.days[dk]=Object.assign(G.days[dk]||{a:0,c:0,m:0}, {a:12, c:9});
+    W.switchTab("rec");
+    doc.getElementById("statStreak").click();
+    ok(doc.querySelector("#modal .calgrid") && doc.getElementById("calPrev") && doc.getElementById("calNext"), "カレンダーのモーダル");
+    ok(doc.querySelectorAll("#modal .calgrid .cd:not(.blank)").length>=28, "その月の日が並ぶ");
+    ok(doc.querySelector("#modal .cd.today") && doc.querySelector("#modal .cd.today").classList.contains("did"), "今日は学習した日(青)+枠線");
+    ok(doc.getElementById("modal").textContent.indexOf("累計解答")>=0 && doc.getElementById("modal").textContent.indexOf("正答率")>=0, "累計の問数と正答率");
+    ok(doc.getElementById("calNext").disabled, "いまの月では▶は無効");
+    doc.querySelector("#modal .cd.today").click(); ok(doc.getElementById("toast").textContent.indexOf("12問")>=0, "日をタップ=その日の問数");
+    doc.getElementById("calHist").click(); ok(doc.querySelector("#modal .histchart") && doc.getElementById("histCal"), "カレンダー→日ごとのグラフ(戻りのボタンあり)"); W.closeModal();
+    W.switchTab("rec"); doc.getElementById("statDays").click(); ok(doc.querySelector("#modal .calgrid"), "学習した日のタイルもカレンダー"); W.closeModal();
+    W.switchTab("rec"); doc.getElementById("statRL").click(); ok(doc.getElementById("modal").textContent.indexOf("読んだ・聴いたの記録")>=0, "今日の英語→記録"); W.closeModal();
+    W.switchTab("rec"); doc.getElementById("statWeak").click(); ok(doc.getElementById("weakGo"), "にがて→ノート"); W.closeModal();
+    W.switchTab("rec"); doc.getElementById("heroWords").click(); ok(doc.getElementById("histPrev"), "覚えた単語の行→学習のあゆみ"); W.closeModal();
+    W.switchTab("home"); doc.getElementById("homeWeek").click(); ok(doc.querySelector("#modal .calgrid"), "ホームの今週の記録→カレンダー"); W.closeModal();
+    G.days=old; W.renderHome();
   });
   t("v5.20.0③: お知らせはゲーム面オフではイベントタブなし(アップデートだけの1枚)", ()=>{
     const doc=W.document;
@@ -4235,10 +4287,11 @@ async function runAsync(W){
     W.closeModal();
     // 導線: 📊記録タブと🎤実戦メニュー
     W.switchTab("rec");
-    ok(doc.getElementById("phrHistBtn"), "記録タブに入口");
+    ok(doc.getElementById("heroPhr"), "記録タブの「覚えたフレーズ」の行から(v5.21.0)");
+    doc.getElementById("heroPhr").click(); ok(doc.getElementById("phrHistPrev"), "行のタップでフレーズのあゆみ");
     W.closeModal();
     W.openDrillMenu();
-    ok(doc.getElementById("phrHistBtn2"), "実戦メニューにも入口");
+    ok(!doc.getElementById("phrHistBtn2"), "実戦メニューの重複した入口は撤去(v5.21.0)");
     W.closeModal();
     G.pdays=oldP; G.phr=oldPhr; W.saveG();
   });
@@ -4600,7 +4653,7 @@ async function runAsync(W){
     W.switchTab("rec");
     const m=doc.getElementById("recBox");
     ok(m.textContent.indexOf("🎫 チケット")<0 && m.textContent.indexOf("知識XP")>=0 && m.textContent.indexOf("🏆 実績")>=0, "記録タブの行");
-    ok(!doc.getElementById("setMissionBtn") && doc.querySelectorAll("#recAch .mrow").length===12, "任務の入口は無く実績が並ぶ");
+    ok(!doc.getElementById("setMissionBtn"), "任務の入口は無い"); doc.getElementById("statXP").click(); eq(doc.querySelectorAll("#modal #recAch .mrow").length, 12, "知識XPのタイルから実績12種"); W.closeModal();
     W.switchTab("home");
     // 図鑑: なかまは無く、カード→単語
     W.openDex("cards");
@@ -4649,10 +4702,11 @@ async function runAsync(W){
     ok(!doc.getElementById("recView").classList.contains("hidden") && doc.getElementById("navRec").classList.contains("active"), "記録タブへ");
     const rb=doc.getElementById("recBox");
     ["覚えた単語","覚えたフレーズ","今日の英語","連続学習","知識XP","累計正解","学習した日"].forEach(s=>ok(rb.textContent.indexOf(s)>=0, "数字: "+s));
-    ["histBtn","paceCfgBtn","phrHistBtn","weakBtn","rlHistBtn2","mywBtn","setDexBtn"].forEach(id=>ok(doc.getElementById(id), "入口: "+id));
-    ok(doc.getElementById("recAch") && doc.querySelectorAll("#recAch .mrow").length===W.LEARN_ACH_DEFS.length, "実績がそのまま並ぶ(v5.15.0: 折りたたみの中)");
+    ["paceCfgBtn","mywBtn","setDexBtn"].forEach(id=>ok(doc.getElementById(id), "入口: "+id));
+    ["statStreak","statDays","statCor","statXP","statRL","statWeak","heroWords","heroPhr"].forEach(id=>ok(doc.getElementById(id), "タップできる: "+id));
+    ["histBtn","phrHistBtn","weakBtn","rlHistBtn2","recAchFold","recAch"].forEach(id=>ok(!doc.getElementById(id), "重複した入口は無い: "+id));
     ok(rb.textContent.indexOf("最長")>=0, "連続学習に最長日数");
-    doc.getElementById("histBtn").click(); ok(doc.getElementById("modal").textContent.indexOf("学習のあゆみ")>=0, "あゆみが開く"); W.closeModal();
+    doc.getElementById("statCor").click(); ok(doc.getElementById("modal").textContent.indexOf("学習のあゆみ")>=0, "累計正解のタイルであゆみが開く"); W.closeModal();
     // ⚙は設定だけ
     W.openSettings();
     const m=doc.getElementById("modal");
@@ -4732,13 +4786,10 @@ async function runAsync(W){
     ok(sg.textContent.indexOf("正答率")>=0, "累計正解に正答率");
     const links=rb.querySelector(".homelinks");
     ok(links && links.previousElementSibling===sg, "4番目は入口");
-    eq(links.querySelectorAll(".btn").length, 7, "入口は7つ");
-    const fold=doc.getElementById("recAchFold");
-    ok(fold && fold.hidden, "実績は折りたたみ(既定は閉)");
-    const fb=rb.querySelector('[data-fold="recAchFold"]');
-    ok(fb && fb.textContent.indexOf("🏆 実績")>=0 && fb.textContent.indexOf("達成")>=0, "見出しに達成数");
-    eq(fold.querySelectorAll("#recAch .mrow").length, W.LEARN_ACH_DEFS.length, "中身はDOMに常在");
-    fb.click(); ok(!fold.hidden, "タップで開く");
+    eq(links.querySelectorAll(".btn").length, 3, "入口は3つ(ペース管理・マイ単語・図鑑)=重複した4つは撤去(v5.21.0)");
+    eq(sg.querySelectorAll("button.stat.tap").length, 6, "タイルは6枚ともタップできる(v5.21.0)");
+    ok(!doc.getElementById("recAchFold"), "実績の折りたたみは無い(知識XPのタイルから・v5.21.0)");
+    ok(sg.textContent.indexOf("🏆 実績")>=0, "知識XPのタイルに実績の達成数");
     G.days=oldDays; G.words=oldWords; G.phr=oldPhr; W.switchTab("home");
   });
   t("目安とセット(v5.14.0): 目安の問数に厳密・端数のセットは短い●・達成は問数で判定", ()=>{

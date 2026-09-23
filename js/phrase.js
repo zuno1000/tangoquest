@@ -252,10 +252,8 @@ function openDrillMenu(){
       return '<button class="btn drillbtn" data-drill="'+k+'"><span>'+d.icon+' <b>'+d.name+'</b>'+
         (k===today? ' <span class="drilltoday">今日のドリル</span>':'')+'</span>'+
         '<span class="hlsub">'+d.desc+'</span></button>';
-    }).join("")+
-    '<button class="btn" id="phrHistBtn2" style="margin-top:12px; width:100%">📊 フレーズのあゆみ(これまでの記録)</button>');
+    }).join("")); // v5.21.0: 「📊 フレーズのあゆみ」ボタンは撤去(記録タブの「覚えたフレーズ」の行から=重複の解消)
   $("modal").querySelectorAll("[data-drill]").forEach(b=>{ b.onclick=()=>startDrill(b.dataset.drill); });
-  $("phrHistBtn2").onclick=()=>openPhrHistoryModal(0);
   // マイフレーズが0件のときは特訓を選べない(➕からの登録を案内)
   if(!myphrList().length){
     const b=$("modal").querySelector('[data-drill="mine"]');

@@ -46,6 +46,7 @@ const EVENTS=[
   // {d:"2026-08-03", t:"..."} 形式でバナー以外のイベント告知を書く
 ];
 const NEWS=[
+  {d:"2026-09-23", t:"🔧 v5.21.0 記録タブを整理: タイル(連続学習・学習した日・累計正解・知識XP・今日の英語・にがて)をタップすると詳細が開く。新設の📅学習カレンダーは月ごとの色塗り(金=目安達成・青=学習した日・🧊フリーズ・📖🎧)と累計の問数・正答率、日をタップでその日の記録。覚えた単語/フレーズの行からあゆみへ。重複していた入口(あゆみ・フレーズのあゆみ・にがて・読んだ聴いた・ペース管理と実戦メニューのあゆみボタン)を撤去し、実績は知識XPのタイルから。ホームの今週の記録のタップもカレンダーに。マイ単語: 品詞や意味を直しても並びが変わらない(登録順で固定)"},
   {d:"2026-09-23", t:"🔧 v5.20.1 今日の英語の見た目を整理: 「📘 進め方」を読む/聴く/時間がない日の3区画に分け、手順は番号つきで見出しと説明を分けた(スマホで読みやすく)。「分からなかった単語を登録」「読んだ・聴いたの記録」は他の行と同じ左寄せの1行に"},
   {d:"2026-09-23", t:"🔧 v5.20.0 ①今日の目安の日ごとのぶれを抑える: 前日に固定した値から±10%以内で調整する(推定の材料が直近100問なので、調子の良し悪しで翌日の数字が跳ねていた。目標日を変えたときは即時に引き直す) ②今日の目安は、起動時の自動同期が済んでから固定する(別の端末が前回の同期で上げた記録まで織り込んだ値になる。1台しか開かない日でも機能し、同期できない・不要なときや最初の解答で固定) ③お知らせの「イベント」タブを廃止(ガチャの告知はなくなったため。アップデートだけの1枚に)"},
   {d:"2026-09-23", t:"🔧 v5.19.1 「何度同期しても今日の目安が揃わない」を修正: 更新前の版が固定した今日の目安どうしは同期で手元の値が勝ってしまい揃わなかった。同点のときは目安の小さい方を採る規則にし、どちらの端末で同期しても同じ数字に収束する(推定ログの旧記録も同様)。今日すでにずれている端末は、次の同期で小さい方に揃う"},
@@ -215,7 +216,7 @@ function renderHome(){
           (stk>=1? '<span style="color:var(--accent)">🔥'+stk+'日連続</span>':'<span class="small">今日から連続記録を</span>')+
           (G.frz? ' <span class="small" title="連続学習フリーズ">🧊'+G.frz+'</span>':'')+'</b></div>'+
       '<div class="weekcal">'+wcells+'</div>'+
-      '<div class="pacefoot"><span class="wlg hit">■</span>目安達成 <span class="wlg did">■</span>学習した日 <span class="wlg">📖</span>読んだ <span class="wlg">🎧</span>聴いた ・ タップで全期間のあゆみ ›</div>'+
+      '<div class="pacefoot"><span class="wlg hit">■</span>目安達成 <span class="wlg did">■</span>学習した日 <span class="wlg">📖</span>読んだ <span class="wlg">🎧</span>聴いた ・ タップで月のカレンダー ›</div>'+
     '</div>'+
     // ── アクション: 学習CTA(主役)
     '<button id="homeStudy" class="studycta shine">📖 '+(sp.cur? 'セットのつづき('+sp.cur+'/'+((sp.target && sp.done===sp.target-1 && sp.last<SET_N)? sp.last : SET_N)+')' : '1セット(30問)はじめる')+
@@ -240,7 +241,7 @@ function renderHome(){
     renderHome(); // バナーを畳む(モーダルは開いたまま=renderHomeはoverlayに触れない)
   };
   fillPaceEl($("homePace"));
-  $("homeWeek").onclick=()=>openHistoryModal(0);
+  $("homeWeek").onclick=()=>openCalendarModal(0); // v5.21.0: 7マス→月ごとの色塗りカレンダー(そこから日ごとのグラフへ)
   if(mn) $("homeClaim").onclick=()=>{ claimAllCurrent(); renderHome(); };
   const sn=$("homeSync");
   if(sn){ ensureGis(()=>{}); sn.onclick=()=>syncNow(); } // GIS事前ロード=タップ時のポップアップブロック防止

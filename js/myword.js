@@ -112,8 +112,10 @@ function mywParse(text){
 
 /* ---- 台帳 ---- */
 function mywActive(){ return Object.keys(G.myw||{}).filter(en=>{ const m=G.myw[en]; return m && !m.del; }); }
-function mywList(){ // 自分で定義した語(内蔵参照は含まない)。新しい順
-  return mywActive().filter(en=>!G.myw[en].ref).map(en=>Object.assign({en}, G.myw[en])).sort((a,b)=>(b.at||0)-(a.at||0));
+function mywList(){ // 自分で定義した語(内蔵参照は含まない)。登録の新しい順
+  /* v5.21.0(実機FB「品詞を変えると勝手に並び替わる」): 並びの鍵は登録時刻(ca)。at=最後の操作時刻は同期の勝敗にだけ使う。
+     以前はatで並べていたため、品詞や意味を直すとその語が先頭へ跳び、隣の語を誤タップしやすかった。旧記録(caなし)はatで代用 */
+  return mywActive().filter(en=>!G.myw[en].ref).map(en=>Object.assign({en}, G.myw[en])).sort((a,b)=>(b.ca||b.at||0)-(a.ca||a.at||0));
 }
 function mywPending(){ return mywList().filter(m=>!m.ja); } // 意味待ち
 function isMyWord(en){ const m=G.myw && G.myw[en]; return !!(m && !m.del && !m.ref); }
@@ -147,10 +149,11 @@ function mywAdd(en, ja, pos, ex, src){
   }
   if(cur && !cur.del){
     if(cur.ja || !ja) return {err:en+" はすでに登録済み"};
+    if(!cur.ca) cur.ca=cur.at||Date.now(); // 登録時刻を固定(並びの鍵・v5.21.0)
     cur.ja=ja; cur.pos=pos; cur.at=Date.now(); if(ex) cur.ex=ex; if(src && !cur.src) cur.src=src; mywMount(en); saveG(); // 意味待ちを埋める
     return {en};
   }
-  G.myw[en]={ja, pos, at:Date.now()};
+  G.myw[en]={ja, pos, at:Date.now(), ca:Date.now()}; // ca=登録時刻(並びの鍵・v5.21.0)
   if(ex) G.myw[en].ex=ex;
   if(src) G.myw[en].src=src;
   if(ja) mywMount(en);
@@ -163,6 +166,7 @@ function mywUpdate(en, ja, pos){
   ja=String(ja||"").replace(/\s+/g," ").trim();
   if(ja) m.ja=ja;
   if(MYW_POS_CYCLE.indexOf(pos)>=0) m.pos=pos;
+  if(!m.ca) m.ca=m.at||Date.now(); // 旧記録: 最初の手直しで登録時刻を固定=以後は並びが動かない(v5.21.0)
   m.at=Date.now();
   if(m.ja) mywMount(en);
   saveG(); return true;

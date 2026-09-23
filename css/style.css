@@ -235,6 +235,27 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
 .stat .ss{font-size:11px; font-weight:700; color:var(--sub)}
 #recView .homelinks .btn:last-child:nth-child(odd){grid-column:1/-1}
 #recView .foldbody .panel{margin-top:6px}
+/* v5.21.0: 記録タブ=タイルと成長の行がタップで詳細・📅学習カレンダー */
+.stat.tap{border:none; font:inherit; text-align:left; width:100%; cursor:pointer; color:var(--ink)}
+.stat.tap:active{transform:scale(.98)}
+.stat .sl{display:flex; justify-content:space-between; align-items:center}
+.stat .sl i{font-style:normal; font-size:15px; line-height:1; color:var(--sub)}
+.stathint{grid-column:1/-1; font-size:11px; font-weight:700; color:var(--sub); text-align:center; padding-top:2px}
+.herorow{cursor:pointer; border-radius:12px}
+.herorow:active{opacity:.8}
+.calwd{display:grid; grid-template-columns:repeat(7,1fr); gap:4px; margin-top:10px; text-align:center; font-size:10px; font-weight:800; color:var(--sub)}
+.calgrid{display:grid; grid-template-columns:repeat(7,1fr); gap:4px; margin-top:4px}
+.cd{aspect-ratio:1; display:flex; flex-direction:column; align-items:center; justify-content:center; border:none; padding:0; border-radius:10px;
+  font:inherit; font-size:12px; font-weight:800; cursor:pointer; background:var(--bg2); color:var(--sub);
+  box-shadow:inset 1.5px 1.5px 3px var(--shd), inset -1.5px -1.5px 3px var(--shl)}
+.cd.blank{background:none; box-shadow:none; cursor:default}
+.cd .cdm{font-size:8px; height:10px; line-height:10px; letter-spacing:-1px}
+.cd.did{background:linear-gradient(135deg,#E3E7FF,#D3D9FF); color:var(--accent2); box-shadow:none}
+.cd.hit{background:linear-gradient(135deg,#FFB547,#F5A020); color:#4A3200; box-shadow:0 2px 6px rgba(245,160,32,.35)}
+.cd.fz{background:linear-gradient(135deg,#E2F4FF,#CFEAFF); color:#2E7FB8; box-shadow:none}
+.cd.today{outline:2px solid var(--accent2); outline-offset:-2px}
+.cd.today.hit{outline-color:#B87400}
+.cd.future, .cd:disabled{opacity:.4; cursor:default}
 /* v5.15.0: ⚙設定のいちばん上=同期・更新の横並び */
 .settop{gap:10px; margin-top:4px}
 /* v5.15.0: 単語単位の並べ替え(片が3〜12個)はタイルを少し小さく */
