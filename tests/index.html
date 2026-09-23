@@ -3553,6 +3553,27 @@ function run(){
     G.words={}; G.pace={goal:W.addDays(W.todayKey(),120), setAt:1, log:[], qd:null}; W.paceToday(G); ok(G.pace.qd.at>0, "固定した時刻(at)を残す");
     G.pace=old; G.words=oldW;
   });
+  t("v5.19.1: 同期の同点規則は端末に依らない ─ 今日の目安はatが同じ(旧版のatなし同士)なら小さい方・旧記録が同数なら内容で決める(どちらから同期しても同じ結果)", ()=>{
+    // v5.18以前が固定したqd(atなし)どうし: 以前は手元が勝って何度同期しても揃わなかった
+    const x={d:"2026-09-23",per:258}, y={d:"2026-09-23",per:183};
+    eq(W.mergeQd(x,y).per, 183, "atなし同士は小さい方"); eq(W.mergeQd(y,x).per, 183, "対称");
+    eq(W.mergeQd({d:"2026-09-23",per:258,at:7}, {d:"2026-09-23",per:183,at:7}).per, 183, "atが同じ時刻でも決まる");
+    eq(W.mergeQd({d:"2026-09-23",per:183}, {d:"2026-09-23",per:258,at:9}).per, 183, "atなし(旧版)は0=先に固定した扱い");
+    eq(W.mergeQd({d:"2026-09-23",per:258,at:5}, {d:"2026-09-23",per:183,at:9}).per, 258, "atが違えば先に固定した方(小さい方ではない)");
+    // 時刻なしの旧記録が同数(100問で頭打ちの端末どうし): 以前は手元が勝って端末ごとに別のまま
+    const oa=[[0,1],[1,0],[0,1]], ob=[[1,1],[0,0],[0,1]];
+    const ma=W.mergePaceLog(oa, ob), mb=W.mergePaceLog(ob, oa);
+    eq(JSON.stringify(ma), JSON.stringify(mb), "同数の旧記録は起点を入れ替えても同じ側");
+    eq(ma.length, 3);
+    eq(JSON.stringify(W.mergePaceLog(oa.concat([[0,1,2,500]]), ob)), JSON.stringify(W.mergePaceLog(ob, oa.concat([[0,1,2,500]]))), "時刻つきが混ざっても対称");
+    // mergeData経由でも対称(どちらの端末で同期しても同じ状態に収束する)
+    const base=()=>({resetAt:0, updatedAt:1, words:{}, inv:{}, chars:{}, dungeons:{}, days:{}});
+    const a=Object.assign(base(),{pace:{goal:"2027-01-01", setAt:1, qd:{d:"2026-09-23",per:258}, log:oa.slice()}});
+    const b=Object.assign(base(),{pace:{goal:"2027-01-01", setAt:1, qd:{d:"2026-09-23",per:183}, log:ob.slice()}});
+    eq(JSON.stringify(W.mergeData(a,b).pace), JSON.stringify(W.mergeData(b,a).pace), "paceの合流は対称");
+    eq(W.mergeData(a,b).pace.qd.per, 183);
+    ok(W.syncChanges(a, b) || W.syncChanges(b, a), "少なくとも一方の端末では取り込みが起きる(=揃う)");
+  });
   t("v5.19.0③: 自動同期の判断(純関数) ─ トークンあり+ホーム表示中=静かに同期/トークンなし・学習中=次の学習タップで/未設定・未認証・5分以内・オフライン=何もしない", ()=>{
     const s=(o)=>Object.assign({clientId:true, authed:true, online:true, now:10*60e3+1, lastSync:0, hasToken:true, onHome:true}, o);
     eq(W.autoSyncDecision(s({})), "silent");

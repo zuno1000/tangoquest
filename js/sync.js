@@ -300,7 +300,10 @@ function mergeData(a, b){
 function mergePaceLog(la, lb){
   la=la||[]; lb=lb||[];
   const oldA=la.filter(e=>!e[3]), oldB=lb.filter(e=>!e[3]);
-  const old=oldA.length>=oldB.length? oldA : oldB;
+  /* v5.19.1: 同数のときは内容(文字列化)で決める=どちらの端末から見ても同じ側を採る。
+     以前は「同数なら手元(la)」だったため、100問で頭打ちの旧記録は同期を何度しても端末ごとに別のまま残った */
+  const old=oldA.length!==oldB.length? (oldA.length>oldB.length? oldA : oldB)
+          : (JSON.stringify(oldA)<=JSON.stringify(oldB)? oldA : oldB);
   const seen={}, nw=[];
   la.concat(lb).forEach(e=>{ if(!e[3]) return; const k=e.join(","); if(seen[k]) return; seen[k]=1; nw.push(e); });
   nw.sort((x,y)=>x[3]-y[3]);
@@ -312,7 +315,11 @@ function mergePaceLog(la, lb){
 function mergeQd(x, y){
   if(!x || !y) return x||y||null;
   if(x.d!==y.d) return x.d>y.d? x : y;
-  return (x.at||0)<=(y.at||0)? x : y;
+  if((x.at||0)!==(y.at||0)) return (x.at||0)<(y.at||0)? x : y;
+  /* v5.19.1(実機FB「何度同期しても今日の目安が揃わない」): atが同じ(v5.18以前が固定したqd=atなし同士を含む)なら
+     目安の小さい方=端末に依らない決め方(目安tの「同数なら小さい方」と同じ思想)。以前は「同じなら手元(x)」で、
+     v5.19.0に更新した日はどちらの端末で同期しても自分の値が勝ち、いつまでも揃わなかった */
+  return (x.per||0)<=(y.per||0)? x : y;
 }
 
 /* 今日の英語の「今日の1本」({d,id,alt,it,at})の勝敗(v5.19.0・純関数): 新しい日 → 「別の候補」を多く進めた方(alt大=意図した変更) →
