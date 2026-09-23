@@ -3609,6 +3609,25 @@ function run(){
     W.paceHoldRelease(); // 念のため
     G.pace=old; G.words=oldW; W.paceToday(G);
   });
+  t("v5.20.1: 今日の英語の進め方は3区画(読む/聴く/時間がない日)・手順は見出しと説明を分けた番号つき・入口2つは左寄せの1行", ()=>{
+    const doc=W.document, G=W.G, oldSeen=G.rl.flowSeen; G.rl.flowSeen=0;
+    W.openRLModal();
+    const fb=doc.getElementById("rlFlow");
+    eq(fb.querySelectorAll(".rlfsec").length, 3, "3区画");
+    eq(fb.querySelectorAll(".rlfsec:nth-child(1) .rlfsteps li").length, W.RL_FLOW.read.steps.length, "読むの手順数");
+    eq(fb.querySelectorAll(".rlfsec:nth-child(2) .rlfsteps li").length, W.RL_FLOW.listen.steps.length, "聴くの手順数");
+    eq(fb.querySelectorAll(".rlfmin li").length, W.RL_FLOW_MIN.length, "最低限の箇条書き");
+    const li=fb.querySelector(".rlfsteps li");
+    ok(li.querySelector("b") && li.querySelector("span") && li.querySelector("b").textContent.length<20, "各手順=短い見出し(b)+説明(span)");
+    eq(fb.querySelectorAll(".rlchip").length, 4, "余裕があれば=読む2+聴く2");
+    ["read","listen"].forEach(k=>W.RL_FLOW[k].steps.forEach(s=>ok(s.t && s.d && !/<b>/.test(s.d), k+": 手順は{t,d}で説明にタグを含まない")));
+    ok(fb.textContent.indexOf("v5.19.0")<0, "版番号は本文に出さない");
+    const st=W.getComputedStyle(doc.getElementById("rlMywBtn"));
+    eq(st.display, "flex", "入口はflexの1行"); eq(st.textAlign, "left", "左寄せ");
+    eq(W.getComputedStyle(doc.getElementById("rlHistBtn")).textAlign, "left", "記録の入口も左寄せ");
+    ok(doc.getElementById("rlHistBtn").textContent.indexOf("本")>=0, "件数は右端に");
+    W.closeModal(); G.rl.flowSeen=oldSeen;
+  });
   t("v5.20.0③: お知らせはゲーム面オフではイベントタブなし(アップデートだけの1枚)", ()=>{
     const doc=W.document;
     W.openNews();

@@ -1228,9 +1228,24 @@ body.svplay #slotView{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
 .rlbtns{display:flex; flex-wrap:wrap; gap:8px; margin-top:10px}
 /* v5.11.0: 学習の流れ(カード下の1行・進め方の手順・プロンプトの使いどき) */
 .rlflowline{color:var(--accent2); margin-top:6px}
-.rlflow{font-size:13px; line-height:1.6}
-.rlflow ol{margin:4px 0 10px; padding-left:20px}
-.rlflow li{margin:3px 0}
+/* v5.20.1: 進め方=3区画(読む/聴く/時間がない日)・手順は番号つきの段組み(見出し太字+説明を下に) */
+.rlflow{font-size:13px; line-height:1.55}
+.rlfsec{background:var(--bg2); border-radius:14px; padding:10px 12px; margin-top:8px}
+.rlfhd{display:flex; align-items:baseline; gap:8px; font-size:13px; font-weight:800}
+.rlfhd span{font-size:11px; font-weight:700; color:var(--sub)}
+.rlfsteps{list-style:none; counter-reset:rls; margin:4px 0 0; padding:0}
+.rlfsteps li{counter-increment:rls; display:grid; grid-template-columns:22px 1fr; column-gap:8px; padding:7px 0; border-top:1px solid var(--line)}
+.rlfsteps li:first-child{border-top:none}
+.rlfsteps li::before{content:counter(rls); grid-row:1 / span 2; width:20px; height:20px; border-radius:50%; margin-top:1px;
+  background:var(--bg); color:var(--accent2); font-size:11px; font-weight:800; display:flex; align-items:center; justify-content:center}
+.rlfsteps li b{grid-column:2; font-size:13px; font-weight:800; line-height:1.4}
+.rlfsteps li span{grid-column:2; font-size:12px; font-weight:600; color:var(--sub); line-height:1.55; margin-top:2px; word-break:auto-phrase}
+.rlfsteps.rlfmin li::before{content:"・"; background:none; color:var(--sub); width:auto; font-size:13px}
+.rlfsteps.rlfmin li{grid-template-columns:14px 1fr}
+/* 進め方の下の入口2つ(単語登録・記録): 開閉の行(.btn.fold)と同じ左寄せの1行 */
+.rlentry{display:flex; width:100%; align-items:center; gap:8px; margin-top:10px; font-size:13px; text-align:left}
+.rlentry .grow{text-align:left}
+.rlentry .hlsub{flex:0 0 auto; margin-left:0}
 .rlpseg{flex-wrap:wrap}
 .rlpseg button{font-size:12px; padding:7px 4px; min-width:45%}
 .rlpwhen{margin-bottom:8px; line-height:1.5; color:var(--sub)}

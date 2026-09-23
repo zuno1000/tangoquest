@@ -345,23 +345,42 @@ const RL_PROMPTS={
       "\n\nトランスクリプトを取得できない場合はそう伝えてください。貼り付けます。"},
   ],
 };
-/* 学習の流れ(モーダルの案内・カード下の1行) */
+/* 学習の流れ(モーダルの案内・カード下の1行)。
+   v5.20.1(実機FB「進め方の説明がごちゃついてスマホで読みにくい」): 手順は{t:見出し, d:説明, opt:余裕があれば}に分け、
+   番号つきの段組み(rlFlowHTML)で描く。見出しは太字1行・説明は薄い色で下に=一目で手順が数えられる */
 const RL_FLOW={
-  read:{line:"通読 → ①正誤 → ②解説 → 📝単語 → ③要約 → ✓",
-    steps:["<b>通読</b>: 🔗開いて辞書なしで最後まで読む(10〜15分)。要点を3行で頭に置く",
-      "<b>① 内容正誤問題</b>: 📋プロンプトをLLMに貼り、問題に答える。理解の穴がここで見える",
-      "<b>② 解説フルセット</b>: 答え合わせのあと、語彙・構文・論旨の解説を読む。<b>語彙一覧を📝マイ単語に貼る</b>と、翌日から4択に混ざる",
-      "<b>③ 要約の添削</b>(余裕があれば): 英語で120語の要約を書いて送る。二次・英作文の練習になる",
-      "<b>④ 意見を言う</b>(余裕があれば): 面接官役のLLMに英語で意見を述べ、講評をもらう",
-      "<b>✓ 読んだ</b>: 記録に残る(今週の記録の📖)。目安は1日1本・30〜40分"]},
-  listen:{line:"通し → ①正誤 → ②教材化 → シャドーイング → 📝 → ✓",
-    steps:["<b>通し</b>: 🔗開いて字幕なしで1回聴く(おすすめは30分以内の回だけ。長く感じたら前半だけでよい)",
-      "<b>① 内容正誤問題</b>: 📋プロンプトをLLMに貼り、問題に答える(トランスクリプトが取れないLLMには字幕を貼る)",
-      "<b>② 教材化</b>: 要約・語彙・キーセンテンス10文をもらい、キーセンテンスをシャドーイング。<b>語彙一覧は📝マイ単語へ</b>",
-      "<b>③ ディクテーション採点</b>(余裕があれば): 1〜2分ぶんを書き起こして送る。聞き落としの原因が分かる",
-      "<b>④ 意見を言う</b>(余裕があれば): 面接官役のLLMに英語で意見を述べ、講評をもらう",
-      "<b>✓ 聴いた</b>: 記録に残る(今週の記録の🎧)。目安は1日1本・20〜30分"]},
+  read:{line:"通読 → ①正誤 → ②解説 → 📝単語 → ③要約 → ✓", head:"📖 読む", time:"1日1本・30〜40分",
+    steps:[{t:"通読", d:"🔗開いて辞書なしで最後まで読む(10〜15分)。要点を3行で頭に置く"},
+      {t:"① 内容正誤問題", d:"📋プロンプトをLLMに貼り、問題に答える。理解の穴がここで見える"},
+      {t:"② 解説フルセット", d:"答え合わせのあと、語彙・構文・論旨の解説を読む。語彙一覧を📝マイ単語に貼ると、翌日から4択に混ざる"},
+      {t:"③ 要約の添削", d:"英語で120語の要約を書いて送る。二次・英作文の練習になる", opt:1},
+      {t:"④ 意見を言う", d:"面接官役のLLMに英語で意見を述べ、講評をもらう", opt:1},
+      {t:"✓ 読んだ", d:"記録に残る(今週の記録の📖)"}]},
+  listen:{line:"通し → ①正誤 → ②教材化 → シャドーイング → 📝 → ✓", head:"🎧 聴く", time:"1日1本・20〜30分",
+    steps:[{t:"通し", d:"🔗開いて字幕なしで1回聴く(おすすめは30分以内の回だけ。長く感じたら前半だけでよい)"},
+      {t:"① 内容正誤問題", d:"📋プロンプトをLLMに貼り、問題に答える(トランスクリプトが取れないLLMには字幕を貼る)"},
+      {t:"② 教材化", d:"要約・語彙・キーセンテンス10文をもらい、キーセンテンスをシャドーイング。語彙一覧は📝マイ単語へ"},
+      {t:"③ ディクテーション採点", d:"1〜2分ぶんを書き起こして送る。聞き落としの原因が分かる", opt:1},
+      {t:"④ 意見を言う", d:"面接官役のLLMに英語で意見を述べ、講評をもらう", opt:1},
+      {t:"✓ 聴いた", d:"記録に残る(今週の記録の🎧)"}]},
 };
+/* 時間がない日の最低限(v5.19.0の文言をv5.20.1で箇条書きに) */
+const RL_FLOW_MIN=[
+  {t:"10分", d:"読む・聴くのどちらか1本だけ。記事は冒頭3段落(結論が出るところまで)を辞書なしで/音声は前半10分を字幕なしで → ✓。正誤問題は省く"},
+  {t:"15〜20分", d:"通読(通し) → ①正誤問題(8問)だけ → ✓"},
+  {t:"どの日も", d:"分からなかった語を1〜2個だけ📝マイ単語へ(翌日から4択に混ざる)。②解説・③添削・④意見は余裕のある日(週1回でよい)にまとめて。毎日ゼロにしないことが完走より効く"},
+];
+/* 進め方の中身(純関数・HTML): 読む/聴く/時間がない日の3区画。手順=番号つきの段組み */
+function rlFlowHTML(){
+  const steps=(list, cls)=>'<ol class="rlfsteps'+(cls? " "+cls:"")+'">'+list.map(s=>
+    '<li><b>'+s.t+(s.opt? ' <i class="rlchip">余裕があれば</i>':'')+'</b><span>'+s.d+'</span></li>').join("")+'</ol>';
+  const sec=(head, time, inner)=>'<div class="rlfsec"><div class="rlfhd">'+head+(time? '<span>'+time+'</span>':'')+'</div>'+inner+'</div>';
+  return '<div class="rlflow">'+
+    sec(RL_FLOW.read.head, RL_FLOW.read.time, steps(RL_FLOW.read.steps))+
+    sec(RL_FLOW.listen.head, RL_FLOW.listen.time, steps(RL_FLOW.listen.steps))+
+    sec("⏱ 時間がない日の最低限", "", steps(RL_FLOW_MIN, "rlfmin"))+
+    '</div>';
+}
 function rlPromptText(kind, promptId, src, item){
   const list=RL_PROMPTS[kind]||[];
   const p=list.find(x=>x.id===promptId)||list[0];
@@ -478,24 +497,17 @@ function openRLModal(){
       'このアプリは日本語訳や問題を自分では作らない(=無料・サーバーなし)。<b>学習の流れ</b>は下の「📘 進め方」に')+
     '<div id="rlModal"><div id="rlCards"></div>'+
     // 学習の流れ(v5.11.0実機FB): プロンプトをどの順で使うか
-    foldSec("rlFlow", "📘 進め方(プロンプトをどう使うか)",
-      '<div class="rlflow"><b>📖 読む(1日1本・30〜40分)</b><ol>'+RL_FLOW.read.steps.map(s=>'<li>'+s+'</li>').join("")+'</ol>'+
-      '<b>🎧 聴く(1日1本・20〜30分)</b><ol>'+RL_FLOW.listen.steps.map(s=>'<li>'+s+'</li>').join("")+'</ol>'+
-      '<div class="small"><b>⏱ 時間がない日の最低限</b>(v5.19.0): '+
-      '<b>10分</b>=読む・聴くのどちらか1本だけ。記事なら冒頭3段落(結論が出るところまで)を辞書なしで読む/音声なら前半10分を字幕なしで通す → ✓。正誤問題は省く。'+
-      '<b>15〜20分</b>=通読(通し) → ①正誤問題(8問)だけ → ✓。'+
-      'どちらの日も、分からなかった語を<b>1〜2個だけ📝マイ単語</b>へ(翌日から4択に混ざる)。'+
-      '②解説・③添削・④意見は余裕のある日(週1回でよい)にまとめて。<b>毎日ゼロにしない</b>ことが完走より効く。'+
-      'おすすめは<b>今日はじめて開いたときに決まり</b>、閉じても・別の端末でも同じ1本(日付が変わると更新)</div></div>', !G.rl.flowSeen)+
-    '<button class="btn" id="rlMywBtn" style="margin-top:10px; width:100%">📝 分からなかった単語を登録<span class="hlsub">マイ単語 '+mywList().length+'語</span></button>'+
+    foldSec("rlFlow", "📘 進め方(プロンプトをどう使うか)", rlFlowHTML(), !G.rl.flowSeen)+
+    /* v5.20.1(実機FB「この2つだけ中央ぞろえで違和感」): 開閉の行と同じ左寄せの1行(.rlentry)に。右端に件数と › */
+    '<button class="btn rlentry" id="rlMywBtn"><span class="grow">📝 分からなかった単語を登録</span><span class="hlsub">マイ単語 '+mywList().length+'語 ›</span></button>'+
     foldSec("rlTopics", "🎛 興味のあるテーマ("+Object.keys(G.rl.topics||{}).filter(t=>G.rl.topics[t]).length+")",
       '<div class="small" style="margin-bottom:6px">選んだテーマに合うソースを優先する(未選択=全ソースから)</div>'+
       '<div class="rlchips">'+Object.keys(RL_TOPICS).map(t=>'<button class="wchip rltop'+(G.rl.topics[t]? " ksel":"")+'" data-t="'+t+'">'+RL_TOPICS[t]+'</button>').join("")+'</div>', false)+
     foldSec("rlMuted", "🔕 外したソース("+Object.keys(G.rl.mute||{}).filter(id=>G.rl.mute[id].on).length+")",
       '<div id="rlMuteList">'+rlMuteListHTML()+'</div>', false)+
-    '<button class="btn" id="rlHistBtn" style="margin-top:10px; width:100%">📚 読んだ・聴いたの記録('+Object.keys(G.rl.done||{}).length+'本)</button>'+
+    '<button class="btn rlentry" id="rlHistBtn"><span class="grow">📚 読んだ・聴いたの記録</span><span class="hlsub">'+Object.keys(G.rl.done||{}).length+'本 ›</span></button>'+
     '<div class="small" style="margin-top:10px">ソース '+RL_SOURCES.filter(s=>s.kind==="read").length+'誌 ・ '+RL_SOURCES.filter(s=>s.kind==="listen").length+'番組。'+
-      'すべて無料で読める・聴けるものだけ</div></div>');
+      'すべて無料で読める・聴けるものだけ。今日のおすすめは、はじめて開いたときに決まり、閉じても別の端末でも同じ(日付が変わると更新)</div></div>');
   $("rlHistBtn").onclick=openRLHistory;
   $("rlMywBtn").onclick=()=>openMywAdd("", rlCurrentTitle("read")||rlCurrentTitle("listen"));
   if(!G.rl.flowSeen){ G.rl.flowSeen=1; saveG(); } // 進め方は初回だけ開いた状態で見せる(端末の好み)

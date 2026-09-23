@@ -46,6 +46,7 @@ const EVENTS=[
   // {d:"2026-08-03", t:"..."} 形式でバナー以外のイベント告知を書く
 ];
 const NEWS=[
+  {d:"2026-09-23", t:"🔧 v5.20.1 今日の英語の見た目を整理: 「📘 進め方」を読む/聴く/時間がない日の3区画に分け、手順は番号つきで見出しと説明を分けた(スマホで読みやすく)。「分からなかった単語を登録」「読んだ・聴いたの記録」は他の行と同じ左寄せの1行に"},
   {d:"2026-09-23", t:"🔧 v5.20.0 ①今日の目安の日ごとのぶれを抑える: 前日に固定した値から±10%以内で調整する(推定の材料が直近100問なので、調子の良し悪しで翌日の数字が跳ねていた。目標日を変えたときは即時に引き直す) ②今日の目安は、起動時の自動同期が済んでから固定する(別の端末が前回の同期で上げた記録まで織り込んだ値になる。1台しか開かない日でも機能し、同期できない・不要なときや最初の解答で固定) ③お知らせの「イベント」タブを廃止(ガチャの告知はなくなったため。アップデートだけの1枚に)"},
   {d:"2026-09-23", t:"🔧 v5.19.1 「何度同期しても今日の目安が揃わない」を修正: 更新前の版が固定した今日の目安どうしは同期で手元の値が勝ってしまい揃わなかった。同点のときは目安の小さい方を採る規則にし、どちらの端末で同期しても同じ数字に収束する(推定ログの旧記録も同様)。今日すでにずれている端末は、次の同期で小さい方に揃う"},
   {d:"2026-09-23", t:"🔧 v5.19.0 実機FB4件に対応: ①訳に英語(熟語の用例)が混ざっていた294語を日本語だけに書き直し、括弧内の熟語186件(pertain to・unwed mother・in spite of…)は熟語の項目として独立(4択の正解が訳の英語で分からなくなる問題の解消。合計8,034項目) ②1日の目安が端末で違う不具合を修正(推定ログと今日の目安を同期で揃える=どの端末でも同じ数字) ③自動同期: アプリを開いた直後に静かに同期(できない場合は「学習/セットのつづき」のタップで同期し、学習タブへ自動で戻る)。別の端末に新しい記録がなければリロードしない ④今日の英語: 30分を超える回は出さない(番組の長さで絞り、長い番組はカタログから外した)・今日の1本は「その日はじめて開いたとき」に決めて閉じても変わらない(別の候補に進めた場合も保持・日付が変われば更新)・同期で別の端末にも同じ1本が出る・時間がない日の最低限の進め方を「進め方」に追記"},
@@ -408,7 +409,7 @@ window.ROOT_DEFS=ROOT_DEFS; window.PREFIX_DEFS=PREFIX_DEFS; window.APP_VERSION=A
 window.LOGIN_BONUS=LOGIN_BONUS; window.ACH_DEFS=ACH_DEFS;
 window.DAILY_DEFS=DAILY_DEFS; window.WEEKLY_DEFS=WEEKLY_DEFS; window.DAILY_CORE=DAILY_CORE;
 window.MASTER_BOX=MASTER_BOX; window.INTERVALS=INTERVALS; window.FRZ_MAX=FRZ_MAX;
-window.byEn=byEn; window.MYW_ENDPOINTS=MYW_ENDPOINTS; window.RL_FLOW=RL_FLOW; // v5.11.0(マイ単語・進め方)
+window.byEn=byEn; window.MYW_ENDPOINTS=MYW_ENDPOINTS; window.RL_FLOW=RL_FLOW; window.RL_FLOW_MIN=RL_FLOW_MIN; // v5.11.0(マイ単語・進め方)・v5.20.1
 window.setCurFromTest=w=>{ cur={word:w, choices:buildChoices(w)}; renderQuestion(); }; window.pairQueueGet=()=>pairQueue; // v5.12.0
 window.LEARN_ACH_DEFS=LEARN_ACH_DEFS; window.GAME_ACH_DEFS=GAME_ACH_DEFS; // v5.13.0(GAME_ENABLEDはvar=windowに載る)
 window.SV_STAGE_SEC=SV_STAGE_SEC; window.SV_REACH=SV_REACH; window.SV_TOUCH_CD=SV_TOUCH_CD;
