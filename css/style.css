@@ -1167,6 +1167,7 @@ body.svplay #slotView{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
 #promptCard.phr{justify-content:flex-start; height:auto; min-height:24vh; min-height:24dvh;
   padding-top:42px}
 #promptCard.phr #promptWord.ja{font-size:20px; line-height:1.45}
+#promptCard.phr #promptWord.ja.fill{font-size:16px; line-height:1.55; text-align:left; font-weight:700} /* 穴埋め模試(v5.28.0): 20〜35語の英文 */
 /* 実戦ドリルのメニューボタン(ホームのhomelinksと同じ縦積みスタイル) */
 .drillbtn{display:flex; width:100%; flex-direction:column; align-items:flex-start; gap:3px;
   padding:12px 14px; text-align:left; margin-top:10px}

@@ -165,6 +165,7 @@ function mergeData(a, b){
   m.say=m.say||{};
   for(const id in b.say||{}){ const x=m.say[id], y=b.say[id]; if(!x || (y.at||0)>(x.at||0)) m.say[id]=y; }
   m.mocks=Object.assign({}, b.mocks||{}, m.mocks||{});
+  if(b.mockq && (b.mockq.at||0)>((m.mockq&&m.mockq.at)||0)) m.mockq=JSON.parse(JSON.stringify(b.mockq)); // 穴埋めの問題セット(v5.28.0)は新しい側
   // 取り違えペア(v5.12.0): ペアごとに回数の多い方(日別記録と同じmaxマージ)
   m.conf=m.conf||{};
   for(const en in b.conf||{}){

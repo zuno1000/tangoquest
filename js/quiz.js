@@ -338,21 +338,24 @@ function openSetDone(){
 function openMockDone(f, okN, n, still){
   clearInterval(f.mock.timer);
   const now=Date.now(), sec=(now-f.mock.t0)/1000;
-  G.mocks[String(now)]={c:okN, s:Math.round(sec), d:todayKey()}; saveG();
+  const fill=!!f.mock.q;
+  G.mocks[String(now)]={c:okN, s:Math.round(sec), d:todayKey(), f:fill? 1:0};
+  if(fill) G.mockq=null; // 穴埋めの問題セットは1回で消費(v5.28.0)
+  saveG();
   const pace=sec<=MOCK_GUIDE_SEC? '本番の目安('+mockFmtSec(MOCK_GUIDE_SEC)+')に収まった' : '本番の目安('+mockFmtSec(MOCK_GUIDE_SEC)+')より'+mockFmtSec(sec-MOCK_GUIDE_SEC)+'長い ─ 迷った語は消去法より先に「知っているか」で切る';
   const prev=Object.keys(G.mocks).sort().filter(k=>k!==String(now)); const pm=prev.length? G.mocks[prev[prev.length-1]] : null;
-  openModal('<h3>🧪 Part 1 模試 ─ 完了!</h3>'+
+  openModal('<h3>🧪 Part 1 模試'+(fill? '(穴埋め)':'')+' ─ 完了!</h3>'+
     '<div class="giftbox">正解 <b style="font-size:20px">'+okN+' / '+n+'</b>'+(okN>=n? ' ─ 全問正解! 🎉':'')+
       ' ・ ⏱ <b>'+mockFmtSec(sec)+'</b><br><span class="small">'+pace+(pm? ' ・ 前回 '+pm.c+'/'+MOCK_N+'('+mockFmtSec(pm.s)+')':'')+'</span>'+
       (still.length? '<br><span class="small">ミス: '+still.map(esc).join("・")+'</span>':'')+'</div>'+
     syncBtnHTML()+
     '<div class="row" style="gap:10px; margin-top:10px">'+
     (still.length? '<button class="btn grow" id="focusAgain">🔥 ミスした'+still.length+'語を立て直す</button>':'')+
-    '<button class="btn grow" id="mockAgain">🧪 もう1回</button>'+
+    '<button class="btn grow" id="mockAgain">🧪 '+(fill? '模試へ' : 'もう1回')+'</button>'+
     '<button class="btn primary grow" id="focusEnd">学習にもどる</button></div>');
   bindSyncBtn();
   const a=$("focusAgain"); if(a) a.onclick=()=>startFocus(still);
-  $("mockAgain").onclick=startMock;
+  $("mockAgain").onclick=fill? openMockModal : startMock;
   $("focusEnd").onclick=()=>{ closeModal(); newQuestion(); };
 }
 
@@ -434,15 +437,90 @@ function startMock(){
   if($("quizView").classList.contains("hidden")) switchTab("quiz");
   newQuestion();
 }
-/* 🧪の案内(v5.27.0・学習タブの🧪ボタン): 何をするかと前回の結果を見せてから始める(実戦ドリルのメニューはDRILLS_ENABLEDで隠した) */
+/* ---- 穴埋め模試(v5.28.0・実機FB「より英検1級らしく英文の穴埋めの選択肢を選ぶ形式に」) ----
+   アプリは問題を作らない(方針=LLMなし・無料)。25語(mockPick)を入れた依頼文をコピーしてLLMに貼り、返ってきた
+   「英文( ) — 正解 — 誤答1 — 誤答2 — 誤答3」を貼り戻す(mockParse・純関数)→G.mockqに保存→🧪穴埋めで開始(startMockFill)。
+   解き方は4択模試と同じ器(FOCUS.mock)で、英文を見せて選択肢は英語の語。解答は正解の語のSRSにふつうに記録される */
+function mockPromptText(words){
+  return "英検1級一次試験のPart 1(短文の語句空所補充)と同じ形式で、次の"+words.length+"語それぞれを正解とする問題を1問ずつ作ってください。\n"+
+    "・英文は1〜2文・本番と同じ難度と長さ(20〜35語程度)。空所は ( ) と書き、文脈から正解が一意に決まるようにしてください"+
+    "(本番の例: The company accountant was arrested for ( ) after it was discovered she had stolen almost a million dollars from the company over five years.)\n"+
+    "・正解の語は原形のまま空所に入る文にしてください(過去形・三単現・複数形にしない。熟語も原形で)\n"+
+    "・選択肢は正解1つ+誤答3つ。誤答は正解と同じ品詞・同じ形(熟語なら熟語)で、英検1級レベルの、文脈に合わない語にしてください\n"+
+    "・出力は1行につき「英文 — 正解 — 誤答1 — 誤答2 — 誤答3」だけ。次の語の順で1行ずつ。番号・記号・説明・空行は入れないでください(アプリにそのまま貼り付けます)\n\n"+
+    words.map(w=>"・"+w).join("\n");
+}
+/* 貼り戻しの解析(純関数): 行→{s:空所つき英文, a:正解(内蔵の語), o:選択肢4つ(混ぜた順)}。words=依頼した語(活用形の照合に使う)。
+   区切りは — – | と「 - 」。誤答がカンマ区切りでも通す。空所は ( )・____・（ ）を「( )」にそろえる。
+   正解が内蔵の語に無い行・選択肢が4つにならない行は捨てて理由を返す */
+function mockMatchWord(a, words){
+  a=String(a||"").toLowerCase().replace(/[.,!?]/g,"").trim();
+  if(byEn[a]) return a;
+  const cands=(words||[]).filter(w=>byEn[w]);
+  const stem=w=>w.length>=5? w.slice(0,-1) : w;
+  const hit=cands.filter(w=>a===w || (a.indexOf(stem(w))===0 && Math.abs(a.length-w.length)<=3)).sort((x,y)=>y.length-x.length)[0];
+  return hit||"";
+}
+function mockParse(text, words){
+  const q=[], errs=[];
+  String(text||"").split(/\n+/).map(s=>s.trim().replace(/^[\d０-９]+[.)．、]\s*|^[・\-*•]\s*/, "")).filter(Boolean).forEach(l=>{
+    const parts=l.split(/\s*[—–|]\s*|\s-\s/).map(s=>s.trim()).filter(Boolean);
+    if(parts.length<2){ errs.push(l.slice(0,30)+": 区切りがない"); return; }
+    let s=parts[0].replace(/\(\s*\)|（\s*）|_{3,}|\[\s*\]/g, "( )");
+    if(s.indexOf("( )")<0){ errs.push(l.slice(0,30)+": 空所がない"); return; }
+    const rest=parts.slice(1).join(",").split(/\s*[,、/]\s*/).map(x=>x.replace(/^\d+[.)]?\s*/, "").trim()).filter(Boolean);
+    const a=mockMatchWord(rest[0], words);
+    if(!a){ errs.push(String(rest[0]||"").slice(0,20)+": 内蔵の語に無い"); return; }
+    const ds=[...new Set(rest.slice(1).map(x=>x.toLowerCase()).filter(x=>x && x!==a))].slice(0,3);
+    if(ds.length<3){ errs.push(a+": 誤答が3つない"); return; }
+    q.push({s, a, o:shuffle([a].concat(ds))});
+  });
+  return {q, errs};
+}
+function mockqReady(){ return !!(G.mockq && G.mockq.q && G.mockq.q.length && G.mockq.q.every(x=>byEn[x.a])); }
+function startMockFill(){
+  if(!mockqReady()) return;
+  closeModal();
+  if(typeof PDRILL!=="undefined") PDRILL=null;
+  if(FOCUS && FOCUS.mock) clearInterval(FOCUS.mock.timer);
+  const q=G.mockq.q.slice();
+  FOCUS={list:q.map(x=>x.a), i:0, res:[], mock:{t0:Date.now(), timer:setInterval(refreshQuizCount, 1000), q}};
+  if($("quizView").classList.contains("hidden")) switchTab("quiz");
+  newQuestion();
+}
+/* 🧪の案内(v5.27.0・学習タブの🧪ボタン): 4択(意味)の模試と、穴埋め(本番形式・LLMに作らせて貼り戻す)の2本 */
 function openMockModal(){
-  const last=mockLast();
-  openModal('<h3>🧪 Part 1 模試</h3>'+
-    '<div class="small" style="line-height:1.7">英検1級一次のPart 1(語彙)と同じ<b>25問</b>(単語21+熟語4)を4択で解き、経過時間を表示する。'+
-    '本番の目安は約'+mockFmtSec(MOCK_GUIDE_SEC)+'(1問24秒)。解いた分はふつうの学習として記録され、ミスした語は1分後・10分後にまた出る。</div>'+
-    '<div class="giftbox" style="margin-top:8px">'+(last? '前回 <b>'+last.c+' / '+MOCK_N+'</b> ・ ⏱ '+mockFmtSec(last.s)+' <span class="small">('+last.d+')</span>' : '<span class="small">まだ記録なし</span>')+'</div>'+
-    '<div class="row" style="gap:10px; margin-top:12px"><button class="btn" data-close>やめる</button><button class="btn primary grow" id="mockGo">🧪 はじめる(25問)</button></div>');
+  const last=mockLast(), mq=G.mockq, ready=mockqReady();
+  openModal('<h3>🧪 Part 1 模試 '+helpBtn("hlp-mock")+'</h3>'+
+    helpNote("hlp-mock", '英検1級一次のPart 1(語彙)と同じ<b>25問</b>(単語21+熟語4)。<b>4択(意味)</b>はすぐ始められる。'+
+      '<b>穴埋め(本番形式)</b>は、📋で25語入りの依頼文をコピーしてLLM(ChatGPT・Gemini等)に貼り、返ってきた「英文 — 正解 — 誤答×3」を貼り戻すと問題セットになる(1回解くと消える)。'+
+      'どちらも経過時間を表示(本番の目安は約'+mockFmtSec(MOCK_GUIDE_SEC)+'・1問24秒)。解いた分はふつうの学習として記録され、ミスした語は1分後・10分後にまた出る')+
+    '<div class="giftbox" style="margin-top:6px">'+(last? '前回 <b>'+last.c+' / '+MOCK_N+'</b> ・ ⏱ '+mockFmtSec(last.s)+' <span class="small">('+last.d+(last.f? '・穴埋め':'・4択')+')</span>' : '<span class="small">まだ記録なし</span>')+'</div>'+
+    '<button class="btn primary" id="mockGo" style="width:100%; margin-top:10px">🧪 4択(意味)ではじめる(25問)</button>'+
+    '<div class="small" style="margin-top:14px">📝 穴埋め(本番形式) ─ LLMに問題を作らせて貼り戻す</div>'+
+    (ready
+      ? '<div class="small" style="margin-top:4px">問題セット <b>'+mq.q.length+'問</b>(作成 '+esc(mq.d||"")+')</div>'+
+        '<div class="row" style="gap:8px; margin-top:6px"><button class="btn" id="mockClear">作り直す</button><button class="btn primary grow" id="mockFillGo">🧪 穴埋めではじめる('+mq.q.length+'問)</button></div>'
+      : '<button class="btn" id="mockPromptBtn" style="width:100%; margin-top:6px">📋 25語の穴埋め問題をLLMに頼む(依頼文をコピー)</button>'+
+        '<textarea id="mockBack" class="myta" rows="3" style="margin-top:8px" placeholder="LLMの答えを貼り付け(1行『英文( ) — 正解 — 誤答1 — 誤答2 — 誤答3』)"></textarea>'+
+        '<button class="btn primary" id="mockImportBtn" style="width:100%; margin-top:6px">貼り戻して問題セットにする</button>')+
+    '<div class="row" style="margin-top:12px"><button class="btn grow" data-close>とじる</button></div>');
   $("mockGo").onclick=startMock;
+  const pb=$("mockPromptBtn");
+  if(pb) pb.onclick=()=>{
+    if(!(G.mockq && G.mockq.words && G.mockq.words.length && !(G.mockq.q&&G.mockq.q.length))){ G.mockq={at:Date.now(), d:todayKey(), words:mockPick(WORDS, MOCK_N, MOCK_IDIOM), q:[]}; saveG(); } // 依頼した語を控える(貼り戻しの照合)
+    rlCopy(mockPromptText(G.mockq.words), $("mockBack"));
+  };
+  const ib=$("mockImportBtn");
+  if(ib) ib.onclick=()=>{
+    const r=mockParse($("mockBack").value, (G.mockq&&G.mockq.words)||[]);
+    if(!r.q.length){ toast(r.errs[0] || "「英文( ) — 正解 — 誤答×3」の行が見つからない"); return; }
+    G.mockq={at:Date.now(), d:todayKey(), words:(G.mockq&&G.mockq.words)||[], q:r.q}; saveG();
+    toast("🧪 穴埋め問題 "+r.q.length+"問を保存"+(r.errs.length? "("+r.errs.length+"行は使えず)":""));
+    openMockModal();
+  };
+  const fg=$("mockFillGo"); if(fg) fg.onclick=startMockFill;
+  const cl=$("mockClear"); if(cl) cl.onclick=()=>{ G.mockq=null; saveG(); openMockModal(); };
 }
 function startFocus(list){
   list=(list && list.length)? list.filter(en=>byEn[en]) : weakWords(G, G.opt.weakSort).slice(0, FOCUS_N); // 特訓はノートの並びに従う
@@ -456,6 +534,14 @@ function startFocus(list){
 }
 function focusNext(){
   if(FOCUS.i>=FOCUS.list.length){ openFocusDone(); return; }
+  if(FOCUS.mock && FOCUS.mock.q){ // 穴埋め模試(v5.28.0): 英文の空所に入る語を4択(選択肢=LLMが作った正解1+誤答3)
+    const q=FOCUS.mock.q[FOCUS.i++], w=byEn[q.a];
+    cur={word:w, choices:q.o.map(o=>o===w.en? w : {en:o, ja:(byEn[o]&&byEn[o].ja)||"", pos:w.pos}), fill:q};
+    renderQuestion();
+    const pw=$("promptWord"); pw.textContent=q.s; pw.className="ja fill"; $("promptCard").classList.add("phr"); // 長い英文=上詰め・小さめの文字
+    $("qBadge").textContent="🧪 穴埋め"; $("qBadge").style.color="var(--accent2)";
+    return;
+  }
   const w=byEn[FOCUS.list[FOCUS.i++]];
   cur={word:w, choices:buildChoices(w)};
   renderQuestion();
@@ -610,7 +696,7 @@ function wordShowChoices(){
   cur.choices.forEach(c=>{
     const b=document.createElement("button");
     b.className="choice";
-    b.innerHTML=choiceHTML(e2j? c.ja : c.en); // かたまり単位の折り返し(textContentは原文のまま)
+    b.innerHTML=choiceHTML((cur.fill || !e2j)? c.en : c.ja); // かたまり単位の折り返し(textContentは原文のまま)。穴埋め(v5.28.0)は常に英語の語
     b.onclick=()=>answer(c,b);
     box.appendChild(b);
   });
@@ -665,9 +751,9 @@ function answer(chosen, btn){
      「戦闘に戻ると押せない」バグになる(v4.22.0で根治・2026-08-13特定) */
   document.querySelectorAll("#choices .choice").forEach(b=>{
     b.disabled=true;
-    const isCorrect = b.textContent === (e2j? w.ja : w.en);
+    const isCorrect = b.textContent === ((cur.fill || !e2j)? w.en : w.ja); // 穴埋め(v5.28.0)は英語の語で照合
     if(isCorrect) b.classList.add("correct");
-    else if(b===btn) markWrongChoice(b, chosen, e2j);
+    else if(b===btn) markWrongChoice(b, chosen, cur.fill? false : e2j); // 穴埋めの誤答には選んだ語の意味を添える
     else b.classList.add("dim");
   });
   // SRS更新

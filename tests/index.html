@@ -4090,6 +4090,61 @@ function run(){
     }finally{ G.say=oldSay; G.myphr=oldMy; G.phr=oldPhr; W.myphrInvalidate(); W.saveG(); }
   });
 
+  t("v5.28.0: 穴埋め模試 ─ mockPromptText/mockParse/mockMatchWord(純関数)・🧪案内の📋と貼り戻し→G.mockq・穴埋めで25問(英文と英語の4択・正解のSRSに記録)・完了で消費・同期はatが新しい側", ()=>{
+    const G=W.G, doc=W.document;
+    const oldMockq=G.mockq? JSON.parse(JSON.stringify(G.mockq)) : null, oldMocks=JSON.parse(JSON.stringify(G.mocks)), oldPre=G.opt.preRecall, oldMode=G.mode;
+    const d=W.dayRec(), a0=d.a;
+    try{
+      const words=W.mockPick(W.WORDS, 25, 4);
+      const pr=W.mockPromptText(words);
+      ok(pr.indexOf("Part 1")>=0 && pr.indexOf("英文 — 正解 — 誤答1 — 誤答2 — 誤答3")>=0 && pr.indexOf("原形")>=0 && words.every(w=>pr.indexOf("・"+w)>=0), "依頼文=本番形式・原形・25語の列挙");
+      // 解析
+      const w0=words[0], w1=words[1], w2=words[2];
+      const txt="1. The minister was accused of ( ) after the scandal broke. — "+w0+" — zzalpha — zzbeta — zzgamma\n"+
+        "Nobody expected the plan to ____ so quickly. – "+w1+" – zzone, zztwo, zzthree\n"+
+        "This line has no blank. — "+w2+" — a — b — c\n"+
+        "Only ( ) two options here. — "+w2+" — zzx\n"+
+        "Not a real word ( ) here. — zzznotaword — a — b — c\n"+
+        "Bad ( ) answer inflected. — "+(w2.indexOf(" ")<0? w2+"s" : w2)+" — zzp — zzq — zzr";
+      const r=W.mockParse(txt, words);
+      eq(r.q.length, 3, "使える行は3(空所なし・誤答不足・内蔵に無い語は捨てる): "+r.errs.join(" / "));
+      eq(r.q[0].a, w0); ok(r.q[0].s.indexOf("( )")>=0 && r.q[0].s.indexOf("1.")<0, "番号を落とし空所は( )"); eq(r.q[0].o.length, 4); ok(r.q[0].o.indexOf(w0)>=0 && r.q[0].o.indexOf("zzalpha")>=0, "選択肢=正解+誤答3(混ぜる)");
+      eq(r.q[1].a, w1); ok(r.q[1].s.indexOf("( )")>=0, "____も( )に"); eq(r.q[1].o.length, 4, "誤答のカンマ区切り");
+      eq(r.q[2].a, w2, "活用形(語幹)でも内蔵の語に照合"); eq(r.errs.length, 3);
+      eq(W.mockMatchWord("implored", ["implore","impose"]), "implore", "語幹で照合"); eq(W.mockMatchWord("zzz", ["implore"]), "", "無ければ空");
+      // 🧪案内: 📋と貼り戻し
+      G.mockq=null; W.openMockModal();
+      ok(doc.getElementById("mockGo") && doc.getElementById("mockPromptBtn") && doc.getElementById("mockBack") && doc.getElementById("mockImportBtn") && !doc.getElementById("mockFillGo"), "案内: 4択・📋・貼り戻し(問題セットは無い)");
+      doc.getElementById("mockPromptBtn").click(); ok(G.mockq && G.mockq.words.length===25 && !G.mockq.q.length, "📋で依頼した25語を控える");
+      const ws=G.mockq.words;
+      const full=ws.map((w,i)=>"Sentence number "+i+" with a ( ) inside it. — "+w+" — zzd"+i+"a — zzd"+i+"b — zzd"+i+"c").join("\n");
+      doc.getElementById("mockBack").value=full; doc.getElementById("mockImportBtn").click();
+      ok(W.mockqReady() && G.mockq.q.length===25, "貼り戻して問題セット25問"); ok(doc.getElementById("mockFillGo") && doc.getElementById("mockClear") && !doc.getElementById("mockPromptBtn"), "案内が「穴埋めではじめる/作り直す」に");
+      // 同期: atが新しい側
+      const a=JSON.parse(JSON.stringify(G)), b=JSON.parse(JSON.stringify(G)); a.mockq={at:1, d:"x", words:[], q:[]}; b.mockq={at:9, d:"y", words:[], q:[{s:"( )",a:ws[0],o:[ws[0],"a","b","c"]}]};
+      eq(W.mergeData(a, b).mockq.d, "y", "新しい側"); eq(W.mergeData(b, a).mockq.d, "y");
+      // 解く
+      G.opt.preRecall=0; G.mode="e2j";
+      doc.getElementById("mockFillGo").click();
+      ok(W.focusGet() && W.focusGet().mock && W.focusGet().mock.q && W.focusGet().list.length===25, "FOCUSの器で25問(穴埋め)");
+      eq(doc.getElementById("qBadge").textContent, "🧪 穴埋め"); ok(doc.getElementById("promptWord").textContent.indexOf("( )")>=0 && doc.getElementById("promptWord").classList.contains("fill"), "英文と空所");
+      let cs=[...doc.querySelectorAll("#choices .choice")]; eq(cs.length, 4); ok(cs.every(b=>/^[a-z0-9 '-]+$/i.test(b.textContent)), "選択肢は英語の語: "+cs.map(b=>b.textContent).join("/"));
+      for(let i=0;i<25;i++){
+        const a=W.focusGet().mock.q[i].a; const st0=(G.words[a]||[0])[0];
+        cs=[...doc.querySelectorAll("#choices .choice")];
+        const b=(i===2)? cs.find(x=>x.textContent!==a) : cs.find(x=>x.textContent===a);
+        b.click();
+        if(i===0){ ok(doc.querySelector("#choices .choice.correct") && doc.querySelector("#choices .choice.correct").textContent===a, "正解の語が緑"); ok(G.words[a] && (G.words[a][2]||0)>=1, "正解の語のSRSに記録"); }
+        W.newQuestion();
+      }
+      ok(!W.focusGet(), "25問で終わる");
+      const mt=doc.getElementById("modal").textContent; ok(mt.indexOf("穴埋め")>=0 && mt.indexOf("24 / 25")>=0, "完了モーダル(穴埋め)");
+      const rec=G.mocks[Object.keys(G.mocks).sort().pop()]; eq(rec.c, 24); eq(rec.f, 1, "記録に穴埋めの印"); ok(!G.mockq, "問題セットは消費");
+      eq(d.a, a0+25, "解答はふつうの学習として記録");
+      doc.getElementById("mockAgain").click(); ok(doc.getElementById("mockPromptBtn") && doc.getElementById("modal").textContent.indexOf("穴埋め")>=0, "「模試へ」で案内に戻る(前回=穴埋め)"); W.closeModal();
+    }finally{ G.mockq=oldMockq; G.mocks=oldMocks; G.opt.preRecall=oldPre; G.mode=oldMode; W.saveG(); if(W.focusGet()){ if(W.focusGet().mock) W.clearInterval(W.focusGet().mock.timer); W.setFocusFromTest(null); } W.newQuestion(); }
+  });
+
   /* ---- 起動状態 ---- */
   t("起動時に問題が出題されている", ()=>{
     ok(W.document.getElementById("promptWord").textContent.length>0);
