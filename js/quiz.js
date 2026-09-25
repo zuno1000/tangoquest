@@ -570,11 +570,13 @@ function openFocusDone(){
     '<div class="giftbox">正解 <b style="font-size:20px">'+okN+' / '+n+'</b>'+(okN>=n? ' ─ 全部立て直した! 🎉':'')+
       (still.length? '<br><span class="small">まだ手ごわい: '+still.map(esc).join("・")+'</span>':'')+
       '<br><span class="small">ミスした語は1分後・10分後にまた出る ─ 今日のうちに2回思い出せれば明日につながる</span></div>'+
-    '<div class="row" style="gap:10px; margin-top:10px">'+
-    (still.length? '<button class="btn grow" id="focusAgain">🔥 まだ手ごわい'+still.length+'語をもう一度</button>':'')+
+    (still.length? '<button class="btn setnext2" id="focusAgain"><span>🔥 まだ手ごわい'+still.length+'語をもう一度</span><span class="hlsub">にがて特訓 ─ 正解の選択肢タップでサクサク進める</span></button>':'')+
+    '<div class="row" style="gap:10px; margin-top:10px">'+ // v5.29.2(実機FB): セット完了と同じ並び=「ひと休み(ホームへ)」+「学習にもどる」
+    '<button class="btn grow" id="focusHome">ひと休み(ホームへ)</button>'+
     '<button class="btn primary grow" id="focusEnd">学習にもどる</button></div>');
   const a=$("focusAgain"); if(a) a.onclick=()=>startFocus(still);
   $("focusEnd").onclick=()=>{ closeModal(); newQuestion(); };
+  $("focusHome").onclick=()=>{ closeModal(); newQuestion(); switchTab("home"); }; // 次の通常の出題を用意してからホームへ(学習タブを離れる=1問以上解いていれば同期・v5.29.0)
 }
 /* にがてノート(⚙設定・記録から): リストの上位と、特訓の入口 */
 function openWeakModal(){

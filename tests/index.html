@@ -3047,6 +3047,12 @@ function run(){
     ok(doc.getElementById("overlay").classList.contains("show") && doc.getElementById("modal").textContent.indexOf("にがて特訓")>=0, "完了モーダル");
     ok(doc.getElementById("modal").textContent.indexOf("3 / 3")>=0, "正解3/3");
     ok(!W.focusGet(), "特訓は終わっている");
+    ok(doc.getElementById("focusHome") && doc.getElementById("focusHome").textContent.indexOf("ホームへ")>=0, "「ひと休み(ホームへ)」(v5.29.2・実機FB)");
+    ok(doc.getElementById("focusHome").compareDocumentPosition(doc.getElementById("focusEnd")) & 4, "ホームへ は「学習にもどる」の左");
+    doc.getElementById("focusHome").click();
+    ok(!doc.getElementById("overlay").classList.contains("show") && !doc.getElementById("homeView").classList.contains("hidden"), "ホームに戻る");
+    ok(doc.getElementById("promptWord").textContent.length>0 && !W.focusGet(), "学習タブには通常の出題が用意されている");
+    W.switchTab("quiz"); W.setFocusFromTest({list:["abate"], res:[true], i:1}); W.openFocusDone(); // もう一度完了画面を出して「学習にもどる」も確認
     doc.getElementById("focusEnd").click();
     ok(doc.getElementById("promptWord").textContent.length>0, "通常の出題に戻る");
     // 📊記録タブの入口と、にがてノートのモーダル
