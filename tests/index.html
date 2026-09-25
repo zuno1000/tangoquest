@@ -4103,6 +4103,25 @@ function run(){
     }finally{ G.say=oldSay; G.myphr=oldMy; G.phr=oldPhr; W.myphrInvalidate(); W.saveG(); }
   });
 
+  t("v5.26.2: 貼り戻しの3列目「覚えたい表現」が核に・2列でも通る・「ー」(長音)は区切らない・依頼文は8〜12語+3列", ()=>{
+    const G=W.G; const oldSay=JSON.parse(JSON.stringify(G.say)), oldMy=JSON.parse(JSON.stringify(G.myphr)), oldPhr=JSON.parse(JSON.stringify(G.phr));
+    try{
+      const p=W.sayParse("I've finally wrapped my head around what you meant. — やっと分かった — wrapped my head around\nWatching the documentary made me want to travel. — そのドキュメンタリーを見て旅に出たくなった\nA matter of grave concern - 由々しき問題 - grave concern");
+      eq(p.length, 3); eq(p[0].key, "wrapped my head around", "3列目=覚えたい表現"); eq(p[0].ja, "やっと分かった");
+      eq(p[1].ja, "そのドキュメンタリーを見て旅に出たくなった", "長音は区切らない"); eq(p[1].key, "", "2列なら空");
+      eq(p[2].key, "grave concern", "半角ハイフンでも");
+      G.say={}; G.myphr={}; W.myphrInvalidate();
+      W.sayAdd("分かった\nドキュメンタリーを見て旅に出たくなった\n由々しき問題である");
+      eq(W.sayList().length, 3, "長音を含む日本語メモも1件のまま");
+      const pr=W.sayPromptText(W.sayList()); ok(pr.indexOf("8〜12語")>=0 && pr.indexOf("英文 — 日本語 — 覚えたい表現")>=0 && pr.indexOf("メモと同じ順")>=0, "依頼文");
+      const r=W.sayImport("I've finally wrapped my head around what you meant. — やっと分かった — wrapped my head around\nWatching the documentary made me want to travel. — そのドキュメンタリーを見て旅に出たくなった\nThis is a matter of grave concern for us. — 由々しき問題である — not in sentence");
+      eq(r.added, 3); eq(W.sayList().length, 0);
+      eq(W.myphrList().find(x=>x.en.indexOf("wrapped")>=0).k, "wrapped my head around", "3列目が核");
+      ok(W.myphrList().find(x=>x.en.indexOf("documentary")>=0).k.length>0, "2列なら自動推定");
+      ok(W.myphrList().find(x=>x.en.indexOf("grave")>=0).k!=="not in sentence", "英文に無い3列目は使わない(自動推定)");
+    }finally{ G.say=oldSay; G.myphr=oldMy; G.phr=oldPhr; W.myphrInvalidate(); W.saveG(); }
+  });
+
   /* ---- 起動状態 ---- */
   t("起動時に問題が出題されている", ()=>{
     ok(W.document.getElementById("promptWord").textContent.length>0);

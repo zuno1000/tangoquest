@@ -19,7 +19,7 @@
    記録: G.say=id→{ja:メモ本文, t:"j"|"p", at, done?, en?}(削除は{del:1,at})・G.sayw={d, list, used, at}。同期は操作時刻LWW(sync.js) */
 
 const SAY_JA=/[぀-ヿ一-鿿]/;
-const SAY_SEP=/\s*(?:—|–|ー|\s-\s|\s:\s|：)\s*/;
+const SAY_SEP=/\s*(?:—|–|\s-\s|\s:\s|：)\s*/; // v5.26.2: 「ー」(長音)は区切りにしない
 /* 1行の仕分け(純関数): {t:"w"|"p"|"j", en, ja}。en/jaは「英文 — 日本語」の形なら分けて入れる */
 function sayClassify(line){
   line=String(line||"").trim().replace(/^[\d０-９]+[.)．、]\s*|^[・\-*•]\s*/, "");
@@ -86,19 +86,21 @@ function sayToWord(id){
 /* LLMへの依頼文(コピー用): 出力を『英文 — 日本語』の1行1つに固定=貼り戻しで自動登録できる */
 function sayPromptText(items){
   return "英語学習のメモです。日本語のメモは「言いたかったのに英語で言えなかったこと」、英語のメモは「意味は分かるのに話すとき出てこなかった単語・句動詞・表現」です。\n"+
-    "・日本語のメモ → 会話でそのまま口に出せる自然な英語1文に(10〜15語程度・話し言葉として自然に。英検1級を目指す学習者なので簡単すぎる言い回しは避けつつ、覚えて使える長さで)\n"+
-    "・英語のメモ → その表現をそのまま含む、会話でそのまま口に出せる自然な英文1文(10〜15語程度)を作り、日本語訳を付ける(例: wipe out → 「The storm wiped out the entire harvest last year.」のように、私が自分の話で使えそうな場面で。メモがすでに文なら、ぎこちなければ自然に直す)\n"+
-    "・出力は1行につき「英文 — 日本語」だけ。番号・記号・説明・空行は入れないでください(単語帳アプリにそのまま貼り付けます)\n\n"+
+    "・日本語のメモ → 会話でそのまま口に出せる自然な英語1文に(8〜12語・話し言葉として自然に。メモの内容を表す「覚えたい表現」(英検1級を目指す学習者向けに簡単すぎない言い回し)を1つ含め、それ以外の部分はやさしい語で短く)\n"+
+    "・英語のメモ → その表現をそのまま含む、会話でそのまま口に出せる自然な英文1文(8〜12語・それ以外の部分はやさしい語で)を作り、日本語訳を付ける(例: wipe out → 「A sudden crisis could wipe out all our savings.」のように、私が自分の話で使えそうな場面で。メモがすでに文なら、ぎこちなければ自然に直す)\n"+
+    "・出力は1行につき「英文 — 日本語 — 覚えたい表現」だけ(3つ目は英文の中にそのまま含まれる連続した語句・1〜5語。英語のメモならその表現)。メモと同じ順で1行ずつ。番号・記号・説明・空行は入れないでください(単語帳アプリにそのまま貼り付けます)\n\n"+
     items.map(x=>"・"+x.ja).join("\n");
 }
-/* 貼り戻しの解析(純関数): 「英文 — 日本語」の行を{en, ja}に。英文だけの行も通す(jaは空)。日本語だけの行は捨てる */
+/* 貼り戻しの解析(純関数): 「英文 — 日本語 — 覚えたい表現」の行を{en, ja, key}に(v5.26.2: 3列目=核の候補。2列でもよい)。
+   英文だけの行も通す(jaは空)。日本語だけの行は捨てる。「ー」(長音)は区切りにしない */
 function sayParse(text){
   const out=[];
   String(text||"").split(/\n+/).map(s=>s.trim().replace(/^[\d０-９]+[.)．、]\s*|^[・\-*•]\s*/, "")).filter(Boolean).forEach(l=>{
-    const m=l.match(/^(.*?[A-Za-z][^—–ー]*?)\s*(?:—|–|ー|\s-\s|\s:\s)\s*(.*)$/);
-    let en=m? m[1].trim() : l, ja=m? m[2].trim() : "";
+    const m=l.match(/^(.*?[A-Za-z][^—–]*?)\s*(?:—|–|\s-\s|\s:\s)\s*(.*)$/);
+    let en=m? m[1].trim() : l, rest=m? m[2].trim() : "";
     if(!/[A-Za-z]/.test(en) || (en.match(/[A-Za-z]/g)||[]).length<en.replace(/\s/g,"").length*0.5) return;
-    out.push({en:en.replace(/\s+/g," "), ja});
+    const segs=rest.split(/\s*[—–]\s*|\s-\s/).map(s=>s.trim()).filter(Boolean);
+    out.push({en:en.replace(/\s+/g," "), ja:segs[0]||"", key:segs[1]||""});
   });
   return out;
 }
@@ -113,8 +115,10 @@ function sayImport(text){
           || pend.filter(x=>!x._used)[0];
     const ja=ln.ja || (hit && hit.t==="j"? hit.ja : "");
     if(!ja){ errs.push(ln.en.slice(0,30)+": 日本語がない"); return; }
-    // 英語のメモ(単語・句動詞)が英文に含まれていれば、それを核(🔑=覚えたい部分)に(v5.26.1: 並べ替えの狙いが「出てこなかった表現」に定まる)
-    const k=(hit && hit.t!=="j" && ln.en.toLowerCase().indexOf(String(hit.ja).toLowerCase())>=0)? hit.ja : "";
+    /* 核(🔑=覚えたい部分): ①LLMが返した3列目(英文にそのまま含まれるもの) ②英語のメモ(単語・句動詞)が英文に含まれていればそれ
+       ③無ければmyphrAddの自動推定(v5.26.1→v5.26.2: 日本語のメモでも「覚えたい表現」が核になる=並べ替えの狙いが定まる) */
+    const inEn=s=>!!s && ln.en.toLowerCase().indexOf(String(s).toLowerCase())>=0;
+    const k=inEn(ln.key)? ln.key : (hit && hit.t!=="j" && inEn(hit.ja))? hit.ja : "";
     const r=myphrAdd(ln.en, ja, k);
     if(r.err){ errs.push(ln.en.slice(0,30)+": "+r.err); return; }
     added++;
@@ -200,7 +204,7 @@ function openSayModal(focusAdd){
               (x.t!=="j"? '<button class="btn sayword" data-id="'+x.id+'" title="単語として登録">→単語</button>':'')+
               '<button class="btn mydel" data-id="'+x.id+'">🗑</button></div>').join("")+'</div>'+
         '<button class="btn" id="sayPromptBtn" style="width:100%; margin-top:8px">📋 '+pend.length+'件の英訳をLLMに頼む(依頼文をコピー)</button>'+
-        '<textarea id="sayBack" class="myta" rows="3" style="margin-top:8px" placeholder="LLMの答えを貼り付け(1行『英文 — 日本語』)"></textarea>'+
+        '<textarea id="sayBack" class="myta" rows="3" style="margin-top:8px" placeholder="LLMの答えを貼り付け(1行『英文 — 日本語 — 覚えたい表現』)"></textarea>'+
         '<button class="btn primary" id="sayImportBtn" style="width:100%; margin-top:6px">貼り戻してマイフレーズに登録</button>'
       : (sayDoneList()? '<div class="small" style="margin-top:8px">英訳待ちのメモはない ─ これまで '+sayDoneList()+'件を言えるようにした</div>' : ''))+
     '<div class="row" style="gap:8px; margin-top:14px"><button class="btn grow" id="sayWarmBtn">🎯 フレーズ5問(マイフレーズ優先)</button></div>'+
