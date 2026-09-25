@@ -46,6 +46,7 @@ const EVENTS=[
   // {d:"2026-08-03", t:"..."} 形式でバナー以外のイベント告知を書く
 ];
 const NEWS=[
+  {d:"2026-09-25", t:"📝 v5.24.0 実機のご意見に対応: ①今日の英語のプロンプトを過去問3回分(2025年度第2回・第3回・2026年度第1回)の形式に合わせ直した。読解=Part 2(空所補充)2問+Part 3(内容一致)4問、要約=Part 4と同じ90〜110語で4観点の採点、意見=Part 5と同じTOPICで英作文(200〜240語・理由3つ)か2分スピーチ、リスニング=Part 2(対談ならPart 4も) ②このお知らせを見出し+箇条書きに整形 ③効果音に種類(ピコ・チャイム・木琴・ささやか)と音量(小・中・大)。⚙設定→演出でタップして試聴 ④設定からサバイバー関連の項目と文言を外した(ゲーム面を戻せば復活) ⑤マイ単語の用例が長いと答え合わせで単語が持ち上がっていたのを、用例の枠(2行・出題時から確保)に収めて解消。LLMへの語彙一覧の依頼も例文20語以内に"},
   {d:"2026-09-25", t:"🎧 v5.23.0 実機のご意見5件に対応: ①今日の英語の問題プロンプトをTrue/False/Not Givenから英検1級と同じ内容一致4択(6問・問いと選択肢は英語・推測/言い換え/段落の要点)に。解説フルセットの中の問題も4択 ②正解・不正解の効果音(短い電子音・音声ファイルなし。⚙設定→演出でON/OFF。iPhoneはマナースイッチに従う) ③聴くカードに「⏱ 長さ」(〜5分・〜15分・〜30分・既定15分)。ポッドキャストは回の長さで、YouTubeはチャンネルの典型的な長さで絞る。短い番組を6つ追加(NPR News Now 5分・Merriam-Webster Word of the Day 2分・Consider This・Marketplace Morning Report・BBC Witness History) ④会員限定の記事が混ざっていたVoxとBig Thinkを「読む」から外した(YouTubeは残す) ⑤ログインボーナスを廃止(開くだけの報酬は語彙力と無関係)。🧊フリーズは「7日連続で学習するごとに1個(最大2)」に"},
   {d:"2026-09-23", t:"📖 v5.22.0 「語彙力」を新設: 覚えた語数は7日あけた復習に正解して初めて増える遅い指標だったので、すべての単語を定着の段階に応じて数えた「見込み◯◯語」(覚えた=1語・定着4=0.8・3=0.6・2=0.4・1=0.2)を主役にしました。1問正解するごとに必ず動き、忘れると1段ぶんだけ下がります。ヘッダの📖はLvから語彙力に、記録タブのいちばん上は語彙力の2色バー(濃=覚えた・薄=見込み・1級レベル語彙に対する%)と「今日+n・今週+n」に、週ごとのグラフは語彙力の伸びに。フレーズも同じ物差し。100語の節目を越えるとお祝い。Lv/XPは🏆実績(タイルは実績に)の中で見られます。伸びの記録はこの版から"},
   {d:"2026-09-23", t:"🔧 v5.21.0 記録タブを整理: タイル(連続学習・学習した日・累計正解・知識XP・今日の英語・にがて)をタップすると詳細が開く。新設の📅学習カレンダーは月ごとの色塗り(金=目安達成・青=学習した日・🧊フリーズ・📖🎧)と累計の問数・正答率、日をタップでその日の記録。覚えた単語/フレーズの行からあゆみへ。重複していた入口(あゆみ・フレーズのあゆみ・にがて・読んだ聴いた・ペース管理と実戦メニューのあゆみボタン)を撤去し、実績は知識XPのタイルから。ホームの今週の記録のタップもカレンダーに。マイ単語: 品詞や意味を直しても並びが変わらない(登録順で固定)"},
@@ -288,10 +289,28 @@ function newsCount(){ return NEWS.length+newsEvents().length; }
 function refreshBellDot(){
   $("bellDot").classList.toggle("hidden", (+localStorage.getItem(NEWS_SEEN_KEY)||0)>=newsCount());
 }
+/* v5.24.0(実機FB「アップデートのお知らせが読みにくい」): 1件=見出し(日付・版・要約)+箇条書き。
+   本文は「絵文字 v版 見出し: ①…②…」の1文字列なので、純関数newsParseで 版/見出し/項目 に分ける
+   (①〜⑳で区切る。番号がなければ「。」で文ごとに)。項目のない1文は見出しだけ。1件=.newsrow 1つ(既読カウント・テストは従来どおり) */
+function newsParse(t){
+  t=String(t||"").trim();
+  let ver="", rest=t;
+  const mv=t.match(/^(\S*\s*v\d+(?:\.\d+)*)\s*/); // 「🎧 v5.23.0 」
+  if(mv){ ver=mv[1]; rest=t.slice(mv[0].length); }
+  let head=rest, body="";
+  const cut=Math.min(...[rest.indexOf(": "), rest.indexOf(":"), rest.indexOf("。"), rest.search(/[①-⑳]/)].filter(i=>i>0));
+  if(isFinite(cut)){ head=rest.slice(0, cut).replace(/[:：]\s*$/, ""); body=rest.slice(cut).replace(/^[:：。\s]+/, ""); }
+  let items=body? body.split(/(?=[①-⑳])/).map(s=>s.trim()).filter(Boolean) : [];
+  if(items.length<=1 && body){ items=body.split(/。(?=.)/).map(s=>s.trim().replace(/。$/, "")).filter(Boolean); }
+  return {ver, head:head.trim(), items};
+}
 function newsRows(list){
-  return list.map(n=>
-    '<div class="newsrow"><span class="small" style="flex:0 0 auto">'+n.d.slice(5)+'</span>'+
-    '<span style="font-size:13px">'+n.t+'</span></div>').join("");
+  return list.map(n=>{
+    const p=newsParse(n.t);
+    return '<div class="newsrow"><div class="nhead"><span class="ndate">'+n.d.slice(5)+'</span>'+
+      (p.ver? '<b class="nver">'+esc(p.ver)+'</b>':'')+'<span class="ntitle">'+esc(p.head)+'</span></div>'+
+      (p.items.length? '<ul class="nlist">'+p.items.map(s=>'<li>'+esc(s)+'</li>').join("")+'</ul>' : '')+'</div>';
+  }).join("");
 }
 /* v4.30.0で刷新(実機FB「シンプルかつわかりやすく」): イベント/アップデートを
    モーダル先頭のタブ(心得のmetaTabsと同じ型)で切替。アップデートは直近だけ見せ、
@@ -407,6 +426,7 @@ window.RL_SOURCES=RL_SOURCES; window.RL_TOPICS=RL_TOPICS; window.RL_PROMPTS=RL_P
 window.setRlFetchImpl=f=>{ rlFetchImpl=f; }; window.rlStateGet=()=>rlState; window.rlAltGet=()=>rlAlt; // テスト用(let/varはwindowに載らない)
 window.rlStateReset=()=>{ rlState={read:null, listen:null}; rlAlt={read:0, listen:0}; }; window.RL_MAX_SEC=RL_MAX_SEC; // v5.19.0
 window.RL_LEN=RL_LEN; window.RL_LEN_DEFAULT=RL_LEN_DEFAULT; // v5.23.0(⏱ 聴く長さ)
+window.SFX_KINDS=SFX_KINDS; window.SFX_VOLS=SFX_VOLS; // v5.24.0(効果音の種類・音量)
 window.autoSyncPendingGet=()=>autoSyncPending; window.autoSyncPendingSet=v=>{ autoSyncPending=!!v; }; window.AUTO_SYNC_GAP=AUTO_SYNC_GAP; // v5.19.0
 window.setFocusFromTest=f=>{ FOCUS=f; }; window.focusGet=()=>FOCUS; window.pdrillGet=()=>PDRILL;
 window.LTD_SLOTS=LTD_SLOTS;

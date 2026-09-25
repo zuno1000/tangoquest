@@ -523,8 +523,10 @@ function renderQuestion(){
   $("resultBar").classList.remove("show");
   $("promptCard").classList.remove("srch"); // 辞書リンクは正誤確認中だけ
   // フレーズ学習(v5.0.0)の描画残りを片づける(並べ替えの組み立て行・チャンク用レイアウト・上詰めカード)
+  /* v5.24.0(実機FB「用例が長いと答え合わせで英単語が持ち上がる」): 単語モードでは用例の枠(.wex=2行ぶん・高さ固定)を
+     出題時から空で置いておき、答え合わせで中身だけ入れる=レイアウトが動かない(フレーズの文脈行と同じ流儀)。長い用例は2行で切る */
   const pb=$("phrBuild");
-  if(pb){ pb.classList.add("hidden"); pb.innerHTML=""; }
+  if(pb){ pb.classList.remove("hidden"); pb.classList.add("wex"); pb.innerHTML=""; }
   $("promptCard").classList.remove("phr");
   $("choices").className="choices";
   const w=cur.word, e2j=G.mode==="e2j";
@@ -651,7 +653,7 @@ function answer(chosen, btn){
   if(!ok && chosen.en!==w.en){ noteConfusion(G, w.en, chosen.en); if(!FOCUS && !pairQueue.some(q=>q.en===chosen.en)) pairQueue.push({en:chosen.en, wait:PAIR_GAP}); }
   // マイ単語の用例(v5.12.0): 出会った文があれば単語カードの下に
   const exh=mywExampleHTML(w.en);
-  if(exh){ const pb=$("phrBuild"); pb.innerHTML=exh; pb.classList.remove("hidden"); }
+  if(exh){ const pb=$("phrBuild"); pb.innerHTML=exh; pb.classList.remove("hidden"); } // 枠は出題時から確保済み(v5.24.0)
 
   // 知識XP: 正解が直接キャラの強さになる(連続学習日数+コンボ+キャラスキルでボーナス)
   let xpGain=0, lvUp=0;

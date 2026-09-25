@@ -72,30 +72,45 @@ function vibe(pat){
   if(!CAN_VIBRATE || localStorage.getItem("tq_vibe")==="off") return;
   try{ navigator.vibrate(pat); }catch(e){}
 }
-/* ---- 効果音(v5.23.0・実機FB「正解不正解の効果音をつけられるか」) ----
-   音声ファイルなし=Web Audioで短い合成音を鳴らす(正解=上がる2音・不正解=低い1音)。AudioContextは最初の解答(タップ操作の中)で
-   作るのでiOSでも鳴る。iOSはマナースイッチに従って消音される。設定は端末ローカル(tq_sfx・既定ON・振動tq_vibeと同じ型) */
+/* ---- 効果音(v5.23.0・実機FB「正解不正解の効果音をつけられるか」/v5.24.0「音量を調節・何種類か用意して選べるように」) ----
+   音声ファイルなし=Web Audioで短い合成音を鳴らす。AudioContextは最初の解答(タップ操作の中)で作るのでiOSでも鳴る。
+   iOSはマナースイッチに従って消音される。設定は端末ローカル(振動tq_vibeと同じ型): tq_sfx=on/off(既定ON)・
+   tq_sfxKind=音の種類(SFX_KINDS・既定pico)・tq_sfxVol=音量の段(SFX_VOLS・既定m)。
+   音の種類={ok:[[周波数, 開始秒, 長さ秒, 波形, 音量], …], ng:[…]}=正解/不正解それぞれの音符の列(純データ・テストで形を検証) */
+const SFX_KINDS={
+  pico: {name:"ピコ",     ok:[[659,0,0.09,"sine",0.18],[988,0.09,0.16,"sine",0.18]], ng:[[196,0,0.18,"triangle",0.16]]},           // v5.23.0の電子音
+  chime:{name:"チャイム", ok:[[523,0,0.32,"sine",0.11],[659,0,0.32,"sine",0.11],[784,0,0.32,"sine",0.11]], ng:[[262,0,0.22,"sine",0.12],[277,0,0.22,"sine",0.12]]}, // 和音/濁った2音
+  wood: {name:"木琴",     ok:[[784,0,0.07,"triangle",0.2],[1047,0.08,0.11,"triangle",0.2]], ng:[[220,0,0.12,"triangle",0.18]]},      // 短く乾いた音
+  soft: {name:"ささやか", ok:[[880,0,0.09,"sine",0.09]], ng:[[330,0,0.11,"sine",0.09]]},                                            // 1音だけ・小さめ
+};
+const SFX_VOLS={s:{name:"小", mul:0.45}, m:{name:"中", mul:1}, l:{name:"大", mul:1.8}};
 let sfxCtx=null;
 function sfxOn(){ try{ return localStorage.getItem("tq_sfx")!=="off"; }catch(e){ return true; } }
-function sfx(kind){
-  if(!sfxOn()) return;
+function sfxKind(){ try{ const k=localStorage.getItem("tq_sfxKind"); return SFX_KINDS[k]? k : "pico"; }catch(e){ return "pico"; } }
+function sfxVol(){ try{ const v=localStorage.getItem("tq_sfxVol"); return SFX_VOLS[v]? v : "m"; }catch(e){ return "m"; } }
+/* kind="ok"|"ng"|"test"(正解→不正解を続けて)。opt.force=設定OFFでも鳴らす(設定画面の試聴)・opt.kind/opt.vol=試聴したい種類・段 */
+function sfx(kind, opt){
+  opt=opt||{};
+  if(!sfxOn() && !opt.force) return;
   try{
     const AC=window.AudioContext||window.webkitAudioContext; if(!AC) return;
     if(!sfxCtx) sfxCtx=new AC();
     if(sfxCtx.state==="suspended") sfxCtx.resume();
+    const set=SFX_KINDS[opt.kind||sfxKind()]||SFX_KINDS.pico, mul=(SFX_VOLS[opt.vol||sfxVol()]||SFX_VOLS.m).mul;
     const t0=sfxCtx.currentTime;
     const tone=(freq, at, dur, type, vol)=>{
       const o=sfxCtx.createOscillator(), g=sfxCtx.createGain();
       o.type=type; o.frequency.setValueAtTime(freq, t0+at);
       g.gain.setValueAtTime(0.0001, t0+at);
-      g.gain.exponentialRampToValueAtTime(vol, t0+at+0.01);
+      g.gain.exponentialRampToValueAtTime(Math.min(0.5, vol*mul), t0+at+0.01);
       g.gain.exponentialRampToValueAtTime(0.0001, t0+at+dur);
       o.connect(g).connect(sfxCtx.destination);
       o.start(t0+at); o.stop(t0+at+dur+0.02);
     };
-    if(kind==="ok"){ tone(659, 0, 0.09, "sine", 0.18); tone(988, 0.09, 0.16, "sine", 0.18); }
-    else if(kind==="ng"){ tone(196, 0, 0.18, "triangle", 0.16); }
-    else if(kind==="test"){ tone(659, 0, 0.09, "sine", 0.18); tone(988, 0.09, 0.16, "sine", 0.18); tone(196, 0.45, 0.18, "triangle", 0.16); }
+    const play=(notes, off)=>notes.forEach(n=>tone(n[0], n[1]+off, n[2], n[3], n[4]));
+    if(kind==="ok") play(set.ok, 0);
+    else if(kind==="ng") play(set.ng, 0);
+    else if(kind==="test"){ play(set.ok, 0); play(set.ng, 0.5); }
   }catch(e){}
 }
 

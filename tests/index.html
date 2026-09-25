@@ -3257,7 +3257,7 @@ function run(){
     const oldSeen=G.rl.flowSeen; G.rl.flowSeen=0;
     W.openRLModal();
     const fb=doc.getElementById("rlFlow"); ok(fb && !fb.hidden, "初回は進め方が開いている");
-    ok(fb.textContent.indexOf("内容一致4択")>=0 && fb.textContent.indexOf("マイ単語")>=0, "手順にプロンプトの順とマイ単語");
+    ok(fb.textContent.indexOf("読解問題")>=0 && fb.textContent.indexOf("マイ単語")>=0, "手順にプロンプトの順とマイ単語");
     ok(doc.getElementById("rlMywBtn"), "分からなかった単語を登録の入口");
     eq(G.rl.flowSeen, 1, "一度見たら閉じた状態になる");
     W.closeModal();
@@ -3854,6 +3854,95 @@ function run(){
     }finally{ G.days=oldDays; G.frz=oldFrz; G.frzAt=oldAt; W.saveG(); }
   });
 
+
+  /* ---- v5.24.0: 過去問3回分に合わせたプロンプト・お知らせの整形・効果音の種類/音量・設定の整理・用例の枠 ---- */
+  t("v5.24.0①: プロンプトは過去問(2025-2/2025-3/2026-1)の形式 ─ 読解=Part 2空所補充2問+Part 3内容一致4問・要約=90〜110語で4観点・意見=Part 5のTOPICで英作文200〜240語/2分スピーチ・リスニング=Part 2(対談はPart 4)", ()=>{
+    const src=W.RL_SOURCES[0], it={t:"T", u:"https://t/x", d:"", s:""};
+    const r1=W.rlPromptText("read", "tf", src, it);
+    ok(r1.indexOf("Part 2形式(空所補充)を2問")>=0 && r1.indexOf("Part 3形式(内容一致)を4問")>=0 && r1.indexOf("6問")>=0, "読む①: Part 2+Part 3=6問");
+    ok(r1.indexOf("逆接・因果・具体例")>=0 && r1.indexOf("inferred")>=0, "空所補充は論理のつながり・内容一致は推測の型");
+    const r3=W.rlPromptText("read", "sum", src, it);
+    ok(r3.indexOf("90 and 110 words")>=0 && r3.indexOf("90〜110語")>=0 && r3.indexOf("Part 4")>=0, "③要約はPart 4と同じ条件");
+    ok(r3.indexOf("内容")>=0 && r3.indexOf("構成")>=0 && r3.indexOf("語彙")>=0 && r3.indexOf("文法")>=0 && r3.indexOf("120語")<0, "4観点で講評・旧120語は消えた");
+    ["read","listen"].forEach(k=>{
+      const r4=W.rlPromptText(k, "talk", src, it);
+      ok(r4.indexOf("Agree or disagree")>=0 && r4.indexOf("Should")>=0, k+"④: Part 5と同じ形のTOPIC");
+      ok(r4.indexOf("200〜240語")>=0 && r4.indexOf("理由3つ")>=0 && r4.indexOf("0〜8点")>=0, k+"④: 英作文は200〜240語・理由3つ・4観点0〜8点");
+      ok(r4.indexOf("2分程度")>=0 && r4.indexOf("面接官")>=0, k+"④: スピーチ+面接官の質疑も残る");
+      ok(W.RL_PROMPTS[k][3].name.indexOf("英作文")>=0, k+"④の名前に英作文");
+    });
+    const l1=W.rlPromptText("listen", "tf", src, it);
+    ok(l1.indexOf("Part 2")>=0 && l1.indexOf("Part 4")>=0 && l1.indexOf("インタビュー")>=0, "聴く①: Part 2が基本・対談ならPart 4");
+    const f=W.rlPromptText("read", "full", src, it);
+    ok(f.indexOf("90〜110語")>=0 && f.indexOf("Agree or disagree")>=0, "②フルセットの要約はPart 4の分量・TOPIC案はPart 5の形");
+    ok(f.indexOf("20語以内")>=0 && W.rlPromptText("listen", "full", src, it).indexOf("20語以内")>=0, "語彙一覧の例文は20語以内(用例の枠に収まる長さ)");
+    ok(W.RL_FLOW.read.steps.some(x=>x.t.indexOf("読解問題")>=0) && W.RL_FLOW.read.steps.some(x=>x.d.indexOf("90〜110語")>=0) && W.RL_FLOW.read.steps.some(x=>x.d.indexOf("200〜240語")>=0), "進め方の文言も本番の条件");
+  });
+  t("v5.24.0②: お知らせの整形 ─ newsParse(純関数)が 版/見出し/箇条書き に分ける・1件=.newsrow 1つ(既読カウントは従来どおり)", ()=>{
+    const p=W.newsParse("🎧 v5.23.0 実機のご意見5件に対応: ①今日の英語の問題を4択に ②効果音 ③聴くカードに「⏱ 長さ」");
+    eq(p.ver, "🎧 v5.23.0", "版"); eq(p.head, "実機のご意見5件に対応", "見出し"); eq(p.items.length, 3, "①②③で3項目"); ok(p.items[0].indexOf("①")===0 && p.items[2].indexOf("③")===0);
+    const q=W.newsParse("🔧 v5.19.1 「何度同期しても今日の目安が揃わない」を修正。原因は旧版の記録。同点は小さい方を採る");
+    eq(q.head, "「何度同期しても今日の目安が揃わない」を修正"); eq(q.items.length, 2, "番号がなければ「。」で文ごと"); eq(q.items[1], "同点は小さい方を採る");
+    const r=W.newsParse("📚 v5.17.0 単語を3,561語追加しました"); eq(r.ver, "📚 v5.17.0"); eq(r.head, "単語を3,561語追加しました"); eq(r.items.length, 0, "1文なら見出しだけ");
+    eq(W.newsParse("").items.length, 0, "空でも落ちない");
+    W.openNews(); const doc=W.document;
+    eq(doc.querySelectorAll("#newsUp .newsrow").length, W.newsCount()-W.newsEvents().length, "件数は変わらない");
+    const first=doc.querySelector("#newsUp .newsrow");
+    ok(first.querySelector(".nver") && first.querySelector(".ntitle") && first.querySelectorAll(".nlist li").length>=3, "最新の1件=版・見出し・箇条書き3つ以上");
+    ok(first.querySelector(".nver").textContent.indexOf("v"+W.APP_VERSION)>=0, "最新はいまの版");
+    W.closeModal();
+  });
+  t("v5.24.0③: 効果音の種類(SFX_KINDS)と音量(SFX_VOLS) ─ 既定はピコ/中・⚙のチップで保存(tq_sfxKind/tq_sfxVol)・OFFでも試聴は鳴らす(force)", ()=>{
+    const LS=W.localStorage, doc=W.document;
+    ["tq_sfx","tq_sfxKind","tq_sfxVol"].forEach(k=>LS.removeItem(k));
+    eq(Object.keys(W.SFX_KINDS).join(","), "pico,chime,wood,soft", "4種類"); eq(Object.keys(W.SFX_VOLS).join(","), "s,m,l", "3段");
+    Object.keys(W.SFX_KINDS).forEach(k=>{ const d=W.SFX_KINDS[k]; ok(d.name && d.ok.length>=1 && d.ng.length>=1 && d.ok.every(n=>n.length===5 && n[0]>0 && n[2]>0 && n[4]>0), k+": 名前と正解/不正解の音符"); });
+    ok(W.SFX_VOLS.s.mul<W.SFX_VOLS.m.mul && W.SFX_VOLS.m.mul<W.SFX_VOLS.l.mul, "小<中<大");
+    eq(W.sfxKind(), "pico", "既定ピコ"); eq(W.sfxVol(), "m", "既定中");
+    LS.setItem("tq_sfxKind", "nope"); eq(W.sfxKind(), "pico", "知らない種類は既定"); LS.removeItem("tq_sfxKind");
+    Object.keys(W.SFX_KINDS).forEach(k=>{ W.sfx("ok", {kind:k, vol:"l"}); W.sfx("ng", {kind:k, vol:"s"}); }); W.sfx("test", {force:true}); // 落ちない
+    W.openSettings();
+    const ks=doc.querySelectorAll("#modal .sfxk"), vs=doc.querySelectorAll("#modal .sfxv");
+    eq(ks.length, 4, "音のチップ4つ"); eq(vs.length, 3, "音量のチップ3つ");
+    ok(ks[0].classList.contains("ksel") && vs[1].classList.contains("ksel"), "既定=ピコ・中が選択");
+    ks[2].click(); eq(LS.getItem("tq_sfxKind"), "wood", "木琴を保存"); ok(ks[2].classList.contains("ksel") && !ks[0].classList.contains("ksel"));
+    vs[2].click(); eq(LS.getItem("tq_sfxVol"), "l", "大を保存"); eq(W.sfxVol(), "l");
+    doc.getElementById("sfxToggle").click(); ok(!W.sfxOn(), "OFF"); vs[0].click(); eq(LS.getItem("tq_sfxVol"), "s", "OFFでも選べる(試聴はforce)");
+    W.closeModal(); ["tq_sfx","tq_sfxKind","tq_sfxVol"].forEach(k=>LS.removeItem(k));
+  });
+  t("v5.24.0④: ⚙設定からサバイバー関連を外す(ゲーム面オフ) ─ 3択の自動選択ボタンなし・ヘルプ/リセットの文言にサバイバー・なかま・通貨が出ない・trueなら従来どおり", ()=>{
+    const doc=W.document;
+    W.openSettings();
+    const txt=doc.getElementById("modal").textContent;
+    ok(!doc.getElementById("svAutoBtn"), "サバイバー3択の自動選択は出ない");
+    ok(txt.indexOf("サバイバー")<0 && txt.indexOf("なかま")<0 && txt.indexOf("通貨")<0 && txt.indexOf("🪙")<0, "文言にもゲーム面の語が残らない");
+    ok(doc.getElementById("resetLearnBtn").textContent==="学習記録だけリセット", "リセットの名前もゲーム面なし");
+    doc.getElementById("resetLearnBtn").click();
+    const t2=doc.getElementById("modal").textContent;
+    ok(t2.indexOf("学習記録をリセットする")>=0 && t2.indexOf("なかま")<0 && t2.indexOf("実績")>=0, "確認画面の文言(消えるもの・残るもの)もゲーム面なし");
+    W.closeModal();
+    W.GAME_ENABLED=true; W.applyGameFlag();
+    try{ W.openSettings(); ok(doc.getElementById("svAutoBtn") && doc.getElementById("modal").textContent.indexOf("サバイバー3択の自動選択")>=0, "trueに戻せば従来どおり"); W.closeModal(); }
+    finally{ W.GAME_ENABLED=false; W.applyGameFlag(); W.refreshHeader(); }
+  });
+  t("v5.24.0⑤: 用例の枠(.wex) ─ 単語モードでは出題時から2行ぶんの枠(空)・答え合わせで中身だけ・フレーズモードではwexが外れる", ()=>{
+    const G=W.G, doc=W.document;
+    W.switchTab("quiz"); W.setCurFromTest(W.WORDS[0]);
+    const pb=doc.getElementById("phrBuild");
+    ok(pb.classList.contains("wex") && !pb.classList.contains("hidden") && pb.textContent==="", "出題時: 枠だけ");
+    const h0=doc.getElementById("promptWord").getBoundingClientRect().top;
+    // 長い用例を持つマイ単語を仮に登録して答え合わせ
+    const en=W.WORDS[0].en; const oldMyw=G.myw[en];
+    G.myw[en]={ja:"x", pos:"n", ex:("The very long example sentence that keeps going on and on about "+en+" ").repeat(4), at:Date.now()};
+    doc.querySelector("#choices .choice").click();
+    ok(pb.textContent.indexOf(en)>=0, "答え合わせで用例が入る");
+    const h1=doc.getElementById("promptWord").getBoundingClientRect().top;
+    ok(Math.abs(h1-h0)<1, "単語の位置が動かない(差 "+Math.abs(h1-h0).toFixed(1)+"px)");
+    ok(pb.getBoundingClientRect().height<=41, "枠は2行ぶん(40px)で切れる: "+pb.getBoundingClientRect().height.toFixed(1));
+    if(oldMyw) G.myw[en]=oldMyw; else delete G.myw[en];
+    W.newQuestion();
+  });
+
   /* ---- 起動状態 ---- */
   t("起動時に問題が出題されている", ()=>{
     ok(W.document.getElementById("promptWord").textContent.length>0);
@@ -4009,7 +4098,7 @@ async function runAsync(W){
       ok(n && n.hidden, id+"は畳まれている");
     });
     ok(!doc.getElementById("sfoldSync") && !doc.getElementById("sfoldUpd"), "同期・更新は畳まない(v5.15.0: いちばん上に常時表示)");
-    ok(doc.getElementById("modeToggle") && doc.getElementById("autoNextBtn") && doc.getElementById("svAutoBtn"), "学習(出題・自動化)");
+    ok(doc.getElementById("modeToggle") && doc.getElementById("autoNextBtn") && !doc.getElementById("svAutoBtn"), "学習(出題・自動化)。サバイバーの設定はゲーム面オフでは出ない(v5.24.0)");
     ok(doc.getElementById("updateBtn") && doc.getElementById("resetLearnBtn") && doc.getElementById("resetBtn"), "更新・リセット");
     // v5.15.0(実機FB): 同期・更新のボタンは⚙を開いた直後に見える(開閉セクションの外・横並び・最初の要素)
     const top=doc.querySelector("#modal .settop");
@@ -4739,7 +4828,7 @@ async function runAsync(W){
     ok(W.mywExampleHTML("zzexword").indexOf("<b>zzexword</b>")>=0, "用例の中の単語を太字に");
     ok(W.mywExampleHTML("abate")==="", "用例のない語は空");
     W.switchTab("quiz"); W.setCurFromTest(W.byEn.zzexword);
-    ok(doc.getElementById("phrBuild").classList.contains("hidden"), "出題中は用例を見せない");
+    ok(!doc.getElementById("phrBuild").classList.contains("hidden") && doc.getElementById("phrBuild").classList.contains("wex") && doc.getElementById("phrBuild").textContent==="", "出題中は用例の枠(.wex・空)だけを置く(v5.24.0: 答え合わせで単語が動かない)");
     [...doc.querySelectorAll("#choices .choice")].find(b=>b.textContent==="用例つき").click();
     ok(!doc.getElementById("phrBuild").classList.contains("hidden") && doc.getElementById("phrBuild").textContent.indexOf("rise quickly")>=0, "答え合わせで用例が出る");
     W.openMywList(); ok(doc.getElementById("modal").textContent.indexOf("rise quickly")>=0 && doc.getElementById("modal").textContent.indexOf("Test Article")>=0, "一覧に用例と出典"); W.closeModal();

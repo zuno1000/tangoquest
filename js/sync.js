@@ -593,15 +593,16 @@ function partialResetData(g, t){
    📖学習/🎨演出/📥同期/🔄更新/🗑リセットの開閉セクション(foldSec)に分類して畳む。
    中身は常にDOMに置く=既存のボタンID・テストは全部そのまま生きる */
 function openSettings(){
+  /* v5.24.0(実機FB「設定にサバイバー関連が残っている」): サバイバーの設定・文言はGAME_ENABLEDのときだけ(方針=隠すだけ・削除しない) */
   const learnInner=
     '<div class="small" style="margin-bottom:6px">出題と自動化のしくみ '+helpBtn("hlp-opt")+'</div>'+
     helpNote("hlp-opt", '<b>自動で次へ</b>: 答え合わせのあと、「次へ」を押さなくても設定した秒数で自動的に次の問題へ進む'+
-      '(学習タブ・サバイバー共通。「次へ」を押せばすぐ進める。レベルアップの3択などは今までどおり止まる)<br><br>'+
-      '<b>サバイバー3択の自動選択</b>: レベルアップ・宝箱の3択をおまかせで即決する'+
-      '(HPが半分近く減っているときは回復を優先。じっくり選びたい人はオフのまま)<br><br>'+
+      (GAME_ENABLED? '(学習タブ・サバイバー共通。「次へ」を押せばすぐ進める。レベルアップの3択などは今までどおり止まる)' : '(「次へ」を押せばすぐ進める)')+'<br><br>'+
+      (GAME_ENABLED? '<b>サバイバー3択の自動選択</b>: レベルアップ・宝箱の3択をおまかせで即決する'+
+      '(HPが半分近く減っているときは回復を優先。じっくり選びたい人はオフのまま)<br><br>' : '')+ // v5.24.0: ゲーム面オフでは出さない
       '<b>先に思い出すステップ</b>: 単語の復習(一度出た語)とフレーズの4択で、選択肢を最初は伏せて自力で思い出してから開く。'+
       '選択肢は「見れば分かる」(再認)で解けてしまい、見ずに言う力(再生)が付きにくい ─ '+
-      'このワンクッションが両者のギャップを埋める(新規の単語・にがて特訓・サバイバーでは出ない。テンポ優先ならオフ)<br><br>'+
+      'このワンクッションが両者のギャップを埋める(新規の単語・にがて特訓'+(GAME_ENABLED? '・サバイバー':'')+'では出ない。テンポ優先ならオフ)<br><br>'+
       '<b>4択の誤答と追い出題(設定なし・常時)</b>: 誤答には「以前に取り違えた相手」と「同じ語根の語」を優先して混ぜ、'+
       'ミスの直後はその相手を数問以内に出す ─ 消去法で解けず、似た語の区別が毎回の学習の中で固まる'+
       (SPEAK_ENABLED? '<br><br><b>フレーズ: 口頭の制限時間</b>: 口頭チェックにカウントダウンを付け、時間切れで自動的に答えが開く。'+
@@ -610,17 +611,20 @@ function openSettings(){
     '<div style="height:8px"></div>'+
     '<button class="btn" id="autoNextBtn">自動で次へ: '+autoNextLabel(G.opt.autoNext)+' (タップで切替)</button>'+
     '<div style="height:8px"></div>'+
-    '<button class="btn" id="svAutoBtn">サバイバー3択の自動選択: '+(G.opt.svAuto? "ON":"OFF")+'</button>'+
-    '<div style="height:8px"></div>'+
+    (GAME_ENABLED? '<button class="btn" id="svAutoBtn">サバイバー3択の自動選択: '+(G.opt.svAuto? "ON":"OFF")+'</button>'+
+    '<div style="height:8px"></div>' : '')+ // v5.24.0: サバイバーの設定はゲーム面オフでは隠す
     '<button class="btn" id="preRecallBtn">先に思い出すステップ(単語の復習・フレーズ): '+(G.opt.preRecall? "ON":"OFF")+'</button>'+
     // 口頭ステージはv5.10.0でUIから撤去(SPEAK_ENABLED=false)。制限時間の設定も一緒に隠す
     (SPEAK_ENABLED? '<div style="height:8px"></div>'+
     '<button class="btn" id="spkSecBtn">フレーズ: 口頭の制限時間: '+spkSecLabel(G.opt.spkSec)+' (タップで切替)</button>' : '');
-  /* 効果音(v5.23.0・実機FB): 振動と同じ端末ローカルの設定。ONにした瞬間にテスト音(正解→不正解) */
+  /* 効果音(v5.23.0・実機FB): 振動と同じ端末ローカルの設定。v5.24.0: 音の種類(SFX_KINDS)と音量(SFX_VOLS)をチップで選ぶ=タップで試聴 */
+  const chips=(cls, defs, cur)=>Object.keys(defs).map(k=>'<button class="wchip '+cls+(k===cur? " ksel":"")+'" data-k="'+k+'">'+defs[k].name+'</button>').join("");
   const sfxInner=
-    '<div class="small" style="margin-bottom:6px">正解・不正解で短い電子音が鳴る '+helpBtn("hlp-sfx")+'</div>'+
-    helpNote("hlp-sfx", '正解=上がる2音・不正解=低い1音。音声ファイルは使わず端末が合成する。iPhoneはマナースイッチ(消音)に従う。ONにした瞬間にテスト音が鳴る')+
+    '<div class="small" style="margin-bottom:6px">正解・不正解で短い音が鳴る '+helpBtn("hlp-sfx")+'</div>'+
+    helpNote("hlp-sfx", '音声ファイルは使わず端末が合成する。iPhoneはマナースイッチ(消音)に従う。種類・音量のチップをタップすると試聴できる(正解→不正解の順)')+
     '<button class="btn" id="sfxToggle">効果音: '+(sfxOn()? "ON":"OFF")+'</button>'+
+    '<div class="sfxrow"><span class="small">音</span>'+chips("sfxk", SFX_KINDS, sfxKind())+'</div>'+
+    '<div class="sfxrow"><span class="small">音量</span>'+chips("sfxv", SFX_VOLS, sfxVol())+'</div>'+
     '<div style="height:10px"></div>';
   const fxInner=sfxInner+(CAN_VIBRATE
     ? '<div class="small" style="margin-bottom:6px">正解やお祝いで端末が振動する '+helpBtn("hlp-vibe")+'</div>'+
@@ -649,8 +653,8 @@ function openSettings(){
     helpNote("hlp-upd", 'ホーム画面から起動している場合(iOS等)も「アップデートを確認」で最新版に更新できる。学習データ・同期は消えない');
   const resetInner=
     '<div class="small" style="margin-bottom:6px">やり直したいときに '+helpBtn("hlp-reset")+'</div>'+
-    helpNote("hlp-reset", '「学習記録とカードだけリセット」はなかま・通貨・レベル・冒険の記録を残して単語の学習をやり直す。どちらも確認画面が出る')+
-    '<button class="btn" id="resetLearnBtn">学習記録とカードだけリセット</button>'+
+    helpNote("hlp-reset", (GAME_ENABLED? '「学習記録とカードだけリセット」はなかま・通貨・レベル・冒険の記録を残して単語の学習をやり直す。' : '「学習記録だけリセット」は実績・マイフレーズ・今日の英語の記録を残して単語とフレーズの学習をやり直す。')+'どちらも確認画面が出る')+
+    '<button class="btn" id="resetLearnBtn">'+(GAME_ENABLED? '学習記録とカードだけリセット' : '学習記録だけリセット')+'</button>'+
     '<div style="height:10px"></div>'+
     '<button class="btn danger" id="resetBtn">データをすべてリセット</button>';
   /* v5.14.0: 「記録」(数字の表・あゆみ・にがて・読んだ聴いた・マイ単語・図鑑・実績)は📊記録タブ(records.js)へ移した。
@@ -671,7 +675,7 @@ function openSettings(){
     G.opt.autoNext=autoNextCycle(G.opt.autoNext); saveG();
     $("autoNextBtn").textContent="自動で次へ: "+autoNextLabel(G.opt.autoNext)+" (タップで切替)";
   };
-  $("svAutoBtn").onclick=()=>{
+  if($("svAutoBtn")) $("svAutoBtn").onclick=()=>{
     G.opt.svAuto=G.opt.svAuto? 0:1; saveG();
     $("svAutoBtn").textContent="サバイバー3択の自動選択: "+(G.opt.svAuto? "ON":"OFF");
   };
@@ -689,6 +693,17 @@ function openSettings(){
     $("sfxToggle").textContent="効果音: "+(on? "ON":"OFF");
     if(on) sfx("test"); // ONにした瞬間(タップ操作中)にテスト音
   };
+  // 音の種類・音量(v5.24.0): 選んで保存し、その設定で試聴(OFFのときも試聴だけは鳴らす)
+  $("modal").querySelectorAll(".sfxk").forEach(b=>b.onclick=()=>{
+    try{ localStorage.setItem("tq_sfxKind", b.dataset.k); }catch(e){}
+    $("modal").querySelectorAll(".sfxk").forEach(x=>x.classList.toggle("ksel", x===b));
+    sfx("test", {force:true});
+  });
+  $("modal").querySelectorAll(".sfxv").forEach(b=>b.onclick=()=>{
+    try{ localStorage.setItem("tq_sfxVol", b.dataset.k); }catch(e){}
+    $("modal").querySelectorAll(".sfxv").forEach(x=>x.classList.toggle("ksel", x===b));
+    sfx("test", {force:true});
+  });
   const vt=$("vibeToggle");
   if(vt) vt.onclick=()=>{
     const off=localStorage.getItem("tq_vibe")==="off";
@@ -701,9 +716,11 @@ function openSettings(){
   if(sb && !sb.disabled){ ensureGis(()=>{}); sb.onclick=()=>syncNow(); } // GIS先読み=タップ時にポップアップがブロックされない
   $("updateBtn").onclick=appUpdate;
   $("resetLearnBtn").onclick=()=>{
-    openModal('<h3>学習記録とカードをリセットする？</h3>'+
-      '<div class="small" style="line-height:1.7">消えるもの: 単語・フレーズの学習記録(SRS・学習のあゆみ)・単語カード・かけら・学習ペースの目標。<br>'+
-      '残るもの: なかま(突破・カスタムアイコン)・🪙・🎫・レベル(XP)・冒険(サバイバー)や任務の記録・マイフレーズの登録内容。'+
+    openModal('<h3>'+(GAME_ENABLED? '学習記録とカードをリセットする？' : '学習記録をリセットする？')+'</h3>'+
+      '<div class="small" style="line-height:1.7">消えるもの: 単語・フレーズの学習記録(SRS・学習のあゆみ・語彙力の記録)'+(GAME_ENABLED? '・単語カード・かけら':'')+'・学習ペースの目標。<br>'+
+      (GAME_ENABLED? '残るもの: なかま(突破・カスタムアイコン)・🪙・🎫・レベル(XP)・冒険(サバイバー)や任務の記録・マイフレーズの登録内容。'
+                   : '残るもの: 実績(XP)・マイフレーズ・マイ単語の登録内容・今日の英語の記録と好み・連続学習フリーズ。')+ // v5.24.0: ゲーム面オフの文言
+
       (syncClientId()&&lastSyncAt()? '<br>Drive同期を使っているため、<b>他の端末も次回同期時に同じ状態になる</b>。':'')+
       '<br>この操作は取り消せない。</div>'+
       '<div class="row" style="margin-top:12px; gap:10px">'+
@@ -717,7 +734,7 @@ function openSettings(){
   };
   $("resetBtn").onclick=()=>{
     openModal('<h3>本当にリセットする？</h3>'+
-      '<div class="small">学習記録・カード・なかま・通貨がすべて消える。'+
+      '<div class="small">'+(GAME_ENABLED? '学習記録・カード・なかま・通貨がすべて消える。' : '学習記録・実績・マイ単語・マイフレーズ・今日の英語の記録がすべて消える。')+
       (syncClientId()&&lastSyncAt()? 'Drive同期を使っているため、<b>他の端末も次回同期時にリセットされる</b>。':'')+
       'この操作は取り消せない。</div>'+
       '<div class="row" style="margin-top:12px; gap:10px">'+

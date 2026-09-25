@@ -300,7 +300,14 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
 .syncnag{margin-top:12px; padding:11px 14px; font-size:13px; font-weight:700;
   color:var(--accent2); cursor:pointer; text-align:center}
 .syncnag:active{opacity:.85}
-.newsrow{display:flex; gap:10px; align-items:baseline; padding:8px 0; border-bottom:1px solid var(--line); line-height:1.5}
+.newsrow{display:block; padding:10px 0; border-bottom:1px solid var(--line); line-height:1.5}
+/* お知らせの整形(v5.24.0): 見出し=日付・版・要約/中身=箇条書き */
+.newsrow .nhead{display:flex; gap:8px; align-items:baseline; flex-wrap:wrap; font-size:13px}
+.newsrow .ndate{flex:0 0 auto; font-size:11px; color:var(--sub); font-weight:700}
+.newsrow .nver{flex:0 0 auto; color:var(--accent2); font-weight:900}
+.newsrow .ntitle{font-weight:800; color:var(--ink)}
+.newsrow .nlist{margin:6px 0 0; padding-left:18px; font-size:12px; line-height:1.6; color:var(--sub); font-weight:600}
+.newsrow .nlist li{margin:3px 0}
 .newsrow:last-child{border-bottom:none}
 /* イベント告知(ガチャ等)は暖色パネルで目立たせる */
 .evpanel{background:linear-gradient(135deg,#FFF3DC,#FFEBC9)}
@@ -1216,6 +1223,10 @@ body.svplay #slotView{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
 .rmeta.myw{color:var(--accent2)}
 /* マイ単語の用例(v5.12.0): 答え合わせのあと単語カードの下・一覧・登録プレビュー */
 .myex{display:block; font-size:13px; font-weight:600; color:var(--sub); line-height:1.5; text-align:left}
+/* 単語モードの用例枠(v5.24.0): 2行ぶんの高さを出題時から確保し、長い用例は2行で切る=答え合わせで単語が動かない */
+#phrBuild.wex{min-height:0; height:40px; margin-top:6px; overflow:hidden; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2;
+  font-size:13px; line-height:1.5; font-weight:600; color:var(--sub); text-align:left}
+#phrBuild.wex .myex{display:inline}
 .myex b{color:var(--accent2)}
 .myexs{font-weight:600; color:var(--sub)}
 /* マイ単語の一覧: 意味はタップで手直し(テキスト風ボタン・点線下線で「押せる」を示す) */
@@ -1280,6 +1291,9 @@ body.svplay #slotView{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
 /* ⏱ 聴く長さの段(v5.23.0): 聴くカードの見出し下の1行 */
 .rllenrow{display:flex; align-items:center; flex-wrap:wrap; gap:6px; margin-top:6px}
 .rllenrow .wchip{padding:4px 10px; font-size:12px}
+/* 効果音の種類・音量(v5.24.0・⚙設定→演出) */
+.sfxrow{display:flex; align-items:center; flex-wrap:wrap; gap:6px; margin-top:8px}
+.sfxrow .wchip{padding:5px 11px; font-size:12px}
 .rlchip{display:inline-block; margin-right:4px; padding:1px 7px; border-radius:8px; font-size:10px; font-weight:800;
   background:var(--bg2); color:var(--sub); vertical-align:middle}
 .rlchip.lv{background:#E3E7FF; color:var(--accent2)}
