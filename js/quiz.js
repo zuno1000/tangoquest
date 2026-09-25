@@ -424,21 +424,40 @@ function mockChartSVG(list){
   });
   return s+'</svg>';
 }
-/* 📊 記録タブ→🧪の推移(v5.28.1・実機FB): 直近12回の正解数の折れ線(v5.28.2)+一覧(日付・種類・正解・時間) */
-function openMockHistoryModal(){
+/* 推移のページ分割(v5.29.4・純関数): 12回ずつ。page=0が直近。戻り={items(古い順=折れ線と一覧の順), page, pages, hasPrev, hasNext, from, to}
+   (フレーズのあゆみの◀▶と同じ操作感。模試は1回ごとの記録なので、日数ではなく回数で区切る) */
+var MOCK_PAGE=12;
+function mockHistoryPage(list, page){
+  const n=(list||[]).length, pages=Math.max(1, Math.ceil(n/MOCK_PAGE));
+  page=Math.max(0, Math.min(pages-1, +page||0));
+  const items=list.slice(page*MOCK_PAGE, page*MOCK_PAGE+MOCK_PAGE).reverse(); // listは新しい順→ページ内は古い順に
+  return {items, page, pages, hasPrev:page<pages-1, hasNext:page>0, from:items.length? items[0].d : "", to:items.length? items[items.length-1].d : ""};
+}
+/* 📊 記録タブ→🧪の推移(v5.28.1・実機FB): 正解数の折れ線(v5.28.2)+一覧(日付・種類・正解・時間)。
+   v5.29.4(実機FB「フレーズのあゆみのように前の記録も見返したい」): 12回ずつ◀▶でさかのぼる(折れ線と一覧は同じページ) */
+function openMockHistoryModal(page){
   const h=mockHistory(G);
-  const bars=h.slice(0, 12).reverse();
+  const pg=mockHistoryPage(h, page);
+  const md=d=>String(d||"").slice(5).replace("-","/");
   openModal('<h3>🧪 Part 1 模試の推移</h3>'+
     (h.length
-      ? '<div class="small">直近'+bars.length+'回の正解数(/'+MOCK_N+')。本番の目安は'+mockFmtSec(MOCK_GUIDE_SEC)+'</div>'+
-        '<div class="mockchart">'+mockChartSVG(bars)+'</div>'+
-        '<div class="pacefoot"><span class="wlg did">●</span>4択(意味) <span class="wlg hit">●</span>穴埋め</div>'+
-        '<div class="panel" style="margin-top:8px">'+h.slice(0, 30).map(x=>
+      ? '<div class="row histnav" style="gap:8px; margin-top:6px">'+
+          '<button class="btn hnav" id="mockHistPrev"'+(pg.hasPrev?'':' disabled')+'>◀</button>'+
+          '<div class="grow" style="text-align:center; font-weight:800">'+md(pg.from)+(pg.from!==pg.to? ' 〜 '+md(pg.to):'')+
+            '<span class="small" style="font-weight:700"> ・ '+pg.items.length+'回'+(pg.pages>1? '('+(pg.page+1)+'/'+pg.pages+'ページ)':'')+'</span></div>'+
+          '<button class="btn hnav" id="mockHistNext"'+(pg.hasNext?'':' disabled')+'>▶</button></div>'+
+        '<div class="mockchart">'+mockChartSVG(pg.items)+'</div>'+
+        '<div class="pacefoot"><span class="wlg did">●</span>4択(意味) <span class="wlg hit">●</span>穴埋め ・ 正解数(/'+MOCK_N+')・本番の目安は'+mockFmtSec(MOCK_GUIDE_SEC)+'</div>'+
+        '<div class="panel" style="margin-top:8px">'+pg.items.slice().reverse().map(x=>
           '<div class="myrow"><div class="grow small"><b style="color:var(--ink)">'+esc(x.d||"")+'</b> ・ '+(x.f? '穴埋め':'4択')+'</div>'+
-          '<div class="small"><b style="color:var(--accent2)">'+x.c+' / '+MOCK_N+'</b> ・ ⏱ '+mockFmtSec(x.s)+(x.s>MOCK_GUIDE_SEC? ' <span style="color:var(--ng)">超過</span>':'')+'</div></div>').join("")+'</div>'
+          '<div class="small"><b style="color:var(--accent2)">'+x.c+' / '+MOCK_N+'</b> ・ ⏱ '+mockFmtSec(x.s)+(x.s>MOCK_GUIDE_SEC? ' <span style="color:var(--ng)">超過</span>':'')+'</div></div>').join("")+'</div>'+
+        '<div class="small" style="margin-top:6px">全'+h.length+'回 ・ ◀で前の'+MOCK_PAGE+'回へ</div>'
       : '<div class="empty">まだ記録なし ─ 学習タブの🧪から</div>')+
     '<div class="row" style="gap:10px; margin-top:12px"><button class="btn" data-close>とじる</button><button class="btn primary grow" id="mockHistGo">🧪 模試へ</button></div>');
   $("mockHistGo").onclick=()=>{ closeModal(); if($("quizView").classList.contains("hidden")) switchTab("quiz"); openMockModal(); };
+  const pv=$("mockHistPrev"), nx=$("mockHistNext");
+  if(pv) pv.onclick=()=>{ if(pg.hasPrev) openMockHistoryModal(pg.page+1); };
+  if(nx) nx.onclick=()=>{ if(pg.hasNext) openMockHistoryModal(pg.page-1); };
 }
 function mockFmtSec(s){ s=Math.round(s||0); return Math.floor(s/60)+":"+String(s%60).padStart(2,"0"); }
 function mockLast(){ const ks=Object.keys(G.mocks||{}).sort(); return ks.length? G.mocks[ks[ks.length-1]] : null; }

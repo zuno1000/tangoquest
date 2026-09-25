@@ -4302,6 +4302,45 @@ function run(){
     }finally{ G.rl.done=oldDone; W.saveG(); W.renderHome(); }
   });
 
+  t("v5.29.4: 模試の推移を12回ずつ◀▶でさかのぼる ─ mockHistoryPage(純関数: ページ内は古い順・範囲・前後の有無)・折れ線と一覧は同じページ・見出しの期間と回数", ()=>{
+    const G=W.G, doc=W.document; const oldMocks=JSON.parse(JSON.stringify(G.mocks));
+    try{
+      eq(W.MOCK_PAGE, 12);
+      // 30回ぶん(1日1回・2026-08-01から)
+      G.mocks={};
+      for(let i=0;i<30;i++){ const dt=new Date(2026,7,1+i); const d=dt.getFullYear()+"-"+String(dt.getMonth()+1).padStart(2,"0")+"-"+String(dt.getDate()).padStart(2,"0"); G.mocks[String(1000+i)]={c:10+(i%15), s:500+i, d, f:i%2}; }
+      const h=W.mockHistory(G); eq(h.length, 30); eq(h[0].d, "2026-08-30", "新しい順");
+      let p=W.mockHistoryPage(h, 0);
+      eq(p.items.length, 12); eq(p.page, 0); eq(p.pages, 3); ok(p.hasPrev && !p.hasNext, "直近=前へだけ");
+      eq(p.items[0].d, "2026-08-19"); eq(p.items[11].d, "2026-08-30", "ページ内は古い順(折れ線の左→右)"); eq(p.from, "2026-08-19"); eq(p.to, "2026-08-30");
+      p=W.mockHistoryPage(h, 1); eq(p.items[0].d, "2026-08-07"); eq(p.items[11].d, "2026-08-18"); ok(p.hasPrev && p.hasNext, "途中=両方");
+      p=W.mockHistoryPage(h, 2); eq(p.items.length, 6, "最古のページは端数"); eq(p.items[0].d, "2026-08-01"); ok(!p.hasPrev && p.hasNext, "最古=次へだけ");
+      p=W.mockHistoryPage(h, 9); eq(p.page, 2, "範囲外は最後のページに丸める"); p=W.mockHistoryPage(h, -1); eq(p.page, 0);
+      p=W.mockHistoryPage([], 0); eq(p.items.length, 0); eq(p.pages, 1); ok(!p.hasPrev && !p.hasNext && p.from==="", "記録なし");
+      p=W.mockHistoryPage(h.slice(0,5), 0); eq(p.pages, 1); ok(!p.hasPrev, "12回以下なら◀は押せない");
+      // 画面
+      W.switchTab("rec"); doc.getElementById("mockHistBtn").click();
+      const m=doc.getElementById("modal");
+      eq(m.querySelectorAll("svg.mockline circle").length, 12, "折れ線は12回"); eq(m.querySelectorAll(".panel .myrow").length, 12, "一覧も同じ12回");
+      ok(m.textContent.indexOf("08/19 〜 08/30")>=0 && m.textContent.indexOf("12回(1/3ページ)")>=0, "見出し=期間と回数・ページ");
+      ok(m.querySelector(".panel .myrow b").textContent==="2026-08-30", "一覧は新しい順のまま");
+      ok(!doc.getElementById("mockHistPrev").disabled && doc.getElementById("mockHistNext").disabled, "直近=◀だけ押せる");
+      doc.getElementById("mockHistPrev").click();
+      ok(doc.getElementById("modal").textContent.indexOf("08/07 〜 08/18")>=0 && doc.getElementById("modal").textContent.indexOf("2/3ページ")>=0, "◀で前の12回");
+      eq(doc.querySelectorAll("#modal svg.mockline text").length>0, true);
+      doc.getElementById("mockHistPrev").click();
+      ok(doc.getElementById("modal").textContent.indexOf("08/01 〜 08/06")>=0 && doc.getElementById("mockHistPrev").disabled, "最古のページ=6回・◀は止まる");
+      eq(doc.querySelectorAll("#modal svg.mockline circle").length, 6);
+      doc.getElementById("mockHistNext").click(); doc.getElementById("mockHistNext").click();
+      ok(doc.getElementById("modal").textContent.indexOf("08/19 〜 08/30")>=0 && doc.getElementById("mockHistNext").disabled, "▶で直近に戻る");
+      ok(doc.getElementById("mockHistGo"), "模試へ は残る"); W.closeModal();
+      // 1回だけ: 期間は1日・◀▶とも押せない
+      G.mocks={"5000":{c:24,s:583,d:"2026-09-25",f:1}}; doc.getElementById("mockHistBtn"); W.openMockHistoryModal();
+      ok(doc.getElementById("modal").textContent.indexOf("09/25 ・ 1回")>=0 && doc.getElementById("mockHistPrev").disabled && doc.getElementById("mockHistNext").disabled, "1回だけ");
+      W.closeModal();
+    }finally{ G.mocks=oldMocks; W.saveG(); W.switchTab("home"); }
+  });
+
   /* ---- 起動状態 ---- */
   t("起動時に問題が出題されている", ()=>{
     ok(W.document.getElementById("promptWord").textContent.length>0);
