@@ -536,7 +536,7 @@ function openRLModal(){
     // 学習の流れ(v5.11.0実機FB): プロンプトをどの順で使うか
     foldSec("rlFlow", "📘 進め方(プロンプトをどう使うか)", rlFlowHTML(), !G.rl.flowSeen)+
     /* v5.20.1(実機FB「この2つだけ中央ぞろえで違和感」): 開閉の行と同じ左寄せの1行(.rlentry)に。右端に件数と › */
-    '<button class="btn rlentry" id="rlMywBtn"><span class="grow">📝 分からなかった単語を登録</span><span class="hlsub">マイ単語 '+mywList().length+'語 ›</span></button>'+
+    '<button class="btn rlentry" id="rlMywBtn"><span class="grow">📝 分からなかった単語・言えなかったことをメモ</span><span class="hlsub">マイ単語 '+mywList().length+'語 ›</span></button>'+ // v5.26.0: 統一メモ(js/lesson.js)
     foldSec("rlTopics", "🎛 興味のあるテーマ("+Object.keys(G.rl.topics||{}).filter(t=>G.rl.topics[t]).length+")",
       '<div class="small" style="margin-bottom:6px">選んだテーマに合うソースを優先する(未選択=全ソースから)</div>'+
       '<div class="rlchips">'+Object.keys(RL_TOPICS).map(t=>'<button class="wchip rltop'+(G.rl.topics[t]? " ksel":"")+'" data-t="'+t+'">'+RL_TOPICS[t]+'</button>').join("")+'</div>', false)+
@@ -546,7 +546,7 @@ function openRLModal(){
     '<div class="small" style="margin-top:10px">ソース '+RL_SOURCES.filter(s=>s.kind==="read" && !s.pay).length+'誌 ・ '+RL_SOURCES.filter(s=>s.kind==="listen").length+'番組。'+
       'すべて無料で読める・聴けるものだけ。今日のおすすめは、はじめて開いたときに決まり、閉じても別の端末でも同じ(日付が変わると更新)</div></div>');
   $("rlHistBtn").onclick=openRLHistory;
-  $("rlMywBtn").onclick=()=>openMywAdd("", rlCurrentTitle("read")||rlCurrentTitle("listen"));
+  $("rlMywBtn").onclick=()=>openSayModal(true); // v5.26.0: 単語もフレーズも同じ入口(自動仕分け)
   if(!G.rl.flowSeen){ G.rl.flowSeen=1; saveG(); } // 進め方は初回だけ開いた状態で見せる(端末の好み)
   render();
   rlEnsureLoaded(()=>{ render(); rlFillHome(); });
@@ -685,5 +685,5 @@ function openRLPrompt(kind, src, item){
   });
   $("rlpCopy").onclick=()=>rlCopy(ta.value, ta);
   $("rlpBack").onclick=openRLModal;
-  $("rlpMyw").onclick=()=>openMywAdd("", item.t);
+  $("rlpMyw").onclick=()=>openSayModal(true); // v5.26.0: 統一メモ
 }

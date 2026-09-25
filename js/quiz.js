@@ -311,9 +311,8 @@ function openSetDone(){
         : '今日の目安まで あと'+(p.targetQ-p.a)+'問'+(p.targetQ-p.a>SET_N? '(約'+Math.ceil((p.targetQ-p.a)/SET_N)+'セット)':''))
     : '今日 '+p.done+'セット目を積み上げた';
   const missN=(s.miss||[]).length;
-  /* v5.10.0: セットの締めに「次の一手」を並べる ─ ミスがあれば🔥にがて特訓(このセットのミスから)、
-     🎯今日の実戦ドリル(日替わり・選択式5問)。フレーズが混ざったセットはその数も出す */
-  const drillK=(typeof todayDrillKind==="function")? todayDrillKind(todayKey(), myphrList().length>0) : null;
+  /* v5.10.0: セットの締めに「次の一手」 ─ ミスがあれば🔥にがて特訓(このセットのミスから)。フレーズが混ざったセットはその数も出す。
+     🎯今日の実戦ドリル(日替わり)はv5.26.0で廃止(実機FB「ポップアップから削除・ホームにシンプルに」→ホームの📝パネル「🎯 フレーズ5問」) */
   openModal('<h3>🧩 セット完了! <span class="small">今日 '+p.done+'セット目</span></h3>'+
     '<div class="giftbox">正解 <b style="font-size:20px">'+s.cor+' / '+s.n+'</b>'+(full? ' ─ 全問正解! 🎉':'')+
       '<div class="setstats">'+
@@ -325,7 +324,6 @@ function openSetDone(){
       setDotsHTML(p)+
       '<div class="small" style="margin-top:6px">'+line+'</div></div>'+
     (missN? '<button class="btn setnext2" id="setWeak"><span>🔥 このセットのミス <b>'+missN+'</b>語をすぐ立て直す</span><span class="hlsub">にがて特訓 ─ 正解の選択肢タップでサクサク進める</span></button>':'')+
-    (drillK? '<button class="btn setnext2" id="setDrill"><span>'+PHR_DRILLS[drillK].icon+' 今日の実戦ドリル: <b>'+PHR_DRILLS[drillK].name+'</b></span><span class="hlsub">選択式で5問 ─ フレーズを実戦の型で</span></button>':'')+
     syncBtnHTML()+ // 区切りで同期(v5.16.0・実機FB)
     '<div class="row" style="gap:10px; margin-top:10px">'+
     '<button class="btn grow" id="setHome">ひと休み(ホームへ)</button>'+
@@ -334,7 +332,6 @@ function openSetDone(){
   $("setNext").onclick=()=>{ closeModal(); newQuestion(); };
   $("setHome").onclick=()=>{ closeModal(); switchTab("home"); };
   if(missN) $("setWeak").onclick=()=>{ closeModal(); startFocus(s.miss.slice()); };
-  if(drillK) $("setDrill").onclick=()=>startDrill(drillK);
 }
 
 /* 模試の完了(v5.25.0): 正解数・時間・本番の目安との比較。ミスした語は「もう一度」でにがて特訓へ。結果はG.mocksに残す */

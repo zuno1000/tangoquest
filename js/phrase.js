@@ -43,7 +43,10 @@ function phrGrain(st){ return (PHR_REORDER_ALL && st && st[0]>=2)? "w" : "ch"; }
 function phrTiles(p, grain){ return grain==="w"? p.en.split(" ") : p.ch.slice(); }
 /* 定着4〜の単語並べ替えは、片を見る前に英文全体の自力想起を1回挟む(先に思い出すステップ・設定共有)。
    片を見ると語順は「見れば分かる」に寄るため。チャンク段階・ドリル(fmt固定)では出ない */
-function phrRecallFirst(st){ return !!(G.opt.preRecall && PHR_REORDER_ALL && st && st[0]>=4 && !PDRILL); }
+function phrRecallFirst(st){
+  if(PDRILL && PHR_DRILLS[PDRILL.kind] && PHR_DRILLS[PDRILL.kind].recall) return true; // v5.26.0: フレーズ特訓は設定に関わらず「まず思い出す」
+  return !!(G.opt.preRecall && PHR_REORDER_ALL && st && st[0]>=4 && !PDRILL);
+}
 
 /* 核(k)の位置を英文から探し、語境界まで広げて返す(v5.1.0)。
    kは辞書形でも良い(seem→seemsのように活用語尾まで空欄が伸びる)。
@@ -207,9 +210,15 @@ function buildPhrChoices(p){
    ・グラフ描写=全文4択(fs): 意図→英文全体を選ぶ(数値の言い回しを文ごと選ぶ)
    ・大人の動詞/無生物主語/マイ=クローズ4択(mc): 動詞の型・主語の動詞・自分の核を、同カテゴリの誤答と弁別する
    ・PREP(スピーチの組み立て)は選択式に置き換えられないため撤去(spk:1=口頭専用・SPEAK_ENABLEDで復活)
-   日替わりの「今日のドリル」(todayDrillKind)をセット完了画面に出し、日々の学習に組み込む */
+   v5.26.0: 日替わりの「今日のドリル」は廃止。日々の入口はホームの📝パネル「🎯 フレーズ5問」(warm) */
 let PDRILL=null; // {kind, res:[ok...], used:Set}
 const PHR_DRILLS={
+  /* v5.6.0のマイフレーズ特訓(mine・クローズ4択)とv5.25.0のレッスン前ウォームアップ(口頭)はv5.26.0でこの1本に統合(実機FB「実戦ドリルも4択や
+     並べ替えに」「今日のドリルは削除してもよい・ホームにシンプルに」): マイフレーズ優先→学習中→未着手(warmPool・js/lesson.js)を順番どおり5問、
+     形式は並べ替え(fmt or)+設定に関わらず「まず自力で英文を思い出す」(recall)=産出の練習。ホームの📝パネル「🎯 フレーズ5問」と🎯メニューから */
+  warm:{icon:"🎯", name:"フレーズ5問(マイフレーズ優先)", fmt:"or", ordered:1, recall:1,
+    desc:"メモから登録したフレーズを優先に5問(無ければ学習中のフレーズ)。まず自力で英文を思い出してから並べ替え。レッスンの前後に",
+    steps:[1,2,3,4,5].map(n=>({t:"🎯 "+n+"/5", f:p=>true})), pool:used=>warmPool(used)},
   prep:{icon:"🎤", name:"2分スピーチの組み立て", spk:1,
     desc:"主張→理由→例→結論(PREP型)の順に、意図だけを見て声に出す。スピーチ1本ぶんの流れの練習",
     steps:[
@@ -228,52 +237,33 @@ const PHR_DRILLS={
   inan:{icon:"🏛", name:"無生物主語で言う", fmt:"mc",
     desc:"「〜のおかげで/せいで/を見ると」を、モノや経験を主語にした文で(This graph shows…型)。クローズ4択で5問連続",
     steps:[1,2,3,4,5].map(n=>({t:"無生物主語 "+n+"/5", f:p=>p.c==="ims"}))},
-  /* v5.6.0: 自分で登録した表現だけの特訓(登録が5件未満なら繰り返しで補う) */
-  mine:{icon:"📝", name:"マイフレーズ特訓", fmt:"mc",
-    desc:"自分で登録した「言えなかった表現」だけをクローズ4択で5問連続。次の英会話までに言えるようにする",
-    steps:[1,2,3,4,5].map(n=>({t:"マイ "+n+"/5", f:p=>p.c==="my"}))},
-  /* v5.25.0(js/lesson.js): レッスン前ウォームアップ=口頭自己判定(fmt sp)。spk=1なので日替わりドリル・実戦メニューの一覧には並ばず、
-     🗣英会話パネル/🎯の専用ボタンから。pool=マイフレーズ優先(warmPool)・順番どおりに出す */
-  warm:{icon:"🎤", name:"レッスン前ウォームアップ", fmt:"sp", spk:1, ordered:1,
-    desc:"マイフレーズ(言えなかったこと)を優先に5つ。日本語だけ見て声に出し、答えを見て⭕✖。レッスンの直前に約5分",
-    steps:[1,2,3,4,5].map(n=>({t:"🎤 "+n+"/5", f:p=>true})), pool:used=>warmPool(used)},
 };
 /* いま選べるドリル(口頭専用はSPEAK_ENABLEDのときだけ) */
 function drillKinds(){ return Object.keys(PHR_DRILLS).filter(k=>SPEAK_ENABLED || !PHR_DRILLS[k].spk); }
-/* 今日のドリル(純関数・日付で決定的に巡回): マイフレーズが無い日はmineを外す */
-function todayDrillKind(ymd, hasMine){
-  const ks=drillKinds().filter(k=>hasMine || k!=="mine");
-  if(!ks.length) return null;
-  return ks[hashStr("drill|"+ymd)%ks.length];
-}
+/* 日替わりの「今日のドリル」(todayDrillKind・v5.10.0〜v5.25.0)はv5.26.0で廃止(実機FB): セット完了画面からも外し、
+   代わりにホームの📝パネル「🎯 フレーズ5問」(warm)を毎日の入口にする */
 function drillPool(step, used){
   const pool=allPhrases().filter(p=>step.f(p) && !used.has(p.en));
   return pool.length? pool : allPhrases().filter(step.f); // 使い切ったら再利用(件数が少ないドリルの保険)
 }
 function openDrillMenu(){
-  const today=todayDrillKind(todayKey(), myphrList().length>0);
   openModal('<h3>🎯 実戦ドリル '+helpBtn("hlp-drill")+'</h3>'+
     helpNote("hlp-drill", '定着段階に関わらず、テーマを1つに絞って5問連続で出す実戦形式(すべて選択式)。'+
       '解いた分はふつうのフレーズ学習として記録される(復習スケジュール'+(GAME_ENABLED? '・🎫・任務':'・実績')+'すべて共通)。'+
-      '「今日のドリル」は日替わり ─ 30問セットの完了画面からも1タップで始められる。<br><br>'+
-      '<b>🎤 レッスン前ウォームアップ</b>(v5.25.0): マイフレーズ優先に5つ、日本語だけ見て声に出し⭕✖で自己判定(約5分)。'+
+      '<b>🎯 フレーズ5問</b>: メモから登録したフレーズ(マイフレーズ)を優先に、まず思い出してから並べ替え。ホームの📝パネルからも。'+
       '<b>🧪 Part 1 模試</b>: 本番と同じ25問(単語21+熟語4)を4択で・タイムを表示(本番の目安は約10分)。解いた分はふつうの学習として記録')+
-    '<button class="btn drillbtn" id="drillWarm"><span>🎤 <b>レッスン前ウォームアップ</b> <span class="drilltoday">約5分</span></span>'+
-      '<span class="hlsub">'+PHR_DRILLS.warm.desc+(myphrList().length? '' : '(マイフレーズが無い日は学習中のフレーズから)')+'</span></button>'+
     '<button class="btn drillbtn" id="drillMock"><span>🧪 <b>Part 1 模試</b> <span class="drilltoday">25問・タイム</span></span>'+
       '<span class="hlsub">本番と同じ25問(単語21+熟語4)・4択・時間を計る。'+(mockLast()? '前回 '+mockLast().c+'/'+MOCK_N+' ・ '+mockFmtSec(mockLast().s) : 'まだ記録なし')+'</span></button>'+
     drillKinds().map(k=>{
       const d=PHR_DRILLS[k];
-      return '<button class="btn drillbtn" data-drill="'+k+'"><span>'+d.icon+' <b>'+d.name+'</b>'+
-        (k===today? ' <span class="drilltoday">今日のドリル</span>':'')+'</span>'+
+      return '<button class="btn drillbtn" data-drill="'+k+'"><span>'+d.icon+' <b>'+d.name+'</b></span>'+
         '<span class="hlsub">'+d.desc+'</span></button>';
     }).join("")); // v5.21.0: 「📊 フレーズのあゆみ」ボタンは撤去(記録タブの「覚えたフレーズ」の行から=重複の解消)
   $("modal").querySelectorAll("[data-drill]").forEach(b=>{ b.onclick=()=>startDrill(b.dataset.drill); });
-  $("drillWarm").onclick=()=>startDrill("warm"); $("drillMock").onclick=startMock; // v5.25.0
-  // マイフレーズが0件のときは特訓を選べない(➕からの登録を案内)
-  if(!myphrList().length){
-    const b=$("modal").querySelector('[data-drill="mine"]');
-    if(b){ b.disabled=true; b.querySelector(".hlsub").textContent="まだ登録がない ─ 学習タブの➕から「言えなかった表現」を登録しよう"; }
+  $("drillMock").onclick=startMock; // v5.25.0
+  if(!myphrList().length){ // マイフレーズが0件でも走る(学習中のフレーズから)。案内だけ添える(v5.26.0)
+    const b=$("modal").querySelector('[data-drill="warm"]');
+    if(b) b.querySelector(".hlsub").textContent+="。いまはマイフレーズが無いので学習中のフレーズから ─ 📝メモで増やそう";
   }
 }
 function startDrill(kind){
@@ -295,8 +285,7 @@ function openDrillDone(){
     graph:'数値の言い回しは、文ごと口から出るまで繰り返すのがコツ',
     verb:'「make 人 do」が浮かんだら、enable/allow/prevent…に置き換える癖をつける',
     inan:'「私は〜のおかげで」を「〜が私に…させた」と主語を入れ替える発想を反射に',
-    mine:'言えなかった表現が「選べる」→次は会話で「使える」へ',
-    warm:'レッスンで使えたら、ホームの🗣英会話から「使えた」を押そう(間隔をあけた正解として復習に反映)。言えなかったことは✍でメモ'}[kind]||'';
+    warm:'会話で使えたら、ホームの📝パネルから「使えた」を押そう(間隔をあけた正解として復習に反映)。言えなかったことは✍でメモ'}[kind]||'';
   openModal('<h3>'+d.icon+' '+d.name+' ─ 完了!</h3>'+
     '<div class="giftbox">正解 <b style="font-size:18px">'+okN+' / '+n+'</b>'+(okN>=n? ' ─ 完璧! 🎉':'')+
       '<br><span class="small">'+tip+'</span></div>'+
@@ -794,7 +783,7 @@ function phrSyncSeg(){
 $("quizSeg").querySelectorAll("button").forEach(b=>{
   b.onclick=()=>{
     if(b.dataset.q==="dr"){ openDrillMenu(); return; } // 実戦は「入口」(モードではない=v5.2.0)
-    if(b.dataset.q==="add"){ openMywAdd(); return; } // ➕=マイ単語(v5.11.0)/マイフレーズ(v5.6.0)の登録入口(モーダル内で切替)
+    if(b.dataset.q==="add"){ openSayModal(true); return; } // ➕=📝メモ(v5.26.0: 単語/フレーズを自動仕分け・js/lesson.js。旧: マイ単語/マイフレーズの登録)
     PDRILL=null; // モード(ミックス/単語/フレーズ)への切替でドリル・にがて特訓は中断
     if(typeof FOCUS!=="undefined"){ if(FOCUS && FOCUS.mock) clearInterval(FOCUS.mock.timer); FOCUS=null; }
     if(quizTarget()===b.dataset.q) return; // 同状態への切替は無視(冪等)

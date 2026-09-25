@@ -246,8 +246,7 @@ function setFootText(sp){
   if(sp.hit) return '🏅 今日の目安ぶんは積み上げた ─ 前倒しでもう1セット?';
   return sp.cur
     ? '🧩 このセット '+sp.cur+'/'+need+'問 ─ つづきから'
-    : sp.done? '🧩 次は'+(sp.done+1)+'セット目'+(inLast? '('+need+'問で目安に届く)':'')+' ─ すきま時間に1セット'
-    : '🧩 30問=1セット ─ すきま時間に1セットずつ';
+    : '🧩 30問=1セット ─ すきま時間に1セットずつ'; // v5.26.0(実機FB「ホームをシンプルに」): 「次は◯セット目」の行は廃止
 }
 /* v5.15.0(実機FB「セット分割のバーを連続した1本に戻す」): バーは旧来の帯グラフ(.pbar)=今日の問数/目安。
    セット(30問)の情報は脚注の1行(setFootText)だけが担う。●○(setDotsHTML)はセット完了モーダルに残す */
@@ -268,13 +267,8 @@ function fillPaceEl(el){
   }else{
     const done=dayRec().a, target=q.perDay;
     const pct=Math.min(100, Math.round(100*done/target));
-    // 時間帯の小目標(v4.13.0): 8時〜20時を学習時間帯として、いまの時刻ぶんを按分
-    const byNow=paceByNow(target);
-    const nowH=new Date().getHours();
-    const nowLine = done>=target? ''
-      : byNow<=0? '<div class="pacenow">⏰ 今日のぶんは8時からカウント ─ あわてなくてOK</div>'
-      : done>=byNow? '<div class="pacenow pgood">⏰ '+nowH+'時時点の目安 '+byNow+'問 ─ いいペース!</div>'
-      : '<div class="pacenow">⏰ '+nowH+'時時点の目安 '+byNow+'問 ─ あと'+(byNow-done)+'問で追いつく</div>';
+    // 時間帯の小目標(v4.13.0「⏰◯時時点の目安」)はv5.26.0で表示をやめた(実機FB「ホームをシンプルに」。paceByNowは残す)
+    const nowLine='';
     el.innerHTML=
       '<div class="pacetop"><span>🎯 今日の目安</span>'+
         '<b class="'+(done>=target?"pgold":"")+'">'+done+' <span class="ptgt">/ '+target+'問</span></b></div>'+

@@ -1,66 +1,118 @@
 "use strict";
-/* ================= 🗣 英会話(v5.25.0) =================
-   実機FB「レッスン中に言えなかったことの振り返りと学習、今まで言えなかったことを表現できるようになることが目的。
-   実戦ドリルを学習に組み込めていない。スピーキング(頭の中の言いたいことを英語で表現する力)を日々強化したい。
-   ただし複雑にしない=『学習』『今日の英語』のようにやることが明快で、とりあえずで始めやすく」への回答。
+/* ================= 📝 分からなかった・言えなかった(v5.25.0→v5.26.0) =================
+   実機FB(v5.25.0)「レッスン中に言えなかったことの振り返りと学習、言えなかったことを表現できるようになることが目的。
+   スピーキングを日々強化。ただし複雑にしない」→ v5.26.0「英会話に限らず普遍的に。①意味が分からなかった英単語 ②日本語で
+   思いついたが英語で言えなかったこと ③意味は分かるが話すとき出てこなかったフレーズ、の3つを、入力箇所は1つで簡単に仕分けて
+   登録したい(マイ単語登録と言えなかったことを統一)。メモはLLMに送る前に個別に書き直せるように」
 
-   設計は3つだけ(入口=ホームの🗣英会話パネル・🎯実戦メニュー):
-   ① 言えなかったこと(G.say): レッスン中/後に日本語で1行メモ → 📋LLMに英訳を頼む(依頼文をコピー) → 答えを貼り戻すと
-      マイフレーズ(G.myphr・c:"my")に登録 → 翌日からミックスの5問目ごとのフレーズに優先して混ざる(phrase.js pickPhrase)
-      = 「言えなかった」が毎日の学習の中で「言える」に変わる。翻訳・生成はアプリではしない(方針=LLMなし・無料)
-   ② レッスン前ウォームアップ(5分): マイフレーズ優先+学習中のフレーズを5つ、日本語だけ見て声に出す→答えを見て⭕✖
-      (口頭自己判定=PHR_DRILLS.warm・fmt "sp"。日常の学習では口頭ステージはオフのまま=SPEAK_ENABLED)
-   ③ 振り返り: ウォームアップの5つに「レッスンで使えた」の印(=間隔をあけた正解として復習に反映・いちばん強い復習)
-      +言えなかったことのメモ(①へ)。
-   記録: G.say=id→{ja, at, done?}(削除は{del:1,at})・G.sayw={d, list, used}(今日のウォームアップ)。同期は操作時刻LWW(sync.js)。
-   可逆設計: このファイル+ホームの1パネル+🎯メニューの2ボタン+PHR_DRILLS.warm+pickPhraseの優先1行+CSSブロックで完結 */
+   設計(入口=ホームの📝パネル・学習タブの➕・今日の英語の📝):
+   ・入力は1つのテキストエリア(1行1つ・英単語/英語のフレーズ/日本語を混ぜてよい)。行ごとに自動で仕分け(sayClassify):
+       w=単語(英語・3語以内・文末記号なし)  → その場でマイ単語(myword.js mywAdd・意味は自動取得)=学習の4択に出る
+       p=フレーズ(英語・4語以上か文)         → 「英文 — 日本語」なら即マイフレーズ/日本語が無ければ英訳待ちメモ(G.say)
+       j=日本語(言えなかったこと)            → 英訳待ちメモ(G.say)
+     仕分けは追加前のプレビューでチップをタップして変えられる(単語⇄フレーズ)。
+   ・英訳待ちメモ: 個別に✎で書き直し・🗑・「→単語」で仕分け直し。📋依頼文をLLMに貼る(日本語→英語1文/英語→日本語訳)→
+     返ってきた「英文 — 日本語」を貼り戻す(sayImport)とマイフレーズ(G.myphr・c:"my")に登録 → ミックスの5問目ごとのフレーズに
+     2回に1回優先して混ざる(phrase.js pickPhrase) = 「言えなかった」が毎日の学習で「言える」に変わる。翻訳・生成はアプリではしない
+   ・フレーズ特訓(5問・PHR_DRILLS.warm): マイフレーズ優先→学習中→未着手。まず自力で英文を思い出してから並べ替え(v5.26.0: 口頭→並べ替え)。
+     今日の5つに「使えた」(sayMarkUsed)=期限前でも間隔をあけた正解として復習に反映(レッスン後の振り返り)
+   記録: G.say=id→{ja:メモ本文, t:"j"|"p", at, done?, en?}(削除は{del:1,at})・G.sayw={d, list, used, at}。同期は操作時刻LWW(sync.js) */
 
-/* ---- ① 言えなかったこと ---- */
-function sayList(){ // 未処理(英訳待ち)のメモ。古い順
+const SAY_JA=/[぀-ヿ一-鿿]/;
+const SAY_SEP=/\s*(?:—|–|ー|\s-\s|\s:\s|：)\s*/;
+/* 1行の仕分け(純関数): {t:"w"|"p"|"j", en, ja}。en/jaは「英文 — 日本語」の形なら分けて入れる */
+function sayClassify(line){
+  line=String(line||"").trim().replace(/^[\d０-９]+[.)．、]\s*|^[・\-*•]\s*/, "");
+  if(!line) return null;
+  let en="", ja="";
+  const parts=line.split(SAY_SEP).map(s=>s.trim()).filter(Boolean);
+  if(parts.length>=2 && /[A-Za-z]/.test(parts[0]) && !SAY_JA.test(parts[0]) && SAY_JA.test(parts[1])){ en=parts[0]; ja=parts.slice(1).join(" — "); }
+  else if(parts.length>=2 && SAY_JA.test(parts[0]) && /[A-Za-z]/.test(parts[1]) && !SAY_JA.test(parts[1])){ ja=parts[0]; en=parts.slice(1).join(" "); }
+  else if(SAY_JA.test(line) && (line.match(/[A-Za-z]/g)||[]).length<line.replace(/\s/g,"").length*0.5){ return {t:"j", en:"", ja:line}; }
+  else en=line;
+  en=en.replace(/\s+/g," ").trim();
+  if(!/[A-Za-z]/.test(en)) return {t:"j", en:"", ja:line};
+  const words=en.split(" ").length, sentence=/[.!?]$/.test(en) || /^(I|You|We|They|He|She|It|Could|Would|Can|Let|Please|What|How|Why|Do|Does|Is|Are|Should)\b/.test(en);
+  return {t:(words<=3 && !sentence)? "w" : "p", en, ja};
+}
+/* 追加(v5.26.0): 仕分けどおりに振り分ける。items=[{t,en,ja}]。戻り={w:マイ単語, p:即マイフレーズ, pend:英訳待ち, errs[]} */
+function sayIntake(items){
+  const r={w:0, p:0, pend:0, errs:[]}; const now=Date.now();
+  const have=new Set(sayList().map(x=>x.ja));
+  (items||[]).forEach((it,i)=>{
+    if(!it) return;
+    if(it.t==="w"){
+      const pw=(typeof mywParse==="function"? mywParse(it.en+(it.ja? " — "+it.ja : ""))[0] : null)||{en:it.en, ja:it.ja, pos:"n", ex:""};
+      const x=mywAdd(pw.en, pw.ja, pw.pos, pw.ex, "メモ");
+      if(x.err) r.errs.push(x.err); else r.w++;
+      return;
+    }
+    if(it.t==="p" && it.ja){ const x=myphrAdd(it.en, it.ja, ""); if(x.err) r.errs.push(x.err); else r.p++; return; }
+    const memo=it.t==="j"? it.ja : it.en;
+    if(!memo || have.has(memo)) return;
+    G.say["s"+(now+i)]={ja:memo, t:it.t==="j"? "j":"p", at:now+i}; have.add(memo); r.pend++;
+  });
+  if(r.w+r.p+r.pend) saveG();
+  return r;
+}
+/* テキストをまとめて追加(自動仕分け)。扱えた件数(単語+フレーズ+メモ)を返す */
+function sayAdd(text){
+  const items=String(text||"").split(/\n+/).map(sayClassify).filter(Boolean);
+  const r=sayIntake(items);
+  return r.w+r.p+r.pend;
+}
+function sayList(){ // 英訳待ちのメモ。古い順
   return Object.keys(G.say||{}).map(id=>Object.assign({id}, G.say[id]))
     .filter(x=>!x.del && !x.done && x.ja).sort((a,b)=>a.at-b.at);
 }
-function sayDoneList(){ // 英訳が済んでマイフレーズになったメモ(件数表示用)
-  return Object.keys(G.say||{}).filter(id=>G.say[id] && !G.say[id].del && G.say[id].done).length;
-}
-/* メモの追加(1行1つ・空行は無視・同じ文は二重に入れない)。追加した件数を返す */
-function sayAdd(text){
-  const lines=String(text||"").split(/\n+/).map(s=>s.trim()).filter(Boolean);
-  const now=Date.now(); let n=0;
-  const have=new Set(sayList().map(x=>x.ja));
-  lines.forEach((ja,i)=>{
-    if(have.has(ja)) return;
-    G.say["s"+(now+i)]={ja, at:now+i}; have.add(ja); n++;
-  });
-  if(n) saveG();
-  return n;
-}
+function sayDoneList(){ return Object.keys(G.say||{}).filter(id=>G.say[id] && !G.say[id].del && G.say[id].done).length; }
 function sayDelete(id){ if(G.say[id]){ G.say[id]={del:1, at:Date.now()}; saveG(); } }
+/* メモの書き直し(v5.26.0・実機FB「LLMに送る前に個別に書き直したい」)。言語が変われば仕分けも変わる */
+function sayEdit(id, text){
+  const x=G.say[id]; text=String(text||"").trim();
+  if(!x || x.del || !text) return false;
+  const c=sayClassify(text)||{t:"j", en:"", ja:text};
+  x.ja=c.t==="j"? c.ja : (c.ja? c.en+" — "+c.ja : c.en); x.t=c.t==="j"? "j":"p"; x.at=Date.now(); saveG();
+  return true;
+}
+/* 「→単語」: 英語のメモをマイ単語として登録し直す(仕分け直し) */
+function sayToWord(id){
+  const x=G.say[id]; if(!x || x.del || x.done || x.t==="j") return {err:"日本語のメモは単語にできない"};
+  const c=sayClassify(x.ja); const r=mywAdd(c? c.en : x.ja, c? c.ja : "", undefined, "", "メモ");
+  if(r.err) return r;
+  G.say[id]=Object.assign({}, x, {done:1, w:1, at:Date.now()}); saveG();
+  return r;
+}
 /* LLMへの依頼文(コピー用): 出力を『英文 — 日本語』の1行1つに固定=貼り戻しで自動登録できる */
 function sayPromptText(items){
-  return "英会話レッスンで言いたかったのに英語で言えなかったことのメモです(日本語)。それぞれ、会話でそのまま口に出せる自然な英語1文にしてください。\n"+
-    "・1つのメモに英文1つ。10〜15語程度・話し言葉として自然に(英検1級を目指す学習者なので、簡単すぎる言い回しは避けつつ、覚えて使える長さで)\n"+
-    "・出力は1行につき「英文 — 日本語のメモ(そのまま)」だけ。番号・記号・説明・空行は入れないでください(単語帳アプリにそのまま貼り付けます)\n\n"+
+  return "英語学習のメモです。日本語のメモは「言いたかったのに英語で言えなかったこと」、英語のメモは「意味は分かるのに話すとき出てこなかった表現」です。\n"+
+    "・日本語のメモ → 会話でそのまま口に出せる自然な英語1文に(10〜15語程度・話し言葉として自然に。英検1級を目指す学習者なので簡単すぎる言い回しは避けつつ、覚えて使える長さで)\n"+
+    "・英語のメモ → 自然な日本語訳を付ける(英文がぎこちなければ自然な英語に直してよい)\n"+
+    "・出力は1行につき「英文 — 日本語」だけ。番号・記号・説明・空行は入れないでください(単語帳アプリにそのまま貼り付けます)\n\n"+
     items.map(x=>"・"+x.ja).join("\n");
 }
-/* 貼り戻しの解析(純関数): 「英文 — 日本語」(— / – / - / ー / : のいずれか)の行を{en, ja}に。英文だけの行も通す(jaは空) */
+/* 貼り戻しの解析(純関数): 「英文 — 日本語」の行を{en, ja}に。英文だけの行も通す(jaは空)。日本語だけの行は捨てる */
 function sayParse(text){
   const out=[];
   String(text||"").split(/\n+/).map(s=>s.trim().replace(/^[\d０-９]+[.)．、]\s*|^[・\-*•]\s*/, "")).filter(Boolean).forEach(l=>{
     const m=l.match(/^(.*?[A-Za-z][^—–ー]*?)\s*(?:—|–|ー|\s-\s|\s:\s)\s*(.*)$/);
     let en=m? m[1].trim() : l, ja=m? m[2].trim() : "";
-    if(!/[A-Za-z]/.test(en) || (en.match(/[A-Za-z]/g)||[]).length<en.replace(/\s/g,"").length*0.5) return; // 英文でない行は捨てる
+    if(!/[A-Za-z]/.test(en) || (en.match(/[A-Za-z]/g)||[]).length<en.replace(/\s/g,"").length*0.5) return;
     out.push({en:en.replace(/\s+/g," "), ja});
   });
   return out;
 }
-/* 貼り戻し→マイフレーズ登録。jaが無い行は、未処理メモを上から順に当てる。登録できたメモはdone。{added, errs[]}を返す */
+/* 貼り戻し→マイフレーズ登録。メモとの対応: 日本語のメモ=日本語が一致/英語のメモ=英文が一致、無ければ上から順。{added, errs[]} */
 function sayImport(text){
   const lines=sayParse(text), pend=sayList(); const errs=[]; let added=0;
-  const norm=s=>String(s||"").replace(/[\s。．、,.!?！？]/g,"");
-  lines.forEach((ln,i)=>{
-    const hit=pend.find(x=>!x._used && ln.ja && norm(x.ja)===norm(ln.ja)) || pend.find(x=>!x._used && ln.ja && (norm(ln.ja).indexOf(norm(x.ja))>=0 || norm(x.ja).indexOf(norm(ln.ja))>=0)) || pend.filter(x=>!x._used)[0];
-    const ja=ln.ja || (hit? hit.ja : "");
+  const norm=s=>String(s||"").toLowerCase().replace(/[\s。．、,.!?！？'’"”]/g,"");
+  const like=(a,b)=>{ a=norm(a); b=norm(b); return !!a && !!b && (a===b || a.indexOf(b)>=0 || b.indexOf(a)>=0); };
+  lines.forEach(ln=>{
+    const hit=pend.find(x=>!x._used && x.t!=="j" && like(x.ja, ln.en))
+          || pend.find(x=>!x._used && ln.ja && like(x.ja, ln.ja))
+          || pend.filter(x=>!x._used)[0];
+    const ja=ln.ja || (hit && hit.t==="j"? hit.ja : "");
+    if(!ja){ errs.push(ln.en.slice(0,30)+": 日本語がない"); return; }
     const r=myphrAdd(ln.en, ja, "");
     if(r.err){ errs.push(ln.en.slice(0,30)+": "+r.err); return; }
     added++;
@@ -70,7 +122,7 @@ function sayImport(text){
   return {added, errs};
 }
 
-/* ---- ② ウォームアップのプール(純関数寄り): マイフレーズ(弱い順)→学習中(復習が近い順)→未着手の意見・理由・つなぎ ---- */
+/* ---- フレーズ特訓(5問)のプール: マイフレーズ(弱い順)→学習中(復習が近い順)→未着手の意見・理由・つなぎ ---- */
 function warmPool(used){
   used=used||new Set(); const now=Date.now();
   const box=p=>{ const st=G.phr[p.en]; return st? st[0] : -1; };
@@ -82,13 +134,13 @@ function warmPool(used){
   const fresh=allPhrases().filter(p=>!used.has(p.en) && !G.phr[p.en] && /^(op|rs|str)$/.test(p.c));
   return fresh.length? shuffle(fresh) : allPhrases().filter(p=>!used.has(p.en));
 }
-/* ウォームアップの完了(phrase.js openDrillDoneから): 今日の5つを控える=振り返りで「使えた」を付ける相手 */
+/* 特訓の完了(phrase.js openDrillDoneから): 今日の5つを控える=「使えた」を付ける相手 */
 function sayWarmDone(list){
   G.sayw={d:todayKey(), list:list.slice(0, 10), used:(G.sayw && G.sayw.d===todayKey()? G.sayw.used : {})||{}, at:Date.now()};
   saveG();
 }
 function sayWarmToday(){ return (G.sayw && G.sayw.d===todayKey() && G.sayw.list && G.sayw.list.length)? G.sayw : null; }
-/* ③ 「レッスンで使えた」: 実際の会話で出てきた=いちばん強い復習。期限前でも間隔をあけた正解として階段を進める */
+/* 「使えた」: 実際の会話で出てきた=いちばん強い復習。期限前でも間隔をあけた正解として階段を進める */
 function sayMarkUsed(en){
   const w=sayWarmToday(); if(!w || w.list.indexOf(en)<0 || w.used[en]) return false;
   let st=G.phr[en]; if(!st) st=G.phr[en]=[0,0,0,0,0,0,0];
@@ -98,18 +150,17 @@ function sayMarkUsed(en){
   return true;
 }
 
-/* ---- ホームのパネル(今日の英語と同じ型・タップで詳細) ---- */
+/* ---- ホームのパネル(今日の英語と同じ型・タップで詳細)。v5.26.0: 文言を削って数字だけ ---- */
 function sayPanelHTML(){
-  const pend=sayList().length, mine=myphrList().length, w=sayWarmToday();
+  const pend=sayList().length, mine=myphrList().length, w=sayWarmToday(), words=mywList().length, wp=mywPending().length;
   const usedN=w? Object.keys(w.used||{}).length : 0;
   return '<div class="panel rlpanel" id="homeSay">'+
-    '<div class="pacetop"><span>🗣 英会話</span><b style="font-size:12px; color:var(--sub)">言えなかったことを、言えるように</b></div>'+
+    '<div class="pacetop"><span>📝 分からなかった・言えなかった</span>'+(w? '<b style="font-size:12px; color:var(--sub)">使えた '+usedN+'/'+w.list.length+'</b>':'')+'</div>'+
     '<div class="rlrows">'+
-      '<div class="rlrow"><span class="rlk">言えなかった</span><span class="rlt">'+(pend? '英訳待ち <b>'+pend+'</b>件 ─ 📋でLLMに頼んで貼り戻す' : (mine? 'メモなし ─ レッスンで言えなかったことを✍で' : 'まだ無い ─ レッスンのあとに✍で1行メモ'))+'</span></div>'+
-      '<div class="rlrow"><span class="rlk">マイフレーズ</span><span class="rlt">'+(mine? '<b>'+mine+'</b>件 ─ ミックスに優先して混ざる' : '0件 ─ 英訳を貼り戻すとここに増える')+
-        (w? ' ・ 今日のウォームアップ '+usedN+'/'+w.list.length+' 使えた' : '')+'</span></div>'+
+      '<div class="rlrow"><span class="rlk">単語</span><span class="rlt">マイ単語 <b>'+words+'</b>語'+(wp? ' <span class="small">(意味待ち'+wp+')</span>':'')+'</span></div>'+
+      '<div class="rlrow"><span class="rlk">フレーズ</span><span class="rlt">マイフレーズ <b>'+mine+'</b>件'+(pend? ' ・ 英訳待ち <b>'+pend+'</b>件':'')+'</span></div>'+
     '</div>'+
-    '<div class="row sayrow"><button class="btn grow" id="homeWarm">🎤 ウォームアップ(5分)</button><button class="btn grow" id="homeSayAdd">✍ 言えなかったこと</button></div>'+
+    '<div class="row sayrow"><button class="btn grow" id="homeWarm">🎯 フレーズ5問</button><button class="btn grow" id="homeSayAdd">✍ メモする</button></div>'+
   '</div>';
 }
 function bindSayPanel(){
@@ -119,53 +170,87 @@ function bindSayPanel(){
   $("homeSayAdd").onclick=e=>{ e.stopPropagation(); openSayModal(true); };
 }
 
-/* ---- モーダル: 言えなかったこと(メモ→英訳→登録)+今日のウォームアップの振り返り ---- */
+/* ---- モーダル: 入力1つ→自動仕分けのプレビュー→追加 / 英訳待ちメモ(✎🗑→単語) / 📋依頼→貼り戻し / 特訓と「使えた」 ---- */
+let sayEditing=null; // 書き直し中のメモid
 function openSayModal(focusAdd){
-  const pend=sayList(), mine=myphrList(), w=sayWarmToday();
-  openModal('<h3>🗣 英会話 '+helpBtn("hlp-say")+'</h3>'+
-    helpNote("hlp-say", '<b>目的</b>: レッスンで言えなかったことを、次は言えるようにする。<br>'+
-      '<b>流れ</b>: ✍レッスン中・後に日本語で1行メモ → 📋依頼文をコピーしてLLM(ChatGPT等)に貼る → 返ってきた「英文 — 日本語」を貼り戻す → '+
-      'マイフレーズに登録され、翌日から<b>ミックスの5問目ごとのフレーズに優先して混ざる</b>(並べ替え・先に思い出す)。'+
-      '🎤ウォームアップはレッスンの直前に5つを声に出す練習(マイフレーズ優先)。レッスンで使えたら「使えた」を押す=間隔をあけた正解として復習に反映。<br>'+
+  const pend=sayList(), mine=myphrList(), w=sayWarmToday(), words=mywList().length;
+  const T={w:"単語", p:"フレーズ", j:"フレーズ"};
+  openModal('<h3>📝 メモ → 単語・フレーズ '+helpBtn("hlp-say")+'</h3>'+
+    helpNote("hlp-say", '<b>1か所に書くだけ</b>(1行1つ)。行ごとに自動で仕分ける ─ '+
+      '<b>単語</b>(意味が分からなかった英単語・3語以内)はそのままマイ単語に(意味は自動取得・学習の4択に出る)。'+
+      '<b>フレーズ</b>(英語で言えなかったこと=日本語/意味は分かるのに出てこなかった英語の表現)は英訳待ちのメモに → '+
+      '📋依頼文をLLM(ChatGPT等)に貼る → 返ってきた「英文 — 日本語」を貼り戻すとマイフレーズに(ミックスの5問目ごとのフレーズに優先して混ざる)。'+
+      '「英文 — 日本語」と書けば単語もフレーズもその場で登録。仕分けは追加前のチップで変えられる。<br>'+
+      '🎯フレーズ5問はマイフレーズ優先の並べ替え(まず思い出してから)。レッスンで使えたら「使えた」=間隔をあけた正解として復習に反映。<br>'+
       '<b>プライバシー</b>: メモはこの端末と、同期を使う場合はあなた自身のGoogleドライブの非公開領域にだけ保存される')+
-    '<div class="small" style="margin-top:6px">✍ 言えなかったこと(日本語で・1行1つ)</div>'+
-    '<textarea id="sayText" class="myta" rows="2" placeholder="例: 締め切りに間に合わなかった理由を説明したかった"></textarea>'+
-    '<div class="row" style="gap:8px; margin-top:6px"><button class="btn primary grow" id="sayAddBtn">＋ メモに追加</button></div>'+
+    '<textarea id="sayText" class="myta" rows="3" placeholder="1行1つ ─ 英単語 / 英語の表現 / 日本語(言えなかったこと) を混ぜてOK\n例: incumbent\n例: I&#39;ll get back to you on that.\n例: 締め切りに間に合わなかった理由を説明したかった"></textarea>'+
+    '<div id="sayPrev" style="margin-top:6px"></div>'+
+    '<div class="row" style="gap:8px; margin-top:6px"><button class="btn primary grow" id="sayAddBtn" disabled>＋ 追加</button></div>'+
     (pend.length
-      ? '<div class="panel" style="margin-top:8px" id="sayPend">'+pend.map(x=>
-          '<div class="myrow"><div class="grow small"><b style="color:var(--ink)">'+esc(x.ja)+'</b> <span class="small">'+esc(x.at? new Date(x.at).toLocaleDateString("ja-JP",{month:"numeric",day:"numeric"}) : "")+'</span></div>'+
-          '<button class="btn mydel" data-id="'+x.id+'">🗑</button></div>').join("")+'</div>'+
+      ? '<div class="small" style="margin-top:12px">英訳待ちのメモ '+pend.length+'件 ─ ✎で書き直し・「→単語」で仕分け直し</div>'+
+        '<div class="panel" style="margin-top:4px" id="sayPend">'+pend.map(x=>
+          sayEditing===x.id
+            ? '<div class="myrow"><input class="pdate grow" id="sayEditIn" value="'+esc(x.ja)+'" style="margin-top:0">'+
+              '<button class="btn primary sayok" data-id="'+x.id+'">保存</button><button class="btn saycancel">取消</button></div>'
+            : '<div class="myrow"><div class="grow small"><span class="rlchip">'+(x.t==="j"? "日→英":"英")+'</span> <b style="color:var(--ink)">'+esc(x.ja)+'</b></div>'+
+              '<button class="btn sayedit" data-id="'+x.id+'" title="書き直す">✎</button>'+
+              (x.t!=="j"? '<button class="btn sayword" data-id="'+x.id+'" title="単語として登録">→単語</button>':'')+
+              '<button class="btn mydel" data-id="'+x.id+'">🗑</button></div>').join("")+'</div>'+
         '<button class="btn" id="sayPromptBtn" style="width:100%; margin-top:8px">📋 '+pend.length+'件の英訳をLLMに頼む(依頼文をコピー)</button>'+
         '<textarea id="sayBack" class="myta" rows="3" style="margin-top:8px" placeholder="LLMの答えを貼り付け(1行『英文 — 日本語』)"></textarea>'+
         '<button class="btn primary" id="sayImportBtn" style="width:100%; margin-top:6px">貼り戻してマイフレーズに登録</button>'
-      : '<div class="small" style="margin-top:8px">英訳待ちのメモはない'+(sayDoneList()? ' ─ これまで '+sayDoneList()+'件を言えるようにした':'')+'</div>')+
-    '<div class="small" style="margin-top:14px">🎤 レッスン前ウォームアップ ─ 5つを声に出す(マイフレーズ優先・約5分)</div>'+
-    '<button class="btn" id="sayWarmBtn" style="width:100%; margin-top:6px">🎤 ウォームアップをはじめる</button>'+
-    (w? '<div class="small" style="margin-top:10px">今日の5つ ─ レッスンで使えたものにタップで印(復習に反映)</div>'+
+      : (sayDoneList()? '<div class="small" style="margin-top:8px">英訳待ちのメモはない ─ これまで '+sayDoneList()+'件を言えるようにした</div>' : ''))+
+    '<div class="row" style="gap:8px; margin-top:14px"><button class="btn grow" id="sayWarmBtn">🎯 フレーズ5問(マイフレーズ優先)</button></div>'+
+    (w? '<div class="small" style="margin-top:10px">今日の5つ ─ レッスンや会話で使えたものにタップで印(復習に反映)</div>'+
         '<div class="panel" style="margin-top:6px">'+w.list.map(en=>{ const p=allPhrases().find(x=>x.en===en); const used=!!w.used[en];
           return '<div class="myrow"><div class="grow small"><b style="color:var(--ink)">'+esc(en)+'</b><br>'+esc(p? p.ja : "")+'</div>'+
             '<button class="btn sayused'+(used? " ok":"")+'" data-en="'+esc(en)+'"'+(used? ' disabled':'')+'>'+(used? '✓ 使えた' : '使えた')+'</button></div>'; }).join("")+'</div>' : '')+
-    '<button class="btn rlentry" id="sayMyBtn" style="margin-top:10px"><span class="grow">📚 マイフレーズ</span><span class="hlsub">'+mine.length+'件 ›</span></button>');
+    '<div class="row" style="gap:8px; margin-top:10px">'+
+      '<button class="btn rlentry grow" id="sayMywBtn"><span class="grow">📚 マイ単語</span><span class="hlsub">'+words+'語 ›</span></button>'+
+      '<button class="btn rlentry grow" id="sayMyBtn"><span class="grow">📚 マイフレーズ</span><span class="hlsub">'+mine.length+'件 ›</span></button></div>');
   const ta=$("sayText");
+  let items=[];
+  const renderPrev=()=>{
+    const box=$("sayPrev");
+    if(!items.length){ box.innerHTML=""; $("sayAddBtn").disabled=true; return; }
+    box.innerHTML='<div class="panel">'+items.map((it,i)=>
+      '<div class="myrow"><button class="wchip saytype'+(it.t==="w"? " ksel":"")+'" data-i="'+i+'"'+(it.t==="j"? ' disabled':'')+'>'+T[it.t]+'</button>'+
+      '<div class="grow small"><b style="color:var(--ink)">'+esc(it.t==="j"? it.ja : it.en)+'</b>'+(it.t!=="j" && it.ja? ' <span class="small">'+esc(it.ja)+'</span>':'')+
+      '<br><span class="small">'+(it.t==="w"? 'マイ単語に(意味は'+(it.ja? 'この訳':'自動取得')+')' : it.t==="j"? '英訳待ちのメモに' : (it.ja? 'マイフレーズに' : '英訳待ちのメモに(日本語訳をLLMに)'))+'</span></div></div>').join("")+'</div>';
+    box.querySelectorAll(".saytype").forEach(b=>b.onclick=()=>{ const it=items[+b.dataset.i]; it.t=it.t==="w"? "p":"w"; renderPrev(); });
+    $("sayAddBtn").disabled=false;
+  };
+  ta.oninput=()=>{ items=ta.value.split(/\n+/).map(sayClassify).filter(Boolean); renderPrev(); };
   $("sayAddBtn").onclick=()=>{
-    const n=sayAdd(ta.value);
-    if(!n){ toast("メモを1行入れてほしい"); return; }
-    toast("✍ "+n+"件をメモした ─ 📋で英訳を頼もう"); openSayModal(); renderHomeIfShown();
+    const r=sayIntake(items);
+    const parts=[]; if(r.w) parts.push("📝 単語"+r.w); if(r.p) parts.push("💬 フレーズ"+r.p); if(r.pend) parts.push("✍ 英訳待ち"+r.pend); if(r.errs.length) parts.push(r.errs[0]);
+    toast(parts.join(" ・ ")||"追加できる行がない");
+    if(r.w && typeof mywFillPending==="function") mywFillPending(()=>{}); // 意味の自動取得(myword.js)
+    openSayModal(); renderHomeIfShown();
   };
   $("modal").querySelectorAll(".mydel").forEach(b=>b.onclick=()=>{ sayDelete(b.dataset.id); openSayModal(); renderHomeIfShown(); });
+  $("modal").querySelectorAll(".sayedit").forEach(b=>b.onclick=()=>{ sayEditing=b.dataset.id; openSayModal(); const i=$("sayEditIn"); if(i){ i.focus(); } });
+  $("modal").querySelectorAll(".sayok").forEach(b=>b.onclick=()=>{ sayEdit(b.dataset.id, $("sayEditIn").value); sayEditing=null; openSayModal(); });
+  $("modal").querySelectorAll(".saycancel").forEach(b=>b.onclick=()=>{ sayEditing=null; openSayModal(); });
+  $("modal").querySelectorAll(".sayword").forEach(b=>b.onclick=()=>{
+    const r=sayToWord(b.dataset.id); toast(r.err? r.err : "📝 "+r.en+" をマイ単語に(意味は自動取得)");
+    if(!r.err && typeof mywFillPending==="function") mywFillPending(()=>{});
+    openSayModal(); renderHomeIfShown();
+  });
   const pb=$("sayPromptBtn");
   if(pb) pb.onclick=()=>rlCopy(sayPromptText(sayList()), $("sayBack"));
   const ib=$("sayImportBtn");
   if(ib) ib.onclick=()=>{
     const r=sayImport($("sayBack").value);
     if(!r.added){ toast(r.errs[0] || "「英文 — 日本語」の行が見つからない"); return; }
-    toast("📝 "+r.added+"件をマイフレーズに登録 ─ 明日からミックスに混ざる"+(r.errs.length? "("+r.errs.length+"件は登録できず)":""));
+    toast("💬 "+r.added+"件をマイフレーズに登録 ─ 明日からミックスに混ざる"+(r.errs.length? "("+r.errs.length+"件は登録できず)":""));
     openSayModal(); renderHomeIfShown();
   };
   $("sayWarmBtn").onclick=()=>startDrill("warm");
   $("modal").querySelectorAll(".sayused").forEach(b=>b.onclick=()=>{
     if(sayMarkUsed(b.dataset.en)){ toast("🗣 実戦で使えた=いちばん強い復習。定着が1段進んだ"); openSayModal(); renderHomeIfShown(); }
   });
+  $("sayMywBtn").onclick=openMywList;
   $("sayMyBtn").onclick=openMyphrList;
   if(focusAdd) setTimeout(()=>{ try{ ta.focus(); }catch(e){} }, 50);
 }
