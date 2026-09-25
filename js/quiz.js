@@ -225,6 +225,7 @@ function refreshQuizCount(){
     return;
   }
   // にがて特訓中(v5.10.0)は進行を出す
+  if(FOCUS && FOCUS.mock){ el.textContent="🧪 "+Math.min(FOCUS.list.length, FOCUS.res.length+(answered?0:1))+"/"+FOCUS.list.length+" ・ ⏱ "+mockFmtSec((Date.now()-FOCUS.mock.t0)/1000); return; } // 模試(v5.25.0)
   if(FOCUS){ el.textContent="🔥 にがて "+Math.min(FOCUS.list.length, FOCUS.res.length+(answered?0:1))+"/"+FOCUS.list.length; return; }
   el.textContent=todayCountText();
 }
@@ -336,6 +337,28 @@ function openSetDone(){
   if(drillK) $("setDrill").onclick=()=>startDrill(drillK);
 }
 
+/* 模試の完了(v5.25.0): 正解数・時間・本番の目安との比較。ミスした語は「もう一度」でにがて特訓へ。結果はG.mocksに残す */
+function openMockDone(f, okN, n, still){
+  clearInterval(f.mock.timer);
+  const now=Date.now(), sec=(now-f.mock.t0)/1000;
+  G.mocks[String(now)]={c:okN, s:Math.round(sec), d:todayKey()}; saveG();
+  const pace=sec<=MOCK_GUIDE_SEC? '本番の目安('+mockFmtSec(MOCK_GUIDE_SEC)+')に収まった' : '本番の目安('+mockFmtSec(MOCK_GUIDE_SEC)+')より'+mockFmtSec(sec-MOCK_GUIDE_SEC)+'長い ─ 迷った語は消去法より先に「知っているか」で切る';
+  const prev=Object.keys(G.mocks).sort().filter(k=>k!==String(now)); const pm=prev.length? G.mocks[prev[prev.length-1]] : null;
+  openModal('<h3>🧪 Part 1 模試 ─ 完了!</h3>'+
+    '<div class="giftbox">正解 <b style="font-size:20px">'+okN+' / '+n+'</b>'+(okN>=n? ' ─ 全問正解! 🎉':'')+
+      ' ・ ⏱ <b>'+mockFmtSec(sec)+'</b><br><span class="small">'+pace+(pm? ' ・ 前回 '+pm.c+'/'+MOCK_N+'('+mockFmtSec(pm.s)+')':'')+'</span>'+
+      (still.length? '<br><span class="small">ミス: '+still.map(esc).join("・")+'</span>':'')+'</div>'+
+    syncBtnHTML()+
+    '<div class="row" style="gap:10px; margin-top:10px">'+
+    (still.length? '<button class="btn grow" id="focusAgain">🔥 ミスした'+still.length+'語を立て直す</button>':'')+
+    '<button class="btn grow" id="mockAgain">🧪 もう1回</button>'+
+    '<button class="btn primary grow" id="focusEnd">学習にもどる</button></div>');
+  bindSyncBtn();
+  const a=$("focusAgain"); if(a) a.onclick=()=>startFocus(still);
+  $("mockAgain").onclick=startMock;
+  $("focusEnd").onclick=()=>{ closeModal(); newQuestion(); };
+}
+
 /* ---- にがて(ミスした単語)の立て直し(v5.10.0・実機FB「間違えた問題を覚えやすくする仕組み」) ----
    ①ミスの直後: 結果バーに「選んだ誤答の単語」(取り違えた相手を名指し=弁別の手がかり)と
      「同じ語根の覚えた仲間」(既知の語に結びつける=記憶の足場)を出す
@@ -394,11 +417,32 @@ function missHintHTML(g, w, chosen, e2j){
   return h.join(" ");
 }
 var FOCUS_N=10;
+/* 🧪 Part 1 模試(v5.25.0・実機FB「Part 1模試の実装を」): 本番の語彙問題と同じ25問(単語21+熟語4=2025〜2026年度の配分)を4択で・
+   経過時間を表示(本番の目安=約10分・1問24秒)。にがて特訓(FOCUS)の器を借りる=解答はふつうの学習として記録・ミスは1分後/10分後に再出題。
+   結果はG.mocks(時刻→{c:正解, s:秒, d:日付}・同期は和集合)。🎯実戦メニューから */
+var MOCK_N=25, MOCK_IDIOM=4, MOCK_GUIDE_SEC=600;
+function mockPick(words, n, nIdiom){ // 純関数: 単語と熟語(空白入り)を分けて無作為に取り、混ぜて返す(en配列)
+  const idi=words.filter(w=>w.en.indexOf(" ")>=0), sgl=words.filter(w=>w.en.indexOf(" ")<0);
+  const ni=Math.min(nIdiom, idi.length);
+  const take=(a,k)=>shuffle(a.slice()).slice(0,k);
+  return shuffle(take(sgl, n-ni).concat(take(idi, ni))).map(w=>w.en);
+}
+function mockFmtSec(s){ s=Math.round(s||0); return Math.floor(s/60)+":"+String(s%60).padStart(2,"0"); }
+function mockLast(){ const ks=Object.keys(G.mocks||{}).sort(); return ks.length? G.mocks[ks[ks.length-1]] : null; }
+function startMock(){
+  closeModal();
+  if(typeof PDRILL!=="undefined") PDRILL=null;
+  if(FOCUS && FOCUS.mock) clearInterval(FOCUS.mock.timer);
+  FOCUS={list:mockPick(WORDS, MOCK_N, MOCK_IDIOM), i:0, res:[], mock:{t0:Date.now(), timer:setInterval(refreshQuizCount, 1000)}};
+  if($("quizView").classList.contains("hidden")) switchTab("quiz");
+  newQuestion();
+}
 function startFocus(list){
   list=(list && list.length)? list.filter(en=>byEn[en]) : weakWords(G, G.opt.weakSort).slice(0, FOCUS_N); // 特訓はノートの並びに従う
   if(!list.length){ toast("いま立て直す「にがて」はない ─ いい調子!"); return; }
   closeModal();
   if(typeof PDRILL!=="undefined") PDRILL=null;
+  if(FOCUS && FOCUS.mock) clearInterval(FOCUS.mock.timer); // 模試の途中なら止める(v5.25.0)
   FOCUS={list:list.slice(0, 30), i:0, res:[]};
   if($("quizView").classList.contains("hidden")) switchTab("quiz");
   newQuestion();
@@ -408,12 +452,14 @@ function focusNext(){
   const w=byEn[FOCUS.list[FOCUS.i++]];
   cur={word:w, choices:buildChoices(w)};
   renderQuestion();
-  $("qBadge").textContent="🔥 にがて"; $("qBadge").style.color="var(--ng)";
+  if(FOCUS.mock){ $("qBadge").textContent="🧪 模試"; $("qBadge").style.color="var(--accent2)"; }
+  else { $("qBadge").textContent="🔥 にがて"; $("qBadge").style.color="var(--ng)"; }
 }
 function openFocusDone(){
   const f=FOCUS; FOCUS=null;
   const okN=f.res.filter(Boolean).length, n=f.res.length;
   const still=f.list.filter((en,i)=>!f.res[i]);
+  if(f.mock){ openMockDone(f, okN, n, still); return; } // 模試(v5.25.0)
   openModal('<h3>🔥 にがて特訓 ─ 完了!</h3>'+
     '<div class="giftbox">正解 <b style="font-size:20px">'+okN+' / '+n+'</b>'+(okN>=n? ' ─ 全部立て直した! 🎉':'')+
       (still.length? '<br><span class="small">まだ手ごわい: '+still.map(esc).join("・")+'</span>':'')+

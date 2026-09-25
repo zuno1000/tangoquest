@@ -2321,8 +2321,9 @@ function run(){
     ok(hb.firstElementChild.textContent.indexOf("セット")>=0, "セットの進みの脚注");
     ok(W.document.getElementById("homeStudy").textContent.indexOf("5問ごと")<0, "「5問ごとに🎫+5」の表記は廃止");
     eq(hb.children[1].id, "homeRL", "今日の英語(v5.10.0)は目安の直後");
-    eq(hb.children[2].id, "homeWeek", "今週の記録はその下");
-    eq(hb.children[3].id, "homeStudy", "学習をはじめるは記録の下(報酬受取・ログボ・同期の条件行も下のグループ)");
+    eq(hb.children[2].id, "homeSay", "🗣英会話(v5.25.0)は今日の英語の下");
+    eq(hb.children[3].id, "homeWeek", "今週の記録はその下");
+    eq(hb.children[4].id, "homeStudy", "学習をはじめるは記録の下(報酬受取・ログボ・同期の条件行も下のグループ)");
     // 目標ありのときも●○バーと目安の数字が同じパネルに
     const oldPace=JSON.parse(JSON.stringify(W.G.pace)), dk=W.todayKey(), oldT=W.G.days[dk] && W.G.days[dk].t;
     W.G.pace={goal:W.addDays(W.todayKey(), 100), setAt:Date.now(), log:[], qd:{d:W.todayKey(), per:60}};
@@ -3941,6 +3942,130 @@ function run(){
     ok(pb.getBoundingClientRect().height<=41, "枠は2行ぶん(40px)で切れる: "+pb.getBoundingClientRect().height.toFixed(1));
     if(oldMyw) G.myw[en]=oldMyw; else delete G.myw[en];
     W.newQuestion();
+  });
+
+
+  /* ---- v5.25.0: 🗣英会話(言えなかったこと・ウォームアップ・使えた)+🧪Part 1模試 ---- */
+  t("v5.25.0①: 言えなかったこと ─ sayAdd/sayList/sayDelete・sayPromptText・sayParse(純関数)・sayImportでマイフレーズに登録しメモをdone", ()=>{
+    const G=W.G; const oldSay=JSON.parse(JSON.stringify(G.say)), oldMy=JSON.parse(JSON.stringify(G.myphr)), oldPhr=JSON.parse(JSON.stringify(G.phr));
+    try{
+      G.say={}; G.myphr={}; W.myphrInvalidate();
+      eq(W.sayAdd("締め切りに間に合わなかった理由を説明したかった\n\n  相手の意見に部分的に賛成と言いたかった  \n"), 2, "2行=2件");
+      eq(W.sayAdd("締め切りに間に合わなかった理由を説明したかった"), 0, "同じ文は二重に入れない");
+      const l=W.sayList(); eq(l.length, 2); eq(l[0].ja, "締め切りに間に合わなかった理由を説明したかった", "古い順");
+      const pr=W.sayPromptText(l);
+      ok(pr.indexOf("英文 — 日本語")>=0 && pr.indexOf("・締め切り")>=0 && pr.indexOf("・相手の意見")>=0, "依頼文にメモと出力形式");
+      const parsed=W.sayParse("1. I couldn't make the deadline because the specs changed at the last minute. — 締め切りに間に合わなかった理由を説明したかった\nI partly agree with you, but I see it a bit differently. – 相手の意見に部分的に賛成と言いたかった\n(説明の行です)\nJust an English line without Japanese");
+      eq(parsed.length, 3, "英文の行だけ3つ(日本語だけの行は捨てる)"); eq(parsed[0].en, "I couldn't make the deadline because the specs changed at the last minute."); eq(parsed[0].ja, "締め切りに間に合わなかった理由を説明したかった");
+      eq(parsed[1].ja, "相手の意見に部分的に賛成と言いたかった", "–(en dash)でも分ける"); eq(parsed[2].ja, "", "日本語なしは空");
+      const r=W.sayImport("I couldn't make the deadline because the specs changed at the last minute. — 締め切りに間に合わなかった理由を説明したかった\nI partly agree with you, but I see it a bit differently. — 相手の意見に部分的に賛成と言いたかった");
+      eq(r.added, 2, "2件登録"); eq(r.errs.length, 0);
+      eq(W.myphrList().length, 2, "マイフレーズになった"); ok(W.myphrList().some(p=>p.ja==="締め切りに間に合わなかった理由を説明したかった"), "日本語はメモのまま");
+      eq(W.sayList().length, 0, "メモは英訳待ちから消える(done)"); eq(W.sayDoneList(), 2, "言えるようにした件数");
+      const r2=W.sayImport("I couldn't make the deadline because the specs changed at the last minute. — x"); eq(r2.added, 0); ok(r2.errs[0].indexOf("登録済み")>=0, "重複は登録できずに理由");
+      W.sayAdd("会議を来週に延期したいと言いたかった"); const id=W.sayList()[0].id;
+      const r3=W.sayImport("Could we push the meeting back to next week?"); eq(r3.added, 1, "日本語なしの行は未処理メモを上から当てる"); eq(W.myphrList().find(p=>p.en.indexOf("push the meeting")>=0).ja, "会議を来週に延期したいと言いたかった");
+      ok(G.say[id].done, "当てたメモもdone");
+      W.sayAdd("消すテスト"); const id2=W.sayList()[0].id; W.sayDelete(id2); eq(W.sayList().length, 0, "🗑=トンボストーン"); ok(G.say[id2].del);
+      // 同期: メモは操作時刻LWW・模試は和集合
+      const a=JSON.parse(JSON.stringify(G)), b=JSON.parse(JSON.stringify(G));
+      a.say={s1:{ja:"A", at:1}}; b.say={s1:{ja:"A", at:5, done:1}, s2:{ja:"B", at:2}}; a.mocks={"1":{c:10,s:100}}; b.mocks={"2":{c:20,s:90}};
+      a.sayw={d:"2026-09-25", list:["x"], used:{}, at:1}; b.sayw={d:"2026-09-25", list:["y"], used:{y:1}, at:9};
+      const m=W.mergeData(a, b);
+      ok(m.say.s1.done && m.say.s2, "メモ: 新しい操作が勝ち・和集合"); eq(Object.keys(m.mocks).length, 2, "模試は和集合"); eq(m.sayw.list[0], "y", "今日のウォームアップはatが新しい側");
+    }finally{ G.say=oldSay; G.myphr=oldMy; G.phr=oldPhr; W.myphrInvalidate(); W.saveG(); }
+  });
+  t("v5.25.0②: ウォームアップ ─ PHR_DRILLS.warm(fmt sp・一覧には並ばない)・warmPoolはマイフレーズ優先→学習中→未着手・5つを順に口頭で・完了でG.sayw・「使えた」は期限前でも階段が進む", ()=>{
+    const G=W.G, doc=W.document;
+    const oldMy=JSON.parse(JSON.stringify(G.myphr)), oldPhr=JSON.parse(JSON.stringify(G.phr)), oldSayw=JSON.parse(JSON.stringify(G.sayw)), oldQtab=G.opt.qtab;
+    const pd=W.pdayRec(), snap={pa:pd.a, pc:pd.c};
+    try{
+      const d=W.PHR_DRILLS.warm; ok(d && d.fmt==="sp" && d.spk && d.ordered && d.steps.length===5 && typeof d.pool==="function", "定義");
+      ok(W.drillKinds().indexOf("warm")<0, "日替わり・一覧には並ばない(口頭専用)");
+      G.myphr={}; W.myphrInvalidate(); G.phr={};
+      W.myphrAdd("I partly agree with you, but I see it differently.", "部分的に賛成", ""); W.myphrAdd("Could we push the meeting back to next week?", "会議を延期", "");
+      G.phr["Could we push the meeting back to next week?"]=[3,0,2,0,0,0,0,0]; // 定着3
+      const pool=W.warmPool(new Set()); eq(pool[0].en, "I partly agree with you, but I see it differently.", "マイフレーズの弱い(未着手)順が先頭"); eq(pool[1].en, "Could we push the meeting back to next week?");
+      const pool2=W.warmPool(new Set(pool.map(p=>p.en))); ok(pool2.length && pool2.every(p=>p.c!=="my"), "マイを使い切ったら内蔵(学習中→未着手)");
+      G.phr[W.PHRASES[0].en]=[2,Date.now()-1,1,0,0,0,0,0];
+      ok(W.warmPool(new Set(pool.map(p=>p.en)))[0].en===W.PHRASES[0].en, "学習中(復習が近い)が未着手より先");
+      // 5つを口頭で
+      W.startDrill("warm");
+      ok(W.pdrillGet() && W.pdrillGet().kind==="warm", "ドリルが走る"); ok(!doc.getElementById("quizView").classList.contains("hidden"), "学習タブへ");
+      eq(doc.getElementById("qBadge").textContent, "🎤 1/5"); ok(doc.getElementById("phrSpkShow"), "口頭=「答えを見る」ボタン");
+      eq(doc.getElementById("promptWord").textContent, "部分的に賛成", "1つ目=マイフレーズ(日本語だけ)");
+      const seen=[];
+      for(let i=0;i<5;i++){
+        seen.push(W.pdrillGet().kind==="warm" && doc.getElementById("promptWord").textContent);
+        doc.getElementById("phrSpkShow").click();
+        ok(doc.getElementById("phrSpkOk") && doc.getElementById("phrSpkNg"), (i+1)+"問目: ⭕✖");
+        doc.getElementById(i%2? "phrSpkNg":"phrSpkOk").click();
+        W.newQuestion();
+      }
+      ok(!W.pdrillGet(), "5つで完了"); ok(doc.getElementById("modal").textContent.indexOf("レッスン前ウォームアップ")>=0 && doc.getElementById("modal").textContent.indexOf("使えた")>=0, "完了モーダル(振り返りの案内)");
+      const w=W.sayWarmToday(); ok(w && w.list.length===5 && w.list.indexOf("I partly agree with you, but I see it differently.")>=0, "今日の5つを控える");
+      eq(pd.a, snap.pa+5, "解答はふつうのフレーズ学習として記録");
+      W.closeModal();
+      // 使えた: 期限前でも階段が進む
+      const en="Could we push the meeting back to next week?"; const st=G.phr[en]; const b0=st[0]; st[1]=Date.now()+864e5*3; // 3日後が期限
+      ok(W.sayMarkUsed(en), "印をつけた"); ok(G.phr[en][0]>b0, "期限前でも定着が進む("+b0+"→"+G.phr[en][0]+")"); ok(G.sayw.used[en], "使えたの記録");
+      ok(!W.sayMarkUsed(en), "二重には効かない"); ok(!W.sayMarkUsed("not in list"), "今日の5つ以外は効かない");
+    }finally{ G.myphr=oldMy; G.phr=oldPhr; G.sayw=oldSayw; G.opt.qtab=oldQtab; pd.a=snap.pa; pd.c=snap.pc; W.myphrInvalidate(); W.saveG(); W.newQuestion(); }
+  });
+  t("v5.25.0③: 日々の学習に組み込む ─ pickPhraseはマイフレーズ(期限/未着手)があれば2回に1回それを出す・ホームの🗣パネルとモーダル・🎯メニューの2ボタン", ()=>{
+    const G=W.G, doc=W.document;
+    const oldMy=JSON.parse(JSON.stringify(G.myphr)), oldPhr=JSON.parse(JSON.stringify(G.phr)), oldRnd=W.Math.random;
+    try{
+      G.myphr={}; W.myphrInvalidate(); W.myphrAdd("Let me circle back to you on that one tomorrow.", "後で返事する", "");
+      W.Math.random=()=>0.1; eq(W.pickPhrase().en, "Let me circle back to you on that one tomorrow.", "乱数が0.5未満ならマイフレーズ");
+      W.Math.random=()=>0.9; ok(W.pickPhrase().c!=="my", "0.5以上なら通常の選び方");
+      W.Math.random=oldRnd;
+      G.phr["Let me circle back to you on that one tomorrow."]=[4, Date.now()+864e5, 3,0,0,0,0,0];
+      W.Math.random=()=>0.1; ok(W.pickPhrase().c!=="my", "期限が来ていないマイフレーズは優先しない"); W.Math.random=oldRnd;
+      // ホーム
+      W.switchTab("home"); W.renderHome();
+      const sp=doc.getElementById("homeSay"); ok(sp && doc.getElementById("homeWarm") && doc.getElementById("homeSayAdd"), "🗣パネルと2ボタン");
+      ok(sp.textContent.indexOf("マイフレーズ")>=0 && sp.textContent.indexOf("1")>=0, "マイフレーズの件数");
+      sp.click(); ok(doc.getElementById("sayText") && doc.getElementById("sayWarmBtn") && doc.getElementById("sayMyBtn"), "モーダル: メモ・ウォームアップ・マイフレーズ");
+      doc.getElementById("sayText").value="テストのメモ"; doc.getElementById("sayAddBtn").click();
+      ok(doc.getElementById("sayPromptBtn") && doc.getElementById("sayBack") && doc.getElementById("sayImportBtn"), "メモがあると📋依頼と貼り戻し");
+      ok(doc.getElementById("homeSay").textContent.indexOf("英訳待ち")>=0, "ホームに英訳待ち1件");
+      doc.querySelector("#modal .mydel").click(); ok(!doc.getElementById("sayPromptBtn"), "消すと依頼ボタンも消える");
+      W.closeModal();
+      W.openDrillMenu(); ok(doc.getElementById("drillWarm") && doc.getElementById("drillMock"), "🎯にウォームアップと模試"); W.closeModal();
+    }finally{ W.Math.random=oldRnd; G.myphr=oldMy; G.phr=oldPhr; W.myphrInvalidate(); W.saveG(); }
+  });
+  t("v5.25.0④: Part 1模試 ─ mockPick(純関数: 25問=単語21+熟語4・重複なし)・startMockで🧪バッジと⏱・25問解くと完了モーダル(正解・時間・目安)とG.mocks・ミスは立て直しへ", ()=>{
+    const G=W.G, doc=W.document;
+    const oldMocks=JSON.parse(JSON.stringify(G.mocks)), oldPre=G.opt.preRecall;
+    const d=W.dayRec(), a0=d.a;
+    try{
+      const ens=W.mockPick(W.WORDS, W.MOCK_N, W.MOCK_IDIOM);
+      eq(ens.length, 25); eq(new Set(ens).size, 25, "重複なし"); eq(ens.filter(e=>e.indexOf(" ")>=0).length, 4, "熟語4");
+      eq(W.mockPick([{en:"a"},{en:"b c"}], 25, 4).length, 2, "足りなければある分だけ");
+      eq(W.mockFmtSec(605), "10:05"); eq(W.MOCK_GUIDE_SEC, 600);
+      G.mocks={}; G.opt.preRecall=0;
+      W.startMock();
+      ok(W.focusGet() && W.focusGet().mock && W.focusGet().list.length===25, "FOCUSの器で25問");
+      eq(doc.getElementById("qBadge").textContent, "🧪 模試"); ok(doc.getElementById("qCount").textContent.indexOf("⏱")>=0 && doc.getElementById("qCount").textContent.indexOf("1/25")>=0, "⏱と進み");
+      let miss=0;
+      for(let i=0;i<25;i++){
+        const w=W.byEn[W.focusGet().list[i]];
+        const want=(G.mode==="e2j"? w.ja : w.en);
+        const cs=[...doc.querySelectorAll("#choices .choice")];
+        const b=(i===3)? cs.find(x=>x.textContent!==want) : cs.find(x=>x.textContent===want); // 4問目だけミス
+        if(i===3) miss++;
+        b.click(); W.newQuestion();
+      }
+      ok(!W.focusGet(), "25問で終わる");
+      const mt=doc.getElementById("modal").textContent;
+      ok(mt.indexOf("Part 1 模試")>=0 && mt.indexOf("24 / 25")>=0 && mt.indexOf("⏱")>=0 && mt.indexOf("本番の目安")>=0, "完了モーダル: 正解・時間・目安 "+mt.slice(0,80));
+      ok(doc.getElementById("focusAgain") && doc.getElementById("mockAgain") && doc.getElementById("focusEnd"), "立て直し・もう1回・戻る");
+      eq(Object.keys(G.mocks).length, 1, "結果が残る"); const rec=G.mocks[Object.keys(G.mocks)[0]]; eq(rec.c, 24); ok(rec.s>=0 && rec.d===W.todayKey());
+      eq(d.a, a0+25, "解答はふつうの学習として記録");
+      W.closeModal();
+      W.openDrillMenu(); ok(doc.getElementById("drillMock").textContent.indexOf("前回 24/25")>=0, "🎯に前回の結果"); W.closeModal();
+    }finally{ G.mocks=oldMocks; G.opt.preRecall=oldPre; W.saveG(); if(W.focusGet()) W.setFocusFromTest(null); W.newQuestion(); }
   });
 
   /* ---- 起動状態 ---- */

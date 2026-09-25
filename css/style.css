@@ -1291,6 +1291,11 @@ body.svplay #slotView{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
 /* ⏱ 聴く長さの段(v5.23.0): 聴くカードの見出し下の1行 */
 .rllenrow{display:flex; align-items:center; flex-wrap:wrap; gap:6px; margin-top:6px}
 .rllenrow .wchip{padding:4px 10px; font-size:12px}
+/* 🗣英会話(v5.25.0): ホームのパネルのボタン行・「使えた」 */
+.sayrow{gap:8px; margin-top:8px}
+.sayrow .btn{padding:9px 6px; min-height:40px; font-size:13px}
+.sayused{flex:0 0 auto; padding:8px 10px; min-height:38px; font-size:12px}
+.sayused.ok{color:var(--ok)}
 /* 効果音の種類・音量(v5.24.0・⚙設定→演出) */
 .sfxrow{display:flex; align-items:center; flex-wrap:wrap; gap:6px; margin-top:8px}
 .sfxrow .wchip{padding:5px 11px; font-size:12px}
