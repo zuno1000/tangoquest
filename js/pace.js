@@ -244,7 +244,7 @@ function setFootText(sp){
   return ''; // v5.26.0〜v5.28.2(実機FB「ホームをシンプルに」): 「次は◯セット目」「30問=1セット」「このセット n/◯問」の行は廃止(達成の行だけ。セットの進みはCTAの「セットのつづき(n/30)」が担う)
 }
 /* v5.15.0(実機FB「セット分割のバーを連続した1本に戻す」): バーは旧来の帯グラフ(.pbar)=今日の問数/目安。
-   セット(30問)の情報は脚注の1行(setFootText)だけが担う。●○(setDotsHTML)はセット完了モーダルに残す */
+   セット(30問)の情報は脚注の1行(setFootText)だけが担う(v5.28.2からは達成の行だけ)。●○(setDotsHTML)はv5.29.0で廃止 */
 function fillPaceEl(el){
   if(!el) return;
   const q=paceToday(G);

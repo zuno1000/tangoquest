@@ -360,7 +360,8 @@ function rlPickNewer(x, y){
    v5.16.0〜v5.28.3の「📥 いま同期する」(セット完了・特訓完了・模試完了の画面)は撤去。
    学習タブ→別のタブ(main.js switchTab)で、その滞在中に1問でも解いていれば同期(タブのタップ=ユーザー操作ありなので認証ポップアップも通る)。
    最終同期からの間隔は問わない(学習の区切り=必ず上げる)。別端末に新しい記録があれば取り込んでリロードし、移った先のタブに戻る(RESUME_KEY) */
-let ansSinceSync=0, syncing=false;
+let ansSinceSync=0, syncing=false; const SYNC_GUARD_MS=90e3;
+function syncingGet(){ return syncing; } // テスト用
 function syncNoteAnswer(){ ansSinceSync++; }  // quiz.js/phrase.jsの答え合わせから
 function syncAnsSince(){ return ansSinceSync; }
 /* 純関数: 学習タブを離れるときに同期するか */
@@ -450,9 +451,11 @@ function syncResumeAfterReload(){
 /* opts(v5.19.0): auto=自動同期(失敗を短く・変化なしはリロードしない)/resume=リロード後に戻るタブ/then=同期後(または不要・失敗時)に続ける処理 */
 async function syncNow(opts){
   opts=opts||{};
-  const then=()=>{ syncing=false; paceHoldRelease(); if(typeof opts.then==="function") opts.then(); }; // 同期が済んだ/不要/失敗 → 今日の目安を固定(v5.20.0)
+  let guard=null;
+  const then=()=>{ syncing=false; clearTimeout(guard); paceHoldRelease(); if(typeof opts.then==="function") opts.then(); }; // 同期が済んだ/不要/失敗 → 今日の目安を固定(v5.20.0)
   if(!syncClientId()){ if(!opts.auto) toast("同期は未設定(READMEの手順でクライアントIDを設定)"); then(); return; }
   syncing=true; ansSinceSync=0; // 学習を終えたときの同期(v5.29.0)の数え直し=この同期以降に解いた問数
+  guard=setTimeout(()=>{ syncing=false; }, SYNC_GUARD_MS); // 認証ポップアップが応答なしで終わっても「同期中」に固まらない(v5.29.3)
   toast(opts.auto? "📥 自動同期中…" : "同期中…");
   getToken(async token=>{
     try{

@@ -576,7 +576,10 @@ function openFocusDone(){
     '<button class="btn primary grow" id="focusEnd">学習にもどる</button></div>');
   const a=$("focusAgain"); if(a) a.onclick=()=>startFocus(still);
   $("focusEnd").onclick=()=>{ closeModal(); newQuestion(); };
-  $("focusHome").onclick=()=>{ closeModal(); newQuestion(); switchTab("home"); }; // 次の通常の出題を用意してからホームへ(学習タブを離れる=1問以上解いていれば同期・v5.29.0)
+  /* 次の通常の出題を用意してからホームへ(学習タブを離れる=1問以上解いていれば同期・v5.29.0)。
+     特訓の解答も30問セットに数えるので、ちょうど30問目で終わったとき(setDonePending)はnewQuestionを呼ばない=
+     セット完了モーダルがタブ切替で消えるのを防ぐ。学習に戻って「次へ」を押した時点でセット完了が出る(v5.29.3自己レビュー) */
+  $("focusHome").onclick=()=>{ closeModal(); if(!setDonePending) newQuestion(); switchTab("home"); };
 }
 /* にがてノート(⚙設定・記録から): リストの上位と、特訓の入口 */
 function openWeakModal(){

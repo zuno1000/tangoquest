@@ -3052,6 +3052,20 @@ function run(){
     doc.getElementById("focusHome").click();
     ok(!doc.getElementById("overlay").classList.contains("show") && !doc.getElementById("homeView").classList.contains("hidden"), "ホームに戻る");
     ok(doc.getElementById("promptWord").textContent.length>0 && !W.focusGet(), "学習タブには通常の出題が用意されている");
+    // v5.29.3: 特訓の最後がちょうど30問目(セット完了が控えている)なら「ホームへ」でセット完了を消さない=学習に戻って「次へ」で出る
+    { const dr=W.dayRec(), pd=W.pdayRec(), a0=dr.a, pa0=pd.a, s0=G.set;
+      W.switchTab("quiz"); W.setFocusFromTest({list:["abate"], res:[], i:0}); W.newQuestion();
+      const en2=doc.getElementById("promptWord").textContent, w2=W.WORDS.find(x=>x.en===en2);
+      const st2=JSON.parse(JSON.stringify(G.words[w2.en]||null));
+      dr.a=W.SET_N-1; pd.a=0;
+      [...doc.querySelectorAll("#choices .choice")].find(b=>b.textContent===w2.ja).click(); // 30問目=特訓の1問
+      W.newQuestion(); ok(doc.getElementById("modal").textContent.indexOf("にがて特訓")>=0, "特訓の完了が先");
+      doc.getElementById("focusHome").click();
+      ok(!doc.getElementById("homeView").classList.contains("hidden") && !doc.getElementById("overlay").classList.contains("show"), "ホームへ");
+      W.switchTab("quiz"); W.newQuestion();
+      ok(doc.getElementById("overlay").classList.contains("show") && doc.getElementById("modal").textContent.indexOf("セット完了")>=0, "学習に戻って「次へ」でセット完了が出る(消えていない)");
+      doc.getElementById("setNext").click();
+      if(st2) G.words[w2.en]=st2; else delete G.words[w2.en]; dr.a=a0; pd.a=pa0; G.set=s0; }
     W.switchTab("quiz"); W.setFocusFromTest({list:["abate"], res:[true], i:1}); W.openFocusDone(); // もう一度完了画面を出して「学習にもどる」も確認
     doc.getElementById("focusEnd").click();
     ok(doc.getElementById("promptWord").textContent.length>0, "通常の出題に戻る");
@@ -4221,6 +4235,7 @@ function run(){
     ok(!W.leaveSyncDecision(d({answered:0})), "解いていなければ同期しない"); ok(!W.leaveSyncDecision(d({answered:undefined})));
     ok(!W.leaveSyncDecision(d({clientId:false})) && !W.leaveSyncDecision(d({authed:false})) && !W.leaveSyncDecision(d({online:false})), "未設定・未認証・オフラインは何もしない");
     ok(!W.leaveSyncDecision(d({syncing:true})), "同期中なら重ねない");
+    ok(typeof W.syncingGet==="function" && !W.syncingGet(), "同期中フラグは平常時false(v5.29.3: 応答なしでも90秒で解除の安全弁つき)");
     ok(W.leaveSyncDecision(d({lastSync:Date.now()})), "最終同期からの間隔は問わない(学習の区切り=必ず上げる)");
     ok(typeof W.syncBtnHTML==="undefined" && typeof W.bindSyncBtn==="undefined", "「いま同期する」のボタンは廃止");
     // 答え合わせで数える(単語・フレーズ)
