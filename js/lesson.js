@@ -133,10 +133,10 @@ function sayImport(text){
 function sayPanelHTML(){
   const pend=sayList().length, mine=myphrList().length, words=mywList().length, wp=mywPending().length;
   return '<div class="panel rlpanel" id="homeSay">'+
-    '<div class="pacetop"><span>📝 分からなかった・言えなかった</span></div>'+
+    '<div class="pacetop"><span>📝 マイ単語・マイフレーズ</span></div>'+ // v5.28.2: 題を「何が増えるか」に(行の「マイ」は省く)
     '<div class="rlrows">'+
-      '<div class="rlrow"><span class="rlk">単語</span><span class="rlt">マイ単語 <b>'+words+'</b>語'+(wp? ' <span class="small">(意味待ち'+wp+')</span>':'')+'</span></div>'+
-      '<div class="rlrow"><span class="rlk">フレーズ</span><span class="rlt">マイフレーズ <b>'+mine+'</b>件'+(pend? ' ・ 英訳待ち <b>'+pend+'</b>件':'')+'</span></div>'+
+      '<div class="rlrow"><span class="rlk">単語</span><span class="rlt"><b>'+words+'</b>語'+(wp? ' ・ 意味待ち <b>'+wp+'</b>':'')+'</span></div>'+
+      '<div class="rlrow"><span class="rlk">フレーズ</span><span class="rlt"><b>'+mine+'</b>件'+(pend? ' ・ 英訳待ち <b>'+pend+'</b>件':'')+'</span></div>'+
     '</div>'+
     '<div class="row sayrow"><button class="btn grow" id="homeSayAdd">✍ メモする</button></div>'+
   '</div>';
@@ -152,19 +152,16 @@ let sayEditing=null; // 書き直し中のメモid
 function openSayModal(focusAdd){
   const pend=sayList(), mine=myphrList(), words=mywList().length;
   const T={w:"単語", p:"フレーズ", j:"フレーズ"};
-  openModal('<h3>📝 メモ → 単語・フレーズ '+helpBtn("hlp-say")+'</h3>'+
-    helpNote("hlp-say", '<b>1か所に書くだけ</b>(1行1つ)。行ごとに自動で仕分ける ─ '+
-      '<b>単語</b>(意味が分からなかった英単語・3語以内)はそのままマイ単語に(意味は自動取得・学習の4択に出る)。'+
-      '<b>フレーズ</b>(英語で言えなかったこと=日本語/意味は分かるのに出てこなかった英語の表現)は英訳待ちのメモに → '+
-      '(wipe out・portable のような短い語も、チップで「フレーズ」にすればLLMが会話で使える例文にし、並べ替えで練習できる) '+
-      '📋依頼文をLLM(ChatGPT等)に貼る → 返ってきた「英文 — 日本語」を貼り戻すとマイフレーズに(ミックスの5問目ごとのフレーズに優先して混ざる)。'+
-      '「英文 — 日本語」と書けば単語もフレーズもその場で登録。仕分けは追加前のチップで変えられる。<br>'+
+  openModal('<h3>📝 メモ → マイ単語・マイフレーズ '+helpBtn("hlp-say")+'</h3>'+
+    helpNote("hlp-say", '1行1つ書くと自動で仕分ける。<b>単語</b>(英語3語以内)→マイ単語(意味は自動取得・4択に出る)。'+
+      '<b>フレーズ</b>(日本語=言えなかったこと/英語の表現)→英訳待ち → 📋依頼文をLLMに貼り、返った「英文 — 日本語 — 覚えたい表現」を貼り戻すとマイフレーズ(並べ替えに優先して出る)。'+
+      '短い語もチップで「フレーズ」にすれば例文化される。「英文 — 日本語」と書けばその場で登録。<br>'+
       '<b>プライバシー</b>: メモはこの端末と、同期を使う場合はあなた自身のGoogleドライブの非公開領域にだけ保存される')+
-    '<textarea id="sayText" class="myta" rows="3" placeholder="1行1つ ─ 英単語 / 英語の表現 / 日本語(言えなかったこと) を混ぜてOK\n例: incumbent\n例: I&#39;ll get back to you on that.\n例: 締め切りに間に合わなかった理由を説明したかった"></textarea>'+
+    '<textarea id="sayText" class="myta" rows="5" placeholder="1行1つ(英単語・英語の表現・日本語)\n例: incumbent\n例: I&#39;ll get back to you on that.\n例: 会議を来週に延期したいと言いたかった"></textarea>'+ // v5.28.2: 4行が見える高さ・例は短く
     '<div id="sayPrev" style="margin-top:6px"></div>'+
     '<div class="row" style="gap:8px; margin-top:6px"><button class="btn primary grow" id="sayAddBtn" disabled>＋ 追加</button></div>'+
     (pend.length
-      ? '<div class="small" style="margin-top:12px">英訳待ちのメモ '+pend.length+'件 ─ ✎で書き直し・「→単語」で仕分け直し</div>'+
+      ? '<div class="small" style="margin-top:12px">英訳待ち '+pend.length+'件</div>'+
         '<div class="panel" style="margin-top:4px" id="sayPend">'+pend.map(x=>
           sayEditing===x.id
             ? '<div class="myrow"><input class="pdate grow" id="sayEditIn" value="'+esc(x.ja)+'" style="margin-top:0">'+
@@ -176,7 +173,7 @@ function openSayModal(focusAdd){
         '<button class="btn" id="sayPromptBtn" style="width:100%; margin-top:8px">📋 '+pend.length+'件の英訳をLLMに頼む(依頼文をコピー)</button>'+
         '<textarea id="sayBack" class="myta" rows="3" style="margin-top:8px" placeholder="LLMの答えを貼り付け(1行『英文 — 日本語 — 覚えたい表現』)"></textarea>'+
         '<button class="btn primary" id="sayImportBtn" style="width:100%; margin-top:6px">貼り戻してマイフレーズに登録</button>'
-      : (sayDoneList()? '<div class="small" style="margin-top:8px">英訳待ちのメモはない ─ これまで '+sayDoneList()+'件を言えるようにした</div>' : ''))+
+      : (sayDoneList()? '<div class="small" style="margin-top:8px">英訳待ちはない(これまで '+sayDoneList()+'件を言えるようにした)</div>' : ''))+
     '<div class="row" style="gap:8px; margin-top:10px">'+
       '<button class="btn rlentry grow" id="sayMywBtn"><span class="grow">📚 マイ単語</span><span class="hlsub">'+words+'語 ›</span></button>'+
       '<button class="btn rlentry grow" id="sayMyBtn"><span class="grow">📚 マイフレーズ</span><span class="hlsub">'+mine.length+'件 ›</span></button></div>');

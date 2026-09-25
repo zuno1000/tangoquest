@@ -241,12 +241,9 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
 .stat .sl{display:flex; justify-content:space-between; align-items:center}
 .stat .sl i{font-style:normal; font-size:15px; line-height:1; color:var(--sub)}
 .stathint{grid-column:1/-1; font-size:11px; font-weight:700; color:var(--sub); text-align:center; padding-top:2px}
-/* 🧪模試の推移(v5.28.1): 回ごとの正解数の棒 */
-.mockbars{display:flex; align-items:flex-end; gap:6px; height:96px; margin-top:8px; padding:0 2px}
-.mockbars .mb{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; gap:3px}
-.mockbars .mb b{display:block; width:100%; max-width:26px; background:var(--accent2); border-radius:6px 6px 2px 2px; min-height:3px}
-.mockbars .mb b.fill{background:var(--accent)}
-.mockbars .mb span{font-size:10px; font-weight:800; color:var(--sub)}
+/* 🧪模試の推移(v5.28.1→v5.28.2): 正解数の折れ線(SVG) */
+.mockchart{margin-top:8px; background:var(--bg); border-radius:14px; padding:6px 4px 2px}
+.mockchart svg{display:block; width:100%; height:auto}
 .herorow{cursor:pointer; border-radius:12px}
 .herorow:active{opacity:.8}
 /* v5.22.0: 語彙力の2色バー=薄い色(est)が見込み・濃い色が覚えた。見込みは下に敷いて重ねる */

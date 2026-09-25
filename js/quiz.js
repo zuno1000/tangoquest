@@ -431,15 +431,31 @@ function mockPick(words, n, nIdiom){ // 純関数: 単語と熟語(空白入り)
 function mockHistory(g){
   return Object.keys((g&&g.mocks)||{}).sort().reverse().map(k=>Object.assign({t:+k}, g.mocks[k]));
 }
-/* 📊 記録タブ→🧪の推移(v5.28.1・実機FB): 回ごとの正解数の棒(直近12回・古い順)+一覧(日付・種類・正解・時間) */
+/* 折れ線(v5.28.2・純関数・SVG文字列): 直近の回を古い順に、正解数(0〜MOCK_N)を点と線で。点の色=4択/穴埋め。上に正解数・下に日付 */
+function mockChartSVG(list){
+  const W=320, H=132, L=36, R=14, T=16, B=22, n=list.length; // L=縦軸ラベルぶんの余白(左端の点の数字と重ならない幅)
+  const x=i=>n<=1? (L+(W-L-R)/2) : L+(W-L-R)*i/(n-1);
+  const y=c=>T+(H-T-B)*(1-Math.max(0, Math.min(MOCK_N, c))/MOCK_N);
+  let s='<svg class="mockline" viewBox="0 0 '+W+' '+H+'" width="100%" role="img" aria-label="模試の正解数の推移">';
+  [0,5,10,15,20,25].forEach(g=>{ s+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y(g).toFixed(1)+'" y2="'+y(g).toFixed(1)+'" stroke="var(--line)" stroke-width="1"/>'+
+    '<text x="'+(L-4)+'" y="'+(y(g)+3.5).toFixed(1)+'" font-size="9" text-anchor="end" fill="var(--sub)" font-weight="700">'+g+'</text>'; });
+  if(n>1) s+='<polyline fill="none" stroke="var(--accent2)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" points="'+list.map((p,i)=>x(i).toFixed(1)+','+y(p.c).toFixed(1)).join(' ')+'"/>';
+  list.forEach((p,i)=>{
+    s+='<circle class="'+(p.f? 'fill':'')+'" cx="'+x(i).toFixed(1)+'" cy="'+y(p.c).toFixed(1)+'" r="5" fill="'+(p.f? 'var(--accent)':'var(--accent2)')+'" stroke="var(--card2)" stroke-width="2"/>'+
+      '<text x="'+x(i).toFixed(1)+'" y="'+(y(p.c)-9).toFixed(1)+'" font-size="10" text-anchor="middle" fill="var(--ink)" font-weight="800">'+p.c+'</text>'+
+      '<text x="'+x(i).toFixed(1)+'" y="'+(H-7)+'" font-size="9" text-anchor="middle" fill="var(--sub)" font-weight="700">'+esc(String(p.d||"").slice(5).replace("-","/"))+'</text>';
+  });
+  return s+'</svg>';
+}
+/* 📊 記録タブ→🧪の推移(v5.28.1・実機FB): 直近12回の正解数の折れ線(v5.28.2)+一覧(日付・種類・正解・時間) */
 function openMockHistoryModal(){
   const h=mockHistory(G);
   const bars=h.slice(0, 12).reverse();
   openModal('<h3>🧪 Part 1 模試の推移</h3>'+
     (h.length
       ? '<div class="small">直近'+bars.length+'回の正解数(/'+MOCK_N+')。本番の目安は'+mockFmtSec(MOCK_GUIDE_SEC)+'</div>'+
-        '<div class="mockbars">'+bars.map(x=>'<div class="mb"><b style="height:'+Math.round(100*x.c/MOCK_N)+'%" class="'+(x.f? "fill":"")+'"></b><span>'+x.c+'</span></div>').join("")+'</div>'+
-        '<div class="pacefoot"><span class="wlg did">■</span>4択(意味) <span class="wlg hit">■</span>穴埋め</div>'+
+        '<div class="mockchart">'+mockChartSVG(bars)+'</div>'+
+        '<div class="pacefoot"><span class="wlg did">●</span>4択(意味) <span class="wlg hit">●</span>穴埋め</div>'+
         '<div class="panel" style="margin-top:8px">'+h.slice(0, 30).map(x=>
           '<div class="myrow"><div class="grow small"><b style="color:var(--ink)">'+esc(x.d||"")+'</b> ・ '+(x.f? '穴埋め':'4択')+'</div>'+
           '<div class="small"><b style="color:var(--accent2)">'+x.c+' / '+MOCK_N+'</b> ・ ⏱ '+mockFmtSec(x.s)+(x.s>MOCK_GUIDE_SEC? ' <span style="color:var(--ng)">超過</span>':'')+'</div></div>').join("")+'</div>'

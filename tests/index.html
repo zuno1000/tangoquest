@@ -2330,7 +2330,7 @@ function run(){
     W.renderHome();
     const hp=W.document.getElementById("homePace");
     ok(hp.querySelector(".pbar") && hp.textContent.indexOf("今日の目安")>=0 && hp.textContent.indexOf("/ 60問")>=0, "目安の数字+連続バー");
-    ok(!hp.querySelector(".setdots") && hp.textContent.indexOf("セット")>=0, "●○は無く、セットは脚注の1行(v5.15.0)");
+    ok(!hp.querySelector(".setdots") && hp.textContent.indexOf("このセット")<0, "●○も「このセット」の脚注も無い(v5.15.0→v5.28.2)");
     ok(W.document.getElementById("homeRL").textContent.indexOf("英検1級レベル")<0 && W.document.getElementById("homeRL").textContent.indexOf("すべて無料")<0, "今日の英語の添え書きは無い(v5.15.0)");
     W.G.pace=oldPace; if(W.G.days[dk]) W.G.days[dk].t=oldT; W.renderHome();
     ok(!W.document.getElementById("homeQuick"), "サクッと5問は廃止(v5.8.0)");
@@ -3996,7 +3996,7 @@ function run(){
       G.say={};
       W.switchTab("home"); W.renderHome();
       const sp=doc.getElementById("homeSay"); ok(sp && !doc.getElementById("homeWarm") && doc.getElementById("homeSayAdd"), "📝パネルと✍ボタン(🎯フレーズ5問はv5.27.0で廃止)");
-      ok(sp.textContent.indexOf("分からなかった・言えなかった")>=0 && sp.textContent.indexOf("マイ単語")>=0 && sp.textContent.indexOf("マイフレーズ")>=0, "単語とフレーズの数字");
+      ok(sp.textContent.indexOf("マイ単語・マイフレーズ")>=0 && sp.textContent.indexOf("単語")>=0 && sp.textContent.indexOf("フレーズ")>=0 && (sp.textContent.match(/マイ/g)||[]).length===2, "題はマイ単語・マイフレーズ・行は数字だけ(マイの重複なし・v5.28.2)");
       ok(sp.textContent.indexOf("LLM")<0 && sp.textContent.indexOf("貼り戻")<0 && sp.textContent.indexOf("言えなかったことを、言えるように")<0, "説明文は無い(v5.26.0)");
       const hp=doc.getElementById("homePace").textContent; ok(hp.indexOf("時時点")<0 && hp.indexOf("次は")<0, "⏰◯時時点の目安・次は◯セット目は無い");
       sp.click(); ok(doc.getElementById("sayText") && !doc.getElementById("sayWarmBtn") && doc.getElementById("sayMyBtn") && doc.getElementById("sayMywBtn"), "モーダル: 入力・マイ単語/マイフレーズの一覧(フレーズ5問は無い)");
@@ -4068,7 +4068,7 @@ function run(){
       eq(W.myphrList().find(p=>p.en.indexOf("portable")>=0).k, "portable", "メモの表現が核(🔑)になる");
       ok(W.myphrList().find(p=>p.en.indexOf("wiped")>=0), "活用していても登録される(核は自動)");
       eq(W.setFootText({cur:0, done:0, hit:false, target:0}), "", "セットが進行中でなければ脚注は空");
-      ok(W.setFootText({cur:5, done:0, hit:false, target:0}).indexOf("5/30問")>=0, "進行中は残す");
+      eq(W.setFootText({cur:5, done:0, hit:false, target:0}), "", "進行中でも脚注は出さない(v5.28.2: CTAの「セットのつづき」が担う)");
     }finally{ G.say=oldSay; G.myphr=oldMy; G.phr=oldPhr; W.myphrInvalidate(); W.saveG(); }
   });
 
@@ -4158,7 +4158,8 @@ function run(){
       W.switchTab("home"); W.switchTab("rec");
       ok(doc.getElementById("mockHistBtn").textContent.indexOf("前回 24/25")>=0 && doc.getElementById("mockHistBtn").textContent.indexOf("穴埋め")>=0, "入口に前回(穴埋め)");
       doc.getElementById("mockHistBtn").click();
-      eq(doc.querySelectorAll("#modal .mockbars .mb").length, 3, "棒は3本"); eq(doc.querySelectorAll("#modal .mockbars .mb b.fill").length, 1, "穴埋めは色分け");
+      eq(doc.querySelectorAll("#modal svg.mockline circle").length, 3, "折れ線の点は3つ(v5.28.2)"); eq(doc.querySelectorAll("#modal svg.mockline circle.fill").length, 1, "穴埋めは色分け"); ok(doc.querySelector("#modal svg.mockline polyline"), "線");
+      const svg1=W.mockChartSVG([{c:24,d:"2026-09-25",f:1}]); ok(svg1.indexOf("<polyline")<0 && (svg1.match(/<circle/g)||[]).length===1 && svg1.indexOf("09/25")>=0, "1回だけなら点のみ・日付は月/日");
       const rows=doc.querySelectorAll("#modal .myrow"); eq(rows.length, 3); ok(rows[0].textContent.indexOf("2026-09-25")>=0 && rows[0].textContent.indexOf("穴埋め")>=0 && rows[0].textContent.indexOf("24 / 25")>=0, "一覧は新しい順");
       ok(rows[2].textContent.indexOf("超過")>=0 && rows[0].textContent.indexOf("超過")<0, "目安超過の印");
       doc.getElementById("mockHistGo").click(); ok(doc.getElementById("mockGo"), "模試へ"); W.closeModal();
@@ -5350,7 +5351,7 @@ async function runAsync(W){
     eq(p.done, 4); eq(p.cur, 17); ok(!p.hit, "単語110問ではまだ");
     h=W.setDotsHTML(p);
     ok(h.indexOf('sd cur')>=0 && h.indexOf('width:77%')>=0, "端数のセットの進みは17/22で描く");
-    ok(W.setFootText(p).indexOf("17/22問")>=0, "脚注は このセット 17/22問");
+    eq(W.setFootText(p), "", "脚注は出さない(v5.28.2)");
     W.renderHome();
     ok(doc.getElementById("homeStudy").textContent.indexOf("17/22")>=0, "CTAも 17/22");
     dr.a=113; p=W.setProgress(G);
@@ -5362,7 +5363,7 @@ async function runAsync(W){
     // 目安なし: 端数の概念はない
     G.pace={goal:null, setAt:0, log:[]}; dr.a=45; p=W.setProgress(G);
     eq(p.targetQ, null); eq(p.last, W.SET_N); ok(!p.hit);
-    ok(W.setFootText(p).indexOf("15/30問")>=0);
+    eq(W.setFootText(p), "", "目安なし・進行中でも脚注は出さない(v5.28.2)");
     dr.a=a0; pd.a=pa0; G.pace=oldPace; G.opt.qtab=oldQtab; if(G.days[dk]) G.days[dk].t=oldT; W.saveG(); W.renderHome();
   });
   t("マイフレーズ登録: 内蔵と同じ出題・帳簿に乗る(誤答は内蔵から自動生成=手間ゼロ)", ()=>{
