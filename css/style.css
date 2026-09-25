@@ -1296,6 +1296,7 @@ body.svplay #slotView{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
 .rllenrow{display:flex; align-items:center; flex-wrap:wrap; gap:6px; margin-top:6px}
 .rllenrow .wchip{padding:4px 10px; font-size:12px}
 /* 🗣英会話(v5.25.0): ホームのパネルのボタン行・「使えた」 */
+#homeSay .rlrow .rlk{min-width:4.2em} /* v5.28.3: 「単語」「フレーズ」を同じ幅にして数字の左端を縦にそろえる */
 .sayrow{gap:8px; margin-top:8px}
 .sayrow .btn{padding:9px 6px; min-height:40px; font-size:13px}
 .sayused{flex:0 0 auto; padding:8px 10px; min-height:38px; font-size:12px}
