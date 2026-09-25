@@ -208,13 +208,13 @@ function renderRecords(){
         : statTile("🏆 実績", s.done+" / "+s.all, "Lv"+accountLevel()+" ・ "+fmt(G.xp)+" XP", "statXP"))+ // v5.22.0: 知識XPのタイル→実績(Lv/XPは添え書きに)
       statTile("📰 今日の英語", "📖"+rlR+" 🎧"+rlL, "読んだ・聴いた", "statRL")+
       statTile("🔥 にがて", weakWords(G).length+"語", "まだ覚えていない語", "statWeak")+
-      '<div class="stathint">タップで詳細 ─ カレンダー・日ごとの記録・実績・一覧</div>'+
-    '</div>'+
-    // ④ 入口(重複を除いた3つ)
+    '</div>'+ // v5.28.1: 「タップで詳細 ─ …」の脚注は撤去(実機FB)
+    // ④ 入口(v5.28.1: 🧪模試の推移を足して4つ)
     '<div class="homelinks" style="margin-top:12px">'+
       '<button class="btn" id="paceCfgBtn">🎯 学習ペース管理<span class="hlsub">目標日と1日の目安</span></button>'+
       '<button class="btn" id="mywBtn">📝 マイ単語<span class="hlsub">'+mywList().length+'語'+(mywPending().length? ' ・ 意味待ち'+mywPending().length:'')+'</span></button>'+
       '<button class="btn" id="setDexBtn">📕 図鑑<span class="hlsub">単語・フレーズの一覧</span></button>'+
+      '<button class="btn" id="mockHistBtn">🧪 Part 1 模試<span class="hlsub">'+(mockLast()? '前回 '+mockLast().c+'/'+MOCK_N+' ・ '+mockFmtSec(mockLast().s)+(mockLast().f? '(穴埋め)':'') : 'まだ記録なし')+'</span></button>'+
     '</div>';
   $("heroWords").onclick=()=>openHistoryModal(0);
   $("heroPhr").onclick=()=>openPhrHistoryModal(0);
@@ -227,4 +227,5 @@ function renderRecords(){
   $("paceCfgBtn").onclick=openPaceModal;
   $("mywBtn").onclick=openMywList;
   $("setDexBtn").onclick=()=>openDex();
+  $("mockHistBtn").onclick=openMockHistoryModal; // v5.28.1
 }

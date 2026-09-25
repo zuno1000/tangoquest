@@ -4029,6 +4029,7 @@ function run(){
     try{
       const ens=W.mockPick(W.WORDS, W.MOCK_N, W.MOCK_IDIOM);
       eq(ens.length, 25); eq(new Set(ens).size, 25, "重複なし"); eq(ens.filter(e=>e.indexOf(" ")>=0).length, 4, "熟語4");
+      ok(ens.slice(21).every(e=>e.indexOf(" ")>=0) && ens.slice(0,21).every(e=>e.indexOf(" ")<0), "熟語は最後にまとめて(v5.28.1・本番の(19)〜(22))");
       eq(W.mockPick([{en:"a"},{en:"b c"}], 25, 4).length, 2, "足りなければある分だけ");
       eq(W.mockFmtSec(605), "10:05"); eq(W.MOCK_GUIDE_SEC, 600);
       G.mocks={}; G.opt.preRecall=0;
@@ -4143,6 +4144,25 @@ function run(){
       eq(d.a, a0+25, "解答はふつうの学習として記録");
       doc.getElementById("mockAgain").click(); ok(doc.getElementById("mockPromptBtn") && doc.getElementById("modal").textContent.indexOf("穴埋め")>=0, "「模試へ」で案内に戻る(前回=穴埋め)"); W.closeModal();
     }finally{ G.mockq=oldMockq; G.mocks=oldMocks; G.opt.preRecall=oldPre; G.mode=oldMode; W.saveG(); if(W.focusGet()){ if(W.focusGet().mock) W.clearInterval(W.focusGet().mock.timer); W.setFocusFromTest(null); } W.newQuestion(); }
+  });
+
+  t("v5.28.1: 記録タブの🧪模試の推移 ─ mockHistory(純関数・新しい順)・入口の添え書き・モーダルの棒と一覧・記録なしの案内・「タップで詳細」の脚注なし", ()=>{
+    const G=W.G, doc=W.document; const oldMocks=JSON.parse(JSON.stringify(G.mocks));
+    try{
+      G.mocks={}; W.switchTab("rec");
+      ok(!doc.querySelector("#recView .stathint"), "「タップで詳細」の脚注は無い");
+      ok(doc.getElementById("mockHistBtn").textContent.indexOf("まだ記録なし")>=0, "記録なしの添え書き");
+      doc.getElementById("mockHistBtn").click(); ok(doc.getElementById("modal").textContent.indexOf("まだ記録なし")>=0 && doc.getElementById("mockHistGo"), "モーダル(記録なし)"); W.closeModal();
+      G.mocks={"1000":{c:18,s:700,d:"2026-09-20",f:0}, "3000":{c:24,s:583,d:"2026-09-25",f:1}, "2000":{c:20,s:610,d:"2026-09-22",f:0}};
+      const h=W.mockHistory(G); eq(h.length, 3); eq(h[0].c, 24, "新しい順"); eq(h[2].c, 18);
+      W.switchTab("home"); W.switchTab("rec");
+      ok(doc.getElementById("mockHistBtn").textContent.indexOf("前回 24/25")>=0 && doc.getElementById("mockHistBtn").textContent.indexOf("穴埋め")>=0, "入口に前回(穴埋め)");
+      doc.getElementById("mockHistBtn").click();
+      eq(doc.querySelectorAll("#modal .mockbars .mb").length, 3, "棒は3本"); eq(doc.querySelectorAll("#modal .mockbars .mb b.fill").length, 1, "穴埋めは色分け");
+      const rows=doc.querySelectorAll("#modal .myrow"); eq(rows.length, 3); ok(rows[0].textContent.indexOf("2026-09-25")>=0 && rows[0].textContent.indexOf("穴埋め")>=0 && rows[0].textContent.indexOf("24 / 25")>=0, "一覧は新しい順");
+      ok(rows[2].textContent.indexOf("超過")>=0 && rows[0].textContent.indexOf("超過")<0, "目安超過の印");
+      doc.getElementById("mockHistGo").click(); ok(doc.getElementById("mockGo"), "模試へ"); W.closeModal();
+    }finally{ G.mocks=oldMocks; W.saveG(); W.switchTab("home"); }
   });
 
   /* ---- 起動状態 ---- */
@@ -5109,7 +5129,7 @@ async function runAsync(W){
     ok(!doc.getElementById("recView").classList.contains("hidden") && doc.getElementById("navRec").classList.contains("active"), "記録タブへ");
     const rb=doc.getElementById("recBox");
     ["語彙力","フレーズ","今日の英語","連続学習","実績","累計正解","学習した日"].forEach(s=>ok(rb.textContent.indexOf(s)>=0, "数字: "+s));
-    ["paceCfgBtn","mywBtn","setDexBtn"].forEach(id=>ok(doc.getElementById(id), "入口: "+id));
+    ["paceCfgBtn","mywBtn","setDexBtn","mockHistBtn"].forEach(id=>ok(doc.getElementById(id), "入口: "+id));
     ["statStreak","statDays","statCor","statXP","statRL","statWeak","heroWords","heroPhr"].forEach(id=>ok(doc.getElementById(id), "タップできる: "+id));
     ["histBtn","phrHistBtn","weakBtn","rlHistBtn2","recAchFold","recAch"].forEach(id=>ok(!doc.getElementById(id), "重複した入口は無い: "+id));
     ok(rb.textContent.indexOf("最長")>=0, "連続学習に最長日数");
@@ -5307,7 +5327,7 @@ async function runAsync(W){
     ok(sg.textContent.indexOf("正答率")>=0, "累計正解に正答率");
     const links=rb.querySelector(".homelinks");
     ok(links && links.previousElementSibling===sg, "4番目は入口");
-    eq(links.querySelectorAll(".btn").length, 3, "入口は3つ(ペース管理・マイ単語・図鑑)=重複した4つは撤去(v5.21.0)");
+    eq(links.querySelectorAll(".btn").length, 4, "入口は4つ(ペース管理・マイ単語・図鑑・🧪模試=v5.28.1)");
     eq(sg.querySelectorAll("button.stat.tap").length, 6, "タイルは6枚ともタップできる(v5.21.0)");
     ok(!doc.getElementById("recAchFold"), "実績の折りたたみは無い(知識XPのタイルから・v5.21.0)");
     ok(sg.textContent.indexOf("🏆 実績")>=0 && sg.textContent.indexOf("Lv")>=0, "実績のタイルに達成数とLv(v5.22.0)");

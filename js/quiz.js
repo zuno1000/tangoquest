@@ -421,11 +421,31 @@ var FOCUS_N=10;
    経過時間を表示(本番の目安=約10分・1問24秒)。にがて特訓(FOCUS)の器を借りる=解答はふつうの学習として記録・ミスは1分後/10分後に再出題。
    結果はG.mocks(時刻→{c:正解, s:秒, d:日付}・同期は和集合)。🎯実戦メニューから */
 var MOCK_N=25, MOCK_IDIOM=4, MOCK_GUIDE_SEC=600;
-function mockPick(words, n, nIdiom){ // 純関数: 単語と熟語(空白入り)を分けて無作為に取り、混ぜて返す(en配列)
+function mockPick(words, n, nIdiom){ // 純関数: 単語と熟語(空白入り)を分けて無作為に取り、単語→熟語の順で返す(en配列。v5.28.1: 本番の(19)〜(22)と同じく熟語は最後にまとめて)
   const idi=words.filter(w=>w.en.indexOf(" ")>=0), sgl=words.filter(w=>w.en.indexOf(" ")<0);
   const ni=Math.min(nIdiom, idi.length);
   const take=(a,k)=>shuffle(a.slice()).slice(0,k);
-  return shuffle(take(sgl, n-ni).concat(take(idi, ni))).map(w=>w.en);
+  return take(sgl, n-ni).concat(take(idi, ni)).map(w=>w.en);
+}
+/* 模試の履歴(純関数・v5.28.1): G.mocks(時刻→{c,s,d,f})を新しい順の配列に */
+function mockHistory(g){
+  return Object.keys((g&&g.mocks)||{}).sort().reverse().map(k=>Object.assign({t:+k}, g.mocks[k]));
+}
+/* 📊 記録タブ→🧪の推移(v5.28.1・実機FB): 回ごとの正解数の棒(直近12回・古い順)+一覧(日付・種類・正解・時間) */
+function openMockHistoryModal(){
+  const h=mockHistory(G);
+  const bars=h.slice(0, 12).reverse();
+  openModal('<h3>🧪 Part 1 模試の推移</h3>'+
+    (h.length
+      ? '<div class="small">直近'+bars.length+'回の正解数(/'+MOCK_N+')。本番の目安は'+mockFmtSec(MOCK_GUIDE_SEC)+'</div>'+
+        '<div class="mockbars">'+bars.map(x=>'<div class="mb"><b style="height:'+Math.round(100*x.c/MOCK_N)+'%" class="'+(x.f? "fill":"")+'"></b><span>'+x.c+'</span></div>').join("")+'</div>'+
+        '<div class="pacefoot"><span class="wlg did">■</span>4択(意味) <span class="wlg hit">■</span>穴埋め</div>'+
+        '<div class="panel" style="margin-top:8px">'+h.slice(0, 30).map(x=>
+          '<div class="myrow"><div class="grow small"><b style="color:var(--ink)">'+esc(x.d||"")+'</b> ・ '+(x.f? '穴埋め':'4択')+'</div>'+
+          '<div class="small"><b style="color:var(--accent2)">'+x.c+' / '+MOCK_N+'</b> ・ ⏱ '+mockFmtSec(x.s)+(x.s>MOCK_GUIDE_SEC? ' <span style="color:var(--ng)">超過</span>':'')+'</div></div>').join("")+'</div>'
+      : '<div class="empty">まだ記録なし ─ 学習タブの🧪から</div>')+
+    '<div class="row" style="gap:10px; margin-top:12px"><button class="btn" data-close>とじる</button><button class="btn primary grow" id="mockHistGo">🧪 模試へ</button></div>');
+  $("mockHistGo").onclick=()=>{ closeModal(); if($("quizView").classList.contains("hidden")) switchTab("quiz"); openMockModal(); };
 }
 function mockFmtSec(s){ s=Math.round(s||0); return Math.floor(s/60)+":"+String(s%60).padStart(2,"0"); }
 function mockLast(){ const ks=Object.keys(G.mocks||{}).sort(); return ks.length? G.mocks[ks[ks.length-1]] : null; }
