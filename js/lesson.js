@@ -14,9 +14,9 @@
    ・英訳待ちメモ: 個別に✎で書き直し・🗑・「→単語」で仕分け直し。📋依頼文をLLMに貼る(日本語→英語1文/英語の単語・表現→それを含む会話の例文1文+日本語訳・v5.26.1)→
      返ってきた「英文 — 日本語」を貼り戻す(sayImport)とマイフレーズ(G.myphr・c:"my")に登録 → ミックスの5問目ごとのフレーズに
      2回に1回優先して混ざる(phrase.js pickPhrase) = 「言えなかった」が毎日の学習で「言える」に変わる。翻訳・生成はアプリではしない
-   ・フレーズ特訓(5問・PHR_DRILLS.warm): マイフレーズ優先→学習中→未着手。まず自力で英文を思い出してから並べ替え(v5.26.0: 口頭→並べ替え)。
-     今日の5つに「使えた」(sayMarkUsed)=期限前でも間隔をあけた正解として復習に反映(レッスン後の振り返り)
-   記録: G.say=id→{ja:メモ本文, t:"j"|"p", at, done?, en?}(削除は{del:1,at})・G.sayw={d, list, used, at}。同期は操作時刻LWW(sync.js) */
+   ・v5.27.0(実機FB「フレーズだけ学習したいときは学習タブのフレーズを選ぶので、フレーズ5問は不要」): フレーズ特訓(warm)と「使えた」の振り返りは廃止。
+     マイフレーズはミックス/フレーズの並べ替えで(期限が来た/未着手のものは2回に1回優先)。
+   記録: G.say=id→{ja:メモ本文, t:"j"|"p", at, done?, en?}(削除は{del:1,at})。同期は操作時刻LWW(sync.js) */
 
 const SAY_JA=/[぀-ヿ一-鿿]/;
 const SAY_SEP=/\s*(?:—|–|\s-\s|\s:\s|：)\s*/; // v5.26.2: 「ー」(長音)は区切りにしない
@@ -128,58 +128,29 @@ function sayImport(text){
   return {added, errs};
 }
 
-/* ---- フレーズ特訓(5問)のプール: マイフレーズ(弱い順)→学習中(復習が近い順)→未着手の意見・理由・つなぎ ---- */
-function warmPool(used){
-  used=used||new Set(); const now=Date.now();
-  const box=p=>{ const st=G.phr[p.en]; return st? st[0] : -1; };
-  const mine=myphrList().filter(p=>!used.has(p.en)).sort((a,b)=>box(a)-box(b));
-  if(mine.length) return mine;
-  const learning=allPhrases().filter(p=>!used.has(p.en) && G.phr[p.en] && !G.phr[p.en][4])
-    .sort((a,b)=>reviewUrgency(G.phr[b.en],now)-reviewUrgency(G.phr[a.en],now));
-  if(learning.length) return learning;
-  const fresh=allPhrases().filter(p=>!used.has(p.en) && !G.phr[p.en] && /^(op|rs|str)$/.test(p.c));
-  return fresh.length? shuffle(fresh) : allPhrases().filter(p=>!used.has(p.en));
-}
-/* 特訓の完了(phrase.js openDrillDoneから): 今日の5つを控える=「使えた」を付ける相手 */
-function sayWarmDone(list){
-  G.sayw={d:todayKey(), list:list.slice(0, 10), used:(G.sayw && G.sayw.d===todayKey()? G.sayw.used : {})||{}, at:Date.now()};
-  saveG();
-}
-function sayWarmToday(){ return (G.sayw && G.sayw.d===todayKey() && G.sayw.list && G.sayw.list.length)? G.sayw : null; }
-/* 「使えた」: 実際の会話で出てきた=いちばん強い復習。期限前でも間隔をあけた正解として階段を進める */
-function sayMarkUsed(en){
-  const w=sayWarmToday(); if(!w || w.list.indexOf(en)<0 || w.used[en]) return false;
-  let st=G.phr[en]; if(!st) st=G.phr[en]=[0,0,0,0,0,0,0];
-  const now=Date.now();
-  srsApply(st, true, Math.max(now, st[1]||0)); st[8]=now;
-  w.used[en]=1; w.at=now; saveG();
-  return true;
-}
 
-/* ---- ホームのパネル(今日の英語と同じ型・タップで詳細)。v5.26.0: 文言を削って数字だけ ---- */
+/* ---- ホームのパネル(今日の英語と同じ型・タップで詳細)。v5.26.0: 文言を削って数字だけ/v5.27.0: ボタンは✍だけ ---- */
 function sayPanelHTML(){
-  const pend=sayList().length, mine=myphrList().length, w=sayWarmToday(), words=mywList().length, wp=mywPending().length;
-  const usedN=w? Object.keys(w.used||{}).length : 0;
+  const pend=sayList().length, mine=myphrList().length, words=mywList().length, wp=mywPending().length;
   return '<div class="panel rlpanel" id="homeSay">'+
-    '<div class="pacetop"><span>📝 分からなかった・言えなかった</span>'+(w? '<b style="font-size:12px; color:var(--sub)">使えた '+usedN+'/'+w.list.length+'</b>':'')+'</div>'+
+    '<div class="pacetop"><span>📝 分からなかった・言えなかった</span></div>'+
     '<div class="rlrows">'+
       '<div class="rlrow"><span class="rlk">単語</span><span class="rlt">マイ単語 <b>'+words+'</b>語'+(wp? ' <span class="small">(意味待ち'+wp+')</span>':'')+'</span></div>'+
       '<div class="rlrow"><span class="rlk">フレーズ</span><span class="rlt">マイフレーズ <b>'+mine+'</b>件'+(pend? ' ・ 英訳待ち <b>'+pend+'</b>件':'')+'</span></div>'+
     '</div>'+
-    '<div class="row sayrow"><button class="btn grow" id="homeWarm">🎯 フレーズ5問</button><button class="btn grow" id="homeSayAdd">✍ メモする</button></div>'+
+    '<div class="row sayrow"><button class="btn grow" id="homeSayAdd">✍ メモする</button></div>'+
   '</div>';
 }
 function bindSayPanel(){
   const el=$("homeSay"); if(!el) return;
   el.onclick=()=>openSayModal();
-  $("homeWarm").onclick=e=>{ e.stopPropagation(); startDrill("warm"); };
   $("homeSayAdd").onclick=e=>{ e.stopPropagation(); openSayModal(true); };
 }
 
-/* ---- モーダル: 入力1つ→自動仕分けのプレビュー→追加 / 英訳待ちメモ(✎🗑→単語) / 📋依頼→貼り戻し / 特訓と「使えた」 ---- */
+/* ---- モーダル: 入力1つ→自動仕分けのプレビュー→追加 / 英訳待ちメモ(✎🗑→単語) / 📋依頼→貼り戻し / 一覧へ ---- */
 let sayEditing=null; // 書き直し中のメモid
 function openSayModal(focusAdd){
-  const pend=sayList(), mine=myphrList(), w=sayWarmToday(), words=mywList().length;
+  const pend=sayList(), mine=myphrList(), words=mywList().length;
   const T={w:"単語", p:"フレーズ", j:"フレーズ"};
   openModal('<h3>📝 メモ → 単語・フレーズ '+helpBtn("hlp-say")+'</h3>'+
     helpNote("hlp-say", '<b>1か所に書くだけ</b>(1行1つ)。行ごとに自動で仕分ける ─ '+
@@ -188,7 +159,6 @@ function openSayModal(focusAdd){
       '(wipe out・portable のような短い語も、チップで「フレーズ」にすればLLMが会話で使える例文にし、並べ替えで練習できる) '+
       '📋依頼文をLLM(ChatGPT等)に貼る → 返ってきた「英文 — 日本語」を貼り戻すとマイフレーズに(ミックスの5問目ごとのフレーズに優先して混ざる)。'+
       '「英文 — 日本語」と書けば単語もフレーズもその場で登録。仕分けは追加前のチップで変えられる。<br>'+
-      '🎯フレーズ5問はマイフレーズ優先の並べ替え(まず思い出してから)。レッスンで使えたら「使えた」=間隔をあけた正解として復習に反映。<br>'+
       '<b>プライバシー</b>: メモはこの端末と、同期を使う場合はあなた自身のGoogleドライブの非公開領域にだけ保存される')+
     '<textarea id="sayText" class="myta" rows="3" placeholder="1行1つ ─ 英単語 / 英語の表現 / 日本語(言えなかったこと) を混ぜてOK\n例: incumbent\n例: I&#39;ll get back to you on that.\n例: 締め切りに間に合わなかった理由を説明したかった"></textarea>'+
     '<div id="sayPrev" style="margin-top:6px"></div>'+
@@ -207,11 +177,6 @@ function openSayModal(focusAdd){
         '<textarea id="sayBack" class="myta" rows="3" style="margin-top:8px" placeholder="LLMの答えを貼り付け(1行『英文 — 日本語 — 覚えたい表現』)"></textarea>'+
         '<button class="btn primary" id="sayImportBtn" style="width:100%; margin-top:6px">貼り戻してマイフレーズに登録</button>'
       : (sayDoneList()? '<div class="small" style="margin-top:8px">英訳待ちのメモはない ─ これまで '+sayDoneList()+'件を言えるようにした</div>' : ''))+
-    '<div class="row" style="gap:8px; margin-top:14px"><button class="btn grow" id="sayWarmBtn">🎯 フレーズ5問(マイフレーズ優先)</button></div>'+
-    (w? '<div class="small" style="margin-top:10px">今日の5つ ─ レッスンや会話で使えたものにタップで印(復習に反映)</div>'+
-        '<div class="panel" style="margin-top:6px">'+w.list.map(en=>{ const p=allPhrases().find(x=>x.en===en); const used=!!w.used[en];
-          return '<div class="myrow"><div class="grow small"><b style="color:var(--ink)">'+esc(en)+'</b><br>'+esc(p? p.ja : "")+'</div>'+
-            '<button class="btn sayused'+(used? " ok":"")+'" data-en="'+esc(en)+'"'+(used? ' disabled':'')+'>'+(used? '✓ 使えた' : '使えた')+'</button></div>'; }).join("")+'</div>' : '')+
     '<div class="row" style="gap:8px; margin-top:10px">'+
       '<button class="btn rlentry grow" id="sayMywBtn"><span class="grow">📚 マイ単語</span><span class="hlsub">'+words+'語 ›</span></button>'+
       '<button class="btn rlentry grow" id="sayMyBtn"><span class="grow">📚 マイフレーズ</span><span class="hlsub">'+mine.length+'件 ›</span></button></div>');
@@ -253,10 +218,6 @@ function openSayModal(focusAdd){
     toast("💬 "+r.added+"件をマイフレーズに登録 ─ 明日からミックスに混ざる"+(r.errs.length? "("+r.errs.length+"件は登録できず)":""));
     openSayModal(); renderHomeIfShown();
   };
-  $("sayWarmBtn").onclick=()=>startDrill("warm");
-  $("modal").querySelectorAll(".sayused").forEach(b=>b.onclick=()=>{
-    if(sayMarkUsed(b.dataset.en)){ toast("🗣 実戦で使えた=いちばん強い復習。定着が1段進んだ"); openSayModal(); renderHomeIfShown(); }
-  });
   $("sayMywBtn").onclick=openMywList;
   $("sayMyBtn").onclick=openMyphrList;
   if(focusAdd) setTimeout(()=>{ try{ ta.focus(); }catch(e){} }, 50);

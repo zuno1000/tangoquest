@@ -434,6 +434,16 @@ function startMock(){
   if($("quizView").classList.contains("hidden")) switchTab("quiz");
   newQuestion();
 }
+/* 🧪の案内(v5.27.0・学習タブの🧪ボタン): 何をするかと前回の結果を見せてから始める(実戦ドリルのメニューはDRILLS_ENABLEDで隠した) */
+function openMockModal(){
+  const last=mockLast();
+  openModal('<h3>🧪 Part 1 模試</h3>'+
+    '<div class="small" style="line-height:1.7">英検1級一次のPart 1(語彙)と同じ<b>25問</b>(単語21+熟語4)を4択で解き、経過時間を表示する。'+
+    '本番の目安は約'+mockFmtSec(MOCK_GUIDE_SEC)+'(1問24秒)。解いた分はふつうの学習として記録され、ミスした語は1分後・10分後にまた出る。</div>'+
+    '<div class="giftbox" style="margin-top:8px">'+(last? '前回 <b>'+last.c+' / '+MOCK_N+'</b> ・ ⏱ '+mockFmtSec(last.s)+' <span class="small">('+last.d+')</span>' : '<span class="small">まだ記録なし</span>')+'</div>'+
+    '<div class="row" style="gap:10px; margin-top:12px"><button class="btn" data-close>やめる</button><button class="btn primary grow" id="mockGo">🧪 はじめる(25問)</button></div>');
+  $("mockGo").onclick=startMock;
+}
 function startFocus(list){
   list=(list && list.length)? list.filter(en=>byEn[en]) : weakWords(G, G.opt.weakSort).slice(0, FOCUS_N); // 特訓はノートの並びに従う
   if(!list.length){ toast("いま立て直す「にがて」はない ─ いい調子!"); return; }

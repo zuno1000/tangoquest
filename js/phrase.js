@@ -12,6 +12,10 @@
      復活はフラグをtrueに戻すだけ(スロットのSLOT_ENABLEDと同じ可逆設計)
    ・v5.15.0(実機FB「並べ替え形式に」): 通常の出題はPHR_REORDER_ALL=trueで並べ替えに一本化(粒度の階段=下記) */
 var SPEAK_ENABLED=false;
+/* 実戦ドリル(v5.2.0〜v5.26.0)の表示フラグ(v5.27.0・実機FB「実戦ドリルを廃止し、扱っていた内容はフレーズとして並べ替えで学習したい」):
+   ドリルの素材(グラフ描写num・動詞の型vp・無生物主語ims)はもともとPHRASESの一部で、ミックス/フレーズの並べ替えに出ている。
+   メニューと入口だけを隠す(方針=隠すだけ・削除しない=SLOT/SPEAKと同じ型)。学習タブの🧪ボタンはPart 1模試(quiz.js openMockModal) */
+var DRILLS_ENABLED=false;
 /* v5.15.0(実機FB「フレーズの勉強は並べ替え形式に」): 出題形式を並べ替えに一本化(PHR_REORDER_ALL・可逆)。
    理由: 並べ替え(整序)は語順・チャンクの切れ目・動詞の型(enable 人 to do)を自分で組み立てる「再構成」の課題で、
    4択(再認)より産出に近く、自由作文より詰まらない。弱点=片が大きいと意味順だけで並ぶので、階段は「粒度」で作る:
@@ -44,7 +48,6 @@ function phrTiles(p, grain){ return grain==="w"? p.en.split(" ") : p.ch.slice();
 /* 定着4〜の単語並べ替えは、片を見る前に英文全体の自力想起を1回挟む(先に思い出すステップ・設定共有)。
    片を見ると語順は「見れば分かる」に寄るため。チャンク段階・ドリル(fmt固定)では出ない */
 function phrRecallFirst(st){
-  if(PDRILL && PHR_DRILLS[PDRILL.kind] && PHR_DRILLS[PDRILL.kind].recall) return true; // v5.26.0: フレーズ特訓は設定に関わらず「まず思い出す」
   return !!(G.opt.preRecall && PHR_REORDER_ALL && st && st[0]>=4 && !PDRILL);
 }
 
@@ -210,15 +213,9 @@ function buildPhrChoices(p){
    ・グラフ描写=全文4択(fs): 意図→英文全体を選ぶ(数値の言い回しを文ごと選ぶ)
    ・大人の動詞/無生物主語/マイ=クローズ4択(mc): 動詞の型・主語の動詞・自分の核を、同カテゴリの誤答と弁別する
    ・PREP(スピーチの組み立て)は選択式に置き換えられないため撤去(spk:1=口頭専用・SPEAK_ENABLEDで復活)
-   v5.26.0: 日替わりの「今日のドリル」は廃止。日々の入口はホームの📝パネル「🎯 フレーズ5問」(warm) */
+   v5.26.0: 日替わりの「今日のドリル」は廃止/v5.27.0: 実戦ドリル自体をDRILLS_ENABLED=falseで隠す(素材はミックス/フレーズの並べ替えに出る) */
 let PDRILL=null; // {kind, res:[ok...], used:Set}
 const PHR_DRILLS={
-  /* v5.6.0のマイフレーズ特訓(mine・クローズ4択)とv5.25.0のレッスン前ウォームアップ(口頭)はv5.26.0でこの1本に統合(実機FB「実戦ドリルも4択や
-     並べ替えに」「今日のドリルは削除してもよい・ホームにシンプルに」): マイフレーズ優先→学習中→未着手(warmPool・js/lesson.js)を順番どおり5問、
-     形式は並べ替え(fmt or)+設定に関わらず「まず自力で英文を思い出す」(recall)=産出の練習。ホームの📝パネル「🎯 フレーズ5問」と🎯メニューから */
-  warm:{icon:"🎯", name:"フレーズ5問(マイフレーズ優先)", fmt:"or", ordered:1, recall:1,
-    desc:"メモから登録したフレーズを優先に5問(無ければ学習中のフレーズ)。まず自力で英文を思い出してから並べ替え。レッスンの前後に",
-    steps:[1,2,3,4,5].map(n=>({t:"🎯 "+n+"/5", f:p=>true})), pool:used=>warmPool(used)},
   prep:{icon:"🎤", name:"2分スピーチの組み立て", spk:1,
     desc:"主張→理由→例→結論(PREP型)の順に、意図だけを見て声に出す。スピーチ1本ぶんの流れの練習",
     steps:[
@@ -241,7 +238,7 @@ const PHR_DRILLS={
 /* いま選べるドリル(口頭専用はSPEAK_ENABLEDのときだけ) */
 function drillKinds(){ return Object.keys(PHR_DRILLS).filter(k=>SPEAK_ENABLED || !PHR_DRILLS[k].spk); }
 /* 日替わりの「今日のドリル」(todayDrillKind・v5.10.0〜v5.25.0)はv5.26.0で廃止(実機FB): セット完了画面からも外し、
-   代わりにホームの📝パネル「🎯 フレーズ5問」(warm)を毎日の入口にする */
+   v5.27.0: フレーズ5問(warm)も廃止。フレーズは学習タブの「フレーズ」/ミックスで(マイフレーズは2回に1回優先) */
 function drillPool(step, used){
   const pool=allPhrases().filter(p=>step.f(p) && !used.has(p.en));
   return pool.length? pool : allPhrases().filter(step.f); // 使い切ったら再利用(件数が少ないドリルの保険)
@@ -250,21 +247,13 @@ function openDrillMenu(){
   openModal('<h3>🎯 実戦ドリル '+helpBtn("hlp-drill")+'</h3>'+
     helpNote("hlp-drill", '定着段階に関わらず、テーマを1つに絞って5問連続で出す実戦形式(すべて選択式)。'+
       '解いた分はふつうのフレーズ学習として記録される(復習スケジュール'+(GAME_ENABLED? '・🎫・任務':'・実績')+'すべて共通)。'+
-      '<b>🎯 フレーズ5問</b>: メモから登録したフレーズ(マイフレーズ)を優先に、まず思い出してから並べ替え。ホームの📝パネルからも。'+
-      '<b>🧪 Part 1 模試</b>: 本番と同じ25問(単語21+熟語4)を4択で・タイムを表示(本番の目安は約10分)。解いた分はふつうの学習として記録')+
-    '<button class="btn drillbtn" id="drillMock"><span>🧪 <b>Part 1 模試</b> <span class="drilltoday">25問・タイム</span></span>'+
-      '<span class="hlsub">本番と同じ25問(単語21+熟語4)・4択・時間を計る。'+(mockLast()? '前回 '+mockLast().c+'/'+MOCK_N+' ・ '+mockFmtSec(mockLast().s) : 'まだ記録なし')+'</span></button>'+
+      '(v5.27.0: 実戦ドリルはDRILLS_ENABLED=falseで隠している。素材のフレーズはミックス/フレーズの並べ替えに出る)')+
     drillKinds().map(k=>{
       const d=PHR_DRILLS[k];
       return '<button class="btn drillbtn" data-drill="'+k+'"><span>'+d.icon+' <b>'+d.name+'</b></span>'+
         '<span class="hlsub">'+d.desc+'</span></button>';
     }).join("")); // v5.21.0: 「📊 フレーズのあゆみ」ボタンは撤去(記録タブの「覚えたフレーズ」の行から=重複の解消)
   $("modal").querySelectorAll("[data-drill]").forEach(b=>{ b.onclick=()=>startDrill(b.dataset.drill); });
-  $("drillMock").onclick=startMock; // v5.25.0
-  if(!myphrList().length){ // マイフレーズが0件でも走る(学習中のフレーズから)。案内だけ添える(v5.26.0)
-    const b=$("modal").querySelector('[data-drill="warm"]');
-    if(b) b.querySelector(".hlsub").textContent+="。いまはマイフレーズが無いので学習中のフレーズから ─ 📝メモで増やそう";
-  }
 }
 function startDrill(kind){
   if(!PHR_DRILLS[kind]) return;
@@ -279,13 +268,11 @@ function startDrill(kind){
 function openDrillDone(){
   const d=PHR_DRILLS[PDRILL.kind], kind=PDRILL.kind;
   const okN=PDRILL.res.filter(Boolean).length, n=d.steps.length;
-  if(kind==="warm") sayWarmDone([...PDRILL.used]); // v5.25.0: 今日の5つを控える(振り返りで「使えた」を付ける)
   PDRILL=null;
   const tip={prep:'この流れ(主張→理由→例→結論)がそのまま2分スピーチの骨組みになる',
     graph:'数値の言い回しは、文ごと口から出るまで繰り返すのがコツ',
     verb:'「make 人 do」が浮かんだら、enable/allow/prevent…に置き換える癖をつける',
-    inan:'「私は〜のおかげで」を「〜が私に…させた」と主語を入れ替える発想を反射に',
-    warm:'会話で使えたら、ホームの📝パネルから「使えた」を押そう(間隔をあけた正解として復習に反映)。言えなかったことは✍でメモ'}[kind]||'';
+    inan:'「私は〜のおかげで」を「〜が私に…させた」と主語を入れ替える発想を反射に'}[kind]||'';
   openModal('<h3>'+d.icon+' '+d.name+' ─ 完了!</h3>'+
     '<div class="giftbox">正解 <b style="font-size:18px">'+okN+' / '+n+'</b>'+(okN>=n? ' ─ 完璧! 🎉':'')+
       '<br><span class="small">'+tip+'</span></div>'+
@@ -302,10 +289,10 @@ function phrNewQuestion(){
   if(PDRILL){
     const d=PHR_DRILLS[PDRILL.kind];
     if(PDRILL.res.length>=d.steps.length){ openDrillDone(); return; }
-    const pool=d.pool? d.pool(PDRILL.used) : drillPool(d.steps[PDRILL.res.length], PDRILL.used); // v5.25.0: ドリル専用のプール(ウォームアップ)
-    const p=d.ordered? pool[0] : pool[Math.floor(Math.random()*pool.length)];
+    const pool=drillPool(d.steps[PDRILL.res.length], PDRILL.used);
+    const p=pool[Math.floor(Math.random()*pool.length)];
     PDRILL.used.add(p.en);
-    phrStart(p, (SPEAK_ENABLED || d.fmt==="sp")? "sp" : (d.fmt||"mc")); // 実戦=ドリルごとの固定形式(v5.10.0: 選択式/v5.25.0: ウォームアップは口頭)
+    phrStart(p, SPEAK_ENABLED? "sp" : (d.fmt||"mc")); // 実戦=ドリルごとの固定形式(v5.10.0: 選択式)
     return;
   }
   phrStart(pickPhrase());
@@ -782,7 +769,7 @@ function phrSyncSeg(){
 }
 $("quizSeg").querySelectorAll("button").forEach(b=>{
   b.onclick=()=>{
-    if(b.dataset.q==="dr"){ openDrillMenu(); return; } // 実戦は「入口」(モードではない=v5.2.0)
+    if(b.dataset.q==="dr"){ if(DRILLS_ENABLED) openDrillMenu(); else openMockModal(); return; } // v5.27.0: 🧪=Part 1模試(実戦ドリルはDRILLS_ENABLEDで隠す)
     if(b.dataset.q==="add"){ openSayModal(true); return; } // ➕=📝メモ(v5.26.0: 単語/フレーズを自動仕分け・js/lesson.js。旧: マイ単語/マイフレーズの登録)
     PDRILL=null; // モード(ミックス/単語/フレーズ)への切替でドリル・にがて特訓は中断
     if(typeof FOCUS!=="undefined"){ if(FOCUS && FOCUS.mock) clearInterval(FOCUS.mock.timer); FOCUS=null; }

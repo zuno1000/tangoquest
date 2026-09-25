@@ -161,10 +161,9 @@ function mergeData(a, b){
     const x=m.myphr[en], y=b.myphr[en];
     if(!x || (y.at||0)>(x.at||0)) m.myphr[en]=y;
   }
-  // 🗣英会話(v5.25.0): メモは項目ごとに操作時刻LWW(マイフレーズと同じ)・今日のウォームアップはatが新しい側・模試の結果は和集合
+  // 📝メモ(v5.25.0): 項目ごとに操作時刻LWW(マイフレーズと同じ)・模試の結果は和集合
   m.say=m.say||{};
   for(const id in b.say||{}){ const x=m.say[id], y=b.say[id]; if(!x || (y.at||0)>(x.at||0)) m.say[id]=y; }
-  if(b.sayw && (b.sayw.at||0)>((m.sayw&&m.sayw.at)||0)) m.sayw=JSON.parse(JSON.stringify(b.sayw));
   m.mocks=Object.assign({}, b.mocks||{}, m.mocks||{});
   // 取り違えペア(v5.12.0): ペアごとに回数の多い方(日別記録と同じmaxマージ)
   m.conf=m.conf||{};

@@ -1,7 +1,7 @@
 "use strict";
 /* ================= 状態管理 ================= */
 const KEY="tangoquest_v1";
-const APP_VERSION="5.26.2";
+const APP_VERSION="5.27.0";
 /* ゲーム面(編成・冒険=サバイバー・ガチャ・カード・任務)の表示フラグ(v5.13.0・ユーザー決定「必要性が薄れた」)。
    false=下部ナビの3タブ・ヘッダの🪙🎫・カードドロップの演出・デイリー/ウィークリー任務・ガチャ告知を隠し、
    ヘッダは📖Lv/🏅覚えた語数/🔥連続日数、任務タブは学習の実績(自動付与・XP)だけになる。
@@ -138,10 +138,9 @@ G.myphr=G.myphr||{};
 /* マイ単語(v5.11.0・js/myword.js): 読んでいて分からなかった単語。en→{ja,pos,at}(意味待ちはja="")/
    削除は{del:1,at}/内蔵に同じ語があるときは{ref:1,at}=優先出題の印だけ。同期はマイフレーズと同じ操作時刻LWW */
 G.myw=G.myw||{};
-/* 🗣英会話(v5.25.0・js/lesson.js): say=言えなかったことのメモ id→{ja,at,done?,en?}(削除は{del:1,at})/sayw=今日のウォームアップ{d,list,used,at}/
-   mocks=Part 1模試の結果 時刻→{c,s,d}(quiz.js startMock)。同期: say=操作時刻LWW・sayw=atが新しい側・mocks=和集合 */
+/* 📝メモ(v5.25.0〜・js/lesson.js): say=メモ id→{ja,t,at,done?,en?}(削除は{del:1,at})/mocks=Part 1模試の結果 時刻→{c,s,d}(quiz.js startMock)。
+   同期: say=操作時刻LWW・mocks=和集合(v5.27.0: sayw=今日のウォームアップは廃止・旧データは無視) */
 G.say=G.say||{};
-G.sayw=G.sayw||{d:"", list:[], used:{}, at:0};
 G.mocks=G.mocks||{};
 /* 取り違えペア(v5.12.0・quiz.js): en→{相手en: 回数}(両方向)。4択の誤答生成と追い出題に使う学習記録(部分リセットで消える) */
 G.conf=G.conf||{};
