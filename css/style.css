@@ -675,6 +675,7 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
   box-shadow:-3px -3px 6px var(--shl), 3px 3px 6px var(--shd)}
 .dexcell.miss{box-shadow:inset 2px 2px 5px var(--shd), inset -2px -2px 5px var(--shl)}
 body.nogame .dexcell.miss{cursor:pointer} /* v5.29.0: 未学習もタップで単語の詳細(辞書) */
+.rlbtns .rldone.rlon{color:var(--ok); font-weight:800} /* v5.29.1: ✓済み=押し直しで取り消す */
 .dexcell .den{font-size:10px; font-weight:800; word-break:break-word; line-height:1.15}
 .dexcell.miss .den{color:var(--sub); font-weight:700; opacity:.8}
 .dexcell .dst{font-size:9px; font-weight:800}

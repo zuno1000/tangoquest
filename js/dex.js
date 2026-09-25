@@ -28,7 +28,7 @@ function openWordModal(en){
       '<div class="wden">'+esc(w.en)+' <span class="poschip pos'+w.pos+'">'+POS_LABEL[w.pos]+'</span></div>'+
       '<div class="wdja">'+esc(w.ja)+'</div>'+
       (st? '<div class="small" style="margin-top:8px">'+qStatsHTML(st)+'</div><div class="small">'+due+'</div>'
-         : '<div class="small" style="margin-top:8px">まだ出題されていない'+(w.my? '(マイ単語)' : mywWanted(en)? '(優先して出る)' : '')+'</div>')+
+         : '<div class="small" style="margin-top:8px">未出題'+(w.my? '(マイ単語)' : mywWanted(en)? '(優先して出る)' : '')+'</div>')+
       (rootText(en)? '<div class="small" style="margin-top:7px">🧬 '+rootText(en)+'</div>':'')+
       (pairs.length? '<div class="small" style="margin-top:7px">⇄ 取り違え: '+pairs.map(o=>esc(o)+'('+conf[o]+')').join("・")+'</div>':'')+
       (ex? '<div class="small" style="margin-top:7px">'+ex+'</div>':'')+

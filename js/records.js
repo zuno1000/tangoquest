@@ -158,8 +158,7 @@ function renderRecords(){
   const mastered=masteredCount(G), total=WORDS.length, learned=Object.keys(G.words).length;
   let pmas=0; for(const en in G.phr){ if(G.phr[en][0]>=MASTER_BOX) pmas++; }
   const ptotal=allPhrases().length;
-  const rlR=Object.keys(G.rl.done||{}).filter(u=>G.rl.done[u].k!=="listen").length;
-  const rlL=Object.keys(G.rl.done||{}).filter(u=>G.rl.done[u].k==="listen").length;
+  const rlR=rlDoneCount(G.rl, "read"), rlL=rlDoneCount(G.rl, "listen"); // 取り消した分は数えない(v5.29.1)
   let daysN=0, tot=0, totC=0;
   for(const k in G.days){ const r=G.days[k]; if(r.a>0){ daysN++; tot+=r.a; totC+=r.c||0; } }
   const wk=growthByWeek(G, 8), thisW=wk[7], lastW=wk[6];

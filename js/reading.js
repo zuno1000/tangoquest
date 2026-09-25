@@ -13,7 +13,7 @@
      取れない日はソースのトップページへの導線と、貼り付け前提のプロンプトだけを出す(機能が沈黙しない)
    ・LLMプロンプト: 記事/動画の題名・URL・出典を埋め込んだ依頼文(解説+語彙/英検形式の4択問題/要約の添削…)を
      テキストエリアで確認・編集→📋コピー。日本語訳・問題生成はアプリ側では行わない(方針=LLMなし・無料)
-   ・記録=G.rl(state.js): topics=興味(端末の好み)/mute=合わないソース(操作時刻LWW・同期)/done=読んだ・聴いた(和集合・同期)
+   ・記録=G.rl(state.js): topics=興味(端末の好み)/mute=合わないソース(操作時刻LWW・同期)/done=読んだ・聴いた(項目ごとの操作時刻LWW・取り消しは{del:1,at}・同期。v5.29.1までは和集合)
    可逆設計: このファイル+ホームの1パネル+CSSブロック+_headersのconnect-srcで完結(学習ロジックは不変) */
 
 const RL_TOPICS={sci:"科学", tec:"テクノロジー", eco:"経済・ビジネス", pol:"政治・国際", env:"環境",
@@ -246,12 +246,28 @@ async function rlFetch(src){
   rlCachePut(src.id, items);
   return items;
 }
+/* 読んだ・聴いたの記録(v5.29.1・実機FB「間違えて押したとき用に、押し直して解除できるように」):
+   done[u]={d,k,id,t,at} / 取り消しは {del:1,at}(トンボストーン=同期で他端末にも伝わる。sync.jsは項目ごとにatの新しい側)。
+   rlIsDone=読んだ・聴いたとして扱うか(取り消し済みは違う)。rlDoneCount=本数(kind省略で合計) */
+function rlIsDone(rl, u){ const e=rl && rl.done && rl.done[u]; return !!e && !e.del; }
+function rlDoneCount(rl, kind){
+  const done=(rl&&rl.done)||{};
+  return Object.keys(done).filter(u=>done[u] && !done[u].del && (!kind || (kind==="listen"? done[u].k==="listen" : done[u].k!=="listen"))).length;
+}
+/* ✓を付ける/取り消す。on=true:記録 false:取り消し。戻り=いま記録されているか */
+function rlSetDone(u, kind, srcId, title, on){
+  G.rl.done=G.rl.done||{};
+  if(on) G.rl.done[u]={d:todayKey(), k:kind, id:srcId, t:String(title||"").slice(0,80), at:Date.now()};
+  else if(G.rl.done[u]) G.rl.done[u]={del:1, at:Date.now()};
+  saveG();
+  return rlIsDone(G.rl, u);
+}
 /* 日別の「読んだ・聴いた」本数(純関数・ymd→{r:読んだ, l:聴いた, n:合計})。
    今週の記録の📖/🎧印と今日の英語パネルの✓に使う(v5.10.2→v5.10.3で読む/聴くを分けた) */
 function rlDoneByDay(rl){
   const out={}; const done=(rl&&rl.done)||{};
   for(const u in done){
-    const e=done[u]; if(!e || !e.d) continue;
+    const e=done[u]; if(!e || e.del || !e.d) continue;
     const o=out[e.d]=out[e.d]||{r:0, l:0, n:0};
     if(e.k==="listen") o.l++; else o.r++;
     o.n++;
@@ -263,7 +279,7 @@ function rlMarks(o){ return o? (o.r? "📖":"")+(o.l? "🎧":"") : ""; }
 /* これまでの記録(純関数): 新しい日→同じ日は新しい順(登録順が無いので題名順)。[{d,k,id,t,u}] */
 function rlHistoryList(rl, max){
   const done=(rl&&rl.done)||{};
-  const list=Object.keys(done).filter(u=>done[u] && done[u].d).map(u=>Object.assign({u}, done[u]));
+  const list=Object.keys(done).filter(u=>done[u] && !done[u].del && done[u].d).map(u=>Object.assign({u}, done[u]));
   list.sort((a,b)=>(b.d>a.d? 1 : b.d<a.d? -1 : String(a.t).localeCompare(String(b.t))));
   return max? list.slice(0, max) : list;
 }
@@ -282,7 +298,7 @@ function openRLHistory(){
       (src? '<br><span class="small">'+esc(src.name)+'</span>':'')+'</div></div>';
   });
   openModal('<h3>📚 読んだ・聴いたの記録</h3>'+
-    '<div class="small">📖 読んだ '+r+'本 ・ 🎧 聴いた '+l+'本'+(list.length<Object.keys(G.rl.done||{}).length? ' ・ 直近200本を表示':'')+'</div>'+
+    '<div class="small">📖 読んだ '+r+'本 ・ 🎧 聴いた '+l+'本'+(list.length<rlDoneCount(G.rl)? ' ・ 直近200本を表示':'')+'</div>'+
     (list.length? '<div class="panel" style="margin-top:8px">'+html+'</div>'
                 : '<div class="empty">まだ記録がない ─ 今日の英語で読んだ・聴いたら ✓ を押そう</div>')+
     '<div class="row" style="margin-top:12px"><button class="btn" id="rlhBack">◀ 今日の英語</button></div>');
@@ -293,7 +309,7 @@ function openRLHistory(){
 function rlChoose(items, rl, kind, src){
   const done=(rl&&rl.done)||{};
   const c=(items||[]).filter(it=>!(kind==="listen" && !rlFits(it, src, rl)));
-  return c.find(it=>!done[it.u]) || c[0] || null;
+  return c.find(it=>!(done[it.u] && !done[it.u].del)) || c[0] || null; // 取り消した回はまた候補に(v5.29.1)
 }
 
 /* ---- LLMへの依頼プロンプト(コピペ用) ----
@@ -542,7 +558,7 @@ function openRLModal(){
       '<div class="rlchips">'+Object.keys(RL_TOPICS).map(t=>'<button class="wchip rltop'+(G.rl.topics[t]? " ksel":"")+'" data-t="'+t+'">'+RL_TOPICS[t]+'</button>').join("")+'</div>', false)+
     foldSec("rlMuted", "🔕 外したソース("+Object.keys(G.rl.mute||{}).filter(id=>G.rl.mute[id].on).length+")",
       '<div id="rlMuteList">'+rlMuteListHTML()+'</div>', false)+
-    '<button class="btn rlentry" id="rlHistBtn"><span class="grow">📚 読んだ・聴いたの記録</span><span class="hlsub">'+Object.keys(G.rl.done||{}).length+'本 ›</span></button>'+
+    '<button class="btn rlentry" id="rlHistBtn"><span class="grow">📚 読んだ・聴いたの記録</span><span class="hlsub">'+rlDoneCount(G.rl)+'本 ›</span></button>'+
     '<div class="small" style="margin-top:10px">ソース '+RL_SOURCES.filter(s=>s.kind==="read" && !s.pay).length+'誌 ・ '+RL_SOURCES.filter(s=>s.kind==="listen").length+'番組。'+
       'すべて無料で読める・聴けるものだけ。今日のおすすめは、はじめて開いたときに決まり、閉じても別の端末でも同じ(日付が変わると更新)</div></div>');
   $("rlHistBtn").onclick=openRLHistory;
@@ -583,7 +599,7 @@ function rlCardHTML(kind){
   }else{
     const s=st.src;
     const it=st.it||null;
-    const done=it && G.rl.done && G.rl.done[it.u];
+    const done=!!it && rlIsDone(G.rl, it.u);
     inner='<div class="rlsrc">'+esc(s.name)+' '+rlSrcChips(s)+'</div>'+
       (it
         ? '<a class="rltitle" href="'+esc(it.u)+'" target="_blank" rel="noopener">'+esc(it.t)+'</a>'+
@@ -600,7 +616,7 @@ function rlCardHTML(kind){
         '<a class="btn primary" href="'+esc(it? it.u : s.url)+'" target="_blank" rel="noopener">🔗 開く</a>'+
         '<button class="btn rlprompt" data-k="'+kind+'">📋 LLMプロンプト</button>'+
         '<button class="btn rlalt" data-k="'+kind+'">🔁 別の候補</button>'+
-        (it? '<button class="btn rldone" data-k="'+kind+'"'+(done?' disabled':'')+'>✓ '+(kind==="read"?"読んだ":"聴いた")+'</button>':'')+
+        (it? '<button class="btn rldone'+(done?' rlon':'')+'" data-k="'+kind+'" title="'+(done? 'もう一度押すと取り消す':'')+'">'+(done? '↩ 取り消す' : '✓ '+(kind==="read"?"読んだ":"聴いた"))+'</button>':'')+ // v5.29.1: 押し直しで解除
         '<button class="btn rlmute" data-k="'+kind+'" title="このソースを今後出さない">🔕 外す</button>'+
       '</div>';
   }
@@ -639,7 +655,12 @@ function rlBindCards(){
     b.onclick=()=>{
       const k=b.dataset.k, st=rlState[k]; if(!st||!st.src||!st.it) return;
       const it=st.it;
-      G.rl.done[it.u]={d:todayKey(), k, id:st.src.id, t:it.t.slice(0,80)}; saveG();
+      if(rlIsDone(G.rl, it.u)){ // 押し直し=取り消し(v5.29.1・実機FB)
+        rlSetDone(it.u, k, st.src.id, it.t, false);
+        toast(k==="read"? "📖 「読んだ」を取り消した" : "🎧 「聴いた」を取り消した");
+        rerender(); return;
+      }
+      rlSetDone(it.u, k, st.src.id, it.t, true);
       toast(k==="read"? "📖 読んだ! 明日も1本" : "🎧 聴いた! 明日も1本");
       checkAchievements(); // 学習の実績(v5.13.0)
       rerender();

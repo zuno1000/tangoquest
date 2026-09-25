@@ -129,9 +129,9 @@ const LEARN_ACH_DEFS=[
    tiers:[[5,{x:50}],[20,{x:150}],[50,{x:400}],[150,{x:1000}]]},
   {id:"lmywm", name:"マイ単語を覚えた", unit:"語", cur:()=>{ let n=0; for(const en in G.words){ if(isMyWord(en) && G.words[en][0]>=MASTER_BOX) n++; } return n; },
    tiers:[[5,{x:150}],[20,{x:400}],[50,{x:1000}]]},
-  {id:"lread", name:"今日の英語を読んだ", unit:"本", cur:()=>Object.keys(G.rl.done||{}).filter(u=>G.rl.done[u].k!=="listen").length,
+  {id:"lread", name:"今日の英語を読んだ", unit:"本", cur:()=>rlDoneCount(G.rl, "read"),
    tiers:[[1,{x:50}],[10,{x:200}],[50,{x:600}],[150,{x:1500}]]},
-  {id:"llis", name:"今日の英語を聴いた", unit:"本", cur:()=>Object.keys(G.rl.done||{}).filter(u=>G.rl.done[u].k==="listen").length,
+  {id:"llis", name:"今日の英語を聴いた", unit:"本", cur:()=>rlDoneCount(G.rl, "listen"),
    tiers:[[1,{x:50}],[10,{x:200}],[50,{x:600}],[150,{x:1500}]]},
 ];
 /* 実績の段階に達していれば自動でXPを付与(ゲーム面オフ)。トーストは他の祝いと重ならないよう少し遅らせる。付与した数を返す */

@@ -4203,7 +4203,7 @@ function run(){
     cell.click();
     const m=doc.getElementById("modal");
     ok(m.textContent.indexOf("単語の詳細")>=0 && m.textContent.indexOf(w.en)>=0 && m.textContent.indexOf(w.ja)>=0, "タップで詳細(意味)");
-    ok(m.textContent.indexOf("まだ出題されていない")>=0 && doc.getElementById("wdDict"), "未学習の案内と辞書ボタン");
+    ok(m.textContent.indexOf("未出題")>=0 && m.textContent.indexOf("まだ出題されていない")<0 && doc.getElementById("wdDict"), "「未出題」の案内と辞書ボタン(v5.29.1)");
     W.closeModal(); W.openDex("cards"); const i2=doc.getElementById("dexSearch"); i2.value=""; i2.dispatchEvent(new W.Event("input")); W.closeModal(); // 検索語を空に戻す(後のテストのため)
     // 学習した語は従来どおり
     const l=Object.keys(G.words).find(en=>W.byEn[en]); if(l){ W.openWordModal(l); ok(m.textContent.indexOf("これまで")>=0); W.closeModal(); }
@@ -4253,6 +4253,32 @@ function run(){
       const css=[...doc.styleSheets].find(ss=>(ss.href||"").indexOf("style.css")>=0);
       ok(css && ![...css.cssRules].some(r=>(r.selectorText||"").indexOf(".setdots")>=0), "●○のCSSも無い");
     }finally{ dr.a=a0; pd.a=pa0; G.pace=oldPace; G.opt.qtab=oldQtab; W.saveG(); W.renderHome(); }
+  });
+
+  t("v5.29.1: 今日の英語の✓読んだ・聴いたの取り消し ─ rlSetDone/rlIsDone/rlDoneCount(取り消しはトンボストーン)・日別/一覧/実績の本数から外れる・その回はまたおすすめに出る(rlChoose)・同期はatの新しい側", ()=>{
+    const G=W.G, doc=W.document, oldDone=JSON.parse(JSON.stringify(G.rl.done||{}));
+    try{
+      G.rl.done={};
+      ok(W.rlSetDone("https://x/1", "read", W.RL_SOURCES[0].id, "Title One", true), "✓を付ける");
+      ok(W.rlIsDone(G.rl, "https://x/1") && G.rl.done["https://x/1"].at>0 && G.rl.done["https://x/1"].d===W.todayKey(), "記録に日付と操作時刻");
+      W.rlSetDone("https://x/2", "listen", W.RL_SOURCES[0].id, "Title Two", true);
+      eq(W.rlDoneCount(G.rl), 2); eq(W.rlDoneCount(G.rl, "read"), 1); eq(W.rlDoneCount(G.rl, "listen"), 1);
+      ok(!W.rlSetDone("https://x/1", "read", W.RL_SOURCES[0].id, "Title One", false), "押し直し=取り消し");
+      ok(G.rl.done["https://x/1"].del && G.rl.done["https://x/1"].at>0, "トンボストーン(同期で伝わる)");
+      ok(!W.rlIsDone(G.rl, "https://x/1")); eq(W.rlDoneCount(G.rl), 1); eq(W.rlDoneCount(G.rl, "read"), 0, "本数から外れる");
+      ok(!W.rlDoneByDay(G.rl)[W.todayKey()].r && W.rlDoneByDay(G.rl)[W.todayKey()].l===1, "日別(今週の記録の📖🎧)からも外れる");
+      eq(W.rlHistoryList(G.rl).length, 1, "一覧からも消える");
+      eq(W.rlChoose([{t:"A",u:"https://x/1"},{t:"B",u:"https://x/3"}], G.rl, "read").u, "https://x/1", "取り消した回はまたおすすめに出る");
+      eq(W.rlChoose([{t:"B",u:"https://x/2"},{t:"C",u:"https://x/3"}], G.rl, "read").u, "https://x/3", "✓のままの回は飛ばす");
+      ok(W.rlSetDone("https://x/1", "read", W.RL_SOURCES[0].id, "Title One", true), "もう一度✓を付け直せる"); eq(W.rlDoneCount(G.rl, "read"), 1);
+      const ach=W.LEARN_ACH_DEFS.find(a=>a.id==="lread"); eq(ach.cur(), 1, "実績の本数も取り消し済みを数えない");
+      // 同期: 項目ごとにatの新しい側(取り消しも伝播・atなしの旧記録どうしは手元)
+      const a={rl:{done:{u1:{d:"2026-09-01",k:"read",at:100}, u2:{d:"2026-09-01",k:"read"}, u3:{del:1,at:300}}}};
+      const b={rl:{done:{u1:{del:1,at:200}, u2:{d:"2026-09-02",k:"listen"}, u3:{d:"2026-09-01",k:"read",at:250}, u4:{d:"2026-09-03",k:"read",at:1}}}};
+      const m=W.mergeData(JSON.parse(JSON.stringify(a)), JSON.parse(JSON.stringify(b)));
+      ok(m.rl.done.u1.del, "別端末の取り消し(atが新しい)が勝つ"); eq(m.rl.done.u2.k, "read", "atなし同士は手元");
+      ok(m.rl.done.u3.del, "手元の取り消しが新しければ残る"); ok(m.rl.done.u4 && m.rl.done.u4.k==="read", "手元に無いものは取り込む(和集合)");
+    }finally{ G.rl.done=oldDone; W.saveG(); W.renderHome(); }
   });
 
   /* ---- 起動状態 ---- */
@@ -5594,7 +5620,7 @@ async function runAsync(W){
     doc.getElementById("wdClose").click(); ok(!doc.getElementById("overlay").classList.contains("show"), "閉じる");
     W.openWordModal(a.en); ok(m.textContent.indexOf("✓ 覚えた")>=0 && m.textContent.indexOf("に到達")>=0, "覚えた語は到達日"); W.closeModal();
     W.openCardModal(a.en+"|1|0"); ok(m.textContent.indexOf("単語の詳細")>=0, "openCardModalもゲーム面オフでは単語の詳細"); W.closeModal();
-    W.openWordModal(c.en); ok(m.textContent.indexOf("まだ出題されていない")>=0, "未学習の語"); W.closeModal();
+    W.openWordModal(c.en); ok(m.textContent.indexOf("未出題")>=0, "未学習の語(v5.29.1: 「未出題」)"); W.closeModal();
     G.words=oldWords; G.conf=oldConf; W.closeModal();
   });
   t("旧ゲーム面の文言(v5.16.0・実機FB): 目安達成のトースト・特訓/ドリルの説明にゲーム面オフでは🎫・任務が出ない", ()=>{

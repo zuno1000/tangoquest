@@ -178,10 +178,15 @@ function mergeData(a, b){
     const x=m.myw[en], y=b.myw[en];
     if(!x || (y.at||0)>(x.at||0)) m.myw[en]=y;
   }
-  /* 今日の英語(v5.10.0): done(読んだ・聴いた)は和集合/mute(合わないソース)は項目ごとの操作時刻LWW
+  /* 今日の英語(v5.10.0): done(読んだ・聴いた)は和集合→v5.29.1から項目ごとの操作時刻LWW(取り消し{del:1,at}も伝播。
+     atが無い旧記録どうしは手元を採る=従来の和集合と同じ)/mute(合わないソース)は項目ごとの操作時刻LWW
      (「戻す」も伝播する=アイコン・マイフレーズと同じ型)/topics・lastは端末の好み=ローカル起点のまま */
   m.rl=Object.assign({topics:{}, mute:{}, done:{}, last:{}}, m.rl||{});
-  m.rl.done=Object.assign({}, (b.rl&&b.rl.done)||{}, (a.rl&&a.rl.done)||{});
+  m.rl.done=Object.assign({}, (a.rl&&a.rl.done)||{});
+  for(const u in (b.rl&&b.rl.done)||{}){
+    const x=m.rl.done[u], y=b.rl.done[u];
+    if(!x || (y.at||0)>(x.at||0)) m.rl.done[u]=y;
+  }
   m.rl.mute=Object.assign({}, (a.rl&&a.rl.mute)||{});
   for(const id in (b.rl&&b.rl.mute)||{}){
     const x=m.rl.mute[id], y=b.rl.mute[id];
