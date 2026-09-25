@@ -3,7 +3,9 @@
 
 /* ---- ログインボーナス(7日サイクル) ----
    v3.7.0: 毎日最低🎫1=来るだけで毎日1回はガチャが引ける
-   v4.13.0: 7日目に🧊フリーズ1個(連続学習の保険・週1ペースで補充) */
+   v4.13.0: 7日目に🧊フリーズ1個(連続学習の保険・週1ペースで補充)
+   v5.23.0: ゲーム面オフでは廃止(実機FB「フリーズ以外に効果がない」。XPは実績の中だけの数字になった)。日付(login)だけ進めておき、
+   GAME_ENABLED=trueに戻せば続きから。🧊は「7日連続で学習するごとに1個」(state.js streakFreezeGrant・quiz.js grantStreakFreezeToday)に移した */
 const LOGIN_BONUS=[{t:1,g:200},{t:1,g:300},{t:2},{t:1,g:500},{t:2},{t:1,g:800},{t:3,g:1000,f:1}];
 /* 報酬(v5.13.0): ゲーム面オフのときは🪙🎫を知識XPに換算する(🎫1=30XP・🪙25=1XP)。x=XPそのもの */
 function rewardXp(r){ return (r.x||0)+(GAME_ENABLED? 0 : (r.t||0)*30+Math.round((r.g||0)/25)); }
@@ -42,10 +44,10 @@ function checkLogin(){
     G.login.last=k;
     G.login.day=(G.login.day%7)+1;
     r=LOGIN_BONUS[G.login.day-1];
-    grantReward(r);
-    try{ localStorage.removeItem(LOGIN_SEEN_KEY); }catch(e){} // 新しい日のバナーを出す
+    if(GAME_ENABLED){ grantReward(r); try{ localStorage.removeItem(LOGIN_SEEN_KEY); }catch(e){} } // 新しい日のバナーを出す
   }
   saveG(); refreshHeader();
+  if(!GAME_ENABLED) return; // v5.23.0: ゲーム面オフではログボの報酬・トースト・バナーは出さない(廃止)
   toast((gift && GAME_ENABLED? "✨ はじめまして記念 🎫10!":"")+
     (gift&&newDay&&GAME_ENABLED? " ／ ":"")+
     (newDay? "🎁 ログインボーナス"+G.login.day+"日目: "+rewardText(r):""));
@@ -53,6 +55,7 @@ function checkLogin(){
 }
 /* ホームのログボバナーを出すか: 今日ぶんを受け取り済みで、まだ畳んでいないとき */
 function loginBonusBannerNeeded(){
+  if(!GAME_ENABLED) return false; // v5.23.0: 廃止
   try{ return G.login.last===todayKey() && localStorage.getItem(LOGIN_SEEN_KEY)!==todayKey(); }
   catch(e){ return false; }
 }

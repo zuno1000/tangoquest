@@ -180,6 +180,15 @@ function recordDayAnswer(d, wasNew, ok){
   }
 }
 
+/* 🧊の配布(v5.23.0): その日はじめての解答で、連続学習が7の倍数日に達していたら1個(state.js streakFreezeGrant)。
+   ログインボーナス7日目の代わり=開くことではなく学習を続けることの報酬。学習タブ・サバイバーの両方から呼ぶ */
+function grantStreakFreezeToday(d){
+  if(!d || d.a!==1) return 0;
+  const n=streakFreezeGrant(G, studyStreak(), todayKey());
+  if(n){ toast("🧊 "+studyStreak()+"日連続の学習! フリーズ+1(いま "+G.frz+"/"+FRZ_MAX+"個)"); vibe(30); }
+  return n;
+}
+
 /* 定着ステップの表示(v4.13.0): 「あとどのくらいで覚えたことになるのか」を見せる。
    box=覚えるまでの階段(0〜MASTER_BOX)。覚えた後は✓だけ出す */
 function masteryHTML(st){
@@ -595,6 +604,7 @@ function answer(chosen, btn){
   if(answered) return;
   answered=true;
   const w=cur.word, ok=chosen.en===w.en, e2j=G.mode==="e2j";
+  sfx(ok? "ok":"ng"); // 効果音(v5.23.0)
   /* 学習タブの選択肢(#choices)だけを対象にする。documentグローバルだと、
      時間停止で保持中のサバイバーの選択肢まで無効化+半透明化してしまい
      「戦闘に戻ると押せない」バグになる(v4.22.0で根治・2026-08-13特定) */
@@ -616,6 +626,7 @@ function answer(chosen, btn){
   srsApply(st, ok, now, {fast:true}); // 単語は既知語の早回しあり(v5.8.0)
   st[8]=now; // 最後に解いた時刻(v5.16.0・同期は新しい方が勝つ)
   recordDayAnswer(d, wasNew, ok);
+  grantStreakFreezeToday(d); // 7日連続で🧊(v5.23.0)
   const vMile=vocabSnap(d, vPre, vocabScore(G)); // 100語の節目を越えたらお祝い(ゲーム面オフのレベルアップの代わり)
   const bonus5=ansBonus(); // 5問ごとの🎫ボーナス(v4.31.0・上限なし・全入口共通/v5.0.0からフレーズと合算)
   let justMastered=false;

@@ -190,6 +190,10 @@ function mergeData(a, b){
     const ta=(a.rl&&a.rl.topicsAt)||0, tb=(b.rl&&b.rl.topicsAt)||0;
     if(tb>ta){ m.rl.topics=Object.assign({}, (b.rl&&b.rl.topics)||{}); m.rl.topicsAt=tb; }
   }
+  { // ⏱ 聴く長さ(v5.23.0): 操作時刻(lmaxAt)が新しい側
+    const la=(a.rl&&a.rl.lmaxAt)||0, lb=(b.rl&&b.rl.lmaxAt)||0;
+    if(lb>la){ m.rl.lmax=b.rl.lmax; m.rl.lmaxAt=lb; }
+  }
   m.rl.pick=Object.assign({}, (a.rl&&a.rl.pick)||{});
   for(const k in (b.rl&&b.rl.pick)||{}) m.rl.pick[k]=rlPickNewer(m.rl.pick[k], b.rl.pick[k]);
   // フレーズSRS(v5.0.0): 単語と同じ規則(v5.16.0: 最後に解いた時刻→解答回数)
@@ -241,6 +245,7 @@ function mergeData(a, b){
   m.xp=Math.max(m.xp||0, b.xp||0);
   m.gift10=Math.max(m.gift10||0, b.gift10||0); // 初回プレゼントは受取済みを優先
   m.frz=Math.max(m.frz||0, b.frz||0);          // フリーズ🧊は多い方(進捗を失わない方向)
+  if((b.frzAt||"")>(m.frzAt||"")) m.frzAt=b.frzAt; // 🧊を配った日(v5.23.0)は新しい方=別端末で同じ日に二重に配らない
   /* カスタムアイコン(v5.8.0): なかまごとに操作時刻(faceAt)が新しい側が勝つ=変更も「絵文字に戻す」
      (削除トンボストーン)も伝播する。旧版の記録(faceAt無し=時刻0)どうしは従来どおり和集合(ローカル優先) */
   m.faceAt=Object.assign({}, b.faceAt||{}, a.faceAt||{});
@@ -577,7 +582,7 @@ function partialResetData(g, t){
     rl:g.rl||{topics:{}, mute:{}, done:{}, last:{}}, // 今日の英語の好み・記録も資産として残す(v5.10.0)
     daily:g.daily||{}, weekly:g.weekly||{}, counters:g.counters||{}, ach:g.ach||{},
     login:g.login||{last:null,day:0}, gift10:g.gift10||0,
-    frz:g.frz||0, faces:g.faces||{}, faceAt:g.faceAt||{}, idle:{last:t},
+    frz:g.frz||0, frzAt:g.frzAt||"", faces:g.faces||{}, faceAt:g.faceAt||{}, idle:{last:t},
     words:{}, days:{}, inv:{}, shards:0, combo:0, conf:{},
     pace:{goal:null, setAt:t, log:[]}};
 }
@@ -611,7 +616,13 @@ function openSettings(){
     // 口頭ステージはv5.10.0でUIから撤去(SPEAK_ENABLED=false)。制限時間の設定も一緒に隠す
     (SPEAK_ENABLED? '<div style="height:8px"></div>'+
     '<button class="btn" id="spkSecBtn">フレーズ: 口頭の制限時間: '+spkSecLabel(G.opt.spkSec)+' (タップで切替)</button>' : '');
-  const fxInner=(CAN_VIBRATE
+  /* 効果音(v5.23.0・実機FB): 振動と同じ端末ローカルの設定。ONにした瞬間にテスト音(正解→不正解) */
+  const sfxInner=
+    '<div class="small" style="margin-bottom:6px">正解・不正解で短い電子音が鳴る '+helpBtn("hlp-sfx")+'</div>'+
+    helpNote("hlp-sfx", '正解=上がる2音・不正解=低い1音。音声ファイルは使わず端末が合成する。iPhoneはマナースイッチ(消音)に従う。ONにした瞬間にテスト音が鳴る')+
+    '<button class="btn" id="sfxToggle">効果音: '+(sfxOn()? "ON":"OFF")+'</button>'+
+    '<div style="height:10px"></div>';
+  const fxInner=sfxInner+(CAN_VIBRATE
     ? '<div class="small" style="margin-bottom:6px">正解やお祝いで端末が振動する '+helpBtn("hlp-vibe")+'</div>'+
       helpNote("hlp-vibe", 'ONにするとテスト振動が鳴る。鳴らない場合は端末のマナーモード/バイブ設定を確認')+
       '<button class="btn" id="vibeToggle">振動: '+(localStorage.getItem("tq_vibe")==="off"?"OFF":"ON")+'</button>'
@@ -647,7 +658,7 @@ function openSettings(){
   openModal('<h3>⚙ 設定</h3>'+
     topRow+ // 同期・更新はいちばん上(v5.15.0)
     foldSec("sfoldLearn", "📖 学習(出題・自動化)", learnInner, false)+
-    foldSec("sfoldFx",    "🎨 演出(振動)", fxInner, false)+
+    foldSec("sfoldFx",    "🎨 演出(効果音・振動)", fxInner, false)+
     foldSec("sfoldReset", "🗑 データのリセット", resetInner, false)+
     '<div class="small" style="margin-top:14px">学習の記録・あゆみ・実績は下のナビの <b>📊 記録</b> に<br>'+
       'LEXICA(レキシカ) v'+APP_VERSION+' ─ 単語データ: 英検1級レベル '+WORDS.length+'語(<a href="https://github.com/zuno1000/tango" target="_blank" rel="noopener" style="color:var(--accent2)">tango</a> 由来)</div>');
@@ -671,6 +682,12 @@ function openSettings(){
   if($("spkSecBtn")) $("spkSecBtn").onclick=()=>{
     G.opt.spkSec=spkSecCycle(G.opt.spkSec); saveG();
     $("spkSecBtn").textContent="フレーズ: 口頭の制限時間: "+spkSecLabel(G.opt.spkSec)+" (タップで切替)";
+  };
+  $("sfxToggle").onclick=()=>{
+    const on=!sfxOn();
+    try{ localStorage.setItem("tq_sfx", on? "on":"off"); }catch(e){}
+    $("sfxToggle").textContent="効果音: "+(on? "ON":"OFF");
+    if(on) sfx("test"); // ONにした瞬間(タップ操作中)にテスト音
   };
   const vt=$("vibeToggle");
   if(vt) vt.onclick=()=>{

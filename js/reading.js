@@ -11,7 +11,7 @@
      「別の候補」はその順位を1つ進める。素材はソースの最新記事(読んだものは飛ばす)
    ・取得=静的サイトなので、フィードはCORS対応の無料の中継(rss2json → allorigins → 直接)で取り込み、端末に当日分をキャッシュ。
      取れない日はソースのトップページへの導線と、貼り付け前提のプロンプトだけを出す(機能が沈黙しない)
-   ・LLMプロンプト: 記事/動画の題名・URL・出典を埋め込んだ依頼文(解説+語彙/内容正誤問題/要約の添削…)を
+   ・LLMプロンプト: 記事/動画の題名・URL・出典を埋め込んだ依頼文(解説+語彙/英検形式の4択問題/要約の添削…)を
      テキストエリアで確認・編集→📋コピー。日本語訳・問題生成はアプリ側では行わない(方針=LLMなし・無料)
    ・記録=G.rl(state.js): topics=興味(端末の好み)/mute=合わないソース(操作時刻LWW・同期)/done=読んだ・聴いた(和集合・同期)
    可逆設計: このファイル+ホームの1パネル+CSSブロック+_headersのconnect-srcで完結(学習ロジックは不変) */
@@ -23,7 +23,9 @@ const RL_TOPICS={sci:"科学", tec:"テクノロジー", eco:"経済・ビジネ
    ★掲載基準(ユーザー決定2026-09-21): 全文を無料で読める・全編を無料で視聴できるソースだけ。有料・閲読制限(メーター)のある
    メディア(The Economist・The Atlantic・NYT・FT・WIRED・New Scientist・MIT TR・SciAm・Nautilus・Project Syndicate・
    Foreign Policy・Nature)と、更新の止まったもの(Hakai・Science In Action)、外部の有料記事へ飛ぶ集約(Longreads)は載せない。
-   種類が減っても「開いたら読めない」を出さないことを優先する。payフラグは使わない(テストで0件を固定) */
+   種類が減っても「開いたら読めない」を出さないことを優先する。
+   pay=会員限定の記事が混ざる媒体(v5.23.0・実機FB「有料会員にならないと読めない記事がたまに出る」→2026-09-25に最新記事を検査:
+   Vox・Big Thinkに isAccessibleForFree=false の記事が混ざっていた)。候補から外す(longと同じ扱い・idはdone記録のため残す) */
 const YT_FEED="https://www.youtube.com/feeds/videos.xml?channel_id=";
 const RL_SOURCES=[
   /* ---- 読む ---- */
@@ -43,8 +45,8 @@ const RL_SOURCES=[
   {id:"knowable", kind:"read", name:"Knowable Magazine", url:"https://knowablemagazine.org", feed:"https://knowablemagazine.org/rss", t:["sci","med"], lv:1},
   {id:"noema", kind:"read", name:"Noema Magazine", url:"https://www.noemamag.com", feed:"https://www.noemamag.com/feed/", t:["cul","pol","tec"], lv:2},
   {id:"undark", kind:"read", name:"Undark", url:"https://undark.org", feed:"https://undark.org/feed/", t:["sci","med"], lv:1},
-  {id:"bigthink", kind:"read", name:"Big Think", url:"https://bigthink.com", feed:"https://bigthink.com/feed/", t:["cul","sci"], lv:1},
-  {id:"vox", kind:"read", name:"Vox", url:"https://www.vox.com", feed:"https://www.vox.com/rss/index.xml", t:["soc","pol"], lv:1},
+  {id:"bigthink", pay:1, kind:"read", name:"Big Think", url:"https://bigthink.com", feed:"https://bigthink.com/feed/", t:["cul","sci"], lv:1},
+  {id:"vox", pay:1, kind:"read", name:"Vox", url:"https://www.vox.com", feed:"https://www.vox.com/rss/index.xml", t:["soc","pol"], lv:1},
   {id:"ars", kind:"read", name:"Ars Technica", url:"https://arstechnica.com", feed:"https://feeds.arstechnica.com/arstechnica/index", t:["tec","sci"], lv:1},
   {id:"owid", kind:"read", name:"Our World in Data", url:"https://ourworldindata.org", feed:"https://ourworldindata.org/atom.xml", t:["soc","eco","env"], lv:1},
   {id:"marginalian", kind:"read", name:"The Marginalian", url:"https://www.themarginalian.org", feed:"https://www.themarginalian.org/feed/", t:["cul"], lv:2},
@@ -53,52 +55,58 @@ const RL_SOURCES=[
   {id:"grist", kind:"read", name:"Grist", url:"https://grist.org", feed:"https://grist.org/feed/", t:["env","pol"], lv:1},
   {id:"harvard-gaz", kind:"read", name:"The Harvard Gazette", url:"https://news.harvard.edu/gazette/", feed:"https://news.harvard.edu/gazette/feed/", t:["sci","soc","med"], lv:1},
   /* ---- 聴く: ポッドキャスト ---- */
-  {id:"ted-audio", kind:"listen", name:"TED Talks Daily", url:"https://www.ted.com/podcasts/ted-talks-daily", feed:"https://feeds.feedburner.com/TEDTalks_audio", t:["cul","sci","soc"], lv:1},
+  {id:"ted-audio", typ:14, kind:"listen", name:"TED Talks Daily", url:"https://www.ted.com/podcasts/ted-talks-daily", feed:"https://feeds.feedburner.com/TEDTalks_audio", t:["cul","sci","soc"], lv:1},
   {id:"ted-radio", long:1, kind:"listen", name:"TED Radio Hour (NPR)", url:"https://www.npr.org/programs/ted-radio-hour/", feed:"https://feeds.npr.org/510298/podcast.xml", t:["cul","sci","soc"], lv:1},
   {id:"hiddenbrain", long:1, kind:"listen", name:"Hidden Brain", url:"https://hiddenbrain.org", feed:"https://feeds.npr.org/510308/podcast.xml", t:["cul","med","soc"], lv:1},
-  {id:"planetmoney", kind:"listen", name:"Planet Money (NPR)", url:"https://www.npr.org/podcasts/510289/planet-money", feed:"https://feeds.npr.org/510289/podcast.xml", t:["eco"], lv:1},
+  {id:"planetmoney", typ:25, kind:"listen", name:"Planet Money (NPR)", url:"https://www.npr.org/podcasts/510289/planet-money", feed:"https://feeds.npr.org/510289/podcast.xml", t:["eco"], lv:1},
   {id:"freakonomics", long:1, kind:"listen", name:"Freakonomics Radio", url:"https://freakonomics.com/series/freakonomics-radio/", feed:"https://feeds.simplecast.com/Y8lFbOT4", t:["eco","soc"], lv:1},
-  {id:"bbc-global", kind:"listen", name:"BBC Global News Podcast", url:"https://www.bbc.co.uk/programmes/p02nq0gn", feed:"https://podcasts.files.bbci.co.uk/p02nq0gn.rss", t:["pol"], lv:1},
-  {id:"bbc-doc", kind:"listen", name:"BBC The Documentary", url:"https://www.bbc.co.uk/programmes/p02nq0lx", feed:"https://podcasts.files.bbci.co.uk/p02nq0lx.rss", t:["soc","pol","cul"], lv:1},
+  {id:"bbc-global", typ:30, kind:"listen", name:"BBC Global News Podcast", url:"https://www.bbc.co.uk/programmes/p02nq0gn", feed:"https://podcasts.files.bbci.co.uk/p02nq0gn.rss", t:["pol"], lv:1},
+  {id:"bbc-doc", typ:27, kind:"listen", name:"BBC The Documentary", url:"https://www.bbc.co.uk/programmes/p02nq0lx", feed:"https://podcasts.files.bbci.co.uk/p02nq0lx.rss", t:["soc","pol","cul"], lv:1},
   {id:"bbc-reith", long:1, kind:"listen", name:"BBC The Reith Lectures", url:"https://www.bbc.co.uk/programmes/b00729d9", feed:"https://podcasts.files.bbci.co.uk/b00729d9.rss", t:["cul","pol"], lv:2},
   {id:"bbc-inourtime", long:1, kind:"listen", name:"BBC In Our Time", url:"https://www.bbc.co.uk/programmes/b006qykl", feed:"https://podcasts.files.bbci.co.uk/b006qykl.rss", t:["his","cul","sci"], lv:2},
-  {id:"bbc-bizdaily", kind:"listen", name:"BBC Business Daily", url:"https://www.bbc.co.uk/programmes/p002vsxs", feed:"https://podcasts.files.bbci.co.uk/p002vsxs.rss", t:["eco"], lv:1},
-  {id:"bbc-moreorless", kind:"listen", name:"BBC More or Less", url:"https://www.bbc.co.uk/programmes/p02nrss1", feed:"https://podcasts.files.bbci.co.uk/p02nrss1.rss", t:["eco","soc"], lv:1},
-  {id:"bbc-inquiry", kind:"listen", name:"BBC The Inquiry", url:"https://www.bbc.co.uk/programmes/p029399x", feed:"https://podcasts.files.bbci.co.uk/p029399x.rss", t:["pol","soc"], lv:1},
-  {id:"sciencevs", kind:"listen", name:"Science Vs", url:"https://gimletmedia.com/shows/science-vs", feed:"https://feeds.megaphone.fm/sciencevs", t:["sci","med"], lv:1},
-  {id:"99pi", kind:"listen", name:"99% Invisible", url:"https://99percentinvisible.org", feed:"https://feeds.simplecast.com/BqbsxVfO", t:["cul","tec","his"], lv:1},
-  {id:"radiolab", kind:"listen", name:"Radiolab", url:"https://radiolab.org", feed:"https://feeds.simplecast.com/EmVW7VGp", t:["sci","cul"], lv:1},
-  /* ---- 聴く: YouTube ---- */
-  {id:"yt-ted", kind:"listen", yt:1, name:"TED (YouTube)", url:"https://www.youtube.com/@TED", feed:YT_FEED+"UCAuUUnT6oDeKwE6v1NGQxug", t:["cul","sci","soc"], lv:1},
-  {id:"yt-teded", kind:"listen", yt:1, name:"TED-Ed (YouTube)", url:"https://www.youtube.com/@TEDEd", feed:YT_FEED+"UCsooa4yRKGN_zEE8iknghZA", t:["sci","his","cul"], lv:1},
-  {id:"yt-kurz", kind:"listen", yt:1, name:"Kurzgesagt (YouTube)", url:"https://www.youtube.com/@kurzgesagt", feed:YT_FEED+"UCsXVk37bltHxD1rDPwtNM8Q", t:["sci"], lv:1},
-  {id:"yt-veritasium", kind:"listen", yt:1, name:"Veritasium (YouTube)", url:"https://www.youtube.com/@veritasium", feed:YT_FEED+"UCHnyfMqiRRG1u-2MsSQLbXA", t:["sci","tec"], lv:1},
-  {id:"yt-vox", kind:"listen", yt:1, name:"Vox (YouTube)", url:"https://www.youtube.com/@Vox", feed:YT_FEED+"UCLXo7UDZvByw2ixzpQCufnA", t:["soc","pol"], lv:1},
-  {id:"yt-economist", kind:"listen", yt:1, name:"The Economist (YouTube)", url:"https://www.youtube.com/@TheEconomist", feed:YT_FEED+"UC0p5jTq6Xx_DosDFxVXnWaQ", t:["eco","pol"], lv:2},
-  {id:"yt-bigthink", kind:"listen", yt:1, name:"Big Think (YouTube)", url:"https://www.youtube.com/@bigthink", feed:YT_FEED+"UCvQECJukTDE2i6aCoMnS-Vg", t:["cul","sci"], lv:1},
-  {id:"yt-crashcourse", kind:"listen", yt:1, name:"CrashCourse (YouTube)", url:"https://www.youtube.com/@crashcourse", feed:YT_FEED+"UCX6b17PVsYBQ0ip5gyeme-Q", t:["his","sci","eco"], lv:1},
+  {id:"bbc-bizdaily", typ:18, kind:"listen", name:"BBC Business Daily", url:"https://www.bbc.co.uk/programmes/p002vsxs", feed:"https://podcasts.files.bbci.co.uk/p002vsxs.rss", t:["eco"], lv:1},
+  {id:"bbc-moreorless", typ:10, kind:"listen", name:"BBC More or Less", url:"https://www.bbc.co.uk/programmes/p02nrss1", feed:"https://podcasts.files.bbci.co.uk/p02nrss1.rss", t:["eco","soc"], lv:1},
+  {id:"bbc-inquiry", typ:23, kind:"listen", name:"BBC The Inquiry", url:"https://www.bbc.co.uk/programmes/p029399x", feed:"https://podcasts.files.bbci.co.uk/p029399x.rss", t:["pol","soc"], lv:1},
+  {id:"sciencevs", typ:30, kind:"listen", name:"Science Vs", url:"https://gimletmedia.com/shows/science-vs", feed:"https://feeds.megaphone.fm/sciencevs", t:["sci","med"], lv:1},
+  {id:"99pi", typ:30, kind:"listen", name:"99% Invisible", url:"https://99percentinvisible.org", feed:"https://feeds.simplecast.com/BqbsxVfO", t:["cul","tec","his"], lv:1},
+  {id:"radiolab", typ:30, kind:"listen", name:"Radiolab", url:"https://radiolab.org", feed:"https://feeds.simplecast.com/EmVW7VGp", t:["sci","cul"], lv:1},
+  /* ---- 聴く: 短い番組(v5.23.0・実機FB「負荷を少なめにしたい日は1〜2分・時間があれば5〜10分・15分以上は厳しい」)。2026-09-25に疎通と長さを確認 ---- */
+  {id:"npr-newsnow", typ:5, kind:"listen", name:"NPR News Now", url:"https://www.npr.org/podcasts/500005/npr-news-now", feed:"https://feeds.npr.org/500005/podcast.xml", t:["pol","soc"], lv:1},
+  {id:"mw-wotd", typ:2, kind:"listen", name:"Merriam-Webster Word of the Day", url:"https://www.merriam-webster.com/word-of-the-day", feed:"https://www.merriam-webster.com/wotd/feed/rss2", t:["cul"], lv:1},
+  {id:"npr-considerthis", typ:9, kind:"listen", name:"Consider This (NPR)", url:"https://www.npr.org/podcasts/510355/considerthis", feed:"https://feeds.npr.org/510355/podcast.xml", t:["pol","soc"], lv:1},
+  {id:"mkt-morning", typ:7, kind:"listen", name:"Marketplace Morning Report", url:"https://www.marketplace.org/shows/marketplace-morning-report/", feed:"https://feeds.publicradio.org/public_feeds/marketplace-morning-report/rss/rss", t:["eco"], lv:1},
+  {id:"bbc-witness", typ:10, kind:"listen", name:"BBC Witness History", url:"https://www.bbc.co.uk/programmes/p004t1hd", feed:"https://podcasts.files.bbci.co.uk/p004t1hd.rss", t:["his"], lv:1},
+  /* ---- 聴く: YouTube(typ=動画の典型的な長さ・分。Atomフィードに長さがないので⏱の判定に使う・v5.23.0) ---- */
+  {id:"yt-ted", kind:"listen", yt:1, typ:14, name:"TED (YouTube)", url:"https://www.youtube.com/@TED", feed:YT_FEED+"UCAuUUnT6oDeKwE6v1NGQxug", t:["cul","sci","soc"], lv:1},
+  {id:"yt-teded", kind:"listen", yt:1, typ:5, name:"TED-Ed (YouTube)", url:"https://www.youtube.com/@TEDEd", feed:YT_FEED+"UCsooa4yRKGN_zEE8iknghZA", t:["sci","his","cul"], lv:1},
+  {id:"yt-kurz", kind:"listen", yt:1, typ:12, name:"Kurzgesagt (YouTube)", url:"https://www.youtube.com/@kurzgesagt", feed:YT_FEED+"UCsXVk37bltHxD1rDPwtNM8Q", t:["sci"], lv:1},
+  {id:"yt-veritasium", kind:"listen", yt:1, typ:25, name:"Veritasium (YouTube)", url:"https://www.youtube.com/@veritasium", feed:YT_FEED+"UCHnyfMqiRRG1u-2MsSQLbXA", t:["sci","tec"], lv:1},
+  {id:"yt-vox", kind:"listen", yt:1, typ:10, name:"Vox (YouTube)", url:"https://www.youtube.com/@Vox", feed:YT_FEED+"UCLXo7UDZvByw2ixzpQCufnA", t:["soc","pol"], lv:1},
+  {id:"yt-economist", kind:"listen", yt:1, typ:10, name:"The Economist (YouTube)", url:"https://www.youtube.com/@TheEconomist", feed:YT_FEED+"UC0p5jTq6Xx_DosDFxVXnWaQ", t:["eco","pol"], lv:2},
+  {id:"yt-bigthink", kind:"listen", yt:1, typ:8, name:"Big Think (YouTube)", url:"https://www.youtube.com/@bigthink", feed:YT_FEED+"UCvQECJukTDE2i6aCoMnS-Vg", t:["cul","sci"], lv:1},
+  {id:"yt-crashcourse", kind:"listen", yt:1, typ:12, name:"CrashCourse (YouTube)", url:"https://www.youtube.com/@crashcourse", feed:YT_FEED+"UCX6b17PVsYBQ0ip5gyeme-Q", t:["his","sci","eco"], lv:1},
   {id:"yt-dwdoc", long:1, kind:"listen", yt:1, name:"DW Documentary (YouTube)", url:"https://www.youtube.com/@DWDocumentary", feed:YT_FEED+"UCW39zufHfsuGgpLviKh297Q", t:["soc","pol","env"], lv:1},
   {id:"yt-pbs", long:1, kind:"listen", yt:1, name:"PBS NewsHour (YouTube)", url:"https://www.youtube.com/@PBSNewsHour", feed:YT_FEED+"UC6ZFN9Tx6xh-skXCuRHCDpQ", t:["pol","soc"], lv:1},
-  {id:"yt-bloomberg-orig", kind:"listen", yt:1, name:"Bloomberg Originals (YouTube)", url:"https://www.youtube.com/@business", feed:YT_FEED+"UCUMZ7gohGI9HcU9VNsr2FJQ", t:["eco","tec"], lv:1},
-  {id:"yt-wsj", kind:"listen", yt:1, name:"The Wall Street Journal (YouTube)", url:"https://www.youtube.com/@wsj", feed:YT_FEED+"UCK7tptUDHh-RYDsdxO1-5QQ", t:["eco","pol","tec"], lv:1},
-  {id:"yt-johnnyharris", kind:"listen", yt:1, name:"Johnny Harris (YouTube)", url:"https://www.youtube.com/@johnnyharris", feed:YT_FEED+"UCmGSJVG3mCRXVOP4yZrU1Dw", t:["pol","his"], lv:1},
-  {id:"yt-wendover", kind:"listen", yt:1, name:"Wendover Productions (YouTube)", url:"https://www.youtube.com/@Wendoverproductions", feed:YT_FEED+"UC9RM-iSvTu1uPJb8X5yp3EQ", t:["eco","tec"], lv:1},
-  {id:"yt-polymatter", kind:"listen", yt:1, name:"PolyMatter (YouTube)", url:"https://www.youtube.com/@PolyMatter", feed:YT_FEED+"UCgNg3vwj3xt7QOrcIDaHdFg", t:["eco","pol"], lv:1},
-  {id:"yt-asianometry", kind:"listen", yt:1, name:"Asianometry (YouTube)", url:"https://www.youtube.com/@Asianometry", feed:YT_FEED+"UC1LpsuAUaKoMzzJSEt5WImw", t:["tec","eco"], lv:2},
+  {id:"yt-bloomberg-orig", kind:"listen", yt:1, typ:12, name:"Bloomberg Originals (YouTube)", url:"https://www.youtube.com/@business", feed:YT_FEED+"UCUMZ7gohGI9HcU9VNsr2FJQ", t:["eco","tec"], lv:1},
+  {id:"yt-wsj", kind:"listen", yt:1, typ:8, name:"The Wall Street Journal (YouTube)", url:"https://www.youtube.com/@wsj", feed:YT_FEED+"UCK7tptUDHh-RYDsdxO1-5QQ", t:["eco","pol","tec"], lv:1},
+  {id:"yt-johnnyharris", kind:"listen", yt:1, typ:25, name:"Johnny Harris (YouTube)", url:"https://www.youtube.com/@johnnyharris", feed:YT_FEED+"UCmGSJVG3mCRXVOP4yZrU1Dw", t:["pol","his"], lv:1},
+  {id:"yt-wendover", kind:"listen", yt:1, typ:20, name:"Wendover Productions (YouTube)", url:"https://www.youtube.com/@Wendoverproductions", feed:YT_FEED+"UC9RM-iSvTu1uPJb8X5yp3EQ", t:["eco","tec"], lv:1},
+  {id:"yt-polymatter", kind:"listen", yt:1, typ:15, name:"PolyMatter (YouTube)", url:"https://www.youtube.com/@PolyMatter", feed:YT_FEED+"UCgNg3vwj3xt7QOrcIDaHdFg", t:["eco","pol"], lv:1},
+  {id:"yt-asianometry", kind:"listen", yt:1, typ:18, name:"Asianometry (YouTube)", url:"https://www.youtube.com/@Asianometry", feed:YT_FEED+"UC1LpsuAUaKoMzzJSEt5WImw", t:["tec","eco"], lv:2},
   {id:"yt-cnbc", long:1, kind:"listen", yt:1, name:"CNBC (YouTube)", url:"https://www.youtube.com/@CNBC", feed:YT_FEED+"UCvJJ_dzjViJCoLf5uKUTwoA", t:["eco"], lv:1},
-  {id:"yt-schooloflife", kind:"listen", yt:1, name:"The School of Life (YouTube)", url:"https://www.youtube.com/@theschooloflifetv", feed:YT_FEED+"UC7IcJI8PUf5Z3zKxnZvTBog", t:["cul"], lv:1},
-  {id:"yt-scishow", kind:"listen", yt:1, name:"SciShow (YouTube)", url:"https://www.youtube.com/@SciShow", feed:YT_FEED+"UCZYTClx2T1of7BRZ86-8fow", t:["sci","med"], lv:1},
-  {id:"yt-realeng", kind:"listen", yt:1, name:"Real Engineering (YouTube)", url:"https://www.youtube.com/@RealEngineering", feed:YT_FEED+"UCR1IuLEqb6UEA_zQ81kwXfg", t:["tec","sci"], lv:1},
-  {id:"yt-vsauce", kind:"listen", yt:1, name:"Vsauce (YouTube)", url:"https://www.youtube.com/@Vsauce", feed:YT_FEED+"UC6nSFpj9HTCZ5t-N3Rm3-HA", t:["sci","cul"], lv:1},
+  {id:"yt-schooloflife", kind:"listen", yt:1, typ:6, name:"The School of Life (YouTube)", url:"https://www.youtube.com/@theschooloflifetv", feed:YT_FEED+"UC7IcJI8PUf5Z3zKxnZvTBog", t:["cul"], lv:1},
+  {id:"yt-scishow", kind:"listen", yt:1, typ:8, name:"SciShow (YouTube)", url:"https://www.youtube.com/@SciShow", feed:YT_FEED+"UCZYTClx2T1of7BRZ86-8fow", t:["sci","med"], lv:1},
+  {id:"yt-realeng", kind:"listen", yt:1, typ:18, name:"Real Engineering (YouTube)", url:"https://www.youtube.com/@RealEngineering", feed:YT_FEED+"UCR1IuLEqb6UEA_zQ81kwXfg", t:["tec","sci"], lv:1},
+  {id:"yt-vsauce", kind:"listen", yt:1, typ:20, name:"Vsauce (YouTube)", url:"https://www.youtube.com/@Vsauce", feed:YT_FEED+"UC6nSFpj9HTCZ5t-N3Rm3-HA", t:["sci","cul"], lv:1},
   {id:"yt-bbcnews", long:1, kind:"listen", yt:1, name:"BBC News (YouTube)", url:"https://www.youtube.com/@BBCNews", feed:YT_FEED+"UC16niRr50-MSBwiO3YDb3RA", t:["pol"], lv:1},
   {id:"yt-aljazeera", long:1, kind:"listen", yt:1, name:"Al Jazeera English (YouTube)", url:"https://www.youtube.com/@aljazeeraenglish", feed:YT_FEED+"UCNye-wNBqNL5ZzHSJj3l8Bg", t:["pol"], lv:1},
-  {id:"yt-guardian", kind:"listen", yt:1, name:"The Guardian (YouTube)", url:"https://www.youtube.com/@guardian", feed:YT_FEED+"UCHpw8xwDNhU9gdohEcJu4aA", t:["soc","pol"], lv:1},
-  {id:"yt-ft", kind:"listen", yt:1, name:"Financial Times (YouTube)", url:"https://www.youtube.com/@FinancialTimes", feed:YT_FEED+"UCoUxsWakJucWg46KW5RsvPw", t:["eco","pol"], lv:2},
+  {id:"yt-guardian", kind:"listen", yt:1, typ:8, name:"The Guardian (YouTube)", url:"https://www.youtube.com/@guardian", feed:YT_FEED+"UCHpw8xwDNhU9gdohEcJu4aA", t:["soc","pol"], lv:1},
+  {id:"yt-ft", kind:"listen", yt:1, typ:8, name:"Financial Times (YouTube)", url:"https://www.youtube.com/@FinancialTimes", feed:YT_FEED+"UCoUxsWakJucWg46KW5RsvPw", t:["eco","pol"], lv:2},
   {id:"yt-bloombergtv", long:1, kind:"listen", yt:1, name:"Bloomberg Television (YouTube)", url:"https://www.youtube.com/@markets", feed:YT_FEED+"UCIALMKvObZNtJ6AmdCLP7Lg", t:["eco"], lv:1},
-  {id:"yt-hbr", kind:"listen", yt:1, name:"Harvard Business Review (YouTube)", url:"https://www.youtube.com/@harvardbusinessreview", feed:YT_FEED+"UCWo4IA01TXzBeGJJKWHOG9g", t:["eco"], lv:1},
-  {id:"yt-quanta", kind:"listen", yt:1, name:"Quanta Magazine (YouTube)", url:"https://www.youtube.com/@QuantaScienceChannel", feed:YT_FEED+"UCTpmmkp1E4nmZqWPS-dl5bg", t:["sci"], lv:2},
+  {id:"yt-hbr", kind:"listen", yt:1, typ:5, name:"Harvard Business Review (YouTube)", url:"https://www.youtube.com/@harvardbusinessreview", feed:YT_FEED+"UCWo4IA01TXzBeGJJKWHOG9g", t:["eco"], lv:1},
+  {id:"yt-quanta", kind:"listen", yt:1, typ:20, name:"Quanta Magazine (YouTube)", url:"https://www.youtube.com/@QuantaScienceChannel", feed:YT_FEED+"UCTpmmkp1E4nmZqWPS-dl5bg", t:["sci"], lv:2},
   {id:"yt-stanfordgsb", long:1, kind:"listen", yt:1, name:"Stanford GSB (YouTube)", url:"https://www.youtube.com/@stanfordgsb", feed:YT_FEED+"UCGwuxdEeCf0TIA2RbPOj-8g", t:["eco"], lv:1},
-  {id:"yt-mit", kind:"listen", yt:1, name:"MIT (YouTube)", url:"https://www.youtube.com/@mit", feed:YT_FEED+"UCFe-pfe0a9bDvWy74Jd7vFg", t:["sci","tec"], lv:1},
+  {id:"yt-mit", kind:"listen", yt:1, typ:4, name:"MIT (YouTube)", url:"https://www.youtube.com/@mit", feed:YT_FEED+"UCFe-pfe0a9bDvWy74Jd7vFg", t:["sci","tec"], lv:1},
 ];
 const byRl={}; RL_SOURCES.forEach(s=>byRl[s.id]=s);
 
@@ -111,11 +119,13 @@ function rlDaysBetween(a, b){ // ymd文字列の差(日)
   return Math.round((new Date(b+"T00:00:00")-new Date(a+"T00:00:00"))/864e5);
 }
 /* v5.19.0: long(1回がほぼ常に30分超の番組・長い動画が混ざるチャンネル)は候補にしない(実機FB「30分以上のポッドキャストは勉強しづらい」)。
+   v5.23.0: pay(会員限定の記事が混ざる媒体)と、典型的な長さ(typ)が⏱の上限を超えるソースも候補にしない。
    「直近に出した」の減点は昨日・一昨日だけ(同じ日は減点しない=以前は今日出した瞬間に減点され、開き直すと別のソースに変わっていた) */
 function rlCandidates(sources, kind, rl, ymd){
   rl=rl||{}; const topics=rl.topics||{}, mute=rl.mute||{}, last=rl.last||{};
   const want=Object.keys(topics).filter(t=>topics[t]);
-  return sources.filter(s=>s.kind===kind && !s.long && !(mute[s.id] && mute[s.id].on)).map(s=>{
+  const maxSec=rlMaxSec(rl);
+  return sources.filter(s=>s.kind===kind && !s.long && !s.pay && !(s.typ && s.typ*60>maxSec) && !(mute[s.id] && mute[s.id].on)).map(s=>{
     let sc=1;
     if(want.length) sc+=2*s.t.filter(t=>topics[t]).length;
     if(last[s.id] && rlDaysBetween(last[s.id], ymd)>0 && rlDaysBetween(last[s.id], ymd)<3) sc-=3;
@@ -142,8 +152,21 @@ function rlPlain(s, n){
   const t=(d.textContent||"").replace(/\s+/g," ").trim();
   return t.length>n? t.slice(0,n-1)+"…" : t;
 }
-/* 番組の長さ(v5.19.0): 聴くは30分以内の回だけおすすめする(実機FB)。sec=0は「長さ不明」(YouTubeのAtomには長さがない)=通す */
-const RL_MAX_SEC=30*60;
+/* 番組の長さ(v5.19.0→v5.23.0): 聴くは「⏱ 長さ」で選んだ上限以内の回だけおすすめする(実機FB「負荷を少なめにしたい日は1〜2分、
+   時間があれば5〜10分。15分以上の音声は正直厳しい」)。段=RL_LEN(分)・既定=RL_LEN_DEFAULT・記録=G.rl.lmax(分・lmaxAtが新しい側が同期で勝つ)。
+   sec=0は「長さ不明」(YouTubeのAtomには長さがない)=チャンネルの典型的な長さ(typ・分)で判定し、typも無ければ通す */
+const RL_MAX_SEC=30*60;    // いちばん長い段(=v5.19.0の上限)
+const RL_LEN=[5,15,30];    // ⏱の段(分)
+const RL_LEN_DEFAULT=15;
+function rlMaxSec(rl){ const m=rl && rl.lmax; return (RL_LEN.indexOf(m)>=0? m : RL_LEN_DEFAULT)*60; }
+function rlLenText(rl){ return (rlMaxSec(rl)/60)+"分以内"; }
+/* 素材が⏱の上限に収まるか(純関数): 長さが分かればそれで・不明ならソースの典型(typ)で・どちらも無ければ通す */
+function rlFits(it, src, rl){
+  const max=rlMaxSec(rl);
+  if(it && it.sec>0) return it.sec<=max;
+  if(src && src.typ) return src.typ*60<=max;
+  return true;
+}
 /* itunes:duration の値 → 秒(純関数)。"1620"・"27:00"・"1:02:30"・数値。解釈できなければ0 */
 function rlDurSec(v){
   if(v==null || v==="") return 0;
@@ -266,31 +289,34 @@ function openRLHistory(){
   $("rlhBack").onclick=openRLModal;
 }
 /* おすすめの1本: ソースの最新から「読んだ・聴いた」ものを飛ばした先頭。
-   聴く(kind="listen")は30分を超える回を除く(v5.19.0)。該当がなければnull(呼び元が次の候補へ進む) */
-function rlChoose(items, rl, kind){
+   聴く(kind="listen")は⏱の上限を超える回を除く(v5.19.0→v5.23.0: rlFits=長さ不明ならsrcの典型typで判定)。該当がなければnull(呼び元が次の候補へ進む) */
+function rlChoose(items, rl, kind, src){
   const done=(rl&&rl.done)||{};
-  const c=(items||[]).filter(it=>!(kind==="listen" && it.sec>RL_MAX_SEC));
+  const c=(items||[]).filter(it=>!(kind==="listen" && !rlFits(it, src, rl)));
   return c.find(it=>!done[it.u]) || c[0] || null;
 }
 
 /* ---- LLMへの依頼プロンプト(コピペ用) ----
-   方針(実機FB): 解説・日本語訳・内容正誤問題はアプリでは作らず、ユーザーが使うLLMに頼む。
+   方針(実機FB): 解説・日本語訳・内容一致問題はアプリでは作らず、ユーザーが使うLLMに頼む。
    その依頼文を素材の題名・URL・出典つきで用意し、そのまま貼れるようにする */
 /* 学習の流れ(v5.11.0実機FB「プロンプトをどう活用して学習すればよいか不明瞭」):
    プロンプトは「いつ使うか」の順(①→②→③→④)で並べ、各型にwhen=使いどき、を持たせる。
-   読む: 通読(辞書なし) → ①正誤問題で理解を確かめる → ②解説で語彙・構文を拾う → 分からなかった語を📝マイ単語へ
+   読む: 通読(辞書なし) → ①4択問題(英検形式・v5.23.0。以前はTrue/False/Not Given)で理解を確かめる → ②解説で語彙・構文を拾う → 分からなかった語を📝マイ単語へ
          → ③要約を書いて添削 → ④意見を英語で言う(二次対策) → ✓読んだ
-   聴く: 字幕なしで1回 → ①正誤問題 → ②教材化(スクリプト・語彙・キーセンテンス)→ シャドーイング → 📝
+   聴く: 字幕なしで1回 → ①4択問題 → ②教材化(スクリプト・語彙・キーセンテンス)→ シャドーイング → 📝
          → ③ディクテーション採点 → ④意見を英語で → ✓聴いた
    ②の語彙一覧は「単語 — 日本語」の1行1語で返してもらう=📝マイ単語にそのまま貼れる */
 const RL_VOCAB_FMT="最後に、3の語彙15個を「単語 — 日本語訳 — その語が使われている英文1文(本文からの引用)」の形式(1行1語・記号や番号なし・見出しの単語は原形)でまとめて一覧にしてください(単語帳アプリにそのまま貼り付けます)。";
 const RL_PROMPTS={
   read:[
-    {id:"tf", step:"①", name:"✅ 内容正誤問題", when:"読み終えた直後に。辞書なしで通読してから、理解できたかを問題で確かめる", tpl:(s,it)=>
-      "次の英語記事について、英検1級の読解問題に近い形式で「内容正誤問題」を作ってください。\n"+
+    {id:"tf", step:"①", name:"✅ 内容一致4択(英検形式)", when:"読み終えた直後に。辞書なしで通読してから、理解できたかを問題で確かめる", tpl:(s,it)=>
+      "次の英語記事について、英検1級の読解問題(内容一致選択問題)と同じ形式で問題を作ってください。\n"+
       "\n記事: "+it.t+"\n出典: "+s.name+"\nURL: "+it.u+"\n"+
-      "\n・True / False / Not Given の3択で8問\n・最初は問題だけを出し、私が答えたら解答・解説(根拠の該当箇所の引用と日本語での説明)を示してください\n"+
-      "・細部の言い換え(paraphrase)を含む、本文の精読が必要な問題にしてください\n"+
+      "\n・4択(選択肢1〜4)で6問。問いと選択肢は英語で、英検1級の問題文と同じ書き方にしてください\n"+
+      "・問いの型を混ぜてください: 「Based on the information in the ◯ paragraph, what can be inferred about …?」(推測)・"+
+      "「What is true about …?」(内容一致)・「The author suggests that …」(文の完成)・「Which of the following best describes …?」(段落の要点)\n"+
+      "・選択肢は本文の言い換え(paraphrase)にし、誤りの選択肢は「本文の語を使いつつ内容が違う」「言いすぎ」「因果の逆転」のように紛らわしくしてください\n"+
+      "・最初は問題だけを出し、私が答えたら、解答・根拠の該当箇所の引用・日本語での解説(正解の理由と、他の選択肢が誤りの理由)を示してください\n"+
       "\nURLを開けない場合はそう伝えてください。本文を貼り付けます。"},
     {id:"full", step:"②", name:"📚 解説フルセット", when:"答え合わせの後に。要約・語彙・構文の解説を読み、語彙一覧を📝マイ単語に貼り付ける", tpl:(s,it)=>
       "英検1級(CEFR C1)を目指す日本人学習者として、次の英語記事を教材にしたいです。記事を読んだうえで、以下を作ってください。\n"+
@@ -299,7 +325,7 @@ const RL_PROMPTS={
       "2. 記事の論旨(主張→根拠→結論)を3行で\n"+
       "3. 英検1級レベルの重要語彙・表現を15個(英語の定義・日本語訳・記事中の用例・言い換え)\n"+
       "4. 読解上つまずきやすい構文を3つ、文の骨格を示して解説\n"+
-      "5. 内容正誤問題(True / False / Not Given)を5問、解答と根拠の該当箇所つき\n"+
+      "5. 英検1級形式の内容一致4択問題を4問(問いと選択肢は英語)、解答と根拠の該当箇所つき\n"+
       "6. この記事のテーマで英検1級二次の2分スピーチをするときの、主張と理由2つの例(英語)\n"+
       "\n"+RL_VOCAB_FMT+"\n\nURLを開けない場合はそう伝えてください。本文を貼り付けます。"},
     {id:"sum", step:"③", name:"✍️ 要約の添削", when:"仕上げに。自分で英語の要約を書いて送り、添削してもらう(書く力)", tpl:(s,it)=>
@@ -315,12 +341,14 @@ const RL_PROMPTS={
       "\n\nURLを開けない場合はそう伝えてください。本文を貼り付けます。"},
   ],
   listen:[
-    {id:"tf", step:"①", name:"✅ 内容正誤問題", when:"字幕なしで1回聴いた直後に。聞き取れたかを問題で確かめる", tpl:(s,it)=>
-      "次の英語の音声/動画について、英検1級のリスニング問題に近い形式で「内容正誤問題」を作ってください。"+
+    {id:"tf", step:"①", name:"✅ 内容一致4択(英検形式)", when:"字幕なしで1回聴いた直後に。聞き取れたかを問題で確かめる", tpl:(s,it)=>
+      "次の英語の音声/動画について、英検1級のリスニング問題(Part 2: ひとつの話に対する内容一致選択問題)と同じ形式で問題を作ってください。"+
       "トランスクリプトを取得できない場合はそう伝えてください。貼り付けます。\n"+
       "\n題名: "+it.t+"\n出典: "+s.name+"\nURL: "+it.u+"\n"+
-      "\n・True / False の2択で8問。最初は問題だけを出し、私が答えたら解答・解説(根拠の発言の引用と日本語での説明)を示してください\n"+
-      "・話者の主張と根拠、数字や固有名詞、言い換えを問う問題を混ぜてください"},
+      "\n・4択(選択肢1〜4)で6問。問いと選択肢は英語で、英検1級の問題文と同じ書き方(「What is one thing the speaker says about …?」"+
+      "「What does the speaker imply about …?」「What did the study find?」など)にしてください\n"+
+      "・話者の主張と根拠、数字や固有名詞、言い換えを問う問題を混ぜ、誤りの選択肢は話に出た語を使いつつ内容が違うものにしてください\n"+
+      "・最初は問題だけを出し、私が答えたら、解答・根拠の発言の引用・日本語での解説(正解の理由と、他の選択肢が誤りの理由)を示してください"},
     {id:"full", step:"②", name:"🎧 リスニング教材化", when:"答え合わせの後に。要約・語彙・キーセンテンスをもらい、シャドーイング。語彙一覧は📝マイ単語へ", tpl:(s,it)=>
       "英検1級(CEFR C1)を目指す日本人学習者として、次の英語の音声/動画をリスニング教材にしたいです。"+
       "内容(トランスクリプトや字幕)を取得できるなら、それを読んだうえで以下を作ってください。取得できない場合はそう伝えてください。トランスクリプトを貼り付けます。\n"+
@@ -328,7 +356,7 @@ const RL_PROMPTS={
       "\n1. 内容の要約(英語100語+日本語)\n"+
       "2. 聞き取りのポイント(話の構成・話者の立場・結論)\n"+
       "3. 重要語彙・表現を15個(英語の定義・日本語訳・音声中の用例)\n"+
-      "4. リスニング内容正誤問題(True / False)を5問、解答と根拠つき\n"+
+      "4. 英検1級リスニング形式の内容一致4択問題を4問(問いと選択肢は英語)、解答と根拠つき\n"+
       "5. シャドーイング用のキーセンテンス10文(短く・使い回せる言い回しを優先)\n"+
       "6. 音のつながり・弱形・脱落など、聞き取りにくい箇所があれば指摘\n"+
       "\n"+RL_VOCAB_FMT},
@@ -349,16 +377,16 @@ const RL_PROMPTS={
    v5.20.1(実機FB「進め方の説明がごちゃついてスマホで読みにくい」): 手順は{t:見出し, d:説明, opt:余裕があれば}に分け、
    番号つきの段組み(rlFlowHTML)で描く。見出しは太字1行・説明は薄い色で下に=一目で手順が数えられる */
 const RL_FLOW={
-  read:{line:"通読 → ①正誤 → ②解説 → 📝単語 → ③要約 → ✓", head:"📖 読む", time:"1日1本・30〜40分",
+  read:{line:"通読 → ①4択 → ②解説 → 📝単語 → ③要約 → ✓", head:"📖 読む", time:"1日1本・30〜40分",
     steps:[{t:"通読", d:"🔗開いて辞書なしで最後まで読む(10〜15分)。要点を3行で頭に置く"},
-      {t:"① 内容正誤問題", d:"📋プロンプトをLLMに貼り、問題に答える。理解の穴がここで見える"},
+      {t:"① 内容一致4択(英検形式)", d:"📋プロンプトをLLMに貼り、英検1級と同じ形式の4択6問に答える。理解の穴がここで見える"},
       {t:"② 解説フルセット", d:"答え合わせのあと、語彙・構文・論旨の解説を読む。語彙一覧を📝マイ単語に貼ると、翌日から4択に混ざる"},
       {t:"③ 要約の添削", d:"英語で120語の要約を書いて送る。二次・英作文の練習になる", opt:1},
       {t:"④ 意見を言う", d:"面接官役のLLMに英語で意見を述べ、講評をもらう", opt:1},
       {t:"✓ 読んだ", d:"記録に残る(今週の記録の📖)"}]},
-  listen:{line:"通し → ①正誤 → ②教材化 → シャドーイング → 📝 → ✓", head:"🎧 聴く", time:"1日1本・20〜30分",
-    steps:[{t:"通し", d:"🔗開いて字幕なしで1回聴く(おすすめは30分以内の回だけ。長く感じたら前半だけでよい)"},
-      {t:"① 内容正誤問題", d:"📋プロンプトをLLMに貼り、問題に答える(トランスクリプトが取れないLLMには字幕を貼る)"},
+  listen:{line:"通し → ①4択 → ②教材化 → シャドーイング → 📝 → ✓", head:"🎧 聴く", time:"1日1本・20〜30分",
+    steps:[{t:"通し", d:"🔗開いて字幕なしで1回聴く(おすすめはカードの⏱で選んだ長さ以内の回だけ・既定15分。長く感じたら前半だけでよい)"},
+      {t:"① 内容一致4択(英検形式)", d:"📋プロンプトをLLMに貼り、英検1級リスニングと同じ形式の4択6問に答える(トランスクリプトが取れないLLMには字幕を貼る)"},
       {t:"② 教材化", d:"要約・語彙・キーセンテンス10文をもらい、キーセンテンスをシャドーイング。語彙一覧は📝マイ単語へ"},
       {t:"③ ディクテーション採点", d:"1〜2分ぶんを書き起こして送る。聞き落としの原因が分かる", opt:1},
       {t:"④ 意見を言う", d:"面接官役のLLMに英語で意見を述べ、講評をもらう", opt:1},
@@ -366,8 +394,8 @@ const RL_FLOW={
 };
 /* 時間がない日の最低限(v5.19.0の文言をv5.20.1で箇条書きに) */
 const RL_FLOW_MIN=[
-  {t:"10分", d:"読む・聴くのどちらか1本だけ。記事は冒頭3段落(結論が出るところまで)を辞書なしで/音声は前半10分を字幕なしで → ✓。正誤問題は省く"},
-  {t:"15〜20分", d:"通読(通し) → ①正誤問題(8問)だけ → ✓"},
+  {t:"10分", d:"読む・聴くのどちらか1本だけ。記事は冒頭3段落(結論が出るところまで)を辞書なしで/音声は前半10分を字幕なしで → ✓。4択問題は省く"},
+  {t:"15〜20分", d:"通読(通し) → ①4択問題(6問)だけ → ✓"},
   {t:"どの日も", d:"分からなかった語を1〜2個だけ📝マイ単語へ(翌日から4択に混ざる)。②解説・③添削・④意見は余裕のある日(週1回でよい)にまとめて。毎日ゼロにしないことが完走より効く"},
 ];
 /* 進め方の中身(純関数・HTML): 読む/聴く/時間がない日の3区画。手順=番号つきの段組み */
@@ -415,8 +443,9 @@ function rlDateText(d){
    以前は「今日出した」がその瞬間に減点されて開き直すと別のソースに変わり、素材も取得ごとに変わり得た(=実機FB) */
 function rlPickSaved(kind){
   const p=G.rl.pick && G.rl.pick[kind];
-  if(!p || p.d!==todayKey() || !byRl[p.id] || byRl[p.id].long) return null;
+  if(!p || p.d!==todayKey() || !byRl[p.id] || byRl[p.id].long || byRl[p.id].pay) return null;
   const mu=G.rl.mute && G.rl.mute[p.id]; if(mu && mu.on) return null;
+  if(kind==="listen" && p.it && !rlFits(p.it, byRl[p.id], G.rl)) return null; // ⏱の長さを変えた(別端末で変えて同期した)あとは引き直す(v5.23.0)
   return p;
 }
 function rlSavePick(kind, src, alt, it){
@@ -425,7 +454,7 @@ function rlSavePick(kind, src, alt, it){
   saveG();
 }
 /* ソースのおすすめを解決して状態に入れる(非同期)。done=描き直しのコールバック。
-   opt.force=保存した今日の1本を使わず引き直す(別の候補・外す・テーマ変更)/opt.hops=30分以内の回がなく次の候補へ進んだ回数 */
+   opt.force=保存した今日の1本を使わず引き直す(別の候補・外す・テーマ変更)/opt.hops=⏱の長さ以内の回がなく次の候補へ進んだ回数 */
 function rlLoad(kind, done, opt){
   opt=opt||{};
   const today=todayKey();
@@ -445,8 +474,8 @@ function rlLoad(kind, done, opt){
   done();
   rlFetch(src).then(items=>{
     if(rlState[kind]!==st) return; // 別の候補に進んでいたら捨てる
-    const it=rlChoose(items, G.rl, kind);
-    if(!it && (opt.hops|0)<6){ rlAlt[kind]++; rlLoad(kind, done, {force:true, hops:(opt.hops|0)+1}); return; } // 30分以内の回がない番組は飛ばす
+    const it=rlChoose(items, G.rl, kind, src);
+    if(!it && (opt.hops|0)<6){ rlAlt[kind]++; rlLoad(kind, done, {force:true, hops:(opt.hops|0)+1}); return; } // ⏱の長さ以内の回がない番組は飛ばす
     st.items=items; st.it=it; st.loading=false;
     if(it) rlSavePick(kind, src, rlAlt[kind], it);
     done();
@@ -464,7 +493,7 @@ function rlFillHome(){
     let body;
     if(!st || !st.src) body='<span class="small">候補がない(⚙で「合わない」を見直す)</span>';
     else if(st.it) body='<span class="rlt">'+esc(st.it.t)+'</span><span class="rls">'+esc(st.src.name)+(st.it.sec? ' ・ '+rlDurText(st.it.sec):'')+'</span>';
-    else if(st.items) body='<span class="rlt">'+esc(st.src.name)+'</span><span class="rls">30分以内の回が見つからない ─ タップしてサイトへ</span>';
+    else if(st.items) body='<span class="rlt">'+esc(st.src.name)+'</span><span class="rls">'+rlLenText(G.rl)+'の回が見つからない ─ タップしてサイトへ</span>';
     else if(st.err) body='<span class="rlt">'+esc(st.src.name)+'</span><span class="rls">最新の一覧を取れなかった ─ タップしてサイトへ</span>';
     else body='<span class="rlt">'+esc(st.src.name)+'</span><span class="rls">最新の記事を取得中…</span>';
     return '<div class="rlrow"><span class="rlk">'+rlKindLabel(k)+'</span>'+body+'</div>';
@@ -489,10 +518,11 @@ function openRLModal(){
   };
   openModal('<h3>📰 今日の英語 '+helpBtn("hlp-rl")+'</h3>'+
     helpNote("hlp-rl", '英検1級(CEFR C1)レベルの英語メディアから、<b>読む</b>(記事)と<b>聴く</b>(ポッドキャスト・YouTube)を毎日1本ずつおすすめする。'+
-      '<b>すべて無料で全文を読める・全編を視聴できるソースだけ</b>(有料・閲読制限のあるメディアは載せていない)。'+
+      '<b>すべて無料で全文を読める・全編を視聴できるソースだけ</b>(有料・閲読制限のあるメディアは載せていない。会員限定の記事が混ざる媒体も外した。有料の記事に当たったら「🔁 別の候補」へ)。'+
+      '<b>🎧 聴く</b>の<b>⏱ 長さ</b>(〜5分・〜15分・〜30分)で、その日の余裕に合わせて番組の長さを絞れる(YouTubeはチャンネルの典型的な長さで判定)。'+
       '選び方は端末の中だけで完結(無料・通信は記事一覧の取得だけ): 「興味のあるテーマ」に合うソースを優先し、同じソースが3日続かないよう入れ替え、'+
       '日付で決まる順番なので同じ日に何度開いても同じおすすめ。合わないソースは「外す」で二度と出ない。<br><br>'+
-      '<b>📋 LLMプロンプト</b>: 解説・語彙・内容正誤問題・要約の添削などを、あなたが使うLLM(ChatGPT・Claude・Gemini等)に頼むための依頼文。'+
+      '<b>📋 LLMプロンプト</b>: 解説・語彙・英検1級と同じ形式の4択問題・要約の添削などを、あなたが使うLLM(ChatGPT・Claude・Gemini等)に頼むための依頼文。'+
       '題名とURLが入っているのでそのまま貼り付けるだけ。URLを開けないLLMには本文/トランスクリプトを続けて貼る。'+
       'このアプリは日本語訳や問題を自分では作らない(=無料・サーバーなし)。<b>学習の流れ</b>は下の「📘 進め方」に')+
     '<div id="rlModal"><div id="rlCards"></div>'+
@@ -506,7 +536,7 @@ function openRLModal(){
     foldSec("rlMuted", "🔕 外したソース("+Object.keys(G.rl.mute||{}).filter(id=>G.rl.mute[id].on).length+")",
       '<div id="rlMuteList">'+rlMuteListHTML()+'</div>', false)+
     '<button class="btn rlentry" id="rlHistBtn"><span class="grow">📚 読んだ・聴いたの記録</span><span class="hlsub">'+Object.keys(G.rl.done||{}).length+'本 ›</span></button>'+
-    '<div class="small" style="margin-top:10px">ソース '+RL_SOURCES.filter(s=>s.kind==="read").length+'誌 ・ '+RL_SOURCES.filter(s=>s.kind==="listen").length+'番組。'+
+    '<div class="small" style="margin-top:10px">ソース '+RL_SOURCES.filter(s=>s.kind==="read" && !s.pay).length+'誌 ・ '+RL_SOURCES.filter(s=>s.kind==="listen").length+'番組。'+
       'すべて無料で読める・聴けるものだけ。今日のおすすめは、はじめて開いたときに決まり、閉じても別の端末でも同じ(日付が変わると更新)</div></div>');
   $("rlHistBtn").onclick=openRLHistory;
   $("rlMywBtn").onclick=()=>openMywAdd("", rlCurrentTitle("read")||rlCurrentTitle("listen"));
@@ -557,7 +587,7 @@ function rlCardHTML(kind){
         : st.err
           ? '<div class="rlmeta">最新の一覧を取得できなかった(通信・中継の都合)。サイトを直接開いて、気になる1本を選ぼう</div>'
           : st.items
-          ? '<div class="rlmeta">この番組の最新回は30分を超えるものばかり。サイトで短い回を選ぶか、「別の候補」へ</div>'
+          ? '<div class="rlmeta">この番組の最新回は'+rlLenText(G.rl)+'に収まらない。⏱で長さを広げるか、「別の候補」へ</div>'
           : '<div class="rlmeta">最新の一覧を取得中…</div>')+
       '<div class="rlbtns">'+
         '<a class="btn primary" href="'+esc(it? it.u : s.url)+'" target="_blank" rel="noopener">🔗 開く</a>'+
@@ -567,13 +597,27 @@ function rlCardHTML(kind){
         '<button class="btn rlmute" data-k="'+kind+'" title="このソースを今後出さない">🔕 外す</button>'+
       '</div>';
   }
-  return '<div class="rlcard" data-k="'+kind+'"><div class="rlhead">'+rlKindLabel(kind)+'</div>'+inner+'</div>';
+  return '<div class="rlcard" data-k="'+kind+'"><div class="rlhead">'+rlKindLabel(kind)+'</div>'+(kind==="listen"? rlLenRowHTML() : '')+inner+'</div>';
+}
+/* ⏱ 聴く長さの段(v5.23.0・実機FB): 聴くカードの見出しの下に3つのチップ(〜5分・〜15分・〜30分)。選ぶと今日の1本を引き直す */
+function rlLenRowHTML(){
+  const cur=rlMaxSec(G.rl)/60;
+  return '<div class="rllenrow"><span class="small">⏱ 長さ</span>'+
+    RL_LEN.map(m=>'<button class="wchip rllen'+(m===cur? " ksel":"")+'" data-m="'+m+'">〜'+m+'分</button>').join("")+'</div>';
 }
 function rlBindCards(){
   const m=$("modal");
   const rerender=()=>{ if($("rlCards")){ $("rlCards").innerHTML=rlCardHTML("read")+rlCardHTML("listen"); rlBindCards(); } rlFillHome(); };
   m.querySelectorAll(".rlalt").forEach(b=>{
     b.onclick=()=>{ const k=b.dataset.k; rlAlt[k]++; rlLoad(k, rerender, {force:true}); }; // 進めた先も今日の1本として保存される
+  });
+  m.querySelectorAll(".rllen").forEach(b=>{ // ⏱ 聴く長さ(v5.23.0)
+    b.onclick=()=>{
+      const v=+b.dataset.m; if(rlMaxSec(G.rl)===v*60) return;
+      G.rl.lmax=v; G.rl.lmaxAt=Date.now(); saveG(); // lmaxAt=同期で新しい操作が勝つ
+      rlAlt.listen=0;
+      rlLoad("listen", rerender, {force:true}); // 上限を変えたら今日の1本を引き直す
+    };
   });
   m.querySelectorAll(".rlmute").forEach(b=>{
     b.onclick=()=>{

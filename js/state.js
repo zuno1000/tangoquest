@@ -1,7 +1,7 @@
 "use strict";
 /* ================= 状態管理 ================= */
 const KEY="tangoquest_v1";
-const APP_VERSION="5.22.0";
+const APP_VERSION="5.23.0";
 /* ゲーム面(編成・冒険=サバイバー・ガチャ・カード・任務)の表示フラグ(v5.13.0・ユーザー決定「必要性が薄れた」)。
    false=下部ナビの3タブ・ヘッダの🪙🎫・カードドロップの演出・デイリー/ウィークリー任務・ガチャ告知を隠し、
    ヘッダは📖Lv/🏅覚えた語数/🔥連続日数、任務タブは学習の実績(自動付与・XP)だけになる。
@@ -109,6 +109,7 @@ G.pace=G.pace||{goal:null, setAt:0, log:[]}; // 学習ペース管理(v4.7.0): �
 if(!Array.isArray(G.pace.log)) G.pace.log=[];
 G.pace.setAt=G.pace.setAt||0; // 目標を設定/解除した時刻(同期はこれが新しい側が勝つ=v4.7.2)
 G.frz=G.frz||0;         // 連続学習フリーズ🧊の所持数(v4.13.0・最大FRZ_MAX)
+G.frzAt=G.frzAt||"";    // 🧊を最後に配った日(v5.23.0: 7日連続の学習ごとに1個・同じ日に二重に配らない。同期は新しい日付)
 G.faces=G.faces||{};    // なかまのカスタムアイコン(charId -> dataURL・v4.13.0)
 G.faceAt=G.faceAt||{};  // アイコンの操作時刻(charId -> {at, del}・v5.8.0: 同期は新しい操作が勝つ)
 G.set=G.set||null;      // 進行中の30問セットの帳簿(v5.8.0・quiz.js setRecord)
@@ -231,7 +232,7 @@ function longestStreak(g){
 
 /* ---- 連続学習フリーズ(v4.13.0・abceedのフリーズ参考) ----
    学習しなかった日を🧊1個につき1日自動で埋めて、連続記録を守る。
-   入手はログインボーナス7日目(週1ペース)・所持は最大FRZ_MAX個。
+   入手は7日連続で学習するごとに1個(v5.23.0 streakFreezeGrant。v5.22.0まではログインボーナス7日目)・所持は最大FRZ_MAX個。
    起動時に「昨日から直近の学習日までの空白」を調べ、在庫で埋め切れる
    ときだけ消費する(どうせ途切れている長い空白に無駄遣いしない)。
    埋めた日は days[k].fz=1 として永続化(同期はmaxマージ=消えない)。
@@ -258,6 +259,15 @@ function applyStreakFreeze(g, now){
     if(gap.length>FRZ_MAX) return 0; // 在庫上限を超える空白は守れない(=もう途切れている)
   }
   return 0; // 60日さかのぼっても学習日がない=守る連続記録がない
+}
+/* 🧊の入手(v5.23.0・実機FB「ログインボーナスはフリーズ以外に効果がない」→ログボは廃止し、フリーズは「学習を続けること」の報酬に):
+   連続学習がちょうど7の倍数日に達した日に1個(最大FRZ_MAX・同じ日に二重に配らない=frzAt)。純関数(g, streak, ymd)。配った数(0/1)を返す */
+function streakFreezeGrant(g, streak, ymd){
+  if(!(streak>0) || streak%7!==0 || g.frzAt===ymd) return 0;
+  g.frzAt=ymd;
+  if((g.frz||0)>=FRZ_MAX) return 0; // 満タンなら配らない(貯め込み防止・その日ぶんは消える)
+  g.frz=(g.frz||0)+1;
+  return 1;
 }
 /* 連続日数XPボーナス: 2日目から+5%/日、21日目以降は×2.0で頭打ち */
 function streakXpMult(){ return 1+0.05*Math.min(Math.max(studyStreak()-1,0), 20); }

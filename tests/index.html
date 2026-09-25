@@ -3181,7 +3181,7 @@ function run(){
     ok(S.filter(s=>s.kind==="read").length>=20, "読むは20誌以上");
     ok(S.filter(s=>s.kind==="listen").length>=30, "聴くは30番組以上");
     // 掲載基準(ユーザー決定2026-09-21): 全文を無料で読める・全編を無料で視聴できるソースだけ
-    eq(S.filter(s=>s.pay).length, 0, "有料・閲読制限つき(pay)のソースは載せない");
+    eq(S.filter(s=>s.pay).map(s=>s.id).sort().join(","), "bigthink,vox", "会員限定の記事が混ざる媒体はpay=1(v5.23.0)・候補から外す(それ以外は載せない)");
     const banned=["economist","atlantic","nytimes","ft.com","wired","newscientist","technologyreview","scientificamerican","nautil.us","project-syndicate","foreignpolicy","nature.com","longreads"];
     S.filter(s=>!s.yt).forEach(s=>ok(banned.every(b=>s.url.indexOf(b)<0 && s.feed.indexOf(b)<0), s.id+": 有料・閲読制限のあるメディアではない"));
     ok(S.filter(s=>s.yt).length>=15, "YouTubeチャンネルが15以上");
@@ -3241,7 +3241,7 @@ function run(){
     eq(W.RL_PROMPTS.read.length, 4); eq(W.RL_PROMPTS.listen.length, 4);
     const p=W.rlPromptText("read", "full", src, it);
     ok(p.indexOf("Test Title")>=0 && p.indexOf("https://t/x")>=0 && p.indexOf(src.name)>=0, "題名・URL・出典");
-    ok(p.indexOf("英検1級")>=0 && p.indexOf("正誤")>=0, "英検1級レベルの解説と内容正誤問題を頼む");
+    ok(p.indexOf("英検1級")>=0 && p.indexOf("4択")>=0 && p.indexOf("Not Given")<0, "英検1級レベルの解説と英検形式の4択問題を頼む(v5.23.0)");
     ok(p.indexOf("単語 — 日本語訳")>=0 && W.rlPromptText("listen", "full", src, it).indexOf("単語 — 日本語訳")>=0, "語彙一覧はマイ単語に貼れる形式で");
     ok(W.rlPromptText("listen", "dict", src, it).indexOf("ディクテーション")>=0, "リスニングはディクテーション採点も");
     ok(W.rlPromptText("read", "talk", src, it).indexOf("面接官")>=0 && W.rlPromptText("listen", "talk", src, it).indexOf("面接官")>=0, "④意見を言う(二次対策)");
@@ -3257,7 +3257,7 @@ function run(){
     const oldSeen=G.rl.flowSeen; G.rl.flowSeen=0;
     W.openRLModal();
     const fb=doc.getElementById("rlFlow"); ok(fb && !fb.hidden, "初回は進め方が開いている");
-    ok(fb.textContent.indexOf("内容正誤問題")>=0 && fb.textContent.indexOf("マイ単語")>=0, "手順にプロンプトの順とマイ単語");
+    ok(fb.textContent.indexOf("内容一致4択")>=0 && fb.textContent.indexOf("マイ単語")>=0, "手順にプロンプトの順とマイ単語");
     ok(doc.getElementById("rlMywBtn"), "分からなかった単語を登録の入口");
     eq(G.rl.flowSeen, 1, "一度見たら閉じた状態になる");
     W.closeModal();
@@ -3710,9 +3710,10 @@ function run(){
     eq(W.rlDurSec("1620"), 1620); eq(W.rlDurSec(1942), 1942); eq(W.rlDurSec("27:00"), 1620); eq(W.rlDurSec("1:02:30"), 3750); eq(W.rlDurSec(""), 0); eq(W.rlDurSec(null), 0); eq(W.rlDurSec("abc"), 0);
     eq(W.RL_MAX_SEC, 1800);
     const items=[{t:"A",u:"u1",sec:2919},{t:"B",u:"u2",sec:1085},{t:"C",u:"u3",sec:0}];
-    eq(W.rlChoose(items, {}, "listen").u, "u2", "30分超(48分)は飛ばす"); eq(W.rlChoose(items, {}, "read").u, "u1", "読むは長さで絞らない");
-    eq(W.rlChoose(items, {done:{u2:{}}}, "listen").u, "u3", "長さ不明(0)は通す");
-    eq(W.rlChoose([{t:"A",u:"u1",sec:3000}], {}, "listen"), null, "全部30分超ならnull=次の候補へ");
+    const L30={lmax:30}; // v5.23.0: 上限は⏱の段(既定15分)。この検証はv5.19.0当時の30分で
+    eq(W.rlChoose(items, L30, "listen").u, "u2", "30分超(48分)は飛ばす"); eq(W.rlChoose(items, {}, "read").u, "u1", "読むは長さで絞らない");
+    eq(W.rlChoose(items, {lmax:30, done:{u2:{}}}, "listen").u, "u3", "長さ不明(0)は通す(typなし)");
+    eq(W.rlChoose([{t:"A",u:"u1",sec:3000}], L30, "listen"), null, "全部30分超ならnull=次の候補へ");
     const S=W.RL_SOURCES;
     ok(S.filter(s=>s.long).length>=8, "long=1回がほぼ30分超の番組・長い動画が混ざるチャンネル("+S.filter(s=>s.long).length+")");
     ["ted-radio","hiddenbrain","freakonomics","bbc-inourtime","yt-pbs","yt-dwdoc"].forEach(id=>ok(S.find(s=>s.id===id).long, id+"はlong"));
@@ -3737,6 +3738,120 @@ function run(){
     W.openRLModal();
     const txt=W.document.getElementById("modal").textContent;
     ok(txt.indexOf("時間がない日の最低限")>=0 && txt.indexOf("10分")>=0, "進め方に時間がない日の最低限"); W.closeModal();
+  });
+
+
+  /* ---- v5.23.0: 実機FB5件(①英検式4択 ②効果音 ③聴く長さ ④有料媒体 ⑤ログボ廃止・🧊は連続学習で) ---- */
+  t("v5.23.0①: 今日の英語のプロンプトは英検1級と同じ内容一致4択(True/False/Not Givenをやめた)・進め方の文言も4択", ()=>{
+    const src=W.RL_SOURCES[0], it={t:"T", u:"https://t/x", d:"", s:""};
+    ["read","listen"].forEach(k=>{
+      const p=W.rlPromptText(k, "tf", src, it), f=W.rlPromptText(k, "full", src, it);
+      ok(p.indexOf("4択")>=0 && p.indexOf("6問")>=0 && p.indexOf("英検1級")>=0, k+": ①は英検形式の4択6問");
+      ok(p.indexOf("Not Given")<0 && p.indexOf("True / False")<0 && f.indexOf("Not Given")<0 && f.indexOf("True / False")<0, k+": 正誤(T/F/NG)は使わない");
+      ok(p.indexOf("問いと選択肢は英語")>=0 && p.indexOf("他の選択肢が誤りの理由")>=0, k+": 英語の問い・誤答の理由も解説");
+      ok(f.indexOf("4択")>=0 && f.indexOf("4問")>=0, k+": ②フルセットの中の問題も4択4問");
+      ok(W.RL_PROMPTS[k][0].name.indexOf("4択")>=0 && W.RL_FLOW[k].line.indexOf("①4択")>=0, k+": 名前と流れの1行");
+    });
+    ok(W.rlPromptText("read", "tf", src, it).indexOf("inferred")>=0, "読む: 推測(inferred)の型を含む");
+    ok(W.rlPromptText("listen", "tf", src, it).indexOf("Part 2")>=0, "聴く: Part 2形式");
+    ok(W.RL_FLOW_MIN.every(x=>x.d.indexOf("正誤")<0), "時間がない日の文言も4択");
+  });
+  t("v5.23.0②: 効果音 ─ sfx()は例外を出さない・既定ON・⚙設定→演出のトグルで端末ローカルに保存(tq_sfx)", ()=>{
+    const LS=W.localStorage, doc=W.document;
+    LS.removeItem("tq_sfx");
+    ok(W.sfxOn(), "既定ON");
+    W.sfx("ok"); W.sfx("ng"); W.sfx("test"); // 鳴らせない環境でも落ちない
+    W.openSettings();
+    const b=doc.getElementById("sfxToggle"); ok(b, "⚙にトグルがある");
+    ok(b.textContent.indexOf("ON")>=0, "表示はON");
+    b.click(); eq(LS.getItem("tq_sfx"), "off", "OFFに"); ok(!W.sfxOn()); ok(b.textContent.indexOf("OFF")>=0);
+    b.click(); eq(LS.getItem("tq_sfx"), "on", "ONに戻る"); ok(W.sfxOn());
+    ok(doc.getElementById("modal").textContent.indexOf("演出(効果音・振動)")>=0, "区画名");
+    W.closeModal(); LS.removeItem("tq_sfx");
+  });
+  t("v5.23.0③: 聴く長さの段(⏱) ─ rlMaxSec/rlFits/rlChoose(typ)/rlCandidates(typ・pay)・既定15分・同期はlmaxAtが新しい側", ()=>{
+    eq(W.RL_LEN.join(","), "5,15,30"); eq(W.RL_LEN_DEFAULT, 15);
+    eq(W.rlMaxSec({}), 900, "既定15分"); eq(W.rlMaxSec({lmax:5}), 300); eq(W.rlMaxSec({lmax:30}), 1800); eq(W.rlMaxSec({lmax:7}), 900, "段にない値は既定");
+    eq(W.rlLenText({lmax:5}), "5分以内");
+    ok(W.rlFits({sec:600}, null, {}) && !W.rlFits({sec:1000}, null, {}), "長さが分かればそれで判定");
+    ok(!W.rlFits({sec:0}, {typ:25}, {}) && W.rlFits({sec:0}, {typ:25}, {lmax:30}) && W.rlFits({sec:0}, {typ:5}, {lmax:5}), "不明ならソースの典型(typ)");
+    ok(W.rlFits({sec:0}, {}, {lmax:5}), "typも無ければ通す");
+    const items=[{t:"A",u:"u1",sec:0},{t:"B",u:"u2",sec:0}];
+    eq(W.rlChoose(items, {}, "listen", {typ:25}), null, "YouTube(長さ不明)は典型が上限超えなら候補なし");
+    eq(W.rlChoose(items, {}, "listen", {typ:5}).u, "u1", "典型が収まれば先頭");
+    eq(W.rlChoose([{t:"A",u:"u1",sec:1000},{t:"B",u:"u2",sec:800}], {}, "listen", {typ:25}).u, "u2", "長さが分かる回はsecで判定(typより優先)");
+    const S=W.RL_SOURCES;
+    const c5=W.rlCandidates(S, "listen", {lmax:5}, "2026-09-25").map(s=>s.id);
+    ok(c5.indexOf("npr-newsnow")>=0 && c5.indexOf("mw-wotd")>=0 && c5.indexOf("yt-teded")>=0, "〜5分: 短い番組とTED-Edが候補 "+c5.join(","));
+    ok(c5.indexOf("yt-johnnyharris")<0 && c5.indexOf("planetmoney")<0, "〜5分: 長いチャンネル・番組は候補にしない");
+    ok(c5.length>=4, "〜5分でも候補は4以上("+c5.length+")");
+    const c15=W.rlCandidates(S, "listen", {}, "2026-09-25").map(s=>s.id);
+    ok(c15.indexOf("yt-kurz")>=0 && c15.indexOf("yt-johnnyharris")<0 && c15.length>=20, "既定(〜15分): Kurzgesagtは入りJohnny Harrisは入らない・20以上("+c15.length+")");
+    const c30=W.rlCandidates(S, "listen", {lmax:30}, "2026-09-25").map(s=>s.id);
+    ok(c30.indexOf("yt-johnnyharris")>=0 && c30.every(id=>!S.find(s=>s.id===id).long), "〜30分: Johnny Harrisは入る・longは入らない");
+    ["npr-newsnow","mw-wotd","npr-considerthis","mkt-morning","bbc-witness"].forEach(id=>{ const s=S.find(x=>x.id===id); ok(s && s.kind==="listen" && s.typ<=10 && s.feed, id+"=短い番組"); });
+    ok(S.filter(s=>s.yt && !s.long).every(s=>s.typ>0), "YouTubeのチャンネルにはtyp(典型的な長さ)がある");
+    const r=W.rlCandidates(S, "read", {}, "2026-09-25").map(s=>s.id);
+    ok(r.indexOf("vox")<0 && r.indexOf("bigthink")<0 && r.indexOf("aeon")>=0, "読む: Vox・Big Think(会員限定の記事が混ざる)は候補にしない");
+    const mk=rl=>Object.assign(JSON.parse(JSON.stringify(W.G)), {rl});
+    const m=W.mergeData(mk({topics:{}, mute:{}, done:{}, last:{}, lmax:5, lmaxAt:1}), mk({topics:{}, mute:{}, done:{}, last:{}, lmax:30, lmaxAt:9}));
+    eq(m.rl.lmax, 30, "lmaxAtが新しい側"); eq(m.rl.lmaxAt, 9);
+    const m2=W.mergeData(mk({topics:{}, mute:{}, done:{}, last:{}, lmax:5, lmaxAt:9}), mk({topics:{}, mute:{}, done:{}, last:{}, lmax:30, lmaxAt:1}));
+    eq(m2.rl.lmax, 5, "手元が新しければ手元");
+    const m3=W.mergeData(mk({topics:{}, mute:{}, done:{}, last:{}}), mk({topics:{}, mute:{}, done:{}, last:{}}));
+    eq(m3.rl.lmax, undefined, "無いもの同士は作らない=既定のまま");
+  });
+  t("v5.23.0③: 聴くカードに⏱の3チップ・タップで保存(lmax/lmaxAt)して引き直す・保存した今日の1本が上限を超えていれば引き直す", ()=>{
+    const G=W.G, doc=W.document; const oldRl=JSON.parse(JSON.stringify(G.rl));
+    try{
+      delete G.rl.lmax; delete G.rl.lmaxAt;
+      W.openRLModal();
+      const chips=doc.querySelectorAll('.rlcard[data-k="listen"] .rllen'); eq(chips.length, 3, "聴くカードに3チップ");
+      eq(doc.querySelectorAll('.rlcard[data-k="read"] .rllen').length, 0, "読むカードには出ない");
+      ok(chips[1].classList.contains("ksel") && chips[1].textContent==="〜15分", "既定は〜15分が選択");
+      chips[0].click();
+      eq(G.rl.lmax, 5, "タップで保存"); ok(G.rl.lmaxAt>0, "操作時刻");
+      eq(doc.querySelector('.rlcard[data-k="listen"] .rllen.ksel').textContent, "〜5分", "描き直して選択が移る");
+      G.rl.pick={listen:{d:W.todayKey(), id:"planetmoney", alt:0, it:{t:"x",u:"u",sec:1500}, at:Date.now()}};
+      G.rl.lmax=15; eq(W.rlPickSaved("listen"), null, "25分の回は〜15分では使わない(引き直す)");
+      G.rl.lmax=30; ok(W.rlPickSaved("listen"), "〜30分なら使う");
+      G.rl.pick={read:{d:W.todayKey(), id:"vox", alt:0, it:{t:"x",u:"u"}, at:Date.now()}};
+      eq(W.rlPickSaved("read"), null, "payのソースの1本は使わない");
+      W.closeModal();
+    }finally{ G.rl=oldRl; W.saveG(); W.rlStateReset(); }
+  });
+  t("v5.23.0⑤: ログインボーナスは廃止(ゲーム面オフ) ─ XPも🧊もトーストもバナーも出ない・日付だけ進む", ()=>{
+    const G=W.G, doc=W.document;
+    const yd=new Date(Date.now()-864e5);
+    const yk=yd.getFullYear()+"-"+String(yd.getMonth()+1).padStart(2,"0")+"-"+String(yd.getDate()).padStart(2,"0");
+    G.login={last:yk, day:6}; const x0=G.xp, f0=G.frz;
+    doc.getElementById("toast").textContent="";
+    W.checkLogin();
+    eq(G.login.day, 7, "日付(日数)は進む=trueに戻せば続きから"); eq(G.xp, x0, "XPは増えない"); eq(G.frz, f0, "🧊も配らない(7日目でも)");
+    ok(!W.loginBonusBannerNeeded(), "ホームのバナー条件は立たない");
+    W.renderHome(); ok(!doc.getElementById("homeLogin"), "ホームにログボのバナーがない");
+    ok(doc.getElementById("toast").textContent.indexOf("ログインボーナス")<0, "トーストも出ない");
+    W.switchTab("home");
+  });
+  t("v5.23.0⑤: 🧊は7日連続で学習するごとに1個 ─ streakFreezeGrant(純関数)・grantStreakFreezeToday(その日の最初の解答だけ)・同期はfrzAtが新しい日付", ()=>{
+    const g={frz:0, frzAt:""};
+    eq(W.streakFreezeGrant(g, 6, "2026-09-25"), 0, "6日目は配らない"); eq(g.frz, 0);
+    eq(W.streakFreezeGrant(g, 7, "2026-09-25"), 1, "7日目に1個"); eq(g.frz, 1); eq(g.frzAt, "2026-09-25");
+    eq(W.streakFreezeGrant(g, 7, "2026-09-25"), 0, "同じ日に二重に配らない");
+    eq(W.streakFreezeGrant(g, 14, "2026-10-02"), 1, "14日目にもう1個"); eq(g.frz, 2);
+    eq(W.streakFreezeGrant(g, 21, "2026-10-09"), 0, "満タン(最大"+W.FRZ_MAX+")なら配らない"); eq(g.frz, W.FRZ_MAX); eq(g.frzAt, "2026-10-09", "その日ぶんは消える");
+    eq(W.streakFreezeGrant(g, 0, "2026-10-10"), 0, "連続0は配らない");
+    const G=W.G, oldDays=JSON.parse(JSON.stringify(G.days)), oldFrz=G.frz, oldAt=G.frzAt;
+    try{
+      G.days={}; G.frz=0; G.frzAt="";
+      for(let i=1;i<=6;i++){ const dt=new Date(); dt.setDate(dt.getDate()-i); const k=dt.getFullYear()+"-"+String(dt.getMonth()+1).padStart(2,"0")+"-"+String(dt.getDate()).padStart(2,"0"); G.days[k]={a:5,c:4,m:0}; }
+      const d=W.dayRec(); d.a=1; // 今日の最初の解答のあとの状態
+      eq(W.grantStreakFreezeToday(d), 1, "7日目の最初の解答で🧊+1"); eq(G.frz, 1); eq(G.frzAt, W.todayKey());
+      d.a=2; eq(W.grantStreakFreezeToday(d), 0, "2問目以降は何もしない");
+      d.a=1; eq(W.grantStreakFreezeToday(d), 0, "同じ日に二重に配らない");
+      const m=W.mergeData(Object.assign(JSON.parse(JSON.stringify(G)), {frz:1, frzAt:"2026-09-20"}), Object.assign(JSON.parse(JSON.stringify(G)), {frz:0, frzAt:"2026-09-25"}));
+      eq(m.frzAt, "2026-09-25", "frzAtは新しい方"); eq(m.frz, 1, "🧊は多い方(従来どおり)");
+    }finally{ G.days=oldDays; G.frz=oldFrz; G.frzAt=oldAt; W.saveG(); }
   });
 
   /* ---- 起動状態 ---- */

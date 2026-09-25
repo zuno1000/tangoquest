@@ -547,6 +547,7 @@ function phrAnswerMC(chosen, btn){
 /* 帳簿(単語のanswer()と同じ骨格): SRS→フレーズ日別→経済(共有)→結果表示 */
 function phrFinish(ok){
   phrAnswered=true;
+  sfx(ok? "ok":"ng"); // 効果音(v5.23.0)
   const p=phrCur.p, now=Date.now();
   let st=G.phr[p.en];
   const wasNew=!st;

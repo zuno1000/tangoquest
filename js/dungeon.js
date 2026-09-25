@@ -72,6 +72,32 @@ function vibe(pat){
   if(!CAN_VIBRATE || localStorage.getItem("tq_vibe")==="off") return;
   try{ navigator.vibrate(pat); }catch(e){}
 }
+/* ---- 効果音(v5.23.0・実機FB「正解不正解の効果音をつけられるか」) ----
+   音声ファイルなし=Web Audioで短い合成音を鳴らす(正解=上がる2音・不正解=低い1音)。AudioContextは最初の解答(タップ操作の中)で
+   作るのでiOSでも鳴る。iOSはマナースイッチに従って消音される。設定は端末ローカル(tq_sfx・既定ON・振動tq_vibeと同じ型) */
+let sfxCtx=null;
+function sfxOn(){ try{ return localStorage.getItem("tq_sfx")!=="off"; }catch(e){ return true; } }
+function sfx(kind){
+  if(!sfxOn()) return;
+  try{
+    const AC=window.AudioContext||window.webkitAudioContext; if(!AC) return;
+    if(!sfxCtx) sfxCtx=new AC();
+    if(sfxCtx.state==="suspended") sfxCtx.resume();
+    const t0=sfxCtx.currentTime;
+    const tone=(freq, at, dur, type, vol)=>{
+      const o=sfxCtx.createOscillator(), g=sfxCtx.createGain();
+      o.type=type; o.frequency.setValueAtTime(freq, t0+at);
+      g.gain.setValueAtTime(0.0001, t0+at);
+      g.gain.exponentialRampToValueAtTime(vol, t0+at+0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0+at+dur);
+      o.connect(g).connect(sfxCtx.destination);
+      o.start(t0+at); o.stop(t0+at+dur+0.02);
+    };
+    if(kind==="ok"){ tone(659, 0, 0.09, "sine", 0.18); tone(988, 0.09, 0.16, "sine", 0.18); }
+    else if(kind==="ng"){ tone(196, 0, 0.18, "triangle", 0.16); }
+    else if(kind==="test"){ tone(659, 0, 0.09, "sine", 0.18); tone(988, 0.09, 0.16, "sine", 0.18); tone(196, 0.45, 0.18, "triangle", 0.16); }
+  }catch(e){}
+}
 
 
 /* ================= 編成(呪文文) =================

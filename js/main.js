@@ -46,6 +46,7 @@ const EVENTS=[
   // {d:"2026-08-03", t:"..."} 形式でバナー以外のイベント告知を書く
 ];
 const NEWS=[
+  {d:"2026-09-25", t:"🎧 v5.23.0 実機のご意見5件に対応: ①今日の英語の問題プロンプトをTrue/False/Not Givenから英検1級と同じ内容一致4択(6問・問いと選択肢は英語・推測/言い換え/段落の要点)に。解説フルセットの中の問題も4択 ②正解・不正解の効果音(短い電子音・音声ファイルなし。⚙設定→演出でON/OFF。iPhoneはマナースイッチに従う) ③聴くカードに「⏱ 長さ」(〜5分・〜15分・〜30分・既定15分)。ポッドキャストは回の長さで、YouTubeはチャンネルの典型的な長さで絞る。短い番組を6つ追加(NPR News Now 5分・Merriam-Webster Word of the Day 2分・Consider This・Marketplace Morning Report・BBC Witness History) ④会員限定の記事が混ざっていたVoxとBig Thinkを「読む」から外した(YouTubeは残す) ⑤ログインボーナスを廃止(開くだけの報酬は語彙力と無関係)。🧊フリーズは「7日連続で学習するごとに1個(最大2)」に"},
   {d:"2026-09-23", t:"📖 v5.22.0 「語彙力」を新設: 覚えた語数は7日あけた復習に正解して初めて増える遅い指標だったので、すべての単語を定着の段階に応じて数えた「見込み◯◯語」(覚えた=1語・定着4=0.8・3=0.6・2=0.4・1=0.2)を主役にしました。1問正解するごとに必ず動き、忘れると1段ぶんだけ下がります。ヘッダの📖はLvから語彙力に、記録タブのいちばん上は語彙力の2色バー(濃=覚えた・薄=見込み・1級レベル語彙に対する%)と「今日+n・今週+n」に、週ごとのグラフは語彙力の伸びに。フレーズも同じ物差し。100語の節目を越えるとお祝い。Lv/XPは🏆実績(タイルは実績に)の中で見られます。伸びの記録はこの版から"},
   {d:"2026-09-23", t:"🔧 v5.21.0 記録タブを整理: タイル(連続学習・学習した日・累計正解・知識XP・今日の英語・にがて)をタップすると詳細が開く。新設の📅学習カレンダーは月ごとの色塗り(金=目安達成・青=学習した日・🧊フリーズ・📖🎧)と累計の問数・正答率、日をタップでその日の記録。覚えた単語/フレーズの行からあゆみへ。重複していた入口(あゆみ・フレーズのあゆみ・にがて・読んだ聴いた・ペース管理と実戦メニューのあゆみボタン)を撤去し、実績は知識XPのタイルから。ホームの今週の記録のタップもカレンダーに。マイ単語: 品詞や意味を直しても並びが変わらない(登録順で固定)"},
   {d:"2026-09-23", t:"🔧 v5.20.1 今日の英語の見た目を整理: 「📘 進め方」を読む/聴く/時間がない日の3区画に分け、手順は番号つきで見出しと説明を分けた(スマホで読みやすく)。「分からなかった単語を登録」「読んだ・聴いたの記録」は他の行と同じ左寄せの1行に"},
@@ -405,6 +406,7 @@ window.PHRASES=PHRASES; window.PHR_CATS=PHR_CATS; window.PHR_DRILLS=PHR_DRILLS;
 window.RL_SOURCES=RL_SOURCES; window.RL_TOPICS=RL_TOPICS; window.RL_PROMPTS=RL_PROMPTS; window.RL_PROXIES=RL_PROXIES;
 window.setRlFetchImpl=f=>{ rlFetchImpl=f; }; window.rlStateGet=()=>rlState; window.rlAltGet=()=>rlAlt; // テスト用(let/varはwindowに載らない)
 window.rlStateReset=()=>{ rlState={read:null, listen:null}; rlAlt={read:0, listen:0}; }; window.RL_MAX_SEC=RL_MAX_SEC; // v5.19.0
+window.RL_LEN=RL_LEN; window.RL_LEN_DEFAULT=RL_LEN_DEFAULT; // v5.23.0(⏱ 聴く長さ)
 window.autoSyncPendingGet=()=>autoSyncPending; window.autoSyncPendingSet=v=>{ autoSyncPending=!!v; }; window.AUTO_SYNC_GAP=AUTO_SYNC_GAP; // v5.19.0
 window.setFocusFromTest=f=>{ FOCUS=f; }; window.focusGet=()=>FOCUS; window.pdrillGet=()=>PDRILL;
 window.LTD_SLOTS=LTD_SLOTS;

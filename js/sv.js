@@ -772,6 +772,7 @@ function svApplyAnswer(w, ok){
   srsApply(st, ok, now, {fast:true}); // 学習タブと同じ規則(既知語の早回し・v5.8.0)
   st[8]=now; // 最後に解いた時刻(v5.16.0)
   recordDayAnswer(d, wasNew, ok);
+  grantStreakFreezeToday(d); // 7日連続で🧊(v5.23.0)
   vocabSnap(d, vPre, vocabScore(G));
   const bonus5=ansBonus(); // 5問ごとの🎫ボーナス(v4.31.0・上限なし・学習タブと同じ=入口で損得が出ない)
   let justMastered=false;
@@ -898,6 +899,7 @@ function svAnswer(chosen, btn){
   if(svAnswered || !SV || SV.over) return;
   svAnswered=true;
   const w=svCur.word, ok=chosen.en===w.en, e2j=G.mode==="e2j";
+  sfx(ok? "ok":"ng"); // 効果音(v5.23.0)
   document.querySelectorAll("#svChoices .choice").forEach(b=>{
     b.disabled=true;
     const isCorrect = b.textContent === (e2j? w.ja : w.en);

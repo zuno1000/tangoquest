@@ -1277,6 +1277,9 @@ body.svplay #slotView{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
 .rlpwhen{margin-bottom:8px; line-height:1.5; color:var(--sub)}
 .rlbtns .btn{padding:8px 12px; min-height:38px; font-size:12px; text-decoration:none; display:inline-flex; align-items:center}
 .rlchips{display:flex; flex-wrap:wrap; gap:6px}
+/* ⏱ 聴く長さの段(v5.23.0): 聴くカードの見出し下の1行 */
+.rllenrow{display:flex; align-items:center; flex-wrap:wrap; gap:6px; margin-top:6px}
+.rllenrow .wchip{padding:4px 10px; font-size:12px}
 .rlchip{display:inline-block; margin-right:4px; padding:1px 7px; border-radius:8px; font-size:10px; font-weight:800;
   background:var(--bg2); color:var(--sub); vertical-align:middle}
 .rlchip.lv{background:#E3E7FF; color:var(--accent2)}
