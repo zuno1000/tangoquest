@@ -248,6 +248,19 @@ function mywPromptText(list){
 
 /* ---- UI ---- */
 const POS_SHORT={v:"動", n:"名", adj:"形", adv:"副"};
+/* 登録前の確認(v5.29.0・「マイ単語登録」と📝メモの共用): 品詞・内蔵にあるか・登録済みか・意味の出どころ。
+   it={en, ja?, pos?}。戻り={pos, builtin(内蔵の語=品詞は固定), note(HTML)} */
+function mywPrevNote(it){
+  const en=mywNorm(it.en)||String(it.en||"").toLowerCase();
+  const m=G.myw && G.myw[en], bi=byEn[en];
+  const builtin=!!(bi && !bi.my);
+  const pos=builtin? bi.pos : (MYW_POS_CYCLE.indexOf(it.pos)>=0? it.pos : mywGuessPos(en));
+  let note;
+  if(builtin) note='<span class="qmas">内蔵にある → 優先出題に</span>'+(G.words[en]? ' ・ 定着 '+G.words[en][0]+'/'+MASTER_BOX : '')+(m && !m.del && m.ref? ' ・ <span class="qx">登録済み</span>':'');
+  else if(m && !m.del) note='<span class="qx">登録済み'+(m.ja? '('+esc(m.ja)+')':'(意味待ち)')+' ─ 追加されない</span>';
+  else note=(it.ja? esc(it.ja) : '<span style="color:var(--accent2)">意味は自動で取得</span>')+(it.ex? '<br><span class="myexs">📝 '+esc(it.ex)+'</span>':'');
+  return {pos, builtin, note};
+}
 /* ➕の入口: 単語/フレーズの切替セグ(両モーダルの先頭に置く) */
 function addSegHTML(active){
   return '<div class="seg metaseg" id="addSeg"><button data-a="w"'+(active==="w"?' class="active"':'')+'>📝 単語</button>'+
@@ -283,13 +296,9 @@ function openMywAdd(prefill, src){
     if(!items.length){ box.innerHTML=""; $("mywSave").disabled=true; return; }
     box.innerHTML='<div class="small" style="margin-bottom:4px">'+items.length+'語 ─ 品詞はタップで変更(動/名/形/副)</div>'+
       '<div class="panel">'+items.map((it,i)=>{
-        const m=G.myw && G.myw[it.en], bi=byEn[it.en];
-        let note;
-        if(bi && !bi.my) note='<span class="qmas">内蔵にある → 優先出題に</span>'+(G.words[it.en]? ' ・ 定着 '+G.words[it.en][0]+'/'+MASTER_BOX : '');
-        else if(m && !m.del) note='<span class="small">登録済み'+(m.ja? '':'(意味待ち)')+'</span>';
-        else note=(it.ja? esc(it.ja) : '<span style="color:var(--accent2)">意味は自動で取得</span>')+(it.ex? '<br><span class="myexs">📝 '+esc(it.ex)+'</span>':'');
-        return '<div class="myrow"><button class="wchip poschip pos'+it.pos+' mywpos" data-i="'+i+'"'+((bi&&!bi.my)?' disabled':'')+'>'+POS_SHORT[it.pos]+'</button>'+
-          '<div class="grow"><b style="font-size:14px">'+esc(it.en)+'</b><br><span class="small">'+note+'</span></div></div>';
+        const w=mywPrevNote(it); // v5.29.0: 📝メモと共用
+        return '<div class="myrow"><button class="wchip poschip pos'+w.pos+' mywpos" data-i="'+i+'"'+(w.builtin?' disabled':'')+'>'+POS_SHORT[w.pos]+'</button>'+
+          '<div class="grow"><b style="font-size:14px">'+esc(it.en)+'</b><br><span class="small">'+w.note+'</span></div></div>';
       }).join("")+'</div>';
     box.querySelectorAll(".mywpos").forEach(b=>{
       b.onclick=()=>{ const it=items[+b.dataset.i]; it.pos=MYW_POS_CYCLE[(MYW_POS_CYCLE.indexOf(it.pos)+1)%MYW_POS_CYCLE.length]; renderPrev(); };

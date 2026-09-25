@@ -33,7 +33,10 @@ function sayClassify(line){
   en=en.replace(/\s+/g," ").trim();
   if(!/[A-Za-z]/.test(en)) return {t:"j", en:"", ja:line};
   const words=en.split(" ").length, sentence=/[.!?]$/.test(en) || /^(I|You|We|They|He|She|It|Could|Would|Can|Let|Please|What|How|Why|Do|Does|Is|Are|Should)\b/.test(en);
-  return {t:(words<=3 && !sentence)? "w" : "p", en, ja};
+  const t=(words<=3 && !sentence)? "w" : "p";
+  /* v5.29.0(実機FB「メモから登録した単語が正しい品詞か・既に登録済みかを確認できない」): 単語には品詞の推定(myword.js)を添える=プレビューのチップで直せる */
+  const pos=(t==="w" && typeof mywGuessPos==="function")? mywGuessPos(mywNorm(en)||en) : "";
+  return pos? {t, en, ja, pos} : {t, en, ja};
 }
 /* 追加(v5.26.0): 仕分けどおりに振り分ける。items=[{t,en,ja}]。戻り={w:マイ単語, p:即マイフレーズ, pend:英訳待ち, errs[]} */
 function sayIntake(items){
@@ -43,7 +46,7 @@ function sayIntake(items){
     if(!it) return;
     if(it.t==="w"){
       const pw=(typeof mywParse==="function"? mywParse(it.en+(it.ja? " — "+it.ja : ""))[0] : null)||{en:it.en, ja:it.ja, pos:"n", ex:""};
-      const x=mywAdd(pw.en, pw.ja, pw.pos, pw.ex, "メモ");
+      const x=mywAdd(pw.en, pw.ja, it.pos||pw.pos, pw.ex, "メモ"); // 品詞はプレビューのチップで直した値を優先(v5.29.0)
       if(x.err) r.errs.push(x.err); else r.w++;
       return;
     }
@@ -153,7 +156,7 @@ function openSayModal(focusAdd){
   const pend=sayList(), mine=myphrList(), words=mywList().length;
   const T={w:"単語", p:"フレーズ", j:"フレーズ"};
   openModal('<h3>📝 メモ → マイ単語・マイフレーズ '+helpBtn("hlp-say")+'</h3>'+
-    helpNote("hlp-say", '1行1つ書くと自動で仕分ける。<b>単語</b>(英語3語以内)→マイ単語(意味は自動取得・4択に出る)。'+
+    helpNote("hlp-say", '1行1つ書くと自動で仕分ける。<b>単語</b>(英語3語以内)→マイ単語(意味は自動取得・4択に出る。品詞のチップはタップで変更。内蔵にある語・登録済みの語はその場で分かる)。'+
       '<b>フレーズ</b>(日本語=言えなかったこと/英語の表現)→英訳待ち → 📋依頼文をLLMに貼り、返った「英文 — 日本語 — 覚えたい表現」を貼り戻すとマイフレーズ(並べ替えに優先して出る)。'+
       '短い語もチップで「フレーズ」にすれば例文化される。「英文 — 日本語」と書けばその場で登録。<br>'+
       '<b>プライバシー</b>: メモはこの端末と、同期を使う場合はあなた自身のGoogleドライブの非公開領域にだけ保存される')+
@@ -182,11 +185,15 @@ function openSayModal(focusAdd){
   const renderPrev=()=>{
     const box=$("sayPrev");
     if(!items.length){ box.innerHTML=""; $("sayAddBtn").disabled=true; return; }
-    box.innerHTML='<div class="panel">'+items.map((it,i)=>
-      '<div class="myrow"><button class="wchip saytype'+(it.t==="w"? " ksel":"")+'" data-i="'+i+'"'+(it.t==="j"? ' disabled':'')+'>'+T[it.t]+'</button>'+
+    /* v5.29.0(実機FB): 単語の行は旧「マイ単語登録」と同じ確認=品詞チップ(タップで動/名/形/副)+内蔵にある/登録済み/意味は自動取得(mywPrevNote) */
+    box.innerHTML='<div class="panel">'+items.map((it,i)=>{
+      const w=it.t==="w"? mywPrevNote(it) : null;
+      return '<div class="myrow"><button class="wchip saytype'+(it.t==="w"? " ksel":"")+'" data-i="'+i+'"'+(it.t==="j"? ' disabled':'')+'>'+T[it.t]+'</button>'+
+      (w? '<button class="wchip poschip pos'+w.pos+' saypos" data-i="'+i+'" title="品詞(タップで変更)"'+(w.builtin? ' disabled':'')+'>'+POS_SHORT[w.pos]+'</button>':'')+
       '<div class="grow small"><b style="color:var(--ink)">'+esc(it.t==="j"? it.ja : it.en)+'</b>'+(it.t!=="j" && it.ja? ' <span class="small">'+esc(it.ja)+'</span>':'')+
-      '<br><span class="small">'+(it.t==="w"? 'マイ単語に(意味は'+(it.ja? 'この訳':'自動取得')+')' : it.t==="j"? '英訳待ちのメモに' : (it.ja? 'マイフレーズに' : '英訳待ちのメモに(例文化と日本語訳をLLMに)'))+'</span></div></div>').join("")+'</div>';
-    box.querySelectorAll(".saytype").forEach(b=>b.onclick=()=>{ const it=items[+b.dataset.i]; it.t=it.t==="w"? "p":"w"; renderPrev(); });
+      '<br><span class="small">'+(w? w.note : it.t==="j"? '英訳待ちのメモに' : (it.ja? 'マイフレーズに' : '英訳待ちのメモに(例文化と日本語訳をLLMに)'))+'</span></div></div>'; }).join("")+'</div>';
+    box.querySelectorAll(".saytype").forEach(b=>b.onclick=()=>{ const it=items[+b.dataset.i]; it.t=it.t==="w"? "p":"w"; if(it.t==="w" && !it.pos) it.pos=mywGuessPos(mywNorm(it.en)||it.en); renderPrev(); });
+    box.querySelectorAll(".saypos").forEach(b=>b.onclick=()=>{ const it=items[+b.dataset.i]; it.pos=MYW_POS_CYCLE[(MYW_POS_CYCLE.indexOf(it.pos||"n")+1)%MYW_POS_CYCLE.length]; renderPrev(); });
     $("sayAddBtn").disabled=false;
   };
   ta.oninput=()=>{ items=ta.value.split(/\n+/).map(sayClassify).filter(Boolean); renderPrev(); };

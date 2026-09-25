@@ -552,6 +552,7 @@ function phrFinish(ok){
   srsApply(st, ok, now);
   st[8]=now; // 最後に解いた時刻(v5.16.0・同期は新しい方が勝つ)
   pd.a++; if(ok) pd.c++;   // 目安・あゆみとは別台帳(G.pdays)
+  if(typeof syncNoteAnswer==="function") syncNoteAnswer(); // 学習を終えたときの同期の条件=1問以上(v5.29.0・sync.js)
   vocabSnap(pd, vPre, knowScore(G.phr));
   const bonus5=ansBonus();                      // 5問ボーナスは単語+フレーズの合算
   track("ans"); if(ok) track("cor");            // 任務・実績のクイズ系は共有

@@ -212,9 +212,6 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
 #recView .stt{margin:0}
 #recAch .achhead{padding-top:0}
 /* v5.12.1: 目安のパネルにセットの●○バーを統合(ヒーロー用に少し大きく) */
-.pacebar.phero .setdots{margin-top:12px; gap:8px}
-.pacebar.phero .setdots{--sdw:34px}
-.pacebar.phero .setdots .sd{width:var(--sdw); height:14px; border-radius:7px}
 .pacebar.phero .pacefoot+.pacefoot{margin-top:4px}
 .pacebar.phero .pacemsg{font-size:13px; margin-top:9px}
 /* v5.15.0: 記録タブの刷新(成長が見える1枚) */
@@ -677,6 +674,7 @@ h2{font-size:14px; margin:16px 4px 8px; color:var(--sub); font-weight:700}
 .dexcell.own{background:var(--card2); cursor:pointer;
   box-shadow:-3px -3px 6px var(--shl), 3px 3px 6px var(--shd)}
 .dexcell.miss{box-shadow:inset 2px 2px 5px var(--shd), inset -2px -2px 5px var(--shl)}
+body.nogame .dexcell.miss{cursor:pointer} /* v5.29.0: 未学習もタップで単語の詳細(辞書) */
 .dexcell .den{font-size:10px; font-weight:800; word-break:break-word; line-height:1.15}
 .dexcell.miss .den{color:var(--sub); font-weight:700; opacity:.8}
 .dexcell .dst{font-size:9px; font-weight:800}
@@ -1046,15 +1044,7 @@ body.svplay #svView{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
 .setpanel{margin-top:12px; padding:12px 14px; cursor:pointer}
 .setpanel .pacetop b{font-size:22px; line-height:1}
 .setpanel .pacetop .ptgt{font-size:13px; color:var(--sub)}
-.setdots{display:flex; flex-wrap:wrap; gap:8px; margin-top:10px}
-.setdots .sd{display:block; width:26px; height:12px; border-radius:6px; background:var(--bg2); overflow:hidden;
-  box-shadow:inset 1.5px 1.5px 3px var(--shd), inset -1.5px -1.5px 3px var(--shl)}
-.setdots .sd.on{background:linear-gradient(135deg,var(--accent2),#7B8CFF); box-shadow:0 2px 6px rgba(91,108,255,.35)}
-.setdots .sd.on.over{background:linear-gradient(135deg,#FFB547,#F5A020); box-shadow:0 2px 6px rgba(245,160,32,.4)}
-.setdots .sd.cur b{display:block; height:100%; background:linear-gradient(135deg,var(--accent2),#7B8CFF); border-radius:6px}
-.setstats{display:flex; flex-wrap:wrap; gap:6px 14px; margin-top:8px; font-size:12px; font-weight:700; color:var(--sub)}
-.setstats b{color:var(--ink); font-size:14px}
-.giftbox .setdots,.giftbox .setstats{justify-content:center}
+.giftbox .setstats{justify-content:center}
 /* 冒険ハブのあそびかた: スロット撤去中は2列(v5.8.0・SLOT_ENABLED) */
 .svmodes.two{grid-template-columns:repeat(2,1fr)}
 /* ログインボーナスのバナー(起動モーダル廃止の受け皿。タップで7日カレンダー) */

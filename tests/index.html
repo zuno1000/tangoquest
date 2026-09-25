@@ -2877,7 +2877,7 @@ function run(){
     ok(!W.loginBonusBannerNeeded(), "畳んだらその日は出ない");
     LS.removeItem("tq_lgSeen");
   });
-  t("30問セット(v5.8.0): 帳簿setRecord・進捗setProgress・●○表示は純関数", ()=>{
+  t("30問セット(v5.8.0): 帳簿setRecord・進捗setProgressは純関数(●○表示setDotsHTMLはv5.29.0で廃止)", ()=>{
     const g={set:null, pace:{goal:null, setAt:0, log:[]}, days:{}};
     const k=W.todayKey();
     // v5.10.0: 第2引数は「今日の合算解答数」(単語+フレーズ)
@@ -2900,23 +2900,18 @@ function run(){
     G.pace={goal:null, setAt:0, log:[]};
     dr.a=75; pd.a=0;
     let p=W.setProgress(G);
-    eq(p.done, 2, "75問=2セット完了"); eq(p.cur, 15, "進行中15問"); eq(p.target, null, "目安なし");
-    let h=W.setDotsHTML(p);
-    eq((h.match(/class="sd on/g)||[]).length, 2, "完了2つ"); eq((h.match(/sd cur/g)||[]).length, 1, "進行中1つ");
-    // 進捗: 目安あり(100問=4セット)
+    eq(p.done, 2, "75問=2セット完了"); eq(p.cur, 15, "進行中15問"); eq(p.targetQ, null, "目安なし");
+    ok(typeof W.setDotsHTML==="undefined" && !("target" in p) && !("last" in p), "●○(setDotsHTML)と目安から換算したセット数(target/last)はv5.29.0で廃止");
+    // 進捗: 目安あり(100問)
     G.pace={goal:W.addDays(W.todayKey(), 100), setAt:Date.now(), log:[], qd:{d:W.todayKey(), per:100}};
     p=W.setProgress(G);
-    eq(p.target, 4, "目安100問=4セット(単語のみ=30語/セット)");
-    h=W.setDotsHTML(p);
-    eq((h.match(/class="sd/g)||[]).length, 4, "●○は目安の4つ");
+    eq(p.targetQ, 100, "目安100問(単語のみ=30語/セット)"); ok(!p.hit);
     dr.a=150; p=W.setProgress(G);
-    eq(p.done, 5); h=W.setDotsHTML(p);
-    eq((h.match(/class="sd/g)||[]).length, 5, "超過分は足す");
-    eq((h.match(/over/g)||[]).length, 1, "超過分は金");
-    // ミックス(v5.10.0): 1セット=単語24+フレーズ6 → 目安100語=5セット。進みは合算
+    eq(p.done, 5); ok(p.hit, "超過=達成");
+    // ミックス(v5.10.0): 1セット=単語24+フレーズ6 → 目安100語=125問。進みは合算
     G.opt.qtab="mix"; dr.a=20; pd.a=10;
     p=W.setProgress(G);
-    eq(p.target, 5, "ミックスは24語/セットで換算(100/24→5)");
+    eq(p.targetQ, 125, "ミックスは24語/セットで換算(100×30/24)");
     eq(p.done, 1, "合算30問=1セット完了"); eq(p.cur, 0);
     dr.a=a0; pd.a=pa0; G.pace=oldPace; G.opt.qtab=oldQtab; W.saveG();
   });
@@ -2938,11 +2933,9 @@ function run(){
     ok(doc.getElementById("overlay").classList.contains("show"), "「次へ」で完了モーダル");
     ok(doc.getElementById("modal").textContent.indexOf("セット完了")>=0, "セット完了の表示");
     ok(doc.getElementById("setNext") && doc.getElementById("setHome"), "次のセットへ/ひと休み");
-    // v5.16.0(実機FB): 区切りに「いま同期する」(最終同期の時刻・未同期の有無)
-    const sb=doc.getElementById("setSync");
-    ok(sb && sb.textContent.indexOf("いま同期する")>=0, "同期ボタン");
-    ok(sb.textContent.indexOf("最終同期")>=0 || sb.textContent.indexOf("まだ同期していない")>=0, "最終同期の時刻か未同期の案内");
-    ok(sb.compareDocumentPosition(doc.getElementById("setNext")) & 4, "同期ボタンは「次のセットへ」の上");
+    // v5.16.0の「いま同期する」はv5.29.0で廃止(学習タブを離れたときに自動で同期)。●○のゲージも無い
+    ok(!doc.getElementById("setSync") && doc.getElementById("modal").textContent.indexOf("いま同期する")<0, "同期ボタンは無い(v5.29.0)");
+    ok(!doc.querySelector("#modal .setdots"), "●○のゲージは無い(v5.29.0)");
     doc.getElementById("setNext").click();
     ok(!doc.getElementById("overlay").classList.contains("show"), "閉じて");
     ok(doc.getElementById("promptWord").textContent.length>0, "次の問題が出る");
@@ -4166,6 +4159,102 @@ function run(){
     }finally{ G.mocks=oldMocks; W.saveG(); W.switchTab("home"); }
   });
 
+  t("v5.29.0①: 📝メモの単語に登録前の確認 ─ sayClassifyが品詞を添える・プレビューに品詞チップ(タップで変更)と内蔵/登録済み/意味は自動取得の注記(mywPrevNote)・直した品詞で登録", ()=>{
+    const G=W.G, doc=W.document;
+    const oldSay=JSON.parse(JSON.stringify(G.say)), oldMyw=JSON.parse(JSON.stringify(G.myw));
+    try{
+      eq(W.sayClassify("incumbent").pos, W.mywGuessPos("incumbent"), "単語には品詞の推定(myword.jsと同じ)"); eq(W.sayClassify("Quickly").pos, "adv"); ok(!("pos" in W.sayClassify("I'll get back to you on that.")), "フレーズには付けない");
+      // 純関数: 内蔵の語=品詞は内蔵に固定・登録済み・未登録
+      const bi=W.WORDS.find(w=>w.en==="abate");
+      let n=W.mywPrevNote({en:"abate", pos:"adj"}); ok(n.builtin && n.pos===bi.pos && n.note.indexOf("内蔵にある")>=0, "内蔵の語は優先出題の案内・品詞は内蔵のまま");
+      W.mywAdd("zzprevdone", "できた", "v"); n=W.mywPrevNote({en:"zzprevdone", pos:"n"}); ok(!n.builtin && n.note.indexOf("登録済み")>=0 && n.note.indexOf("できた")>=0 && n.note.indexOf("追加されない")>=0, "登録済みの語はその意味と「追加されない」");
+      n=W.mywPrevNote({en:"zzprevnew", pos:"adj"}); ok(!n.builtin && n.pos==="adj" && n.note.indexOf("自動で取得")>=0, "未登録=意味は自動で取得・品詞は渡した値");
+      n=W.mywPrevNote({en:"zzprevja", ja:"和訳あり"}); ok(n.note.indexOf("和訳あり")>=0 && n.pos==="n", "訳つき=その訳・品詞は推定");
+      // 画面: メモのプレビュー
+      W.openSayModal();
+      const ta=doc.getElementById("sayText"); ta.value="zzprevword\nabate\nzzprevdone\nI partly agree with you on that point."; ta.oninput();
+      const rows=doc.querySelectorAll("#sayPrev .myrow"); eq(rows.length, 4);
+      const pc=doc.querySelectorAll("#sayPrev .saypos"); eq(pc.length, 3, "単語の行だけ品詞チップ(フレーズには無い)");
+      ok(rows[1].textContent.indexOf("内蔵にある")>=0 && pc[1].disabled, "内蔵の語は「内蔵にある → 優先出題に」・品詞は固定");
+      ok(rows[2].textContent.indexOf("登録済み")>=0, "登録済みの語はその場で分かる");
+      ok(rows[0].textContent.indexOf("自動で取得")>=0, "新しい語=意味は自動で取得");
+      const before=pc[0].textContent; pc[0].click();
+      const after=doc.querySelectorAll("#sayPrev .saypos")[0]; ok(after.textContent!==before, "タップで品詞が変わる("+before+"→"+after.textContent+")");
+      doc.querySelectorAll("#sayPrev .saypos")[0].click(); doc.querySelectorAll("#sayPrev .saypos")[0].click(); // 名→形→副→動(nから3回)
+      const CYC=["v","n","adj","adv"], SH={v:"動",n:"名",adj:"形",adv:"副"};
+      const chosen=CYC[(CYC.indexOf(W.mywGuessPos("zzprevword"))+3)%4];
+      eq(doc.querySelectorAll("#sayPrev .saypos")[0].textContent, SH[chosen], "3回で1周手前");
+      doc.getElementById("sayAddBtn").click();
+      ok(G.myw.zzprevword && !G.myw.zzprevword.del, "登録された"); eq(G.myw.zzprevword.pos, chosen, "直した品詞で登録される");
+      ok(G.myw.abate && G.myw.abate.ref, "内蔵の語は優先出題の印");
+      // 単語⇄フレーズのチップでフレーズ→単語に戻したときも品詞チップが出る
+      W.openSayModal(); const ta2=doc.getElementById("sayText"); ta2.value="in the grand scheme of things"; ta2.oninput();
+      eq(doc.querySelectorAll("#sayPrev .saypos").length, 0); doc.querySelector("#sayPrev .saytype").click();
+      eq(doc.querySelectorAll("#sayPrev .saypos").length, 1, "単語にすれば品詞チップ");
+      W.closeModal();
+    }finally{ G.say=oldSay; G.myw=oldMyw; ["zzprevword","zzprevdone"].forEach(en=>W.mywUnmount(en)); W.saveG(); W.closeModal(); }
+  });
+  t("v5.29.0②: 図鑑「単語」 ─ 未学習の語(窪み)もタップで単語の詳細(辞書のように意味・品詞・語根・辞書ボタン)", ()=>{
+    const G=W.G, doc=W.document;
+    const w=W.WORDS.find(x=>!G.words[x.en] && !x.my && x.en.indexOf(" ")<0); ok(w, "未学習の語");
+    W.openDex("cards");
+    const inp=doc.getElementById("dexSearch"); inp.value=w.en; inp.dispatchEvent(new W.Event("input"));
+    const cell=[...doc.querySelectorAll("#dexGrid .dexcell.miss")].find(c=>c.dataset.en===w.en); ok(cell, "窪みのセルにdata-en");
+    cell.click();
+    const m=doc.getElementById("modal");
+    ok(m.textContent.indexOf("単語の詳細")>=0 && m.textContent.indexOf(w.en)>=0 && m.textContent.indexOf(w.ja)>=0, "タップで詳細(意味)");
+    ok(m.textContent.indexOf("まだ出題されていない")>=0 && doc.getElementById("wdDict"), "未学習の案内と辞書ボタン");
+    W.closeModal(); W.openDex("cards"); const i2=doc.getElementById("dexSearch"); i2.value=""; i2.dispatchEvent(new W.Event("input")); W.closeModal(); // 検索語を空に戻す(後のテストのため)
+    // 学習した語は従来どおり
+    const l=Object.keys(G.words).find(en=>W.byEn[en]); if(l){ W.openWordModal(l); ok(m.textContent.indexOf("これまで")>=0); W.closeModal(); }
+  });
+  t("v5.29.0③: 学習を終えたときの同期 ─ leaveSyncDecision(純関数)・答え合わせで数える(syncAnsSince)・学習タブを離れるとautoSyncOnLeave・完了画面に「いま同期する」は無い・リロード後は移った先のタブへ", ()=>{
+    const G=W.G, doc=W.document;
+    const d=s=>Object.assign({answered:1, clientId:true, authed:true, online:true, syncing:false}, s);
+    ok(W.leaveSyncDecision(d({})), "1問以上解いていれば同期");
+    ok(!W.leaveSyncDecision(d({answered:0})), "解いていなければ同期しない"); ok(!W.leaveSyncDecision(d({answered:undefined})));
+    ok(!W.leaveSyncDecision(d({clientId:false})) && !W.leaveSyncDecision(d({authed:false})) && !W.leaveSyncDecision(d({online:false})), "未設定・未認証・オフラインは何もしない");
+    ok(!W.leaveSyncDecision(d({syncing:true})), "同期中なら重ねない");
+    ok(W.leaveSyncDecision(d({lastSync:Date.now()})), "最終同期からの間隔は問わない(学習の区切り=必ず上げる)");
+    ok(typeof W.syncBtnHTML==="undefined" && typeof W.bindSyncBtn==="undefined", "「いま同期する」のボタンは廃止");
+    // 答え合わせで数える(単語・フレーズ)
+    const oldQtab=G.opt.qtab, oldPre=G.opt.preRecall; G.opt.qtab="w"; G.opt.preRecall=0;
+    const dr=W.dayRec(), pd=W.pdayRec(), snap={a:dr.a, c:dr.c, m:dr.m, pa:pd.a, t:G.tickets, xp:G.xp, cb:G.combo, set:G.set};
+    dr.a=1; pd.a=0; // 30問目に当たらないように(セット完了モーダルを避ける)
+    W.switchTab("quiz"); W.newQuestion();
+    const n0=W.syncAnsSince();
+    const en=doc.getElementById("promptWord").textContent, w=W.WORDS.find(x=>x.en===en);
+    const oldSt=JSON.parse(JSON.stringify(G.words[w.en]||null));
+    [...doc.querySelectorAll("#choices .choice")].find(b=>b.textContent===w.ja).click();
+    eq(W.syncAnsSince(), n0+1, "単語の答え合わせで+1");
+    ok(W.autoSyncOnLeave("home")===false, "同期が未設定のテスト環境では何もしない(false)");
+    eq(W.syncAnsSince(), n0+1, "同期しなかったので数は残る");
+    W.switchTab("home"); // 学習タブ→ホーム(autoSyncOnLeaveが呼ばれる・未設定なので何もしない)
+    ok(!doc.getElementById("homeView").classList.contains("hidden"), "ホームへ");
+    if(oldSt) G.words[w.en]=oldSt; else delete G.words[w.en];
+    // リロード後の復帰: 移った先のタブへ(RESUME_KEY)
+    W.sessionStorage.setItem("tq_resume", "rec"); W.syncResumeAfterReload();
+    ok(!doc.getElementById("recView").classList.contains("hidden"), "記録タブに戻る"); ok(!W.sessionStorage.getItem("tq_resume"), "使い切り");
+    W.sessionStorage.setItem("tq_resume", "home"); W.switchTab("quiz"); W.syncResumeAfterReload(); ok(!doc.getElementById("quizView").classList.contains("hidden"), "homeは何もしない(既定のまま)");
+    dr.a=snap.a; dr.c=snap.c; dr.m=snap.m; pd.a=snap.pa; G.tickets=snap.t; G.xp=snap.xp; G.combo=snap.cb; G.set=snap.set;
+    G.opt.qtab=oldQtab; G.opt.preRecall=oldPre; W.closeModal(); W.newQuestion(); W.switchTab("home"); W.saveG();
+  });
+  t("v5.29.0④: ホームのCTA「セットのつづき」は常に n/30 ─ 目安に合わせた端数のセット(6/7)は出ない(setProgressにtarget/lastなし・CSSの.setdotsも撤去)", ()=>{
+    const G=W.G, doc=W.document;
+    const oldPace=JSON.parse(JSON.stringify(G.pace)), dr=W.dayRec(), pd=W.pdayRec(), a0=dr.a, pa0=pd.a, oldQtab=G.opt.qtab;
+    try{
+      G.opt.qtab="mix"; G.pace={goal:W.addDays(W.todayKey(), 300), setAt:Date.now(), log:[], qd:{d:W.todayKey(), per:221}};
+      dr.a=228; pd.a=48; // 合算276(スクショ: 目安221→277問・最後のセットは7問→「6/7」と出ていた)
+      const p=W.setProgress(G); eq(p.cur, 6); eq(p.done, 9); eq(p.targetQ, 277); ok(!("target" in p) && !("last" in p));
+      W.renderHome();
+      const cta=doc.getElementById("homeStudy").textContent;
+      ok(cta.indexOf("セットのつづき(6/30)")>=0, "CTA=6/30: "+cta);
+      dr.a=240; pd.a=60; W.renderHome(); ok(doc.getElementById("homeStudy").textContent.indexOf("1セット(30問)はじめる")>=0, "30の倍数=次のセット");
+      const css=[...doc.styleSheets].find(ss=>(ss.href||"").indexOf("style.css")>=0);
+      ok(css && ![...css.cssRules].some(r=>(r.selectorText||"").indexOf(".setdots")>=0), "●○のCSSも無い");
+    }finally{ dr.a=a0; pd.a=pa0; G.pace=oldPace; G.opt.qtab=oldQtab; W.saveG(); W.renderHome(); }
+  });
+
   /* ---- 起動状態 ---- */
   t("起動時に問題が出題されている", ()=>{
     ok(W.document.getElementById("promptWord").textContent.length>0);
@@ -5334,7 +5423,7 @@ async function runAsync(W){
     ok(sg.textContent.indexOf("🏆 実績")>=0 && sg.textContent.indexOf("Lv")>=0, "実績のタイルに達成数とLv(v5.22.0)");
     G.days=oldDays; G.words=oldWords; G.phr=oldPhr; W.switchTab("home");
   });
-  t("目安とセット(v5.14.0): 目安の問数に厳密・端数のセットは短い●・達成は問数で判定", ()=>{
+  t("目安とセット(v5.14.0→v5.29.0): 目安の問数に厳密・達成は問数で判定・端数のセット(6/7など)と●○は廃止=CTAは常にn/30", ()=>{
     const G=W.G, doc=W.document;
     const oldPace=JSON.parse(JSON.stringify(G.pace)), dr=W.dayRec(), pd=W.pdayRec(), a0=dr.a, pa0=pd.a, oldQtab=G.opt.qtab;
     const dk=W.todayKey(), oldT=G.days[dk] && G.days[dk].t;
@@ -5343,26 +5432,23 @@ async function runAsync(W){
     dr.a=0; pd.a=0;
     let p=W.setProgress(G);
     eq(p.targetQ, 142, "目安113語=ミックスでは142問(113×30/24を切り上げ)");
-    eq(p.target, 5, "5セットめは端数"); eq(p.last, 22, "最後のセットは22問");
-    let h=W.setDotsHTML(p);
-    eq((h.match(/class="sd/g)||[]).length, 5, "●は5つ");
-    ok(h.indexOf("あと22問のセット")>=0 && h.indexOf("*0.73")>=0, "最後の●は22/30の幅");
+    ok(!("target" in p) && !("last" in p), "目安から換算したセット数・端数のセットは持たない(v5.29.0)");
     dr.a=110; pd.a=27; p=W.setProgress(G); // 合算137=4セット+17問(単語110<113)
     eq(p.done, 4); eq(p.cur, 17); ok(!p.hit, "単語110問ではまだ");
-    h=W.setDotsHTML(p);
-    ok(h.indexOf('sd cur')>=0 && h.indexOf('width:77%')>=0, "端数のセットの進みは17/22で描く");
     eq(W.setFootText(p), "", "脚注は出さない(v5.28.2)");
     W.renderHome();
-    ok(doc.getElementById("homeStudy").textContent.indexOf("17/22")>=0, "CTAも 17/22");
-    dr.a=113; p=W.setProgress(G);
+    ok(doc.getElementById("homeStudy").textContent.indexOf("17/30")>=0 && doc.getElementById("homeStudy").textContent.indexOf("17/22")<0, "CTAは 17/30(端数の22ではない・v5.29.0)");
+    dr.a=276; pd.a=0; G.pace.qd.per=221; W.renderHome(); // 実機のスクショの状態(目安221語→277問・合算276=9セット+6問)
+    ok(doc.getElementById("homeStudy").textContent.indexOf("6/30")>=0 && doc.getElementById("homeStudy").textContent.indexOf("6/7")<0, "実機FB: 「6/7」ではなく 6/30");
+    G.pace.qd.per=113; dr.a=113; pd.a=27; p=W.setProgress(G);
     ok(p.hit && p.done===4, "単語113問で達成=目安の数字と同じ判定(セット数は4のまま)");
     ok(W.setFootText(p).indexOf("目安ぶんは積み上げた")>=0, "達成の脚注");
-    // 単語のみ: 100問=3セット+10問
+    // 単語のみ: 目安100問
     G.opt.qtab="w"; G.pace.qd.per=100; dr.a=0; pd.a=0; p=W.setProgress(G);
-    eq(p.targetQ, 100); eq(p.target, 4); eq(p.last, 10);
-    // 目安なし: 端数の概念はない
+    eq(p.targetQ, 100);
+    // 目安なし
     G.pace={goal:null, setAt:0, log:[]}; dr.a=45; p=W.setProgress(G);
-    eq(p.targetQ, null); eq(p.last, W.SET_N); ok(!p.hit);
+    eq(p.targetQ, null); eq(p.cur, 15); ok(!p.hit);
     eq(W.setFootText(p), "", "目安なし・進行中でも脚注は出さない(v5.28.2)");
     dr.a=a0; pd.a=pa0; G.pace=oldPace; G.opt.qtab=oldQtab; if(G.days[dk]) G.days[dk].t=oldT; W.saveG(); W.renderHome();
   });

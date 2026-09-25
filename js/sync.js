@@ -351,17 +351,27 @@ function rlPickNewer(x, y){
   return (x.at||0)<=(y.at||0)? x : y;
 }
 
-/* セット完了・にがて特訓完了の画面に置く「同期」ボタン(v5.16.0・実機FB「セット終了時の画面に同期ボタンを用意するのが最も手間がなく確実」)。
-   自動同期はしない: iOS PWAではユーザー操作なしの認証ポップアップが止められる・学習の途中のリロードを避ける。
-   学習の区切り(セット完了・特訓完了)で1タップ=別端末との連携が習慣に乗る。未設定の端末(クライアントID無し)では出さない */
-function syncBtnHTML(){
-  if(!syncClientId()) return "";
-  const last=lastSyncAt();
-  let dirty=false; try{ dirty=!!localStorage.getItem(SYNC_DIRTY_KEY); }catch(e){}
-  const sub=last? "最終同期 "+fmtSyncTime(last)+(dirty? " ・ この端末に未同期の変更あり":" ・ 変更なし") : "まだ同期していない ─ 別の端末とつなぐ";
-  return '<button class="btn setnext2" id="setSync"><span>📥 いま同期する</span><span class="hlsub">'+sub+'</span></button>';
+/* 学習を終えたときの同期(v5.29.0・実機FB「学習画面から離れた際に同期(1問以上解いたときのみ)。代わりにセット終わりの同期ボタンは廃止」)。
+   v5.16.0〜v5.28.3の「📥 いま同期する」(セット完了・特訓完了・模試完了の画面)は撤去。
+   学習タブ→別のタブ(main.js switchTab)で、その滞在中に1問でも解いていれば同期(タブのタップ=ユーザー操作ありなので認証ポップアップも通る)。
+   最終同期からの間隔は問わない(学習の区切り=必ず上げる)。別端末に新しい記録があれば取り込んでリロードし、移った先のタブに戻る(RESUME_KEY) */
+let ansSinceSync=0, syncing=false;
+function syncNoteAnswer(){ ansSinceSync++; }  // quiz.js/phrase.jsの答え合わせから
+function syncAnsSince(){ return ansSinceSync; }
+/* 純関数: 学習タブを離れるときに同期するか */
+function leaveSyncDecision(s){
+  if(!(s.answered>0)) return false;
+  if(!s.clientId || !s.authed || s.online===false) return false;
+  if(s.syncing) return false;
+  return true;
 }
-function bindSyncBtn(){ const b=$("setSync"); if(b) b.onclick=()=>{ b.disabled=true; syncNow(); }; }
+function autoSyncOnLeave(nextTab){
+  let go=false;
+  try{ go=leaveSyncDecision(Object.assign(autoSyncState(), {answered:ansSinceSync, syncing})); }catch(e){}
+  if(!go) return false;
+  syncNow({auto:true, resume:nextTab});
+  return true;
+}
 
 /* キー順を揃えたJSON(純関数): マージ結果どうしの比較用(Object.assignでキー順が変わっても同じ文字列になる) */
 function stableJSON(v){
@@ -428,15 +438,16 @@ function autoSyncOnGesture(then){
 function syncResumeAfterReload(){
   let r=null, msg=null;
   try{ r=sessionStorage.getItem(RESUME_KEY); msg=sessionStorage.getItem(SYNCED_MSG_KEY); sessionStorage.removeItem(RESUME_KEY); sessionStorage.removeItem(SYNCED_MSG_KEY); }catch(e){}
-  if(r==="quiz") switchTab("quiz");
+  if(r && r!=="home" && TABS[r]) switchTab(r); // v5.29.0: 学習を終えたときの同期なら移った先(記録など)へ
   if(msg) toast(msg);
 }
 
 /* opts(v5.19.0): auto=自動同期(失敗を短く・変化なしはリロードしない)/resume=リロード後に戻るタブ/then=同期後(または不要・失敗時)に続ける処理 */
 async function syncNow(opts){
   opts=opts||{};
-  const then=()=>{ paceHoldRelease(); if(typeof opts.then==="function") opts.then(); }; // 同期が済んだ/不要/失敗 → 今日の目安を固定(v5.20.0)
+  const then=()=>{ syncing=false; paceHoldRelease(); if(typeof opts.then==="function") opts.then(); }; // 同期が済んだ/不要/失敗 → 今日の目安を固定(v5.20.0)
   if(!syncClientId()){ if(!opts.auto) toast("同期は未設定(READMEの手順でクライアントIDを設定)"); then(); return; }
+  syncing=true; ansSinceSync=0; // 学習を終えたときの同期(v5.29.0)の数え直し=この同期以降に解いた問数
   toast(opts.auto? "📥 自動同期中…" : "同期中…");
   getToken(async token=>{
     try{

@@ -13,8 +13,13 @@ const TABS={
   sv:      {view:"svView",      nav:null,         on:()=>{}}, // 単語のサバイバー(冒険タブから入る)
   slot:    {view:"slotView",    nav:null,         on:()=>{}}, // ことだまスロット(ミニゲーム・冒険タブから入る v4.27.0)
 };
+let curTab="home";
 function switchTab(name){
   closeModal();
+  /* 学習を終えたときの同期(v5.29.0・sync.js): 学習タブを離れる瞬間に、その滞在中に1問以上解いていれば同期する。
+     同期が要らなければ何もしない。別端末の記録を取り込んだときはリロード→移った先のタブへ(syncResumeAfterReload) */
+  if(curTab==="quiz" && name!=="quiz" && typeof autoSyncOnLeave==="function") autoSyncOnLeave(name);
+  curTab=name;
   for(const k in TABS){
     $(TABS[k].view).classList.toggle("hidden", k!==name);
     if(TABS[k].nav) $(TABS[k].nav).classList.toggle("active", k===name);
@@ -46,6 +51,7 @@ const EVENTS=[
   // {d:"2026-08-03", t:"..."} 形式でバナー以外のイベント告知を書く
 ];
 const NEWS=[
+  {d:"2026-09-26", t:"🔧 v5.29.0 実機FB4件に対応: ①📝メモから単語を登録するとき、品詞のチップ(タップで動/名/形/副)と「内蔵にある(優先出題に)」「登録済み」「意味は自動で取得」の確認が追加前に出るように(以前の「マイ単語登録」と同じ工程) ②図鑑「単語」で、まだ学習していない語もタップで詳細(意味・品詞・語根・辞書)を見られるように(検索して辞書のように使える) ③学習タブを離れたときに自動で同期(その間に1問以上解いたときだけ)。セット完了・にがて特訓・模試の画面の「📥 いま同期する」ボタンは廃止 ④ホームの「セットのつづき」は常に n/30 に(目安に合わせた端数のセット「6/7」のような表記と、セット完了の●○ゲージを廃止)"},
   {d:"2026-09-25", t:"🔧 v5.28.3 見た目の細かい直し: ①ホームの「マイ単語・マイフレーズ」で「単語」「フレーズ」のラベル幅をそろえ、語数と件数の左端が縦に並ぶように ②模試の推移(折れ線)の左余白を広げ、左端の数字が縦軸の目盛りと重ならないように"},
   {d:"2026-09-25", t:"🔧 v5.28.2 ①ホームの目安の「このセット n/30問 ─ つづきから」を削除(セットの進みは「セットのつづき」のボタンだけ) ②メモのパネルを「📝 マイ単語・マイフレーズ」に。行は「単語 n語・意味待ち」「フレーズ n件・英訳待ち」と数字だけ。メモ画面は入力欄を4行が見える高さにし、例を短く、説明も短く ③Part 1模試の推移を棒から折れ線に(点の色=4択/穴埋め・上に正解数・下に日付)"},
   {d:"2026-09-25", t:"🔧 v5.28.1 ①Part 1模試は本番と同じく熟語4問を最後にまとめて出す(4択・穴埋めとも。依頼文の語の順も同じ) ②記録タブの入口に「🧪 Part 1 模試」: 回ごとの正解数の棒(4択/穴埋めの色分け)と一覧(日付・種類・正解・時間・目安超過) ③記録タブの「タップで詳細 ─ …」の脚注を削除"},
@@ -233,7 +239,7 @@ function renderHome(){
       '<div class="pacefoot"><span class="wlg hit">■</span>目安達成 <span class="wlg did">■</span>学習した日 <span class="wlg">📖</span>読んだ <span class="wlg">🎧</span>聴いた ・ タップで月のカレンダー ›</div>'+
     '</div>'+
     // ── アクション: 学習CTA(主役)
-    '<button id="homeStudy" class="studycta shine">📖 '+(sp.cur? 'セットのつづき('+sp.cur+'/'+((sp.target && sp.done===sp.target-1 && sp.last<SET_N)? sp.last : SET_N)+')' : '1セット(30問)はじめる')+
+    '<button id="homeStudy" class="studycta shine">📖 '+(sp.cur? 'セットのつづき('+sp.cur+'/'+SET_N+')' : '1セット(30問)はじめる')+
       '<span class="ctasub">今日 '+d.a+'問(正解'+d.c+')'+(stk>=2? ' ・ 🔥'+stk+'日連続':'')+'</span></button>'+
     // 任務報酬の一括受取(受け取れるものがあるときだけ出す)
     (mn? '<button id="homeClaim" class="claimbtn homeclaim">🎁 任務報酬をすべて受け取る('+mn+'件)</button>':'')+

@@ -269,46 +269,28 @@ function setRecord(g, total, info){
   if(!info.ok && info.en && !info.phr){ s.miss=s.miss||[]; if(s.miss.indexOf(info.en)<0) s.miss.push(info.en); }
   return total%SET_N===0;
 }
-/* 今日のセット数の見え方: done=完了したセット数・cur=進行中のセットの問数・
-   target=目安から換算したセット数(目標未設定・達成後はnull)。
-   v5.10.0: 進みは単語+フレーズの合算。目安(単語数)→セット数の換算は「1セットに含まれる単語の数」で割る
-   (ミックス=24語/セット・単語のみ=30語/セット) */
-/* v5.14.0(実機FB「113問の目安に5セットは仕様か」): 目安は問数で厳密に。targetQ=目安に相当する今日の合算問数
-   (ミックスは単語24問ごとにフレーズ6問が混ざるので 目安×30/24)。target=そのセット数(端数は切り上げ)、
-   last=最後のセットに必要な問数(0<last<30なら端数のセット=●○バーで短く描く)。達成判定は a>=targetQ(セット数ではない) */
+/* 今日のセット数の見え方: done=完了したセット数・cur=進行中のセットの問数(常に30問で1セット)。
+   v5.10.0: 進みは単語+フレーズの合算。
+   v5.14.0: targetQ=目安に相当する今日の合算問数(ミックスは単語24問ごとにフレーズ6問が混ざるので 目安×30/24)。
+   達成判定(hit)は a>=targetQ(セット数ではない)。
+   v5.29.0(実機FB「CTAが6/7と出た=目安に合わせた端数のセットが、間違い直しでずれる」): 目安から換算したセット数(target)・
+   最後の端数のセット(last)・●○のゲージ(setDotsHTML)は廃止。セットは常に30問で数え、目安は問数(targetQ)だけで扱う */
 function setProgress(g){
   const t=todayTotal(), q=paceToday(g);
   const targetQ=(q && !q.done)? Math.max(1, Math.ceil(q.perDay*SET_N/wordsPerSet())) : null;
-  const target=targetQ? Math.ceil(targetQ/SET_N) : null;
-  const last=targetQ? (targetQ%SET_N || SET_N) : SET_N;
-  // 達成=目安(単語の問数)に届いたか。セット換算(targetQ)は描画用で、端数の丸めで1〜2問ずれるため判定には単語数を使う
+  // 達成=目安(単語の問数)に届いたか。セット換算(targetQ)は表示用で、端数の丸めで1〜2問ずれるため判定には単語数を使う
   const hit=!!targetQ && (dayRec().a>=q.perDay || t>=targetQ);
-  return {done:Math.floor(t/SET_N), cur:t%SET_N, target, targetQ, last, a:t, hit};
-}
-/* セットの●○表示(done=完了・cur=進行中の問数・target=目安のセット数・last=最後のセットの問数)。
-   目安なし=完了分+進行中(あれば)だけ。目安ありで超過した分は金の●で足す。最後のセットが端数なら幅を問数に比例させる */
-function setDotsHTML(p){
-  const n=p.target? Math.max(p.target, p.done+(p.cur?1:0)) : p.done+(p.cur?1:0);
-  let h='<div class="setdots">';
-  for(let i=0;i<n;i++){
-    const isLast=p.target && i===p.target-1 && p.last<SET_N;
-    const need=isLast? p.last : SET_N;
-    const st=isLast? ' style="width:calc(var(--sdw,26px)*'+(need/SET_N).toFixed(2)+')" title="あと'+need+'問のセット"' : '';
-    if(i<p.done) h+='<i class="sd on'+(p.target && i>=p.target? ' over':'')+'"'+st+'></i>';
-    else if(i===p.done && p.cur) h+='<i class="sd cur"'+st+'><b style="width:'+Math.min(100, Math.round(100*p.cur/need))+'%"></b></i>';
-    else h+='<i class="sd"'+st+'></i>';
-  }
-  return h+'</div>';
+  return {done:Math.floor(t/SET_N), cur:t%SET_N, targetQ, a:t, hit};
 }
 let setDonePending=false; // 30問目の答え合わせのあと、「次へ」で完了モーダルを出す
 function openSetDone(){
   const s=G.set||{n:SET_N, cor:0, newN:0, up:0, mas:0, tk:0, phr:0, miss:[]};
   const p=setProgress(G);
   const full=s.cor>=s.n;
-  const line=p.target
+  const line=p.targetQ
     ? (p.hit
         ? '🏅 今日の目安('+p.targetQ+'問)達成! ここからは前倒し'
-        : '今日の目安まで あと'+(p.targetQ-p.a)+'問'+(p.targetQ-p.a>SET_N? '(約'+Math.ceil((p.targetQ-p.a)/SET_N)+'セット)':''))
+        : '今日の目安まで あと'+(p.targetQ-p.a)+'問') // 「(約◯セット)」はv5.29.0で撤去(目安に合わせたセット表記の廃止)
     : '今日 '+p.done+'セット目を積み上げた';
   const missN=(s.miss||[]).length;
   /* v5.10.0: セットの締めに「次の一手」 ─ ミスがあれば🔥にがて特訓(このセットのミスから)。フレーズが混ざったセットはその数も出す。
@@ -321,14 +303,11 @@ function openSetDone(){
         '<span>🏅 覚えた <b>'+s.mas+'</b></span>'+
         (s.phr? '<span>💬 フレーズ <b>'+s.phr+'</b>問</span>':'')+'</div>'+
       (GAME_ENABLED? '<div style="font-weight:800; color:var(--accent2); margin-top:8px">🎫 このセットで +'+s.tk+'</div>':'')+
-      setDotsHTML(p)+
-      '<div class="small" style="margin-top:6px">'+line+'</div></div>'+
+      '<div class="small" style="margin-top:6px">'+line+'</div></div>'+ // ●○のゲージ(setDotsHTML)はv5.29.0で廃止
     (missN? '<button class="btn setnext2" id="setWeak"><span>🔥 このセットのミス <b>'+missN+'</b>語をすぐ立て直す</span><span class="hlsub">にがて特訓 ─ 正解の選択肢タップでサクサク進める</span></button>':'')+
-    syncBtnHTML()+ // 区切りで同期(v5.16.0・実機FB)
-    '<div class="row" style="gap:10px; margin-top:10px">'+
+    '<div class="row" style="gap:10px; margin-top:10px">'+ // 「📥 いま同期する」(v5.16.0)はv5.29.0で撤去=学習タブを離れたときに自動で同期
     '<button class="btn grow" id="setHome">ひと休み(ホームへ)</button>'+
     '<button class="btn primary grow" id="setNext">🧩 次のセットへ</button></div>');
-  bindSyncBtn();
   $("setNext").onclick=()=>{ closeModal(); newQuestion(); };
   $("setHome").onclick=()=>{ closeModal(); switchTab("home"); };
   if(missN) $("setWeak").onclick=()=>{ closeModal(); startFocus(s.miss.slice()); };
@@ -348,12 +327,10 @@ function openMockDone(f, okN, n, still){
     '<div class="giftbox">正解 <b style="font-size:20px">'+okN+' / '+n+'</b>'+(okN>=n? ' ─ 全問正解! 🎉':'')+
       ' ・ ⏱ <b>'+mockFmtSec(sec)+'</b><br><span class="small">'+pace+(pm? ' ・ 前回 '+pm.c+'/'+MOCK_N+'('+mockFmtSec(pm.s)+')':'')+'</span>'+
       (still.length? '<br><span class="small">ミス: '+still.map(esc).join("・")+'</span>':'')+'</div>'+
-    syncBtnHTML()+
     '<div class="row" style="gap:10px; margin-top:10px">'+
     (still.length? '<button class="btn grow" id="focusAgain">🔥 ミスした'+still.length+'語を立て直す</button>':'')+
     '<button class="btn grow" id="mockAgain">🧪 '+(fill? '模試へ' : 'もう1回')+'</button>'+
     '<button class="btn primary grow" id="focusEnd">学習にもどる</button></div>');
-  bindSyncBtn();
   const a=$("focusAgain"); if(a) a.onclick=()=>startFocus(still);
   $("mockAgain").onclick=fill? openMockModal : startMock;
   $("focusEnd").onclick=()=>{ closeModal(); newQuestion(); };
@@ -593,11 +570,9 @@ function openFocusDone(){
     '<div class="giftbox">正解 <b style="font-size:20px">'+okN+' / '+n+'</b>'+(okN>=n? ' ─ 全部立て直した! 🎉':'')+
       (still.length? '<br><span class="small">まだ手ごわい: '+still.map(esc).join("・")+'</span>':'')+
       '<br><span class="small">ミスした語は1分後・10分後にまた出る ─ 今日のうちに2回思い出せれば明日につながる</span></div>'+
-    syncBtnHTML()+ // 区切りで同期(v5.16.0・実機FB)
     '<div class="row" style="gap:10px; margin-top:10px">'+
     (still.length? '<button class="btn grow" id="focusAgain">🔥 まだ手ごわい'+still.length+'語をもう一度</button>':'')+
     '<button class="btn primary grow" id="focusEnd">学習にもどる</button></div>');
-  bindSyncBtn();
   const a=$("focusAgain"); if(a) a.onclick=()=>startFocus(still);
   $("focusEnd").onclick=()=>{ closeModal(); newQuestion(); };
 }
@@ -803,6 +778,7 @@ function answer(chosen, btn){
   srsApply(st, ok, now, {fast:true}); // 単語は既知語の早回しあり(v5.8.0)
   st[8]=now; // 最後に解いた時刻(v5.16.0・同期は新しい方が勝つ)
   recordDayAnswer(d, wasNew, ok);
+  if(typeof syncNoteAnswer==="function") syncNoteAnswer(); // 学習を終えたときの同期の条件=1問以上(v5.29.0・sync.js)
   grantStreakFreezeToday(d); // 7日連続で🧊(v5.23.0)
   const vMile=vocabSnap(d, vPre, vocabScore(G)); // 100語の節目を越えたらお祝い(ゲーム面オフのレベルアップの代わり)
   const bonus5=ansBonus(); // 5問ごとの🎫ボーナス(v4.31.0・上限なし・全入口共通/v5.0.0からフレーズと合算)

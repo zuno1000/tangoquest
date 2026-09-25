@@ -28,7 +28,7 @@ function openWordModal(en){
       '<div class="wden">'+esc(w.en)+' <span class="poschip pos'+w.pos+'">'+POS_LABEL[w.pos]+'</span></div>'+
       '<div class="wdja">'+esc(w.ja)+'</div>'+
       (st? '<div class="small" style="margin-top:8px">'+qStatsHTML(st)+'</div><div class="small">'+due+'</div>'
-         : '<div class="small" style="margin-top:8px">まだ出題されていない</div>')+
+         : '<div class="small" style="margin-top:8px">まだ出題されていない'+(w.my? '(マイ単語)' : mywWanted(en)? '(優先して出る)' : '')+'</div>')+
       (rootText(en)? '<div class="small" style="margin-top:7px">🧬 '+rootText(en)+'</div>':'')+
       (pairs.length? '<div class="small" style="margin-top:7px">⇄ 取り違え: '+pairs.map(o=>esc(o)+'('+conf[o]+')').join("・")+'</div>':'')+
       (ex? '<div class="small" style="margin-top:7px">'+ex+'</div>':'')+
@@ -184,11 +184,12 @@ function renderDexBody(){
         const rar=m[w.en]||0;
         const stw=G.words[w.en], mas=stw && stw[0]>=MASTER_BOX;
         if(!GAME_ENABLED){
-          /* v5.16.0: ★(カードの記録)ではなく定着を見せる。学習した語はタップで単語の詳細 */
+          /* v5.16.0: ★(カードの記録)ではなく定着を見せる。学習した語はタップで単語の詳細。
+             v5.29.0(実機FB「検索した未学習の語も辞書のように意味を確かめたい」): 未学習(窪み)もタップで同じ詳細(意味・品詞・語根・辞書) */
           g+= stw
             ? '<div class="dexcell own" data-en="'+esc(w.en)+'"><div class="den">'+esc(w.en)+'</div>'+
               (mas? '<div class="dmas">✓覚えた</div>' : '<div class="dst dstep">定着 '+stw[0]+'/'+MASTER_BOX+'</div>')+'</div>'
-            : '<div class="dexcell miss"><div class="den">'+esc(w.en)+'</div></div>';
+            : '<div class="dexcell miss" data-en="'+esc(w.en)+'"><div class="den">'+esc(w.en)+'</div></div>';
           return;
         }
         g+= rar
@@ -228,7 +229,7 @@ function renderDexBody(){
     });
     // クリックは委譲1本(セルごとのリスナー2,500個を作らない=軽量化)
     $("dexGrid").onclick=e=>{
-      const cell=e.target.closest(".dexcell.own");
+      const cell=e.target.closest(GAME_ENABLED? ".dexcell.own" : ".dexcell[data-en]"); // ゲーム面オフは未学習も(v5.29.0)
       if(!cell) return;
       if(GAME_ENABLED) openCardModal(cell.dataset.k); else openWordModal(cell.dataset.en); // v5.16.0
     };
