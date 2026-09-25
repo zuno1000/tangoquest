@@ -246,7 +246,7 @@ function setFootText(sp){
   if(sp.hit) return '🏅 今日の目安ぶんは積み上げた ─ 前倒しでもう1セット?';
   return sp.cur
     ? '🧩 このセット '+sp.cur+'/'+need+'問 ─ つづきから'
-    : '🧩 30問=1セット ─ すきま時間に1セットずつ'; // v5.26.0(実機FB「ホームをシンプルに」): 「次は◯セット目」の行は廃止
+    : ''; // v5.26.0/v5.26.1(実機FB「ホームをシンプルに」): 「次は◯セット目」「30問=1セット」の行は廃止(進行中と達成の行だけ)
 }
 /* v5.15.0(実機FB「セット分割のバーを連続した1本に戻す」): バーは旧来の帯グラフ(.pbar)=今日の問数/目安。
    セット(30問)の情報は脚注の1行(setFootText)だけが担う。●○(setDotsHTML)はセット完了モーダルに残す */
@@ -260,7 +260,7 @@ function fillPaceEl(el){
       '<b style="color:var(--accent2); font-size:13px">🎯 目標日を設定 ›</b></div>'+
       '<div class="pbar"><i style="width:'+Math.round(100*sp.cur/SET_N)+'%"></i></div>'+
       '<div class="pacemsg">「いつまでに全部覚えるか」を決めると、1日の目安をここに逆算する</div>'+
-      '<div class="pacefoot">'+setFootText(sp)+'</div>';
+      (setFootText(sp)? '<div class="pacefoot">'+setFootText(sp)+'</div>' : '');
   }else if(q.done){
     el.innerHTML='<div class="pacetop"><span>🏆 全'+fmt(q.total)+'語 制覇!</span><b>🎊</b></div>'+
       '<div class="pacemsg">おめでとう! 復習を続けて記憶を守ろう</div>';
@@ -275,7 +275,7 @@ function fillPaceEl(el){
       '<div class="pbar'+(done>=target?" full":"")+'"><i style="width:'+pct+'%"></i></div>'+ // 連続1本のバー(v5.15.0で●○から戻した)
       '<div class="pacemsg'+(done>=target?" pdone":"")+'">'+paceMsg(done, target)+'</div>'+
       nowLine+
-      '<div class="pacefoot">'+setFootText(sp)+'</div>'+
+      (setFootText(sp)? '<div class="pacefoot">'+setFootText(sp)+'</div>' : '')+
       '<div class="pacefoot">'+(q.expired
         ? '⚠️ 目標日を過ぎている ─ タップして立て直そう'
         : '目標 '+q.goal.replace(/-/g,"/")+' まで残り'+q.daysLeft+'日 ・ 覚えた '+fmt(q.mastered)+'/'+fmt(q.total)+'語')+'</div>';

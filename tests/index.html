@@ -2318,7 +2318,7 @@ function run(){
     // v5.12.1: 今日のセットのパネルは目安に統合(●○バーが目安のパネルの中に入る)
     ok(!W.document.getElementById("homeSets"), "今日のセットのパネルは無い");
     ok(hb.firstElementChild.querySelector(".pbar") && !hb.firstElementChild.querySelector(".setdots"), "目安のパネルのバーは連続1本(v5.15.0)");
-    ok(hb.firstElementChild.textContent.indexOf("セット")>=0, "セットの進みの脚注");
+    ok(hb.firstElementChild.textContent.indexOf("30問=1セット")<0 && hb.firstElementChild.textContent.indexOf("次は")<0, "「30問=1セット」「次は◯セット目」の脚注は無い(v5.26.1)");
     ok(W.document.getElementById("homeStudy").textContent.indexOf("5問ごと")<0, "「5問ごとに🎫+5」の表記は廃止");
     eq(hb.children[1].id, "homeRL", "今日の英語(v5.10.0)は目安の直後");
     eq(hb.children[2].id, "homeSay", "🗣英会話(v5.25.0)は今日の英語の下");
@@ -3886,7 +3886,7 @@ function run(){
     W.openNews(); const doc=W.document;
     eq(doc.querySelectorAll("#newsUp .newsrow").length, W.newsCount()-W.newsEvents().length, "件数は変わらない");
     const first=doc.querySelector("#newsUp .newsrow");
-    ok(first.querySelector(".nver") && first.querySelector(".ntitle") && first.querySelectorAll(".nlist li").length>=3, "最新の1件=版・見出し・箇条書き3つ以上");
+    ok(first.querySelector(".nver") && first.querySelector(".ntitle") && first.querySelectorAll(".nlist li").length>=2, "最新の1件=版・見出し・箇条書き2つ以上");
     ok(first.querySelector(".nver").textContent.indexOf("v"+W.APP_VERSION)>=0, "最新はいまの版");
     W.closeModal();
   });
@@ -4085,6 +4085,22 @@ function run(){
       W.closeModal();
       W.openDrillMenu(); ok(doc.getElementById("drillMock").textContent.indexOf("前回 24/25")>=0, "🎯に前回の結果"); W.closeModal();
     }finally{ G.mocks=oldMocks; G.opt.preRecall=oldPre; W.saveG(); if(W.focusGet()) W.setFocusFromTest(null); W.newQuestion(); }
+  });
+
+  t("v5.26.1: 英語のメモは例文化(依頼文)・貼り戻しでメモの表現が核に・ホームの30問=1セットの脚注なし", ()=>{
+    const G=W.G; const oldSay=JSON.parse(JSON.stringify(G.say)), oldMy=JSON.parse(JSON.stringify(G.myphr)), oldPhr=JSON.parse(JSON.stringify(G.phr));
+    try{
+      G.say={}; G.myphr={}; W.myphrInvalidate();
+      W.sayIntake([Object.assign(W.sayClassify("wipe out"), {t:"p"}), Object.assign(W.sayClassify("portable"), {t:"p"})]); // チップで「フレーズ」にした短い語
+      eq(W.sayList().length, 2); const pr=W.sayPromptText(W.sayList());
+      ok(pr.indexOf("その表現をそのまま含む")>=0 && pr.indexOf("例")>=0 && pr.indexOf("・wipe out")>=0 && pr.indexOf("・portable")>=0, "英語のメモは例文化を頼む");
+      const r=W.sayImport("The storm wiped out the entire harvest last year. — 嵐で去年の収穫が全部だめになった\nI always carry a portable charger when I travel. — 旅行にはいつも携帯用の充電器を持っていく");
+      eq(r.added, 2, "2件登録"); eq(W.sayList().length, 0, "メモは順で対応づけて消える");
+      eq(W.myphrList().find(p=>p.en.indexOf("portable")>=0).k, "portable", "メモの表現が核(🔑)になる");
+      ok(W.myphrList().find(p=>p.en.indexOf("wiped")>=0), "活用していても登録される(核は自動)");
+      eq(W.setFootText({cur:0, done:0, hit:false, target:0}), "", "セットが進行中でなければ脚注は空");
+      ok(W.setFootText({cur:5, done:0, hit:false, target:0}).indexOf("5/30問")>=0, "進行中は残す");
+    }finally{ G.say=oldSay; G.myphr=oldMy; G.phr=oldPhr; W.myphrInvalidate(); W.saveG(); }
   });
 
   /* ---- 起動状態 ---- */

@@ -11,7 +11,7 @@
        p=フレーズ(英語・4語以上か文)         → 「英文 — 日本語」なら即マイフレーズ/日本語が無ければ英訳待ちメモ(G.say)
        j=日本語(言えなかったこと)            → 英訳待ちメモ(G.say)
      仕分けは追加前のプレビューでチップをタップして変えられる(単語⇄フレーズ)。
-   ・英訳待ちメモ: 個別に✎で書き直し・🗑・「→単語」で仕分け直し。📋依頼文をLLMに貼る(日本語→英語1文/英語→日本語訳)→
+   ・英訳待ちメモ: 個別に✎で書き直し・🗑・「→単語」で仕分け直し。📋依頼文をLLMに貼る(日本語→英語1文/英語の単語・表現→それを含む会話の例文1文+日本語訳・v5.26.1)→
      返ってきた「英文 — 日本語」を貼り戻す(sayImport)とマイフレーズ(G.myphr・c:"my")に登録 → ミックスの5問目ごとのフレーズに
      2回に1回優先して混ざる(phrase.js pickPhrase) = 「言えなかった」が毎日の学習で「言える」に変わる。翻訳・生成はアプリではしない
    ・フレーズ特訓(5問・PHR_DRILLS.warm): マイフレーズ優先→学習中→未着手。まず自力で英文を思い出してから並べ替え(v5.26.0: 口頭→並べ替え)。
@@ -85,9 +85,9 @@ function sayToWord(id){
 }
 /* LLMへの依頼文(コピー用): 出力を『英文 — 日本語』の1行1つに固定=貼り戻しで自動登録できる */
 function sayPromptText(items){
-  return "英語学習のメモです。日本語のメモは「言いたかったのに英語で言えなかったこと」、英語のメモは「意味は分かるのに話すとき出てこなかった表現」です。\n"+
+  return "英語学習のメモです。日本語のメモは「言いたかったのに英語で言えなかったこと」、英語のメモは「意味は分かるのに話すとき出てこなかった単語・句動詞・表現」です。\n"+
     "・日本語のメモ → 会話でそのまま口に出せる自然な英語1文に(10〜15語程度・話し言葉として自然に。英検1級を目指す学習者なので簡単すぎる言い回しは避けつつ、覚えて使える長さで)\n"+
-    "・英語のメモ → 自然な日本語訳を付ける(英文がぎこちなければ自然な英語に直してよい)\n"+
+    "・英語のメモ → その表現をそのまま含む、会話でそのまま口に出せる自然な英文1文(10〜15語程度)を作り、日本語訳を付ける(例: wipe out → 「The storm wiped out the entire harvest last year.」のように、私が自分の話で使えそうな場面で。メモがすでに文なら、ぎこちなければ自然に直す)\n"+
     "・出力は1行につき「英文 — 日本語」だけ。番号・記号・説明・空行は入れないでください(単語帳アプリにそのまま貼り付けます)\n\n"+
     items.map(x=>"・"+x.ja).join("\n");
 }
@@ -113,7 +113,9 @@ function sayImport(text){
           || pend.filter(x=>!x._used)[0];
     const ja=ln.ja || (hit && hit.t==="j"? hit.ja : "");
     if(!ja){ errs.push(ln.en.slice(0,30)+": 日本語がない"); return; }
-    const r=myphrAdd(ln.en, ja, "");
+    // 英語のメモ(単語・句動詞)が英文に含まれていれば、それを核(🔑=覚えたい部分)に(v5.26.1: 並べ替えの狙いが「出てこなかった表現」に定まる)
+    const k=(hit && hit.t!=="j" && ln.en.toLowerCase().indexOf(String(hit.ja).toLowerCase())>=0)? hit.ja : "";
+    const r=myphrAdd(ln.en, ja, k);
     if(r.err){ errs.push(ln.en.slice(0,30)+": "+r.err); return; }
     added++;
     if(hit){ hit._used=1; G.say[hit.id]=Object.assign({}, G.say[hit.id], {done:1, en:ln.en, at:Date.now()}); }
@@ -179,6 +181,7 @@ function openSayModal(focusAdd){
     helpNote("hlp-say", '<b>1か所に書くだけ</b>(1行1つ)。行ごとに自動で仕分ける ─ '+
       '<b>単語</b>(意味が分からなかった英単語・3語以内)はそのままマイ単語に(意味は自動取得・学習の4択に出る)。'+
       '<b>フレーズ</b>(英語で言えなかったこと=日本語/意味は分かるのに出てこなかった英語の表現)は英訳待ちのメモに → '+
+      '(wipe out・portable のような短い語も、チップで「フレーズ」にすればLLMが会話で使える例文にし、並べ替えで練習できる) '+
       '📋依頼文をLLM(ChatGPT等)に貼る → 返ってきた「英文 — 日本語」を貼り戻すとマイフレーズに(ミックスの5問目ごとのフレーズに優先して混ざる)。'+
       '「英文 — 日本語」と書けば単語もフレーズもその場で登録。仕分けは追加前のチップで変えられる。<br>'+
       '🎯フレーズ5問はマイフレーズ優先の並べ替え(まず思い出してから)。レッスンで使えたら「使えた」=間隔をあけた正解として復習に反映。<br>'+
@@ -216,7 +219,7 @@ function openSayModal(focusAdd){
     box.innerHTML='<div class="panel">'+items.map((it,i)=>
       '<div class="myrow"><button class="wchip saytype'+(it.t==="w"? " ksel":"")+'" data-i="'+i+'"'+(it.t==="j"? ' disabled':'')+'>'+T[it.t]+'</button>'+
       '<div class="grow small"><b style="color:var(--ink)">'+esc(it.t==="j"? it.ja : it.en)+'</b>'+(it.t!=="j" && it.ja? ' <span class="small">'+esc(it.ja)+'</span>':'')+
-      '<br><span class="small">'+(it.t==="w"? 'マイ単語に(意味は'+(it.ja? 'この訳':'自動取得')+')' : it.t==="j"? '英訳待ちのメモに' : (it.ja? 'マイフレーズに' : '英訳待ちのメモに(日本語訳をLLMに)'))+'</span></div></div>').join("")+'</div>';
+      '<br><span class="small">'+(it.t==="w"? 'マイ単語に(意味は'+(it.ja? 'この訳':'自動取得')+')' : it.t==="j"? '英訳待ちのメモに' : (it.ja? 'マイフレーズに' : '英訳待ちのメモに(例文化と日本語訳をLLMに)'))+'</span></div></div>').join("")+'</div>';
     box.querySelectorAll(".saytype").forEach(b=>b.onclick=()=>{ const it=items[+b.dataset.i]; it.t=it.t==="w"? "p":"w"; renderPrev(); });
     $("sayAddBtn").disabled=false;
   };
