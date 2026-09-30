@@ -34,7 +34,7 @@ function openWordModal(en){
       // 違う文字を強調(v5.30.2)。意味は出す(v5.30.3: 詳細は自分で開いて見る画面なので伏せない)
       (pairs.length? '<div class="small" style="margin-top:7px">⇄ 取り違え: '+pairs.map(o=>diffMark(o, en)+'('+esc(shortJa(byEn[o].ja))+'・'+conf[o]+'回)').join("・")+'</div>':'')+
       (la.length? '<div class="small" style="margin-top:7px">👀 似た形: '+la.map(o=>diffMark(o, en)+partnerJa(o, true)).join("・")+'</div>':'')+
-      (memo? '<div class="small wmemo" style="margin-top:7px">💡 '+esc(memo)+'</div>':'')+
+      (memo? '<div class="small wmemo" style="margin-top:7px; white-space:pre-line">💡 '+esc(memo)+'</div>':'')+
       (ex? '<div class="small" style="margin-top:7px">'+ex+'</div>':'')+
     '</div>'+
     '<button class="btn" id="wdMemo" style="width:100%; margin-top:12px">✏️ '+(memo? '覚え方メモを直す' : '覚え方メモを書く')+'</button>'+

@@ -1224,6 +1224,7 @@ body.svplay #slotView{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
 #phrBuild.wex .myex{display:inline}
 /* 答え合わせの2行(v5.30.0→v5.30.1: 別の行・中央ぞろえ): 上=👀似た形(⇄取り違え/📝用例)・下=💡覚え方メモ(✏️の入口)。各行1行・はみ出しは… */
 #phrBuild.wex .wrow{display:block; height:20px; line-height:20px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+#phrBuild.wex.tall{height:60px} /* 2行の覚え方メモ(v5.30.8): 似た形1行+メモ2行 */
 #phrBuild.wex.memo{cursor:pointer}
 .wmemo{color:var(--accent2); font-weight:800}
 .wla{color:var(--ink); font-weight:700}

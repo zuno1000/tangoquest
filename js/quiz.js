@@ -119,10 +119,16 @@ function shortJa(ja){
 
 /* ---- 覚え方メモ(v5.30.0・実機FB「語呂などの工夫を書き込んで正解確認画面で見られるメモ欄」) ----
    G.wmemo: en→{t, at}(削除は{del:1,at})。答え合わせの用例行(#phrBuild.wex)に💡で出る(タップで書く/直す)。単語の詳細にも */
-var WMEMO_MAX=120;
+var WMEMO_MAX=120, WMEMO_LINES=2;
 function wmemoGet(en){ const m=G.wmemo && G.wmemo[en]; return (m && !m.del && m.t)? m.t : ""; }
+/* 改行に対応(v5.30.8・実機FB「2行で表記したい」): 行ごとに空白を整え、空行は捨て、WMEMO_LINES行まで(3行目以降は2行目につなぐ)。全体でWMEMO_MAX字 */
+function wmemoNorm(t){
+  const lines=String(t||"").replace(/\r\n?/g, "\n").split("\n").map(s=>s.replace(/[ \t\u3000]+/g, " ").trim()).filter(Boolean);
+  if(lines.length>WMEMO_LINES) lines.splice(WMEMO_LINES-1, lines.length, lines.slice(WMEMO_LINES-1).join(" "));
+  return lines.join("\n").slice(0, WMEMO_MAX);
+}
 function wmemoSet(en, t){
-  t=String(t||"").replace(/\s+/g, " ").trim().slice(0, WMEMO_MAX);
+  t=wmemoNorm(t);
   G.wmemo=G.wmemo||{};
   G.wmemo[en]=t? {t, at:Date.now()} : {del:1, at:Date.now()};
   saveG();
@@ -172,9 +178,13 @@ function wexLineHTML(en, reveal){
     top=mywExampleHTML(en);
     if(!top) top=lookAlikeRowHTML(en, reveal); // 取り違えの相手
   }
-  const bottom=memo? '<span class="wmemo">💡 '+esc(memo)+'</span>' : '<span class="wpen">✏️ 覚え方メモ</span>';
-  return '<div class="wrow" data-k="la">'+top+'</div><div class="wrow" data-k="memo">'+bottom+'</div>';
+  // メモは行ごとに1行ずつ(v5.30.8: 2行のメモは枠を1行ぶん広げる=wexHeight)。1行目に💡
+  const bottom=memo? memo.split("\n").map((l,i)=>'<div class="wrow" data-k="memo"><span class="wmemo">'+(i? '' : '💡 ')+esc(l)+'</span></div>').join("")
+    : '<div class="wrow" data-k="memo"><span class="wpen">✏️ 覚え方メモ</span></div>';
+  return '<div class="wrow" data-k="la">'+top+'</div>'+bottom;
 }
+/* 枠の高さ(v5.30.8): 似た形の行1+メモの行数。出題時に決めておく=答え合わせで単語が動かない(2行のメモを答え合わせ中に書いた直後だけ枠が広がる) */
+function wexHeight(pb, en){ pb.classList.toggle("tall", wmemoGet(en).indexOf("\n")>=0); }
 /* メモを書く/直す。after=保存・削除・とじたあとに呼ぶ(答え合わせの行の描き直し・単語の詳細に戻る) */
 function openMemoModal(en, after){
   const w=byEn[en]; if(!w) return;
@@ -184,7 +194,7 @@ function openMemoModal(en, after){
   const done=()=>{ closeModal(); if(after) after(); };
   openModal('<h3>✏️ 覚え方メモ '+helpBtn("hlp-wmemo")+'</h3>'+
     helpNote("hlp-wmemo", '語呂・語源のこじつけ・似た形の語と区別するコツなど、自分の言葉で。<b>答え合わせのたびに単語の下に💡で出る</b>(正解した回も)。'+
-      '図鑑・にがてノートの単語の詳細からも書ける。'+WMEMO_MAX+'字まで・同期で他の端末にも伝わる')+
+      '図鑑・にがてノートの単語の詳細からも書ける。'+WMEMO_MAX+'字まで・<b>改行で2行</b>(3行目以降は2行目につながる)・同期で他の端末にも伝わる')+
     '<div class="wdetail"><div class="wden">'+esc(w.en)+' <span class="poschip pos'+w.pos+'">'+POS_LABEL[w.pos]+'</span></div><div class="wdja">'+esc(w.ja)+'</div>'+
       (ref.length? '<div class="small" style="margin-top:6px">区別したい相手: '+ref.join(' ・ ')+'</div>':'')+'</div>'+
     '<textarea id="wmemoTa" class="myta" rows="3" maxlength="'+WMEMO_MAX+'" style="margin-top:10px" placeholder="例: regime(政権)は短い方 ─ regimeNは Nutrition の N=食事の管理">'+esc(memo)+'</textarea>'+
@@ -897,6 +907,7 @@ function renderQuestion(){
   $("promptCard").classList.remove("phr");
   $("choices").className="choices";
   const w=cur.word, e2j=G.mode==="e2j";
+  if(pb) wexHeight(pb, w.en); // 2行の覚え方メモがある語は枠を60pxに(v5.30.8)
   const st=G.words[w.en];
   $("qBadge").textContent = !st? "新規" : (st[0]>=MASTER_BOX? "覚えた・復習" : "復習");
   $("qBadge").style.color = !st? "var(--accent2)" : (st[0]>=MASTER_BOX? "var(--ok)" : "var(--accent)");
@@ -1021,12 +1032,12 @@ function answer(chosen, btn){
   if(!ok && chosen.en!==w.en){ noteConfusion(G, w.en, chosen.en); if(!FOCUS && !pairQueue.some(q=>q.en===chosen.en)) pairQueue.push({en:chosen.en, wait:PAIR_GAP}); }
   /* 単語カードの下の行(枠は出題時から確保済み=v5.24.0): 💡覚え方メモ(なければ✏️の入口)・👀似た形・📝マイ単語の用例(v5.30.0で統合)。
      タップで覚え方メモを書く/直す(単語カードの辞書タップとは分ける=stopPropagation)。穴埋め模試は英文が上にあるので同じ行に出す */
-  { const pb=$("phrBuild"); let reveal=false; pb.innerHTML=wexLineHTML(w.en, reveal); pb.classList.remove("hidden"); pb.classList.add("memo");
+  { const pb=$("phrBuild"); let reveal=false; pb.innerHTML=wexLineHTML(w.en, reveal); pb.classList.remove("hidden"); pb.classList.add("memo"); wexHeight(pb, w.en);
     /* 上の行(似た形)のタップ=伏せた相手の意味を開く(v5.30.2・自分の答えを確かめる)。下の行(メモ)のタップ=覚え方メモを書く/直す */
     pb.onclick=e=>{ e.stopPropagation(); if(!answered || !cur || cur.word.en!==w.en) return;
       const row=e.target.closest? e.target.closest(".wrow") : null;
       if(row && row.dataset.k==="la" && row.textContent.trim()){ reveal=true; pb.innerHTML=wexLineHTML(w.en, reveal); return; }
-      openMemoModal(w.en, ()=>{ if(answered && cur && cur.word.en===w.en) pb.innerHTML=wexLineHTML(w.en, reveal); }); }; }
+      openMemoModal(w.en, ()=>{ if(answered && cur && cur.word.en===w.en){ pb.innerHTML=wexLineHTML(w.en, reveal); wexHeight(pb, w.en); } }); }; }
 
   // 知識XP: 正解が直接キャラの強さになる(連続学習日数+コンボ+キャラスキルでボーナス)
   let xpGain=0, lvUp=0;

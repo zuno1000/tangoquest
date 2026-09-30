@@ -4379,9 +4379,12 @@ function run(){
   t("v5.30.0③: 覚え方メモ ─ wmemoGet/wmemoSet(空白の整理・120字・空ならトンボストーン)・同期は操作時刻LWW(mergeData)・部分リセットで残る", ()=>{
     const G=W.G; const old=JSON.parse(JSON.stringify(G.wmemo||{}));
     try{
-      eq(W.wmemoGet("regimen"), ""); eq(W.wmemoSet("regimen", "  regimeN = Nutrition \n の N  "), "regimeN = Nutrition の N"); eq(W.wmemoGet("regimen"), "regimeN = Nutrition の N");
+      eq(W.wmemoGet("regimen"), ""); eq(W.wmemoSet("regimen", "  regimeN = Nutrition \n の N  "), "regimeN = Nutrition\nの N", "改行は残す(v5.30.8)・行ごとに空白を整える"); eq(W.wmemoGet("regimen"), "regimeN = Nutrition\nの N");
       ok(G.wmemo.regimen.at>0, "操作時刻"); eq(W.wmemoSet("regimen", "x".repeat(200)).length, W.WMEMO_MAX, "上限");
       W.wmemoSet("regimen", ""); ok(G.wmemo.regimen.del && !W.wmemoGet("regimen"), "空=削除のトンボストーン");
+      // 改行(v5.30.8): 行ごとに整え・空行は捨て・2行まで(3行目以降は2行目につなぐ)・CRLFも
+      eq(W.wmemoNorm(" 1行目 \r\n\n  2行目\n"), "1行目\n2行目"); eq(W.wmemoNorm("a\nb\nc\nd"), "a\nb c d"); eq(W.wmemoNorm("\n\n"), ""); eq(W.WMEMO_LINES, 2);
+      eq(W.wmemoSet("regimen", "上\n下"), "上\n下"); eq(W.wmemoGet("regimen"), "上\n下");
       const a={wmemo:{a:{t:"A手元", at:10}, b:{del:1, at:30}, c:{t:"C", at:5}}}, b={wmemo:{a:{t:"A別端末", at:20}, b:{t:"B古い", at:20}, d:{t:"D", at:1}}};
       const m=W.mergeData(a, b);
       eq(m.wmemo.a.t, "A別端末", "新しい方が勝つ"); ok(m.wmemo.b.del, "手元の削除が新しければ残る"); eq(m.wmemo.c.t, "C"); eq(m.wmemo.d.t, "D", "手元に無いものは取り込む");
@@ -4425,8 +4428,19 @@ function run(){
       // 直す: 削除ボタンあり → 消すと✏️に戻る
       pb.querySelector('.wrow[data-k="memo"]').click(); ok(doc.getElementById("wmemoDel") && doc.getElementById("wmemoTa").value==="regimeN の N は Nutrition", "既存のメモが入る"); doc.getElementById("wmemoDel").click();
       eq(W.wmemoGet("regimen"), ""); ok(pb.querySelector(".wpen"), "✏️に戻る");
+      // 2行のメモ(v5.30.8): 答え合わせ中に書けば枠が60pxに広がり3行(似た形+メモ2行)・次の出題では出題時から60px=答え合わせで単語が動かない
+      pb.querySelector('.wrow[data-k="memo"]').click(); doc.getElementById("wmemoTa").value="上の行\n下の行"; doc.getElementById("wmemoSave").click();
+      eq(W.wmemoGet("regimen"), "上の行\n下の行"); eq(pb.querySelectorAll(".wrow").length, 3, "3行"); eq(pb.querySelectorAll('.wrow[data-k="memo"]').length, 2);
+      ok(pb.textContent.indexOf("💡 上の行")>=0 && pb.textContent.indexOf("下の行")>=0 && pb.classList.contains("tall"), "枠は.tall");
+      // 高さはテストの1pxのiframe(flexで縮む)では測れないので、スタイルシートの規則で確かめる
+      { let rule=null; for(const ss of doc.styleSheets){ try{ for(const r of ss.cssRules){ if(r.selectorText==="#phrBuild.wex.tall") rule=r; } }catch(e){} }
+        ok(rule && rule.style.height==="60px", "2行のメモの枠は60px(CSS)"); }
+      W.setCurFromTest(W.byEn.regimen); ok(pb.classList.contains("tall") && pb.textContent==="", "出題時から60pxの空の枠");
+      const hh0=doc.getElementById("promptWord").getBoundingClientRect().top;
+      [...doc.querySelectorAll("#choices .choice")].find(x=>x.textContent===want).click();
+      ok(Math.abs(doc.getElementById("promptWord").getBoundingClientRect().top-hh0)<1, "2行のメモでも単語の位置が動かない"); eq(pb.querySelectorAll(".wrow").length, 3);
       W.wmemoSet("regimen", "メモ");
-      W.setCurFromTest(W.WORDS[0]); ok(!pb.classList.contains("memo") && pb.textContent==="", "次の出題で行は空・onclickは外れる");
+      W.setCurFromTest(W.WORDS[0]); ok(!pb.classList.contains("memo") && pb.textContent==="" && !pb.classList.contains("tall"), "次の出題で行は空・onclickは外れる・1行のメモなら40px");
       // 単語の詳細(図鑑・にがてノート)
       W.openWordModal("regimen");
       ok(m.textContent.indexOf("💡 メモ")>=0 && m.textContent.indexOf("👀 似た形")>=0 && m.textContent.indexOf("regime(政権)")>=0 && m.textContent.indexOf("未学習")<0 && m.querySelector(".wdf") && doc.getElementById("wdMemo") && doc.getElementById("wdMemo").textContent.indexOf("直す")>=0, "詳細に💡と👀と✏️");
