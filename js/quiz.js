@@ -129,10 +129,9 @@ function wmemoSet(en, t){
   return t;
 }
 /* ---- 似た形の見せ方(v5.30.2・実機FB「並べて見せると、かえって間違えた方を覚えてしまいそう」=記憶の干渉への対策) ----
-   ①相手の意味は「相手も学習済み(定着2以上・partnerLearned)」のときだけ。片方が未学習のうちは綴りだけ(似た語があることに気づかせるが、二つの意味を同時に符号化させない)
-   ②違う文字を強調(diffMark: LCSで揃わない文字を<b class="wdf">)=手がかりを意味ではなく「見分ける文字」に付ける
-   ③意味は伏せておき、上の行のタップで開く(小さな想起テスト・「まず自力で思い出す」と同じ思想)。未学習の相手は開いても「未学習」 */
-function partnerLearned(en){ const st=G.words[en]; return !!st && Math.max(st[0]||0, st[7]||0)>=2; }
+   ①違う文字を強調(diffMark: LCSで揃わない文字を<b class="wdf">)=手がかりを意味ではなく「見分ける文字」に付ける
+   ②相手の意味は伏せておき、上の行のタップで開く(小さな想起テスト・「まず自力で思い出す」と同じ思想)。二つの意味を受け身で同時に読ませない。
+   v5.30.3(実機FB「一度隠すなら未学習の相手も意味を出してよい」): 開いたあとは学習済み/未学習を問わず意味を出す(v5.30.2の学習済み判定は撤去) */
 /* aのうち、bと(順序を保って)揃わない文字を強調したHTML(純関数)。regimen/regime→regime<b>n</b>・imminent/eminent→<b>im</b>minent */
 function diffMark(a, b){
   const n=a.length, m=b.length, L=[];
@@ -149,9 +148,9 @@ function diffMark(a, b){
   flush();
   return out;
 }
-/* 相手の意味(学習済みなら意味・未学習なら「未学習」)。reveal=false のときは空 */
-function partnerJa(o, reveal){ return reveal? '('+(partnerLearned(o)? esc(shortJa(byEn[o].ja)) : '未学習')+')' : ''; }
-/* 上の行: 「👀 regimeN ⇄ regime・regimenT ▸意味」→タップで「👀 regimeN ⇄ regime(政権)・regimenT(未学習)」 */
+/* 相手の意味(開いたときだけ)。reveal=false のときは空 */
+function partnerJa(o, reveal){ return reveal? '('+esc(shortJa(byEn[o].ja))+')' : ''; }
+/* 上の行: 「👀 regimeN ⇄ regime・regimenT ▸意味」→タップで「👀 regimeN ⇄ regime(政権)・regimenT(連隊)」 */
 function lookAlikeRowHTML(en, reveal){
   const la=lookAlikes(en, 2);
   let mark="👀", list=la;
@@ -178,7 +177,7 @@ function openMemoModal(en, after){
   const w=byEn[en]; if(!w) return;
   const memo=wmemoGet(en);
   const la=lookAlikes(en, 3), cf=confusedWith(G, en, 2).filter(o=>la.indexOf(o)<0);
-  const ref=la.map(o=>'👀 <b>'+diffMark(o, en)+'</b>'+partnerJa(o, true)).concat(cf.map(o=>'⇄ <b>'+diffMark(o, en)+'</b>'+partnerJa(o, true))); // 意味は学習済みの相手だけ(v5.30.2)
+  const ref=la.map(o=>'👀 <b>'+diffMark(o, en)+'</b>'+partnerJa(o, true)).concat(cf.map(o=>'⇄ <b>'+diffMark(o, en)+'</b>'+partnerJa(o, true))); // 違う文字を強調(v5.30.2)
   const done=()=>{ closeModal(); if(after) after(); };
   openModal('<h3>✏️ 覚え方メモ '+helpBtn("hlp-wmemo")+'</h3>'+
     helpNote("hlp-wmemo", '語呂・語源のこじつけ・似た形の語と区別するコツなど、自分の言葉で。<b>答え合わせのたびに単語の下に💡で出る</b>(正解した回も)。'+

@@ -4358,14 +4358,13 @@ function run(){
       const cands=W.lookAlikes("regimen", 5); if(cands.length>=2){ const last=cands[cands.length-1]; G.conf.regimen={[last]:3}; eq(W.lookAlikes("regimen", 5)[0], last, "取り違えの多い相手が先頭"); }
     }finally{ G.conf=oldConf; }
     eq(W.shortJa("（一時的な）政権、体制"), "政権", "先頭の補足を外し最初の読点まで");
-    // v5.30.2: 違う文字の強調(diffMark・純関数)と相手の学習済み判定(partnerLearned)
+    // v5.30.2: 違う文字の強調(diffMark・純関数)・v5.30.3: 開くと未学習の相手でも意味
     eq(W.diffMark("regimen","regime"), 'regime<b class="wdf">n</b>'); eq(W.diffMark("regime","regimen"), "regime", "足りない側は何も強調しない");
     eq(W.diffMark("regiment","regimen"), 'regimen<b class="wdf">t</b>'); eq(W.diffMark("imminent","eminent"), '<b class="wdf">im</b>minent'); eq(W.diffMark("eminent","imminent"), '<b class="wdf">e</b>minent');
     eq(W.diffMark("depreciate","deprecate"), 'deprec<b class="wdf">i</b>ate'); eq(W.diffMark("abc","abc"), "abc"); eq(W.diffMark("","abc"), "");
-    { const oldSt=G.words.regime; delete G.words.regime; ok(!W.partnerLearned("regime"), "未出題=未学習");
-      G.words.regime=[1, 0, 1, 1, 0, 0, 0]; ok(!W.partnerLearned("regime"), "定着1=未学習"); G.words.regime=[0, 0, 1, 1, 0, 0, 0, 2]; ok(W.partnerLearned("regime"), "ミスで落ちても復帰先が2なら学習済み");
-      G.words.regime=[2, 0, 1, 0, 0, 0, 0]; ok(W.partnerLearned("regime"), "定着2=学習済み");
-      eq(W.lookAlikeRowHTML("regimen", false).indexOf("政権"), -1, "伏せているときは意味なし"); ok(W.lookAlikeRowHTML("regimen", true).indexOf("regime(政権)")>=0, "開くと学習済みの相手の意味");
+    { const oldSt=G.words.regime; delete G.words.regime;
+      eq(W.lookAlikeRowHTML("regimen", false).indexOf("政権"), -1, "伏せているときは意味なし"); ok(W.lookAlikeRowHTML("regimen", true).indexOf("regime(政権)")>=0, "開くと未学習の相手でも意味(v5.30.3)");
+      ok(typeof W.partnerLearned==="undefined", "学習済み判定は撤去");
       if(oldSt) G.words.regime=oldSt; else delete G.words.regime; } eq(W.shortJa("（軍の）連隊"), "連隊"); eq(W.shortJa("港"), "港");
   });
 
@@ -4406,12 +4405,10 @@ function run(){
       const rows=pb.querySelectorAll(".wrow"); eq(rows.length, 2, "2行(v5.30.1)"); ok(rows[0].querySelector(".wla") && rows[1].querySelector(".wpen"), "上=似た形・下=メモ");
       eq(W.getComputedStyle(pb).textAlign, "center", "中央ぞろえ"); eq(W.getComputedStyle(rows[0]).whiteSpace, "nowrap", "各行は1行"); ok(rows[0].getBoundingClientRect().height<=21 && pb.getBoundingClientRect().height<=41, "行の高さ");
       ok(Math.abs(doc.getElementById("promptWord").getBoundingClientRect().top-h0)<1, "単語の位置が動かない");
-      // 上の行のタップ=意味を開く(未学習の相手は「未学習」・学習済みなら意味)
+      // 上の行のタップ=伏せた意味を開く(v5.30.3: 未学習の相手でも意味)
       const oldRegime=G.words.regime; delete G.words.regime;
       pb.querySelector('.wrow[data-k="la"]').click();
-      ok(!doc.getElementById("wmemoTa"), "上の行のタップではメモは開かない"); ok(pb.textContent.indexOf("regime(未学習)")>=0 && pb.textContent.indexOf("▸意味")<0, "未学習の相手は意味を出さない: "+pb.textContent);
-      G.words.regime=[2, Date.now()+864e5, 1, 0, 0, 0, 0]; pb.querySelector('.wrow[data-k="la"]').click();
-      ok(pb.textContent.indexOf("regime(政権)")>=0, "学習済み(定着2)の相手は意味: "+pb.textContent);
+      ok(!doc.getElementById("wmemoTa"), "上の行のタップではメモは開かない"); ok(pb.textContent.indexOf("regime(政権)")>=0 && pb.textContent.indexOf("未学習")<0 && pb.textContent.indexOf("▸意味")<0, "開くと未学習の相手でも意味: "+pb.textContent);
       if(oldRegime) G.words.regime=oldRegime; else delete G.words.regime;
       pb.querySelector('.wrow[data-k="memo"]').click();
       const m=doc.getElementById("modal"); ok(doc.getElementById("wmemoTa") && m.textContent.indexOf("覚え方メモ")>=0 && m.textContent.indexOf("regimen")>=0 && m.textContent.indexOf("区別したい相手")>=0 && m.textContent.indexOf("regime")>=0, "メモのモーダル(相手の一覧)");
@@ -4428,7 +4425,7 @@ function run(){
       W.setCurFromTest(W.WORDS[0]); ok(!pb.classList.contains("memo") && pb.textContent==="", "次の出題で行は空・onclickは外れる");
       // 単語の詳細(図鑑・にがてノート)
       W.openWordModal("regimen");
-      ok(m.textContent.indexOf("💡 メモ")>=0 && m.textContent.indexOf("👀 似た形")>=0 && m.textContent.indexOf("regime(未学習)")>=0 && m.querySelector(".wdf") && doc.getElementById("wdMemo") && doc.getElementById("wdMemo").textContent.indexOf("直す")>=0, "詳細に💡と👀と✏️");
+      ok(m.textContent.indexOf("💡 メモ")>=0 && m.textContent.indexOf("👀 似た形")>=0 && m.textContent.indexOf("regime(政権)")>=0 && m.textContent.indexOf("未学習")<0 && m.querySelector(".wdf") && doc.getElementById("wdMemo") && doc.getElementById("wdMemo").textContent.indexOf("直す")>=0, "詳細に💡と👀と✏️");
       doc.getElementById("wdMemo").click(); ok(doc.getElementById("wmemoTa"), "詳細→メモ"); doc.getElementById("wmemoClose").click();
       ok(doc.getElementById("wdDict") && doc.getElementById("wdMemo"), "とじると詳細に戻る"); W.closeModal();
       // 似た形が無い語で取り違えの相手だけあるとき ⇄ / 何も無ければ ✏️ だけ
