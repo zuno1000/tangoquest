@@ -51,6 +51,7 @@ const EVENTS=[
   // {d:"2026-08-03", t:"..."} 形式でバナー以外のイベント告知を書く
 ];
 const NEWS=[
+  {d:"2026-09-30", t:"👀 v5.30.0 紛らわしい語を混同せずに覚える+模試を学習の流れに: ①綴りの近い語(regimen/regime・deprecate/depreciate など)を自動で見つけ、答え合わせの単語の下に「👀 似た形: regime(政権)」と毎回出す(正解した回も見比べる)。4択の誤答にも同じ品詞の似た形の語が混ざる ②「✏️ 覚え方メモ」: 答え合わせの行をタップ(または図鑑・にがてノートの単語の詳細から)して語呂・区別のコツを書くと、以後は答え合わせのたびに💡で出る(同期で他の端末にも) ③Part 1模試の出題範囲を選べる: 「全語彙」(本番と同じく知らない語も混ざる=本番の予想に数える)/「学習した語」(一度出た語だけ=定着の確認。推移では○の点) ④模試の完了と推移に「📈 本番の予想」: 全語彙の直近5回の平均正解数と、合格者のPart 1正答率のよくある範囲からの帯(Part 1だけの目安・他パートは含まない) ⑤100語以上学習して1週間模試を受けていないと、セット完了の画面とホームに「🧪 Part 1 模試を受ける」の入口(タップですぐ4択がはじまる)"},
   {d:"2026-09-26", t:"🔧 v5.29.4 実機FB: Part 1模試の推移を前までさかのぼれるように: ①フレーズのあゆみと同じ◀▶で12回ずつ(折れ線と一覧は同じページ) ②見出しにその12回の期間と回数・ページ数"},
   {d:"2026-09-26", t:"🔧 v5.29.3 自己レビューの直し: ①にがて特訓の最後がちょうど30問目だったとき「ひと休み(ホームへ)」でセット完了の画面が消えていたのを修正(学習に戻って「次へ」で出る) ②同期の認証が応答なしで終わったあとも「学習を離れたときの同期」が止まらないように"},
   {d:"2026-09-26", t:"🔧 v5.29.2 実機FB: にがて特訓の完了画面に「ひと休み(ホームへ)」ボタン(セット完了と同じ並び。まだ手ごわい語の「もう一度」は上の段に)"},
@@ -245,6 +246,8 @@ function renderHome(){
     // ── アクション: 学習CTA(主役)
     '<button id="homeStudy" class="studycta shine">📖 '+(sp.cur? 'セットのつづき('+sp.cur+'/'+SET_N+')' : '1セット(30問)はじめる')+
       '<span class="ctasub">今日 '+d.a+'問(正解'+d.c+')'+(stk>=2? ' ・ 🔥'+stk+'日連続':'')+'</span></button>'+
+    // 週1回の模試の入口(v5.30.0): 100語以上学習して直近の模試から7日以上のときだけ(mockDue)。タップですぐ4択の模試がはじまる
+    (mockDue(G)? '<button class="btn homemock" id="homeMock">🧪 Part 1 模試を受ける(25問・約10分)<span class="hlsub">'+mockDueSub()+'</span></button>':'')+
     // 任務報酬の一括受取(受け取れるものがあるときだけ出す)
     (mn? '<button id="homeClaim" class="claimbtn homeclaim">🎁 任務報酬をすべて受け取る('+mn+'件)</button>':'')+
     // ログインボーナスのバナー(v4.26.0: 起動モーダル廃止の受け皿。タップで7日カレンダー)
@@ -256,6 +259,7 @@ function renderHome(){
       '<div class="panel syncnag" id="homeSync">📥 最終同期から'+
         Math.floor((Date.now()-lastSyncAt())/864e5)+'日 ─ タップして同期</div>':'');
   $("homeStudy").onclick=()=>autoSyncOnGesture(()=>switchTab("quiz")); // 同期が要れば同期→リロード後に学習タブへ(v5.19.0)
+  const hm=$("homeMock"); if(hm) hm.onclick=startMock; // v5.30.0
   $("homeRL").onclick=openRLModal;
   bindSayPanel(); // 🗣英会話(v5.25.0)
   rlFillHome(); rlEnsureLoaded(rlFillHome); // 今日の英語(v5.10.0): キャッシュがあれば即・なければ取得して埋める
@@ -450,6 +454,7 @@ window.rlStateReset=()=>{ rlState={read:null, listen:null}; rlAlt={read:0, liste
 window.RL_LEN=RL_LEN; window.RL_LEN_DEFAULT=RL_LEN_DEFAULT; // v5.23.0(⏱ 聴く長さ)
 window.SFX_KINDS=SFX_KINDS; window.SFX_VOLS=SFX_VOLS; // v5.24.0(効果音の種類・音量)
 window.MOCK_N=MOCK_N; window.MOCK_IDIOM=MOCK_IDIOM; window.MOCK_GUIDE_SEC=MOCK_GUIDE_SEC; // v5.25.0(Part 1模試)
+window.laCacheClear=()=>laCache.clear(); window.answeredGet=()=>answered; window.setDonePendingSet=v=>{ setDonePending=!!v; }; // v5.30.0(似た形・覚え方メモ・模試のテスト)
 window.autoSyncPendingGet=()=>autoSyncPending; window.autoSyncPendingSet=v=>{ autoSyncPending=!!v; }; window.AUTO_SYNC_GAP=AUTO_SYNC_GAP; // v5.19.0
 window.setFocusFromTest=f=>{ FOCUS=f; }; window.focusGet=()=>FOCUS; window.pdrillGet=()=>PDRILL;
 window.LTD_SLOTS=LTD_SLOTS;

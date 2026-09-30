@@ -4341,6 +4341,156 @@ function run(){
     }finally{ G.mocks=oldMocks; W.saveG(); W.switchTab("home"); }
   });
 
+  /* ---- v5.30.0: 似た形の語・覚え方メモ・模試の出題範囲/本番の予想/週1回の入口 ---- */
+  t("v5.30.0①: 似た形の語 ─ editDist(純関数: 置換・挿入・削除・隣接の入れ替え=1・早期打ち切り)・isLookAlike(7字以上は2以内・6字以下は1以内・熟語と短い語は対象外)・lookAlikes(WORDSから・並び=取り違え→学習ずみ→近さ)", ()=>{
+    const G=W.G;
+    eq(W.editDist("regimen","regime",3), 1); eq(W.editDist("deprecate","depreciate",3), 1); eq(W.editDist("eminent","imminent",3), 2);
+    eq(W.editDist("precede","proceed",3), 2, "de↔edの入れ替えは1"); eq(W.editDist("adapt","adopt",3), 1); eq(W.editDist("abandon","zebra",2), 3, "打ち切り=max+1");
+    ok(W.isLookAlike("regimen","regime") && W.isLookAlike("deprecate","depreciate") && W.isLookAlike("eminent","imminent") && W.isLookAlike("adverse","averse") && W.isLookAlike("elicit","illicit"), "代表的な紛らわしいペア");
+    ok(W.isLookAlike("adapt","adept"), "adapt/adept(5字・1)"); ok(!W.isLookAlike("grave","brace"), "5字で2つ違いは対象外"); ok(!W.isLookAlike("cede","code"), "4字以下は対象外");
+    ok(!W.isLookAlike("chip away at","chip in") && !W.isLookAlike("regime","regime"), "熟語・同じ語は対象外");
+    const la=W.lookAlikes("regimen", 3); ok(la.indexOf("regime")>=0, "regimen→regime: "+la.join(","));
+    ok(W.lookAlikes("deprecate", 3).indexOf("depreciate")>=0 && W.lookAlikes("eminent", 3).indexOf("imminent")>=0 && W.lookAlikes("prescribe", 3).indexOf("proscribe")>=0, "WORDSの実データで見つかる");
+    // 並び: 取り違えた回数が多い相手が先
+    const oldConf=JSON.parse(JSON.stringify(G.conf)); G.conf={};
+    try{
+      const cands=W.lookAlikes("regimen", 5); if(cands.length>=2){ const last=cands[cands.length-1]; G.conf.regimen={[last]:3}; eq(W.lookAlikes("regimen", 5)[0], last, "取り違えの多い相手が先頭"); }
+    }finally{ G.conf=oldConf; }
+    eq(W.shortJa("（一時的な）政権、体制"), "政権", "先頭の補足を外し最初の読点まで"); eq(W.shortJa("（軍の）連隊"), "連隊"); eq(W.shortJa("港"), "港");
+  });
+
+  t("v5.30.0②: 4択の誤答に似た形の語(同じ品詞・単語のみ)が混ざる ─ regimen の誤答に regime が出ることがある・熟語には出ない", ()=>{
+    const w=W.byEn.regimen, r=W.byEn.regime; ok(w && r && w.pos===r.pos, "同じ品詞");
+    let hit=0; for(let i=0;i<40;i++){ if(W.buildChoices(w).some(c=>c.en==="regime")) hit++; }
+    ok(hit>=10, "40回中 regime が誤答に "+hit+"回(確率3/4)");
+    const pv=W.byEn["chip away at"]; for(let i=0;i<5;i++){ ok(W.buildChoices(pv).filter(c=>c.en!==pv.en).every(c=>c.en.indexOf(" ")>=0), "熟語の誤答は熟語のまま"); }
+  });
+
+  t("v5.30.0③: 覚え方メモ ─ wmemoGet/wmemoSet(空白の整理・120字・空ならトンボストーン)・同期は操作時刻LWW(mergeData)・部分リセットで残る", ()=>{
+    const G=W.G; const old=JSON.parse(JSON.stringify(G.wmemo||{}));
+    try{
+      eq(W.wmemoGet("regimen"), ""); eq(W.wmemoSet("regimen", "  regimeN = Nutrition \n の N  "), "regimeN = Nutrition の N"); eq(W.wmemoGet("regimen"), "regimeN = Nutrition の N");
+      ok(G.wmemo.regimen.at>0, "操作時刻"); eq(W.wmemoSet("regimen", "x".repeat(200)).length, W.WMEMO_MAX, "上限");
+      W.wmemoSet("regimen", ""); ok(G.wmemo.regimen.del && !W.wmemoGet("regimen"), "空=削除のトンボストーン");
+      const a={wmemo:{a:{t:"A手元", at:10}, b:{del:1, at:30}, c:{t:"C", at:5}}}, b={wmemo:{a:{t:"A別端末", at:20}, b:{t:"B古い", at:20}, d:{t:"D", at:1}}};
+      const m=W.mergeData(a, b);
+      eq(m.wmemo.a.t, "A別端末", "新しい方が勝つ"); ok(m.wmemo.b.del, "手元の削除が新しければ残る"); eq(m.wmemo.c.t, "C"); eq(m.wmemo.d.t, "D", "手元に無いものは取り込む");
+      const r=W.partialResetData({wmemo:{a:{t:"A", at:1}}, words:{x:[1]}}, 999); eq(r.wmemo.a.t, "A", "部分リセットでメモは残る"); eq(Object.keys(r.words).length, 0);
+    }finally{ G.wmemo=old; W.saveG(); }
+  });
+
+  t("v5.30.0④: 答え合わせの行 ─ 👀似た形(正解でも)・✏️メモの入口・タップでメモのモーダル(相手の一覧・保存で💡に描き直し)・単語の位置は動かない・次の出題で外れる・単語の詳細にも💡と✏️", ()=>{
+    const G=W.G, doc=W.document; const old=JSON.parse(JSON.stringify(G.wmemo||{})), oldPre=G.opt.preRecall;
+    const oldDays=JSON.parse(JSON.stringify(G.days)), oldPdays=JSON.parse(JSON.stringify(G.pdays)), oldSet=JSON.parse(JSON.stringify(G.set)); // 1問の解答で今日の合算がずれると後続のミックスの物差しが動くので戻す
+    try{
+      G.opt.preRecall=0; G.wmemo={};
+      W.switchTab("quiz"); W.setCurFromTest(W.byEn.regimen);
+      const pb=doc.getElementById("phrBuild"); eq(pb.textContent, "", "出題時は空"); ok(!pb.classList.contains("memo"));
+      const h0=doc.getElementById("promptWord").getBoundingClientRect().top;
+      const want=(G.mode==="e2j"? W.byEn.regimen.ja : "regimen");
+      [...doc.querySelectorAll("#choices .choice")].find(x=>x.textContent===want).click();
+      ok(pb.textContent.indexOf("👀 似た形: ")>=0 && pb.textContent.indexOf("regime(")>=0, "正解しても似た形が出る: "+pb.textContent);
+      ok(pb.querySelector(".wpen") && pb.textContent.indexOf("✏️ 覚え方メモ")>=0, "メモの入口"); ok(pb.classList.contains("memo"));
+      ok(Math.abs(doc.getElementById("promptWord").getBoundingClientRect().top-h0)<1, "単語の位置が動かない");
+      pb.click();
+      const m=doc.getElementById("modal"); ok(doc.getElementById("wmemoTa") && m.textContent.indexOf("覚え方メモ")>=0 && m.textContent.indexOf("regimen")>=0 && m.textContent.indexOf("区別したい相手")>=0 && m.textContent.indexOf("regime")>=0, "メモのモーダル(相手の一覧)");
+      ok(!doc.getElementById("wmemoDel"), "まだメモが無ければ削除ボタンなし");
+      doc.getElementById("wmemoTa").value="regimeN の N は Nutrition"; doc.getElementById("wmemoSave").click();
+      ok(!doc.getElementById("wmemoTa"), "とじる"); eq(W.wmemoGet("regimen"), "regimeN の N は Nutrition");
+      ok(pb.querySelector(".wmemo") && pb.textContent.indexOf("💡 regimeN の N は Nutrition")>=0 && !pb.querySelector(".wpen"), "行が💡に描き直される: "+pb.textContent);
+      ok(pb.textContent.indexOf("👀 似た形")>=0, "似た形も残る");
+      // 直す: 削除ボタンあり → 消すと✏️に戻る
+      pb.click(); ok(doc.getElementById("wmemoDel") && doc.getElementById("wmemoTa").value==="regimeN の N は Nutrition", "既存のメモが入る"); doc.getElementById("wmemoDel").click();
+      eq(W.wmemoGet("regimen"), ""); ok(pb.querySelector(".wpen"), "✏️に戻る");
+      W.wmemoSet("regimen", "メモ");
+      W.setCurFromTest(W.WORDS[0]); ok(!pb.classList.contains("memo") && pb.textContent==="", "次の出題で行は空・onclickは外れる");
+      // 単語の詳細(図鑑・にがてノート)
+      W.openWordModal("regimen");
+      ok(m.textContent.indexOf("💡 メモ")>=0 && m.textContent.indexOf("👀 似た形")>=0 && doc.getElementById("wdMemo") && doc.getElementById("wdMemo").textContent.indexOf("直す")>=0, "詳細に💡と👀と✏️");
+      doc.getElementById("wdMemo").click(); ok(doc.getElementById("wmemoTa"), "詳細→メモ"); doc.getElementById("wmemoClose").click();
+      ok(doc.getElementById("wdDict") && doc.getElementById("wdMemo"), "とじると詳細に戻る"); W.closeModal();
+      // 似た形が無い語で取り違えの相手だけあるとき ⇄ / 何も無ければ ✏️ だけ
+      const lone=W.WORDS.find(w=>w.en.indexOf(" ")<0 && !W.lookAlikes(w.en, 1).length && !W.wmemoGet(w.en) && !(G.myw&&G.myw[w.en]));
+      ok(lone, "似た形の無い語"); eq(W.wexLineHTML(lone.en).indexOf("👀"), -1); ok(W.wexLineHTML(lone.en).indexOf("✏️ 覚え方メモ")>=0);
+    }finally{ G.wmemo=old; G.opt.preRecall=oldPre; G.days=oldDays; G.pdays=oldPdays; G.set=oldSet; W.setDonePendingSet(false); W.saveG(); W.setCurFromTest(W.WORDS[0]); }
+  });
+
+  t("v5.30.0⑤: 模試の出題範囲 ─ mockPoolWords(純関数: seen=学習した語・25語に足りなければ全語彙)・🧪案内のセグでG.opt.mockPoolを保存・学習した語の回は結果にp:1・穴埋めの依頼文も同じ範囲・推移の一覧と点(○)", ()=>{
+    const G=W.G, doc=W.document;
+    const oldWords=G.words, oldMocks=JSON.parse(JSON.stringify(G.mocks)), oldPool=G.opt.mockPool, oldPre=G.opt.preRecall, oldQ=G.mockq;
+    const oldDays=JSON.parse(JSON.stringify(G.days)), oldPdays=JSON.parse(JSON.stringify(G.pdays)), oldSet=JSON.parse(JSON.stringify(G.set)); // 25問ぶんの解答は後続のテストの物差し(セットの境界)に影響するので戻す
+    try{
+      G.words={}; eq(W.mockPoolWords(G, "seen"), W.WORDS, "学習した語が無ければ全語彙"); eq(W.mockPoolWords(G, "all"), W.WORDS);
+      W.WORDS.slice(0, 30).forEach(w=>{ G.words[w.en]=[2, Date.now()+864e5, 1, 0, 0, 0, 0]; });
+      const s=W.mockPoolWords(G, "seen"); eq(s.length, 30, "学習した30語"); ok(s.every(w=>G.words[w.en]));
+      G.opt.mockPool="all"; G.mocks={}; G.mockq=null;
+      W.openMockModal();
+      const seg=doc.getElementById("mockPoolSeg"); ok(seg && seg.querySelector('[data-p="all"]').classList.contains("active"), "既定=全語彙");
+      ok(doc.getElementById("modal").textContent.indexOf("本番の予想")>=0, "予想の行(記録なしの案内)");
+      seg.querySelector('[data-p="seen"]').click(); eq(G.opt.mockPool, "seen", "保存"); ok(doc.getElementById("mockPoolSeg").querySelector('[data-p="seen"]').classList.contains("active"), "描き直し");
+      // 学習した語の模試: 出題は学習した語だけ・結果にp:1・完了画面は「本番の予想には数えない」
+      G.opt.preRecall=0; W.startMock();
+      const f=W.focusGet(); ok(f && f.mock && f.mock.p===1, "FOCUS.mock.p"); ok(f.list.every(en=>G.words[en]), "学習した語だけ"); eq(f.list.length, 25);
+      for(let i=0;i<25;i++){ const w=W.byEn[W.focusGet().list[i]]; const want=(G.mode==="e2j"? w.ja : w.en); [...doc.querySelectorAll("#choices .choice")].find(x=>x.textContent===want).click(); W.newQuestion(); }
+      const k=Object.keys(G.mocks)[0]; eq(G.mocks[k].p, 1, "p:1"); eq(G.mocks[k].c, 25);
+      const mt=doc.getElementById("modal").textContent; ok(mt.indexOf("学習した語")>=0 && mt.indexOf("本番の予想には数えない")>=0, "完了画面: "+mt.slice(0,120)); W.closeModal();
+      ok(W.mockForecast(G)===null, "学習した語の回は予想に数えない");
+      // 全語彙の回にはpが付かない
+      G.opt.mockPool="all"; W.startMock(); ok(W.focusGet().mock.p===0, "全語彙=p:0"); clearInterval(W.focusGet().mock.timer); W.setFocusFromTest(null); W.newQuestion();
+      // 穴埋めの依頼文の語も範囲に従う
+      G.opt.mockPool="seen"; W.openMockModal(); doc.getElementById("mockPromptBtn").click();
+      ok(G.mockq && G.mockq.p===1 && G.mockq.words.every(en=>G.words[en]), "依頼した語は学習した語・p:1"); W.closeModal();
+      // 推移: 一覧に「学習した語」・点は白抜き(.seen)
+      G.mocks={"1000":{c:18,s:700,d:"2026-09-20",f:0}, "2000":{c:24,s:600,d:"2026-09-22",f:0,p:1}};
+      W.openMockHistoryModal();
+      ok(doc.querySelector("#modal svg.mockline circle.seen"), "○の点"); eq(doc.querySelectorAll("#modal svg.mockline circle.seen").length, 1);
+      const rows=doc.querySelectorAll("#modal .myrow"); ok(rows[0].textContent.indexOf("学習した語")>=0 && rows[1].textContent.indexOf("学習した語")<0, "一覧の印");
+      ok(doc.getElementById("modal").textContent.indexOf("○")>=0, "脚注"); W.closeModal();
+    }finally{ if(W.focusGet() && W.focusGet().mock) clearInterval(W.focusGet().mock.timer); W.setFocusFromTest(null); G.words=oldWords; G.mocks=oldMocks; G.opt.mockPool=oldPool; G.opt.preRecall=oldPre; G.mockq=oldQ; G.days=oldDays; G.pdays=oldPdays; G.set=oldSet; W.setDonePendingSet(false); W.laCacheClear(); W.saveG(); W.newQuestion(); W.switchTab("home"); }
+  });
+
+  t("v5.30.0⑥: 本番の予想 ─ mockForecast(純関数: 全語彙の直近5回の平均・学習した語の回は除く・帯MOCK_BANDS・1回前の予想との差)・mockForecastHTML・完了画面と推移の見出しに出る", ()=>{
+    const G=W.G, doc=W.document; const oldMocks=JSON.parse(JSON.stringify(G.mocks));
+    try{
+      eq(W.mockForecast({mocks:{}}), null, "記録なし");
+      eq(W.mockForecast({mocks:{"1":{c:20,s:1,d:"d",p:1}}}), null, "学習した語だけなら無し");
+      let fc=W.mockForecast({mocks:{"1":{c:18,s:1,d:"d"}}}); eq(fc.avg, 18); eq(fc.n, 1); eq(fc.band, "合格者の平均的な帯"); eq(fc.delta, null);
+      fc=W.mockForecast({mocks:{"1":{c:10,s:1,d:"d"}, "2":{c:12,s:1,d:"d"}, "3":{c:14,s:1,d:"d"}, "4":{c:16,s:1,d:"d"}, "5":{c:18,s:1,d:"d"}, "6":{c:20,s:1,d:"d"}, "7":{c:25,s:1,d:"d",p:1}}});
+      eq(fc.avg, 16, "直近5回(12〜20)の平均・学習した語(25)は除く"); eq(fc.n, 5); eq(fc.delta, 2, "1回前の予想(10〜18の平均14)との差");
+      eq(W.MOCK_BANDS.length, 4); eq(W.mockForecast({mocks:{"1":{c:21,s:1,d:"d"}}}).band, "合格者の平均を上回る語彙力"); eq(W.mockForecast({mocks:{"1":{c:13,s:1,d:"d"}}}).band, "合格ライン前後 ─ 語彙をもう一段"); eq(W.mockForecast({mocks:{"1":{c:5,s:1,d:"d"}}}).band, "語彙が足かせ ─ 学習を積もう");
+      const html=W.mockForecastHTML(fc); ok(html.indexOf("16 / 25")>=0 && html.indexOf("直近5回の平均")>=0 && html.indexOf("+2")>=0 && html.indexOf("Part 1だけの目安")>=0, html);
+      ok(W.mockForecastHTML(null).indexOf("受けると出る")>=0);
+      // 推移の見出し
+      G.mocks={"1000":{c:18,s:700,d:"2026-09-20",f:0}, "2000":{c:20,s:600,d:"2026-09-22",f:0}};
+      W.openMockHistoryModal(); const t=doc.getElementById("modal").textContent; ok(t.indexOf("本番の予想")>=0 && t.indexOf("19 / 25")>=0, "推移に予想: "+t.slice(0,80)); W.closeModal();
+    }finally{ G.mocks=oldMocks; W.saveG(); }
+  });
+
+  t("v5.30.0⑦: 週1回の模試の入口 ─ mockDue(純関数: 100語未満は出ない・一度も無ければ出る・7日未満は出ない・7日以上で出る)・セット完了とホームの🧪ボタン(タップで模試がはじまる)・mockDueSub", ()=>{
+    const G=W.G, doc=W.document;
+    const oldWords=G.words, oldMocks=JSON.parse(JSON.stringify(G.mocks)), oldPre=G.opt.preRecall, oldPool=G.opt.mockPool;
+    try{
+      const now=Date.now(), D=864e5;
+      const many={}; W.WORDS.slice(0, 120).forEach(w=>{ many[w.en]=[1, now, 1, 0, 0, 0, 0]; });
+      ok(!W.mockDue({words:{a:[1]}, mocks:{}}, now), "100語未満は出ない");
+      ok(W.mockDue({words:many, mocks:{}}, now), "一度も無ければ出る");
+      ok(!W.mockDue({words:many, mocks:{[String(now-3*D)]:{c:1}}}, now), "3日前なら出ない");
+      ok(W.mockDue({words:many, mocks:{[String(now-8*D)]:{c:1}}}, now), "8日前なら出る");
+      eq(W.MOCK_DUE_DAYS, 7); eq(W.MOCK_MIN_SEEN, 100);
+      // ホーム: 出る/出ない
+      G.words=many; G.mocks={}; W.renderHome(); ok(doc.getElementById("homeMock") && doc.getElementById("homeMock").textContent.indexOf("まだ一度も")>=0, "ホームに入口(まだ一度も)");
+      G.mocks={[String(now-9*D)]:{c:17,s:600,d:"2026-09-21",f:0}}; W.renderHome();
+      const hm=doc.getElementById("homeMock"); ok(hm && hm.textContent.indexOf("前回から9日")>=0 && hm.textContent.indexOf("17/25")>=0, "前回からの日数と結果: "+hm.textContent);
+      G.mocks={[String(now-D)]:{c:17,s:600,d:"2026-09-29",f:0}}; W.renderHome(); ok(!doc.getElementById("homeMock"), "昨日受けていれば出ない");
+      // セット完了の画面
+      G.mocks={}; W.openSetDone(); ok(doc.getElementById("setMock") && doc.getElementById("setHome") && doc.getElementById("setNext"), "セット完了に🧪"); W.closeModal();
+      G.mocks={[String(now-D)]:{c:17,s:600,d:"2026-09-29",f:0}}; W.openSetDone(); ok(!doc.getElementById("setMock"), "受けたばかりなら出ない"); W.closeModal();
+      // タップで模試がはじまる(ホーム)
+      G.mocks={}; G.opt.preRecall=0; G.opt.mockPool="all"; W.renderHome(); doc.getElementById("homeMock").click();
+      ok(W.focusGet() && W.focusGet().mock && !doc.getElementById("quizView").classList.contains("hidden"), "ホームの🧪→学習タブで模試"); eq(doc.getElementById("qBadge").textContent, "🧪 模試");
+    }finally{ if(W.focusGet() && W.focusGet().mock) clearInterval(W.focusGet().mock.timer); W.setFocusFromTest(null); G.words=oldWords; G.mocks=oldMocks; G.opt.preRecall=oldPre; G.opt.mockPool=oldPool; W.saveG(); W.newQuestion(); W.switchTab("home"); }
+  });
+
   /* ---- 起動状態 ---- */
   t("起動時に問題が出題されている", ()=>{
     ok(W.document.getElementById("promptWord").textContent.length>0);

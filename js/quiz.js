@@ -68,6 +68,100 @@ function rootMates(en, n){
   }
   return shuffle(out).slice(0, n||1);
 }
+/* ---- 似た形の語(v5.30.0・実機FB「regimen/regime・deprecate/depreciateのような紛らわしい語を混同せずに覚えたい」) ----
+   綴りの近い語を「似た形」として自動で見つける(WORDSから・語ごとにキャッシュ)。基準=編集距離(置換・挿入・削除・隣り合う2字の入れ替え=1):
+   長い方が7字以上なら2以内・6字以下なら1以内(regimen/regime=1・deprecate/depreciate=1・eminent/imminent=2・adapt/adopt=1)。熟語は対象外。
+   ①答え合わせの用例行に「👀 似た形: regime(政権)」を毎回出す=正解した回も見比べて区別を固める
+   ②4択の誤答に混ぜる(取り違え→似た形→語根→無作為。同じ品詞のときだけ)=消去法で解けない・弁別を毎回練習
+   ③覚え方メモ(wmemo)の相手として見せる。取り違え(G.conf)と同じく新しいモードは足さない */
+function editDist(a, b, max){
+  const la=a.length, lb=b.length;
+  if(Math.abs(la-lb)>max) return max+1;
+  let prev2=null, prev=[];
+  for(let j=0;j<=lb;j++) prev[j]=j;
+  for(let i=1;i<=la;i++){
+    const cur=[i]; let rowMin=i;
+    for(let j=1;j<=lb;j++){
+      let v=Math.min(prev[j]+1, cur[j-1]+1, prev[j-1]+(a[i-1]===b[j-1]? 0 : 1));
+      if(i>1 && j>1 && a[i-1]===b[j-2] && a[i-2]===b[j-1]) v=Math.min(v, prev2[j-2]+1); // 隣接の入れ替え
+      cur[j]=v; if(v<rowMin) rowMin=v;
+    }
+    if(rowMin>max) return max+1; // 早期打ち切り
+    prev2=prev; prev=cur;
+  }
+  return prev[lb];
+}
+function isLookAlike(a, b){
+  if(a===b || a.indexOf(" ")>=0 || b.indexOf(" ")>=0) return false;
+  const la=a.length, lb=b.length;
+  if(la<5 || lb<5 || Math.abs(la-lb)>2) return false;
+  const max=Math.max(la, lb)>=7? 2 : 1;
+  return editDist(a, b, max)<=max;
+}
+const laCache=new Map();
+/* 似た形の語(最大n・en配列)。並び=取り違えた回数が多い→学習ずみ→綴りが近い→アルファベット順 */
+function lookAlikes(en, n){
+  let arr=laCache.get(en);
+  if(!arr){
+    arr=[];
+    for(const x of WORDS){ if(isLookAlike(en, x.en)) arr.push(x.en); }
+    laCache.set(en, arr);
+  }
+  const c=(G.conf||{})[en]||{};
+  return arr.filter(o=>byEn[o]).sort((a,b)=>((c[b]||0)-(c[a]||0)) || ((G.words[b]?1:0)-(G.words[a]?1:0)) || (editDist(en,a,3)-editDist(en,b,3)) || a.localeCompare(b)).slice(0, n||2);
+}
+/* 意味の要約(添え書き用): 先頭の「（専制的な）」のような補足を外し、最初の読点まで。regime→「政権」 */
+function shortJa(ja){
+  const s=String(ja||"");
+  const t=s.replace(/^[（(][^）)]*[）)]\s*/, "").split(/[、。／]/)[0];
+  return t || s.split(/[、。／]/)[0];
+}
+
+/* ---- 覚え方メモ(v5.30.0・実機FB「語呂などの工夫を書き込んで正解確認画面で見られるメモ欄」) ----
+   G.wmemo: en→{t, at}(削除は{del:1,at})。答え合わせの用例行(#phrBuild.wex)に💡で出る(タップで書く/直す)。単語の詳細にも */
+var WMEMO_MAX=120;
+function wmemoGet(en){ const m=G.wmemo && G.wmemo[en]; return (m && !m.del && m.t)? m.t : ""; }
+function wmemoSet(en, t){
+  t=String(t||"").replace(/\s+/g, " ").trim().slice(0, WMEMO_MAX);
+  G.wmemo=G.wmemo||{};
+  G.wmemo[en]=t? {t, at:Date.now()} : {del:1, at:Date.now()};
+  saveG();
+  return t;
+}
+/* 答え合わせの用例行(単語): 💡メモ(なければ✏️の入口)・👀似た形(なければ⇄取り違え)・📝マイ単語の用例。2行に収まる分だけ見える */
+function wexLineHTML(en){
+  const parts=[], memo=wmemoGet(en);
+  if(memo) parts.push('<span class="wmemo">💡 '+esc(memo)+'</span>');
+  const la=lookAlikes(en, 2);
+  if(la.length) parts.push('<span class="wla">👀 似た形: '+la.map(o=>esc(o)+'('+esc(shortJa(byEn[o].ja))+')').join("・")+'</span>');
+  else{ const cf=confusedWith(G, en, 1); if(cf.length) parts.push('<span class="wla">⇄ 取り違え: '+esc(cf[0])+'('+esc(shortJa(byEn[cf[0]].ja))+')</span>'); }
+  if(!memo) parts.push('<span class="wpen">✏️ 覚え方メモ</span>');
+  const ex=mywExampleHTML(en); if(ex) parts.push(ex);
+  return parts.join('<span class="wsep"> ・ </span>');
+}
+/* メモを書く/直す。after=保存・削除・とじたあとに呼ぶ(答え合わせの行の描き直し・単語の詳細に戻る) */
+function openMemoModal(en, after){
+  const w=byEn[en]; if(!w) return;
+  const memo=wmemoGet(en);
+  const la=lookAlikes(en, 3), cf=confusedWith(G, en, 2).filter(o=>la.indexOf(o)<0);
+  const ref=la.map(o=>'👀 <b>'+esc(o)+'</b>('+esc(shortJa(byEn[o].ja))+')').concat(cf.map(o=>'⇄ <b>'+esc(o)+'</b>('+esc(shortJa(byEn[o].ja))+')'));
+  const done=()=>{ closeModal(); if(after) after(); };
+  openModal('<h3>✏️ 覚え方メモ '+helpBtn("hlp-wmemo")+'</h3>'+
+    helpNote("hlp-wmemo", '語呂・語源のこじつけ・似た形の語と区別するコツなど、自分の言葉で。<b>答え合わせのたびに単語の下に💡で出る</b>(正解した回も)。'+
+      '図鑑・にがてノートの単語の詳細からも書ける。'+WMEMO_MAX+'字まで・同期で他の端末にも伝わる')+
+    '<div class="wdetail"><div class="wden">'+esc(w.en)+' <span class="poschip pos'+w.pos+'">'+POS_LABEL[w.pos]+'</span></div><div class="wdja">'+esc(w.ja)+'</div>'+
+      (ref.length? '<div class="small" style="margin-top:6px">区別したい相手: '+ref.join(' ・ ')+'</div>':'')+'</div>'+
+    '<textarea id="wmemoTa" class="myta" rows="3" maxlength="'+WMEMO_MAX+'" style="margin-top:10px" placeholder="例: regime(政権)は短い方 ─ regimeNは Nutrition の N=食事の管理">'+esc(memo)+'</textarea>'+
+    '<div class="row" style="gap:8px; margin-top:10px">'+
+      (memo? '<button class="btn" id="wmemoDel">削除</button>':'')+
+      '<button class="btn grow" id="wmemoClose">とじる</button>'+
+      '<button class="btn primary grow" id="wmemoSave">保存</button></div>');
+  const ta=$("wmemoTa"); try{ ta.focus(); }catch(e){}
+  $("wmemoSave").onclick=()=>{ const t=wmemoSet(en, ta.value); toast(t? "💡 覚え方メモを保存" : "メモを消した"); done(); };
+  $("wmemoClose").onclick=done;
+  const dl=$("wmemoDel"); if(dl) dl.onclick=()=>{ wmemoSet(en, ""); toast("メモを消した"); done(); };
+}
+
 /* マイ単語の新規導入は1セット(30問)にこの数まで(v5.12.0): 1記事から15語登録した日に復習を押しのけない */
 var MYW_PER_SET=6;
 function setMyNew(g, total){
@@ -305,28 +399,37 @@ function openSetDone(){
       (GAME_ENABLED? '<div style="font-weight:800; color:var(--accent2); margin-top:8px">🎫 このセットで +'+s.tk+'</div>':'')+
       '<div class="small" style="margin-top:6px">'+line+'</div></div>'+ // ●○のゲージ(setDotsHTML)はv5.29.0で廃止
     (missN? '<button class="btn setnext2" id="setWeak"><span>🔥 このセットのミス <b>'+missN+'</b>語をすぐ立て直す</span><span class="hlsub">にがて特訓 ─ 正解の選択肢タップでサクサク進める</span></button>':'')+
+    (mockDue(G)? '<button class="btn setnext2" id="setMock"><span>🧪 Part 1 模試を受ける(25問・約10分)</span><span class="hlsub">'+mockDueSub()+'</span></button>':'')+ // 週1回の模試の入口(v5.30.0)
     '<div class="row" style="gap:10px; margin-top:10px">'+ // 「📥 いま同期する」(v5.16.0)はv5.29.0で撤去=学習タブを離れたときに自動で同期
     '<button class="btn grow" id="setHome">ひと休み(ホームへ)</button>'+
     '<button class="btn primary grow" id="setNext">🧩 次のセットへ</button></div>');
   $("setNext").onclick=()=>{ closeModal(); newQuestion(); };
   $("setHome").onclick=()=>{ closeModal(); switchTab("home"); };
   if(missN) $("setWeak").onclick=()=>{ closeModal(); startFocus(s.miss.slice()); };
+  const sm=$("setMock"); if(sm) sm.onclick=startMock;
+}
+/* 🧪の入口の添え書き(セット完了・ホーム): 前回からの日数と結果、まだなら誘い文 */
+function mockDueSub(){
+  const last=mockLast(), at=mockLastAt(G);
+  return last? '前回から'+Math.floor((Date.now()-at)/864e5)+'日 ・ '+last.c+'/'+MOCK_N+' ─ 今週の1回を' : 'まだ一度も ─ いまの語彙力を本番の形式で';
 }
 
 /* 模試の完了(v5.25.0): 正解数・時間・本番の目安との比較。ミスした語は「もう一度」でにがて特訓へ。結果はG.mocksに残す */
 function openMockDone(f, okN, n, still){
   clearInterval(f.mock.timer);
   const now=Date.now(), sec=(now-f.mock.t0)/1000;
-  const fill=!!f.mock.q;
-  G.mocks[String(now)]={c:okN, s:Math.round(sec), d:todayKey(), f:fill? 1:0};
+  const fill=!!f.mock.q, seen=!!f.mock.p;
+  const rec={c:okN, s:Math.round(sec), d:todayKey(), f:fill? 1:0}; if(seen) rec.p=1; // p=学習した語だけの出題(v5.30.0・本番の予想には数えない)
+  G.mocks[String(now)]=rec;
   if(fill) G.mockq=null; // 穴埋めの問題セットは1回で消費(v5.28.0)
   saveG();
   const pace=sec<=MOCK_GUIDE_SEC? '本番の目安('+mockFmtSec(MOCK_GUIDE_SEC)+')に収まった' : '本番の目安('+mockFmtSec(MOCK_GUIDE_SEC)+')より'+mockFmtSec(sec-MOCK_GUIDE_SEC)+'長い ─ 迷った語は消去法より先に「知っているか」で切る';
   const prev=Object.keys(G.mocks).sort().filter(k=>k!==String(now)); const pm=prev.length? G.mocks[prev[prev.length-1]] : null;
-  openModal('<h3>🧪 Part 1 模試'+(fill? '(穴埋め)':'')+' ─ 完了!</h3>'+
+  openModal('<h3>🧪 Part 1 模試'+(fill? '(穴埋め)':'')+(seen? '・学習した語':'')+' ─ 完了!</h3>'+
     '<div class="giftbox">正解 <b style="font-size:20px">'+okN+' / '+n+'</b>'+(okN>=n? ' ─ 全問正解! 🎉':'')+
       ' ・ ⏱ <b>'+mockFmtSec(sec)+'</b><br><span class="small">'+pace+(pm? ' ・ 前回 '+pm.c+'/'+MOCK_N+'('+mockFmtSec(pm.s)+')':'')+'</span>'+
-      (still.length? '<br><span class="small">ミス: '+still.map(esc).join("・")+'</span>':'')+'</div>'+
+      (still.length? '<br><span class="small">ミス: '+still.map(esc).join("・")+'</span>':'')+
+      '<div class="mockfc" style="margin-top:8px">'+(seen? '<span class="small">学習した語だけの出題 ─ 定着の確認(本番の予想には数えない)</span>' : mockForecastHTML(mockForecast(G)))+'</div></div>'+
     '<div class="row" style="gap:10px; margin-top:10px">'+
     (still.length? '<button class="btn grow" id="focusAgain">🔥 ミスした'+still.length+'語を立て直す</button>':'')+
     '<button class="btn grow" id="mockAgain">🧪 '+(fill? '模試へ' : 'もう1回')+'</button>'+
@@ -398,6 +501,44 @@ var FOCUS_N=10;
    経過時間を表示(本番の目安=約10分・1問24秒)。にがて特訓(FOCUS)の器を借りる=解答はふつうの学習として記録・ミスは1分後/10分後に再出題。
    結果はG.mocks(時刻→{c:正解, s:秒, d:日付}・同期は和集合)。🎯実戦メニューから */
 var MOCK_N=25, MOCK_IDIOM=4, MOCK_GUIDE_SEC=600;
+/* ---- 模試の出題範囲・時期・本番の予想(v5.30.0・実機FB「模試をより気軽に学習に取り入れたい・学習済みだけ/全語彙の2通り・予想合格率」) ----
+   出題範囲(G.opt.mockPool): all=全語彙(本番の予想に数える)/seen=学習した語(定着の確認・本番の予想には数えない=結果にp:1)。
+   学習した語が25語に足りないうちは全語彙。🧪の案内のセグで選び、以後は覚える(4択・穴埋めの依頼文とも同じ範囲) */
+function mockPoolWords(g, pool){
+  if(pool==="seen"){ const s=WORDS.filter(w=>g.words[w.en]); if(s.length>=MOCK_N) return s; }
+  return WORDS;
+}
+function mockPool(){ return (G.opt && G.opt.mockPool==="seen")? "seen" : "all"; }
+/* 模試の時期(純関数): 100語以上を学習していて、直近の模試から7日以上(または一度も)なら「そろそろ」。
+   セット完了の画面とホームに🧪の入口を出す条件=毎週1回、学習の流れの中で自然に受ける(新しいタブ・設定は足さない) */
+var MOCK_DUE_DAYS=7, MOCK_MIN_SEEN=100;
+function mockLastAt(g){ const ks=Object.keys((g&&g.mocks)||{}); return ks.length? Math.max.apply(null, ks.map(Number)) : 0; }
+function mockDue(g, now){
+  now=now||Date.now();
+  if(Object.keys((g&&g.words)||{}).length<MOCK_MIN_SEEN) return false;
+  const last=mockLastAt(g);
+  return !last || now-last>=MOCK_DUE_DAYS*864e5;
+}
+/* 本番の予想(純関数): 全語彙から出した直近MOCK_FC_N回の平均正解数。1回の25問は運のぶれが大きい(±2〜3問)ので平均で見る。
+   帯=英検1級合格者のPart 1正答率のよくある範囲(おおむね16〜19/25)からの目安。合格率そのものは他パート(読解・リスニング・
+   作文)次第で出せないため、「Part 1だけの目安」と明記する。delta=1回前の予想(直近の1回を除いた平均)との差 */
+var MOCK_FC_N=5;
+var MOCK_BANDS=[{min:20, t:"合格者の平均を上回る語彙力"}, {min:16, t:"合格者の平均的な帯"}, {min:12, t:"合格ライン前後 ─ 語彙をもう一段"}, {min:0, t:"語彙が足かせ ─ 学習を積もう"}];
+function mockForecast(g){
+  const all=mockHistory(g).filter(x=>!x.p);
+  if(!all.length) return null;
+  const avgOf=a=>a.reduce((s,x)=>s+x.c, 0)/a.length;
+  const rec=all.slice(0, MOCK_FC_N), avg=avgOf(rec);
+  const pr=all.slice(1, MOCK_FC_N+1), prev=pr.length? avgOf(pr) : null;
+  const band=MOCK_BANDS.find(b=>avg>=b.min);
+  return {avg:Math.round(avg*10)/10, n:rec.length, band:band.t, delta:prev==null? null : Math.round((avg-prev)*10)/10};
+}
+function mockForecastHTML(fc){
+  if(!fc) return '<span class="small">📈 本番の予想: 全語彙の模試を受けると出る</span>';
+  const d=fc.delta;
+  return '📈 本番の予想 <b>'+fc.avg+' / '+MOCK_N+'</b> <span class="small">('+(fc.n>1? '直近'+fc.n+'回の平均' : '1回分')+
+    (d!=null && d!==0? ' ・ 前回の予想から'+(d>0? '+':'')+d : '')+')</span><br><span class="small">'+fc.band+' ─ Part 1だけの目安</span>';
+}
 function mockPick(words, n, nIdiom){ // 純関数: 単語と熟語(空白入り)を分けて無作為に取り、単語→熟語の順で返す(en配列。v5.28.1: 本番の(19)〜(22)と同じく熟語は最後にまとめて)
   const idi=words.filter(w=>w.en.indexOf(" ")>=0), sgl=words.filter(w=>w.en.indexOf(" ")<0);
   const ni=Math.min(nIdiom, idi.length);
@@ -418,7 +559,8 @@ function mockChartSVG(list){
     '<text x="'+(L-4)+'" y="'+(y(g)+3.5).toFixed(1)+'" font-size="9" text-anchor="end" fill="var(--sub)" font-weight="700">'+g+'</text>'; });
   if(n>1) s+='<polyline fill="none" stroke="var(--accent2)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" points="'+list.map((p,i)=>x(i).toFixed(1)+','+y(p.c).toFixed(1)).join(' ')+'"/>';
   list.forEach((p,i)=>{
-    s+='<circle class="'+(p.f? 'fill':'')+'" cx="'+x(i).toFixed(1)+'" cy="'+y(p.c).toFixed(1)+'" r="5" fill="'+(p.f? 'var(--accent)':'var(--accent2)')+'" stroke="var(--card2)" stroke-width="2"/>'+
+    // 点=4択(青)/穴埋め(橙)。学習した語だけの回(p・v5.30.0)は白抜き=本番の予想には数えない回
+    s+='<circle class="'+(p.f? 'fill':'')+(p.p? ' seen':'')+'" cx="'+x(i).toFixed(1)+'" cy="'+y(p.c).toFixed(1)+'" r="5" fill="'+(p.p? 'var(--card2)' : p.f? 'var(--accent)':'var(--accent2)')+'" stroke="'+(p.p? (p.f? 'var(--accent)':'var(--accent2)') : 'var(--card2)')+'" stroke-width="2"/>'+
       '<text x="'+x(i).toFixed(1)+'" y="'+(y(p.c)-9).toFixed(1)+'" font-size="10" text-anchor="middle" fill="var(--ink)" font-weight="800">'+p.c+'</text>'+
       '<text x="'+x(i).toFixed(1)+'" y="'+(H-7)+'" font-size="9" text-anchor="middle" fill="var(--sub)" font-weight="700">'+esc(String(p.d||"").slice(5).replace("-","/"))+'</text>';
   });
@@ -441,15 +583,16 @@ function openMockHistoryModal(page){
   const md=d=>String(d||"").slice(5).replace("-","/");
   openModal('<h3>🧪 Part 1 模試の推移</h3>'+
     (h.length
-      ? '<div class="row histnav" style="gap:8px; margin-top:6px">'+
+      ? '<div class="giftbox mockfc" style="margin-top:6px">'+mockForecastHTML(mockForecast(G))+'</div>'+ // 本番の予想(v5.30.0)
+        '<div class="row histnav" style="gap:8px; margin-top:6px">'+
           '<button class="btn hnav" id="mockHistPrev"'+(pg.hasPrev?'':' disabled')+'>◀</button>'+
           '<div class="grow" style="text-align:center; font-weight:800">'+md(pg.from)+(pg.from!==pg.to? ' 〜 '+md(pg.to):'')+
             '<span class="small" style="font-weight:700"> ・ '+pg.items.length+'回'+(pg.pages>1? '('+(pg.page+1)+'/'+pg.pages+'ページ)':'')+'</span></div>'+
           '<button class="btn hnav" id="mockHistNext"'+(pg.hasNext?'':' disabled')+'>▶</button></div>'+
         '<div class="mockchart">'+mockChartSVG(pg.items)+'</div>'+
-        '<div class="pacefoot"><span class="wlg did">●</span>4択(意味) <span class="wlg hit">●</span>穴埋め ・ 正解数(/'+MOCK_N+')・本番の目安は'+mockFmtSec(MOCK_GUIDE_SEC)+'</div>'+
+        '<div class="pacefoot"><span class="wlg did">●</span>4択(意味) <span class="wlg hit">●</span>穴埋め <span class="wlg did">○</span>学習した語 ・ 正解数(/'+MOCK_N+')・本番の目安は'+mockFmtSec(MOCK_GUIDE_SEC)+'</div>'+
         '<div class="panel" style="margin-top:8px">'+pg.items.slice().reverse().map(x=>
-          '<div class="myrow"><div class="grow small"><b style="color:var(--ink)">'+esc(x.d||"")+'</b> ・ '+(x.f? '穴埋め':'4択')+'</div>'+
+          '<div class="myrow"><div class="grow small"><b style="color:var(--ink)">'+esc(x.d||"")+'</b> ・ '+(x.f? '穴埋め':'4択')+(x.p? '・学習した語':'')+'</div>'+
           '<div class="small"><b style="color:var(--accent2)">'+x.c+' / '+MOCK_N+'</b> ・ ⏱ '+mockFmtSec(x.s)+(x.s>MOCK_GUIDE_SEC? ' <span style="color:var(--ng)">超過</span>':'')+'</div></div>').join("")+'</div>'+
         '<div class="small" style="margin-top:6px">全'+h.length+'回 ・ ◀で前の'+MOCK_PAGE+'回へ</div>'
       : '<div class="empty">まだ記録なし ─ 学習タブの🧪から</div>')+
@@ -465,7 +608,9 @@ function startMock(){
   closeModal();
   if(typeof PDRILL!=="undefined") PDRILL=null;
   if(FOCUS && FOCUS.mock) clearInterval(FOCUS.mock.timer);
-  FOCUS={list:mockPick(WORDS, MOCK_N, MOCK_IDIOM), i:0, res:[], mock:{t0:Date.now(), timer:setInterval(refreshQuizCount, 1000)}};
+  const pool=mockPool(), words=mockPoolWords(G, pool); // 出題範囲(v5.30.0)
+  if(pool==="seen" && words===WORDS) toast("学習した語が"+MOCK_N+"語に足りないので全語彙から");
+  FOCUS={list:mockPick(words, MOCK_N, MOCK_IDIOM), i:0, res:[], mock:{t0:Date.now(), timer:setInterval(refreshQuizCount, 1000), p:(pool==="seen" && words!==WORDS)? 1 : 0}};
   if($("quizView").classList.contains("hidden")) switchTab("quiz");
   newQuestion();
 }
@@ -516,19 +661,25 @@ function startMockFill(){
   if(typeof PDRILL!=="undefined") PDRILL=null;
   if(FOCUS && FOCUS.mock) clearInterval(FOCUS.mock.timer);
   const q=G.mockq.q.slice();
-  FOCUS={list:q.map(x=>x.a), i:0, res:[], mock:{t0:Date.now(), timer:setInterval(refreshQuizCount, 1000), q}};
+  FOCUS={list:q.map(x=>x.a), i:0, res:[], mock:{t0:Date.now(), timer:setInterval(refreshQuizCount, 1000), q, p:G.mockq.p? 1:0}};
   if($("quizView").classList.contains("hidden")) switchTab("quiz");
   newQuestion();
 }
 /* 🧪の案内(v5.27.0・学習タブの🧪ボタン): 4択(意味)の模試と、穴埋め(本番形式・LLMに作らせて貼り戻す)の2本 */
 function openMockModal(){
   const last=mockLast(), mq=G.mockq, ready=mockqReady();
+  const pool=mockPool(), seenN=WORDS.filter(w=>G.words[w.en]).length; // 出題範囲(v5.30.0)
   openModal('<h3>🧪 Part 1 模試 '+helpBtn("hlp-mock")+'</h3>'+
     helpNote("hlp-mock", '英検1級一次のPart 1(語彙)と同じ<b>25問</b>(単語21+熟語4)。<b>4択(意味)</b>はすぐ始められる。'+
       '<b>穴埋め(本番形式)</b>は、📋で25語入りの依頼文をコピーしてLLM(ChatGPT・Gemini等)に貼り、返ってきた「英文 — 正解 — 誤答×3」を貼り戻すと問題セットになる(1回解くと消える)。'+
-      'どちらも経過時間を表示(本番の目安は約'+mockFmtSec(MOCK_GUIDE_SEC)+'・1問24秒)。解いた分はふつうの学習として記録され、ミスした語は1分後・10分後にまた出る')+
-    '<div class="giftbox" style="margin-top:6px">'+(last? '前回 <b>'+last.c+' / '+MOCK_N+'</b> ・ ⏱ '+mockFmtSec(last.s)+' <span class="small">('+last.d+(last.f? '・穴埋め':'・4択')+')</span>' : '<span class="small">まだ記録なし</span>')+'</div>'+
-    '<button class="btn primary" id="mockGo" style="width:100%; margin-top:10px">🧪 4択(意味)ではじめる(25問)</button>'+
+      'どちらも経過時間を表示(本番の目安は約'+mockFmtSec(MOCK_GUIDE_SEC)+'・1問24秒)。解いた分はふつうの学習として記録され、ミスした語は1分後・10分後にまた出る。<br><br>'+
+      '<b>出題範囲</b>: 「全語彙」は本番と同じく知らない語も混ざる=<b>本番の予想</b>(直近'+MOCK_FC_N+'回の平均)に数える。「学習した語」は一度出た語だけ=定着の確認(予想には数えない)。'+
+      '予想の帯は合格者のPart 1正答率のよくある範囲(おおむね16〜19/25)からの目安で、読解・リスニング・作文は含まない。100語以上学習して1週間模試がなければ、セット完了とホームに🧪の入口が出る')+
+    '<div class="giftbox" style="margin-top:6px">'+(last? '前回 <b>'+last.c+' / '+MOCK_N+'</b> ・ ⏱ '+mockFmtSec(last.s)+' <span class="small">('+last.d+(last.f? '・穴埋め':'・4択')+(last.p? '・学習した語':'')+')</span>' : '<span class="small">まだ記録なし</span>')+
+      '<div class="mockfc" style="margin-top:6px">'+mockForecastHTML(mockForecast(G))+'</div></div>'+
+    '<div class="seg weakseg" id="mockPoolSeg" style="margin-top:10px"><button data-p="all"'+(pool==="all"? ' class="active"':'')+'>全語彙(本番の予想)</button><button data-p="seen"'+(pool==="seen"? ' class="active"':'')+'>学習した語(定着の確認)</button></div>'+
+    (pool==="seen" && seenN<MOCK_N? '<div class="small">学習した語が'+MOCK_N+'語に足りないうちは全語彙から('+seenN+'語)</div>':'')+
+    '<button class="btn primary" id="mockGo" style="width:100%; margin-top:6px">🧪 4択(意味)ではじめる(25問)</button>'+
     '<div class="small" style="margin-top:14px">📝 穴埋め(本番形式) ─ LLMに問題を作らせて貼り戻す</div>'+
     (ready
       ? '<div class="small" style="margin-top:4px">問題セット <b>'+mq.q.length+'問</b>(作成 '+esc(mq.d||"")+')</div>'+
@@ -538,16 +689,20 @@ function openMockModal(){
         '<button class="btn primary" id="mockImportBtn" style="width:100%; margin-top:6px">貼り戻して問題セットにする</button>')+
     '<div class="row" style="margin-top:12px"><button class="btn grow" data-close>とじる</button></div>');
   $("mockGo").onclick=startMock;
+  $("mockPoolSeg").querySelectorAll("button").forEach(b=>{ b.onclick=()=>{ G.opt.mockPool=b.dataset.p; saveG(); openMockModal(); }; });
   const pb=$("mockPromptBtn");
   if(pb) pb.onclick=()=>{
-    if(!(G.mockq && G.mockq.words && G.mockq.words.length && !(G.mockq.q&&G.mockq.q.length))){ G.mockq={at:Date.now(), d:todayKey(), words:mockPick(WORDS, MOCK_N, MOCK_IDIOM), q:[]}; saveG(); } // 依頼した語を控える(貼り戻しの照合)
+    if(!(G.mockq && G.mockq.words && G.mockq.words.length && !(G.mockq.q&&G.mockq.q.length))){ // 依頼した語を控える(貼り戻しの照合)。出題範囲も同じ(v5.30.0)
+      const pw=mockPoolWords(G, pool);
+      G.mockq={at:Date.now(), d:todayKey(), words:mockPick(pw, MOCK_N, MOCK_IDIOM), q:[], p:(pool==="seen" && pw!==WORDS)? 1:0}; saveG();
+    }
     rlCopy(mockPromptText(G.mockq.words), $("mockBack"));
   };
   const ib=$("mockImportBtn");
   if(ib) ib.onclick=()=>{
     const r=mockParse($("mockBack").value, (G.mockq&&G.mockq.words)||[]);
     if(!r.q.length){ toast(r.errs[0] || "「英文( ) — 正解 — 誤答×3」の行が見つからない"); return; }
-    G.mockq={at:Date.now(), d:todayKey(), words:(G.mockq&&G.mockq.words)||[], q:r.q}; saveG();
+    G.mockq={at:Date.now(), d:todayKey(), words:(G.mockq&&G.mockq.words)||[], q:r.q, p:(G.mockq&&G.mockq.p)? 1:0}; saveG();
     toast("🧪 穴埋め問題 "+r.q.length+"問を保存"+(r.errs.length? "("+r.errs.length+"行は使えず)":""));
     openMockModal();
   };
@@ -655,6 +810,8 @@ function buildChoices(word){
   /* 熟語(v5.18.0・enに空白を含む)の誤答は熟語から、単語の誤答は単語から選ぶ(形が違うと消去法で解けてしまう)。語根の枠は熟語では使わない */
   const multi=word.en.indexOf(" ")>=0;
   if(Math.random()<0.75) confusedWith(G, word.en, 2).forEach(add);
+  // 似た形の語(v5.30.0): 同じ品詞のものを1つ(regimen↔regime・deprecate↔depreciate)=形で見分ける練習を毎回
+  if(!multi && Math.random()<0.75){ const la=lookAlikes(word.en, 3).find(en=>okc(byEn[en]) && !has(en)); if(la) add(la); }
   if(!multi && Math.random()<0.75) rootMates(word.en, 1).forEach(add);
   let pool=WORDS.filter(c=>okc(c) && !has(c.en) && (c.en.indexOf(" ")>=0)===multi);
   if(pool.length<3) pool=WORDS.filter(c=>okc(c) && !has(c.en));
@@ -700,7 +857,7 @@ function renderQuestion(){
   /* v5.24.0(実機FB「用例が長いと答え合わせで英単語が持ち上がる」): 単語モードでは用例の枠(.wex=2行ぶん・高さ固定)を
      出題時から空で置いておき、答え合わせで中身だけ入れる=レイアウトが動かない(フレーズの文脈行と同じ流儀)。長い用例は2行で切る */
   const pb=$("phrBuild");
-  if(pb){ pb.classList.remove("hidden"); pb.classList.add("wex"); pb.innerHTML=""; }
+  if(pb){ pb.classList.remove("hidden"); pb.classList.add("wex"); pb.classList.remove("memo"); pb.innerHTML=""; pb.onclick=null; }
   $("promptCard").classList.remove("phr");
   $("choices").className="choices";
   const w=cur.word, e2j=G.mode==="e2j";
@@ -826,9 +983,11 @@ function answer(chosen, btn){
   if(FOCUS) FOCUS.res.push(ok); // にがて特訓の進行(v5.10.0)
   // 取り違えの記録と追い出題(v5.12.0): 選んだ誤答の単語を相手として数え、数問以内に出す
   if(!ok && chosen.en!==w.en){ noteConfusion(G, w.en, chosen.en); if(!FOCUS && !pairQueue.some(q=>q.en===chosen.en)) pairQueue.push({en:chosen.en, wait:PAIR_GAP}); }
-  // マイ単語の用例(v5.12.0): 出会った文があれば単語カードの下に
-  const exh=mywExampleHTML(w.en);
-  if(exh){ const pb=$("phrBuild"); pb.innerHTML=exh; pb.classList.remove("hidden"); } // 枠は出題時から確保済み(v5.24.0)
+  /* 単語カードの下の行(枠は出題時から確保済み=v5.24.0): 💡覚え方メモ(なければ✏️の入口)・👀似た形・📝マイ単語の用例(v5.30.0で統合)。
+     タップで覚え方メモを書く/直す(単語カードの辞書タップとは分ける=stopPropagation)。穴埋め模試は英文が上にあるので同じ行に出す */
+  { const pb=$("phrBuild"); pb.innerHTML=wexLineHTML(w.en); pb.classList.remove("hidden"); pb.classList.add("memo");
+    pb.onclick=e=>{ e.stopPropagation(); if(!answered || !cur || cur.word.en!==w.en) return;
+      openMemoModal(w.en, ()=>{ if(answered && cur && cur.word.en===w.en) pb.innerHTML=wexLineHTML(w.en); }); }; }
 
   // 知識XP: 正解が直接キャラの強さになる(連続学習日数+コンボ+キャラスキルでボーナス)
   let xpGain=0, lvUp=0;

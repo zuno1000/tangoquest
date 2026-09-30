@@ -335,7 +335,7 @@ function phrRenderQuestion(){
   pw.className="ja";
   $("qStats").innerHTML=qStatsHTML(st);
   const bl=$("phrBuild");
-  bl.classList.remove("hidden"); bl.classList.remove("wex"); // 文脈行は出題時から常設(答え合わせでレイアウトが動かない)。wex=単語モードの用例枠(v5.24.0)
+  bl.classList.remove("hidden"); bl.classList.remove("wex"); bl.onclick=null; // 文脈行は出題時から常設(答え合わせでレイアウトが動かない)。wex=単語モードの用例枠(v5.24.0)・onclick=単語の覚え方メモ(v5.30.0)の残りを外す
   const box=$("choices"); box.innerHTML="";
   clearInterval(phrSpkT); phrSpkT=null; // 口頭の制限時間タイマーの残りを掃除
   if(phrCur.fmt==="mc"){

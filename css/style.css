@@ -1222,6 +1222,15 @@ body.svplay #slotView{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
 #phrBuild.wex{min-height:0; height:40px; margin-top:6px; overflow:hidden; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2;
   font-size:13px; line-height:1.5; font-weight:600; color:var(--sub); text-align:left}
 #phrBuild.wex .myex{display:inline}
+/* 答え合わせの行(v5.30.0): 💡覚え方メモ・👀似た形・✏️メモの入口。タップでメモを書く(単語カードの辞書タップとは別) */
+#phrBuild.wex.memo{cursor:pointer}
+.wmemo{color:var(--accent2); font-weight:800}
+.wla{color:var(--ink); font-weight:700}
+.wpen{color:var(--sub); text-decoration:underline dotted var(--sub); text-underline-offset:3px}
+.wsep{color:var(--sub)}
+.mockfc b{color:var(--accent2)}
+.homemock{width:100%; margin-top:10px; padding:11px 14px}
+.homemock .hlsub{display:block; margin-left:0; margin-top:2px}
 .myex b{color:var(--accent2)}
 .myexs{font-weight:600; color:var(--sub)}
 /* マイ単語の一覧: 意味はタップで手直し(テキスト風ボタン・点線下線で「押せる」を示す) */

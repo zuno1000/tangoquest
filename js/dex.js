@@ -23,6 +23,7 @@ function openWordModal(en){
     else due="次の復習 "+fmtDueIn(st[1]-now);
   }
   const ex=(typeof mywExampleHTML==="function")? (mywExampleHTML(en)||"") : "";
+  const la=lookAlikes(en, 3).filter(o=>pairs.indexOf(o)<0), memo=wmemoGet(en); // 似た形・覚え方メモ(v5.30.0)
   openModal('<h3>単語の詳細</h3>'+
     '<div class="wdetail">'+
       '<div class="wden">'+esc(w.en)+' <span class="poschip pos'+w.pos+'">'+POS_LABEL[w.pos]+'</span></div>'+
@@ -30,14 +31,18 @@ function openWordModal(en){
       (st? '<div class="small" style="margin-top:8px">'+qStatsHTML(st)+'</div><div class="small">'+due+'</div>'
          : '<div class="small" style="margin-top:8px">未出題'+(w.my? '(マイ単語)' : mywWanted(en)? '(優先して出る)' : '')+'</div>')+
       (rootText(en)? '<div class="small" style="margin-top:7px">🧬 '+rootText(en)+'</div>':'')+
-      (pairs.length? '<div class="small" style="margin-top:7px">⇄ 取り違え: '+pairs.map(o=>esc(o)+'('+conf[o]+')').join("・")+'</div>':'')+
+      (pairs.length? '<div class="small" style="margin-top:7px">⇄ 取り違え: '+pairs.map(o=>esc(o)+'('+esc(shortJa(byEn[o].ja))+'・'+conf[o]+'回)').join("・")+'</div>':'')+
+      (la.length? '<div class="small" style="margin-top:7px">👀 似た形: '+la.map(o=>esc(o)+'('+esc(shortJa(byEn[o].ja))+')').join("・")+'</div>':'')+
+      (memo? '<div class="small wmemo" style="margin-top:7px">💡 '+esc(memo)+'</div>':'')+
       (ex? '<div class="small" style="margin-top:7px">'+ex+'</div>':'')+
     '</div>'+
-    '<div class="row" style="margin-top:12px; gap:8px">'+
+    '<button class="btn" id="wdMemo" style="width:100%; margin-top:12px">✏️ '+(memo? '覚え方メモを直す' : '覚え方メモを書く')+'</button>'+
+    '<div class="row" style="margin-top:8px; gap:8px">'+
       '<button class="btn grow" id="wdDict">📖 辞書で確かめる</button>'+
       '<button class="btn primary grow" id="wdClose">閉じる</button></div>');
   $("wdDict").onclick=()=>window.open("https://ejje.weblio.jp/content/"+encodeURIComponent(en), "_blank", "noopener");
   $("wdClose").onclick=closeModal;
+  $("wdMemo").onclick=()=>openMemoModal(en, ()=>openWordModal(en)); // 書き終えたら詳細に戻る
 }
 
 /* en -> 所持している最高レア度(0=未取得) */

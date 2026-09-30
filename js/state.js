@@ -1,7 +1,7 @@
 "use strict";
 /* ================= 状態管理 ================= */
 const KEY="tangoquest_v1";
-const APP_VERSION="5.29.4";
+const APP_VERSION="5.30.0";
 /* ゲーム面(編成・冒険=サバイバー・ガチャ・カード・任務)の表示フラグ(v5.13.0・ユーザー決定「必要性が薄れた」)。
    false=下部ナビの3タブ・ヘッダの🪙🎫・カードドロップの演出・デイリー/ウィークリー任務・ガチャ告知を隠し、
    ヘッダは📖Lv/🏅覚えた語数/🔥連続日数、任務タブは学習の実績(自動付与・XP)だけになる。
@@ -119,7 +119,8 @@ G.idle=G.idle||{last:0}; // 旧るすばん探索の精算時刻(v5.9.0で機能
    同期マージはローカル優先(Object.assign起点)=端末ごとの好みとして振る舞う */
 /* qtab=学習タブの対象(mix=ミックス/w=単語/p=フレーズ・v5.10.0でmixが既定)・spkSec=口頭の制限時間ms(0=オフ・口頭は
    v5.10.0でSPEAK_ENABLED=false=UIから撤去)・preRecall=4択の前に思い出すステップ(v5.3.0・既定ON) */
-G.opt=Object.assign({autoNext:0, svAuto:0, slotBet:0, qtab:"mix", spkSec:0, preRecall:1}, G.opt||{});
+/* mockPool=Part 1模試の出題範囲(v5.30.0: all=全語彙・本番の予想/seen=学習した語・定着の確認) */
+G.opt=Object.assign({autoNext:0, svAuto:0, slotBet:0, qtab:"mix", spkSec:0, preRecall:1, mockPool:"all"}, G.opt||{});
 /* v5.10.0移行(実機FB「フレーズを日々の学習に組み込みやすく」): 既存の好みが単語だけの端末も、一度だけ
    ミックス(30問セットの5問目ごとにフレーズ)へ切り替える。以後はセグの選択がそのまま残る(mixOn=移行済み印) */
 if(!G.opt.mixOn){ G.opt.qtab="mix"; G.opt.mixOn=1; }
@@ -145,6 +146,9 @@ G.mocks=G.mocks||{};
 G.mockq=G.mockq||null; // 穴埋め模試の問題セット(v5.28.0: {at,d,words,q:[{s,a,o}]}・LLMに作らせて貼り戻したもの・解き終えると消す・同期はatが新しい側)
 /* 取り違えペア(v5.12.0・quiz.js): en→{相手en: 回数}(両方向)。4択の誤答生成と追い出題に使う学習記録(部分リセットで消える) */
 G.conf=G.conf||{};
+/* 覚え方メモ(v5.30.0・quiz.js wmemoGet/wmemoSet): en→{t:本文, at}(削除は{del:1,at})。語呂・似た形の語と区別するコツ。
+   答え合わせの用例行と単語の詳細に出る。ユーザーの資産=部分リセットでも残す・同期はマイ単語と同じ操作時刻LWW */
+G.wmemo=G.wmemo||{};
 /* v5.16.0: 単語・フレーズの状態に「最後に解いた時刻」(st[8]・同期は新しい方が勝つ)と「覚えた日時」(st[9]・記録タブの週ごとの伸び)を追加。
    以前に覚えた語は最後に正解した時刻(st[6])で近似する(冪等: st[9]が入れば二度と走らない) */
 function migMasteredAt(g){

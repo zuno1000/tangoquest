@@ -178,6 +178,12 @@ function mergeData(a, b){
     const x=m.myw[en], y=b.myw[en];
     if(!x || (y.at||0)>(x.at||0)) m.myw[en]=y;
   }
+  // 覚え方メモ(v5.30.0): 項目ごとの操作時刻LWW(書き直し・削除のトンボストーンが伝播)
+  m.wmemo=m.wmemo||{};
+  for(const en in b.wmemo||{}){
+    const x=m.wmemo[en], y=b.wmemo[en];
+    if(!x || (y.at||0)>(x.at||0)) m.wmemo[en]=y;
+  }
   /* 今日の英語(v5.10.0): done(読んだ・聴いた)は和集合→v5.29.1から項目ごとの操作時刻LWW(取り消し{del:1,at}も伝播。
      atが無い旧記録どうしは手元を採る=従来の和集合と同じ)/mute(合わないソース)は項目ごとの操作時刻LWW
      (「戻す」も伝播する=アイコン・マイフレーズと同じ型)/topics・lastは端末の好み=ローカル起点のまま */
@@ -603,6 +609,7 @@ function partialResetData(g, t){
     slot:{meta:(g.slot&&g.slot.meta)||{}}, // スロットの心得も冒険の記録として残す(v4.28.0)
     myphr:g.myphr||{}, // マイフレーズの定義はユーザーの資産=部分リセットでも残す(SRS記録だけやり直し・v5.6.0)
     myw:g.myw||{},     // マイ単語の定義も同じく資産(v5.11.0)
+    wmemo:g.wmemo||{}, // 覚え方メモも資産(v5.30.0)
     say:g.say||{},     // 言えなかったことのメモも資産(v5.25.0)
     rl:g.rl||{topics:{}, mute:{}, done:{}, last:{}}, // 今日の英語の好み・記録も資産として残す(v5.10.0)
     daily:g.daily||{}, weekly:g.weekly||{}, counters:g.counters||{}, ach:g.ach||{},
