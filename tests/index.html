@@ -3939,12 +3939,13 @@ function run(){
   });
   t("v5.24.0⑤: 用例の枠(.wex) ─ 単語モードでは出題時から2行ぶんの枠(空)・答え合わせで中身だけ・フレーズモードではwexが外れる", ()=>{
     const G=W.G, doc=W.document;
-    W.switchTab("quiz"); W.setCurFromTest(W.WORDS[0]);
+    const w0=W.WORDS.find(w=>w.en.indexOf(" ")<0 && !W.lookAlikes(w.en, 1).length); // v5.30.1: 似た形が無い語(あると上の行は👀になり用例は出ない。用例は⇄取り違えより先)
+    W.switchTab("quiz"); W.setCurFromTest(w0);
     const pb=doc.getElementById("phrBuild");
     ok(pb.classList.contains("wex") && !pb.classList.contains("hidden") && pb.textContent==="", "出題時: 枠だけ");
     const h0=doc.getElementById("promptWord").getBoundingClientRect().top;
     // 長い用例を持つマイ単語を仮に登録して答え合わせ
-    const en=W.WORDS[0].en; const oldMyw=G.myw[en];
+    const en=w0.en; const oldMyw=G.myw[en];
     G.myw[en]={ja:"x", pos:"n", ex:("The very long example sentence that keeps going on and on about "+en+" ").repeat(4), at:Date.now()};
     doc.querySelector("#choices .choice").click();
     ok(pb.textContent.indexOf(en)>=0, "答え合わせで用例が入る");
@@ -4391,6 +4392,8 @@ function run(){
       [...doc.querySelectorAll("#choices .choice")].find(x=>x.textContent===want).click();
       ok(pb.textContent.indexOf("👀 似た形: ")>=0 && pb.textContent.indexOf("regime(")>=0, "正解しても似た形が出る: "+pb.textContent);
       ok(pb.querySelector(".wpen") && pb.textContent.indexOf("✏️ 覚え方メモ")>=0, "メモの入口"); ok(pb.classList.contains("memo"));
+      const rows=pb.querySelectorAll(".wrow"); eq(rows.length, 2, "2行(v5.30.1)"); ok(rows[0].querySelector(".wla") && rows[1].querySelector(".wpen"), "上=似た形・下=メモ");
+      eq(W.getComputedStyle(pb).textAlign, "center", "中央ぞろえ"); eq(W.getComputedStyle(rows[0]).whiteSpace, "nowrap", "各行は1行"); ok(rows[0].getBoundingClientRect().height<=21 && pb.getBoundingClientRect().height<=41, "行の高さ");
       ok(Math.abs(doc.getElementById("promptWord").getBoundingClientRect().top-h0)<1, "単語の位置が動かない");
       pb.click();
       const m=doc.getElementById("modal"); ok(doc.getElementById("wmemoTa") && m.textContent.indexOf("覚え方メモ")>=0 && m.textContent.indexOf("regimen")>=0 && m.textContent.indexOf("区別したい相手")>=0 && m.textContent.indexOf("regime")>=0, "メモのモーダル(相手の一覧)");
@@ -4398,6 +4401,7 @@ function run(){
       doc.getElementById("wmemoTa").value="regimeN の N は Nutrition"; doc.getElementById("wmemoSave").click();
       ok(!doc.getElementById("wmemoTa"), "とじる"); eq(W.wmemoGet("regimen"), "regimeN の N は Nutrition");
       ok(pb.querySelector(".wmemo") && pb.textContent.indexOf("💡 regimeN の N は Nutrition")>=0 && !pb.querySelector(".wpen"), "行が💡に描き直される: "+pb.textContent);
+      ok(pb.querySelectorAll(".wrow")[1].querySelector(".wmemo"), "💡は下の行");
       ok(pb.textContent.indexOf("👀 似た形")>=0, "似た形も残る");
       // 直す: 削除ボタンあり → 消すと✏️に戻る
       pb.click(); ok(doc.getElementById("wmemoDel") && doc.getElementById("wmemoTa").value==="regimeN の N は Nutrition", "既存のメモが入る"); doc.getElementById("wmemoDel").click();

@@ -1219,10 +1219,11 @@ body.svplay #slotView{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
 /* マイ単語の用例(v5.12.0): 答え合わせのあと単語カードの下・一覧・登録プレビュー */
 .myex{display:block; font-size:13px; font-weight:600; color:var(--sub); line-height:1.5; text-align:left}
 /* 単語モードの用例枠(v5.24.0): 2行ぶんの高さを出題時から確保し、長い用例は2行で切る=答え合わせで単語が動かない */
-#phrBuild.wex{min-height:0; height:40px; margin-top:6px; overflow:hidden; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2;
-  font-size:13px; line-height:1.5; font-weight:600; color:var(--sub); text-align:left}
+#phrBuild.wex{min-height:0; height:40px; margin-top:6px; overflow:hidden; display:block;
+  font-size:13px; line-height:20px; font-weight:600; color:var(--sub); text-align:center}
 #phrBuild.wex .myex{display:inline}
-/* 答え合わせの行(v5.30.0): 💡覚え方メモ・👀似た形・✏️メモの入口。タップでメモを書く(単語カードの辞書タップとは別) */
+/* 答え合わせの2行(v5.30.0→v5.30.1: 別の行・中央ぞろえ): 上=👀似た形(⇄取り違え/📝用例)・下=💡覚え方メモ(✏️の入口)。各行1行・はみ出しは… */
+#phrBuild.wex .wrow{display:block; height:20px; line-height:20px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 #phrBuild.wex.memo{cursor:pointer}
 .wmemo{color:var(--accent2); font-weight:800}
 .wla{color:var(--ink); font-weight:700}

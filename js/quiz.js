@@ -128,16 +128,20 @@ function wmemoSet(en, t){
   saveG();
   return t;
 }
-/* 答え合わせの用例行(単語): 💡メモ(なければ✏️の入口)・👀似た形(なければ⇄取り違え)・📝マイ単語の用例。2行に収まる分だけ見える */
+/* 答え合わせの用例行(単語・2行・中央ぞろえ。実機FB「似た形とメモは別の行に」):
+   上の行=👀似た形(なければ📝マイ単語の用例・それも無ければ⇄取り違え。ミス直後の相手は誤答の選択肢にも出るので用例を先に)/
+   下の行=💡覚え方メモ(なければ✏️の入口)。各行は1行に収め、はみ出しは…で切る */
 function wexLineHTML(en){
-  const parts=[], memo=wmemoGet(en);
-  if(memo) parts.push('<span class="wmemo">💡 '+esc(memo)+'</span>');
+  const memo=wmemoGet(en);
+  let top="";
   const la=lookAlikes(en, 2);
-  if(la.length) parts.push('<span class="wla">👀 似た形: '+la.map(o=>esc(o)+'('+esc(shortJa(byEn[o].ja))+')').join("・")+'</span>');
-  else{ const cf=confusedWith(G, en, 1); if(cf.length) parts.push('<span class="wla">⇄ 取り違え: '+esc(cf[0])+'('+esc(shortJa(byEn[cf[0]].ja))+')</span>'); }
-  if(!memo) parts.push('<span class="wpen">✏️ 覚え方メモ</span>');
-  const ex=mywExampleHTML(en); if(ex) parts.push(ex);
-  return parts.join('<span class="wsep"> ・ </span>');
+  if(la.length) top='<span class="wla">👀 似た形: '+la.map(o=>esc(o)+'('+esc(shortJa(byEn[o].ja))+')').join("・")+'</span>';
+  else{
+    top=mywExampleHTML(en);
+    if(!top){ const cf=confusedWith(G, en, 1); if(cf.length) top='<span class="wla">⇄ 取り違え: '+esc(cf[0])+'('+esc(shortJa(byEn[cf[0]].ja))+')</span>'; }
+  }
+  const bottom=memo? '<span class="wmemo">💡 '+esc(memo)+'</span>' : '<span class="wpen">✏️ 覚え方メモ</span>';
+  return '<div class="wrow">'+top+'</div><div class="wrow">'+bottom+'</div>';
 }
 /* メモを書く/直す。after=保存・削除・とじたあとに呼ぶ(答え合わせの行の描き直し・単語の詳細に戻る) */
 function openMemoModal(en, after){
