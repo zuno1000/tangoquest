@@ -4403,6 +4403,7 @@ function run(){
       ok(pb.textContent.indexOf("政権")<0 && pb.textContent.indexOf("(")<0, "意味は伏せてある");
       ok(pb.querySelector(".wrow .wdf") && pb.querySelector(".wrow .wdf").textContent==="n", "違う文字(n)を強調: "+pb.querySelector(".wrow").innerHTML.slice(0,120));
       eq(W.getComputedStyle(pb.querySelector(".wrow .wdf")).color, "rgb(214, 40, 40)", "強調は赤(v5.30.5)");
+      eq(W.getComputedStyle(pb.querySelector(".wrow .wdf")).backgroundColor, "rgba(0, 0, 0, 0)", "背景は塗らない(v5.30.7)");
       ok(pb.querySelector(".wpen") && pb.textContent.indexOf("✏️ 覚え方メモ")>=0, "メモの入口"); ok(pb.classList.contains("memo"));
       const rows=pb.querySelectorAll(".wrow"); eq(rows.length, 2, "2行(v5.30.1)"); ok(rows[0].querySelector(".wla") && rows[1].querySelector(".wpen"), "上=似た形・下=メモ");
       eq(W.getComputedStyle(pb).textAlign, "center", "中央ぞろえ"); eq(W.getComputedStyle(rows[0]).whiteSpace, "nowrap", "各行は1行"); ok(rows[0].getBoundingClientRect().height<=21 && pb.getBoundingClientRect().height<=41, "行の高さ");

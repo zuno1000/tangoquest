@@ -1230,8 +1230,8 @@ body.svplay #slotView{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
 .wpen{color:var(--sub); text-decoration:underline dotted var(--sub); text-underline-offset:3px}
 .wsep{color:var(--sub)}
 /* 似た形の見せ方(v5.30.2): 違う文字の強調(.wdf)・伏せた意味を開くタップの印(.wtap) */
-/* v5.30.5(実機FB「強調の色が見えにくい」): 黄土色→はっきりした赤・薄い赤の背景で文字の輪郭も出す */
-.wdf{color:#D62828; background:var(--ng-bg); border-radius:3px; padding:0 1px; font-weight:900; text-decoration:underline; text-decoration-color:#D62828; text-underline-offset:2px}
+/* v5.30.5(実機FB「強調の色が見えにくい」): 黄土色→はっきりした赤。v5.30.7(実機FB): 背景の塗りはやめ、赤い文字と同色の下線だけ */
+.wdf{color:#D62828; font-weight:900; text-decoration:underline; text-decoration-color:#D62828; text-underline-offset:2px}
 .wtap{color:var(--accent2); font-weight:700}
 .mockfc b{color:var(--accent2)}
 .homemock{width:100%; margin-top:10px; padding:11px 14px}
