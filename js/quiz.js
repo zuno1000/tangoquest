@@ -128,27 +128,57 @@ function wmemoSet(en, t){
   saveG();
   return t;
 }
+/* ---- 似た形の見せ方(v5.30.2・実機FB「並べて見せると、かえって間違えた方を覚えてしまいそう」=記憶の干渉への対策) ----
+   ①相手の意味は「相手も学習済み(定着2以上・partnerLearned)」のときだけ。片方が未学習のうちは綴りだけ(似た語があることに気づかせるが、二つの意味を同時に符号化させない)
+   ②違う文字を強調(diffMark: LCSで揃わない文字を<b class="wdf">)=手がかりを意味ではなく「見分ける文字」に付ける
+   ③意味は伏せておき、上の行のタップで開く(小さな想起テスト・「まず自力で思い出す」と同じ思想)。未学習の相手は開いても「未学習」 */
+function partnerLearned(en){ const st=G.words[en]; return !!st && Math.max(st[0]||0, st[7]||0)>=2; }
+/* aのうち、bと(順序を保って)揃わない文字を強調したHTML(純関数)。regimen/regime→regime<b>n</b>・imminent/eminent→<b>im</b>minent */
+function diffMark(a, b){
+  const n=a.length, m=b.length, L=[];
+  for(let i=0;i<=n;i++){ L[i]=new Array(m+1).fill(0); }
+  for(let i=n-1;i>=0;i--) for(let j=m-1;j>=0;j--) L[i][j]=a[i]===b[j]? L[i+1][j+1]+1 : Math.max(L[i+1][j], L[i][j+1]);
+  let i=0, j=0, out="", run="";
+  const flush=()=>{ if(run){ out+='<b class="wdf">'+esc(run)+'</b>'; run=""; } };
+  while(i<n && j<m){
+    if(a[i]===b[j]){ flush(); out+=esc(a[i]); i++; j++; }
+    else if(L[i+1][j]>=L[i][j+1]){ run+=a[i]; i++; }
+    else j++;
+  }
+  while(i<n){ run+=a[i]; i++; }
+  flush();
+  return out;
+}
+/* 相手の意味(学習済みなら意味・未学習なら「未学習」)。reveal=false のときは空 */
+function partnerJa(o, reveal){ return reveal? '('+(partnerLearned(o)? esc(shortJa(byEn[o].ja)) : '未学習')+')' : ''; }
+/* 上の行: 「👀 regimeN ⇄ regime・regimenT ▸意味」→タップで「👀 regimeN ⇄ regime(政権)・regimenT(未学習)」 */
+function lookAlikeRowHTML(en, reveal){
+  const la=lookAlikes(en, 2);
+  let mark="👀", list=la;
+  if(!la.length){ const cf=confusedWith(G, en, 1); if(!cf.length) return ""; mark="⇄"; list=cf; } // 似た形が無ければ取り違えの相手を同じ流儀で
+  return '<span class="wla">'+mark+' '+diffMark(en, list[0])+' ⇄ '+list.map(o=>diffMark(o, en)+partnerJa(o, reveal)).join("・")+
+    (reveal? '' : ' <span class="wtap">▸意味</span>')+'</span>';
+}
 /* 答え合わせの用例行(単語・2行・中央ぞろえ。実機FB「似た形とメモは別の行に」):
    上の行=👀似た形(なければ📝マイ単語の用例・それも無ければ⇄取り違え。ミス直後の相手は誤答の選択肢にも出るので用例を先に)/
-   下の行=💡覚え方メモ(なければ✏️の入口)。各行は1行に収め、はみ出しは…で切る */
-function wexLineHTML(en){
+   下の行=💡覚え方メモ(なければ✏️の入口)。各行は1行に収め、はみ出しは…で切る。reveal=上の行の意味を開いたか(v5.30.2) */
+function wexLineHTML(en, reveal){
   const memo=wmemoGet(en);
   let top="";
-  const la=lookAlikes(en, 2);
-  if(la.length) top='<span class="wla">👀 似た形: '+la.map(o=>esc(o)+'('+esc(shortJa(byEn[o].ja))+')').join("・")+'</span>';
+  if(lookAlikes(en, 1).length) top=lookAlikeRowHTML(en, reveal);
   else{
     top=mywExampleHTML(en);
-    if(!top){ const cf=confusedWith(G, en, 1); if(cf.length) top='<span class="wla">⇄ 取り違え: '+esc(cf[0])+'('+esc(shortJa(byEn[cf[0]].ja))+')</span>'; }
+    if(!top) top=lookAlikeRowHTML(en, reveal); // 取り違えの相手
   }
   const bottom=memo? '<span class="wmemo">💡 '+esc(memo)+'</span>' : '<span class="wpen">✏️ 覚え方メモ</span>';
-  return '<div class="wrow">'+top+'</div><div class="wrow">'+bottom+'</div>';
+  return '<div class="wrow" data-k="la">'+top+'</div><div class="wrow" data-k="memo">'+bottom+'</div>';
 }
 /* メモを書く/直す。after=保存・削除・とじたあとに呼ぶ(答え合わせの行の描き直し・単語の詳細に戻る) */
 function openMemoModal(en, after){
   const w=byEn[en]; if(!w) return;
   const memo=wmemoGet(en);
   const la=lookAlikes(en, 3), cf=confusedWith(G, en, 2).filter(o=>la.indexOf(o)<0);
-  const ref=la.map(o=>'👀 <b>'+esc(o)+'</b>('+esc(shortJa(byEn[o].ja))+')').concat(cf.map(o=>'⇄ <b>'+esc(o)+'</b>('+esc(shortJa(byEn[o].ja))+')'));
+  const ref=la.map(o=>'👀 <b>'+diffMark(o, en)+'</b>'+partnerJa(o, true)).concat(cf.map(o=>'⇄ <b>'+diffMark(o, en)+'</b>'+partnerJa(o, true))); // 意味は学習済みの相手だけ(v5.30.2)
   const done=()=>{ closeModal(); if(after) after(); };
   openModal('<h3>✏️ 覚え方メモ '+helpBtn("hlp-wmemo")+'</h3>'+
     helpNote("hlp-wmemo", '語呂・語源のこじつけ・似た形の語と区別するコツなど、自分の言葉で。<b>答え合わせのたびに単語の下に💡で出る</b>(正解した回も)。'+
@@ -989,9 +1019,12 @@ function answer(chosen, btn){
   if(!ok && chosen.en!==w.en){ noteConfusion(G, w.en, chosen.en); if(!FOCUS && !pairQueue.some(q=>q.en===chosen.en)) pairQueue.push({en:chosen.en, wait:PAIR_GAP}); }
   /* 単語カードの下の行(枠は出題時から確保済み=v5.24.0): 💡覚え方メモ(なければ✏️の入口)・👀似た形・📝マイ単語の用例(v5.30.0で統合)。
      タップで覚え方メモを書く/直す(単語カードの辞書タップとは分ける=stopPropagation)。穴埋め模試は英文が上にあるので同じ行に出す */
-  { const pb=$("phrBuild"); pb.innerHTML=wexLineHTML(w.en); pb.classList.remove("hidden"); pb.classList.add("memo");
+  { const pb=$("phrBuild"); let reveal=false; pb.innerHTML=wexLineHTML(w.en, reveal); pb.classList.remove("hidden"); pb.classList.add("memo");
+    /* 上の行(似た形)のタップ=伏せた相手の意味を開く(v5.30.2・自分の答えを確かめる)。下の行(メモ)のタップ=覚え方メモを書く/直す */
     pb.onclick=e=>{ e.stopPropagation(); if(!answered || !cur || cur.word.en!==w.en) return;
-      openMemoModal(w.en, ()=>{ if(answered && cur && cur.word.en===w.en) pb.innerHTML=wexLineHTML(w.en); }); }; }
+      const row=e.target.closest? e.target.closest(".wrow") : null;
+      if(row && row.dataset.k==="la" && row.textContent.trim()){ reveal=true; pb.innerHTML=wexLineHTML(w.en, reveal); return; }
+      openMemoModal(w.en, ()=>{ if(answered && cur && cur.word.en===w.en) pb.innerHTML=wexLineHTML(w.en, reveal); }); }; }
 
   // 知識XP: 正解が直接キャラの強さになる(連続学習日数+コンボ+キャラスキルでボーナス)
   let xpGain=0, lvUp=0;

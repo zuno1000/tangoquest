@@ -1229,6 +1229,9 @@ body.svplay #slotView{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
 .wla{color:var(--ink); font-weight:700}
 .wpen{color:var(--sub); text-decoration:underline dotted var(--sub); text-underline-offset:3px}
 .wsep{color:var(--sub)}
+/* 似た形の見せ方(v5.30.2): 違う文字の強調(.wdf)・伏せた意味を開くタップの印(.wtap) */
+.wdf{color:var(--accent); font-weight:900; text-decoration:underline; text-underline-offset:2px}
+.wtap{color:var(--accent2); font-weight:700}
 .mockfc b{color:var(--accent2)}
 .homemock{width:100%; margin-top:10px; padding:11px 14px}
 .homemock .hlsub{display:block; margin-left:0; margin-top:2px}

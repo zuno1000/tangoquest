@@ -31,8 +31,9 @@ function openWordModal(en){
       (st? '<div class="small" style="margin-top:8px">'+qStatsHTML(st)+'</div><div class="small">'+due+'</div>'
          : '<div class="small" style="margin-top:8px">未出題'+(w.my? '(マイ単語)' : mywWanted(en)? '(優先して出る)' : '')+'</div>')+
       (rootText(en)? '<div class="small" style="margin-top:7px">🧬 '+rootText(en)+'</div>':'')+
-      (pairs.length? '<div class="small" style="margin-top:7px">⇄ 取り違え: '+pairs.map(o=>esc(o)+'('+esc(shortJa(byEn[o].ja))+'・'+conf[o]+'回)').join("・")+'</div>':'')+
-      (la.length? '<div class="small" style="margin-top:7px">👀 似た形: '+la.map(o=>esc(o)+'('+esc(shortJa(byEn[o].ja))+')').join("・")+'</div>':'')+
+      // 相手の意味は学習済みのときだけ・違う文字を強調(v5.30.2・記憶の干渉への対策)
+      (pairs.length? '<div class="small" style="margin-top:7px">⇄ 取り違え: '+pairs.map(o=>diffMark(o, en)+'('+(partnerLearned(o)? esc(shortJa(byEn[o].ja)) : '未学習')+'・'+conf[o]+'回)').join("・")+'</div>':'')+
+      (la.length? '<div class="small" style="margin-top:7px">👀 似た形: '+la.map(o=>diffMark(o, en)+partnerJa(o, true)).join("・")+'</div>':'')+
       (memo? '<div class="small wmemo" style="margin-top:7px">💡 '+esc(memo)+'</div>':'')+
       (ex? '<div class="small" style="margin-top:7px">'+ex+'</div>':'')+
     '</div>'+
