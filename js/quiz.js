@@ -134,6 +134,9 @@ function wmemoSet(en, t){
    v5.30.3(実機FB「一度隠すなら未学習の相手も意味を出してよい」): 開いたあとは学習済み/未学習を問わず意味を出す(v5.30.2の学習済み判定は撤去) */
 /* aのうち、bと(順序を保って)揃わない文字を強調したHTML(純関数)。regimen/regime→regime<b>n</b>・imminent/eminent→<b>im</b>minent */
 function diffMark(a, b){
+  /* v5.30.6(実機FB「knowingly/unequivocally で強調が3か所に割れて分かりにくい」): 強調は編集距離で「似た形」と判定した組だけ。
+     綴りが似ていない取り違えの相手(意味で混同した組)は、揃わない文字を塗っても見分けの手がかりにならないので素の綴りで */
+  if(!isLookAlike(a, b)) return esc(a);
   const n=a.length, m=b.length, L=[];
   for(let i=0;i<=n;i++){ L[i]=new Array(m+1).fill(0); }
   for(let i=n-1;i>=0;i--) for(let j=m-1;j>=0;j--) L[i][j]=a[i]===b[j]? L[i+1][j+1]+1 : Math.max(L[i+1][j], L[i][j+1]);
@@ -150,12 +153,12 @@ function diffMark(a, b){
 }
 /* 相手の意味(開いたときだけ)。reveal=false のときは空 */
 function partnerJa(o, reveal){ return reveal? '('+esc(shortJa(byEn[o].ja))+')' : ''; }
-/* 上の行: 「👀 regimeN ⇄ regime・regimenT ▸意味」→タップで「👀 regimeN ⇄ regime(政権)・regimenT(連隊)」 */
+/* 上の行: 「👀 regimeN ⇄ regime・regimenT ▸意味」→タップで「👀 regimeN(養生法) ⇄ regime(政権)・regimenT(連隊)」(v5.30.6: 正解の単語にも意味) */
 function lookAlikeRowHTML(en, reveal){
   const la=lookAlikes(en, 2);
   let mark="👀", list=la;
   if(!la.length){ const cf=confusedWith(G, en, 1); if(!cf.length) return ""; mark="🔀"; list=cf; } // 似た形が無ければ取り違えの相手を同じ流儀で(先頭の印は🔀。⇄だと間の⇄と重なり矢印が2つ並ぶ=v5.30.4実機FB)
-  return '<span class="wla">'+mark+' '+diffMark(en, list[0])+' ⇄ '+list.map(o=>diffMark(o, en)+partnerJa(o, reveal)).join("・")+
+  return '<span class="wla">'+mark+' '+diffMark(en, list[0])+partnerJa(en, reveal)+' ⇄ '+list.map(o=>diffMark(o, en)+partnerJa(o, reveal)).join("・")+
     (reveal? '' : ' <span class="wtap">▸意味</span>')+'</span>';
 }
 /* 答え合わせの用例行(単語・2行・中央ぞろえ。実機FB「似た形とメモは別の行に」):

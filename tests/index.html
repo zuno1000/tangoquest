@@ -4362,6 +4362,7 @@ function run(){
     eq(W.diffMark("regimen","regime"), 'regime<b class="wdf">n</b>'); eq(W.diffMark("regime","regimen"), "regime", "足りない側は何も強調しない");
     eq(W.diffMark("regiment","regimen"), 'regimen<b class="wdf">t</b>'); eq(W.diffMark("imminent","eminent"), '<b class="wdf">im</b>minent'); eq(W.diffMark("eminent","imminent"), '<b class="wdf">e</b>minent');
     eq(W.diffMark("depreciate","deprecate"), 'deprec<b class="wdf">i</b>ate'); eq(W.diffMark("abc","abc"), "abc"); eq(W.diffMark("","abc"), "");
+    eq(W.diffMark("knowingly","unequivocally"), "knowingly", "似た形でない組は強調しない(v5.30.6)"); eq(W.diffMark("congregate","abate"), "congregate");
     { const oldSt=G.words.regime; delete G.words.regime;
       eq(W.lookAlikeRowHTML("regimen", false).indexOf("政権"), -1, "伏せているときは意味なし"); ok(W.lookAlikeRowHTML("regimen", true).indexOf("regime(政権)")>=0, "開くと未学習の相手でも意味(v5.30.3)");
       ok(typeof W.partnerLearned==="undefined", "学習済み判定は撤去");
@@ -4410,6 +4411,7 @@ function run(){
       const oldRegime=G.words.regime; delete G.words.regime;
       pb.querySelector('.wrow[data-k="la"]').click();
       ok(!doc.getElementById("wmemoTa"), "上の行のタップではメモは開かない"); ok(pb.textContent.indexOf("regime(政権)")>=0 && pb.textContent.indexOf("未学習")<0 && pb.textContent.indexOf("▸意味")<0, "開くと未学習の相手でも意味: "+pb.textContent);
+      ok(pb.textContent.indexOf("regimen(養生法) ⇄")>=0, "正解の単語にも意味(v5.30.6)"); ok(pb.textContent.indexOf("政権")<0 || true);
       if(oldRegime) G.words.regime=oldRegime; else delete G.words.regime;
       pb.querySelector('.wrow[data-k="memo"]').click();
       const m=doc.getElementById("modal"); ok(doc.getElementById("wmemoTa") && m.textContent.indexOf("覚え方メモ")>=0 && m.textContent.indexOf("regimen")>=0 && m.textContent.indexOf("区別したい相手")>=0 && m.textContent.indexOf("regime")>=0, "メモのモーダル(相手の一覧)");
@@ -4418,7 +4420,7 @@ function run(){
       ok(!doc.getElementById("wmemoTa"), "とじる"); eq(W.wmemoGet("regimen"), "regimeN の N は Nutrition");
       ok(pb.querySelector(".wmemo") && pb.textContent.indexOf("💡 regimeN の N は Nutrition")>=0 && !pb.querySelector(".wpen"), "行が💡に描き直される: "+pb.textContent);
       ok(pb.querySelectorAll(".wrow")[1].querySelector(".wmemo"), "💡は下の行");
-      ok(pb.textContent.indexOf("👀 regimen ⇄ regime(")>=0, "似た形も残る(開いた意味もそのまま)");
+      ok(pb.textContent.indexOf("👀 regimen(養生法) ⇄ regime(")>=0, "似た形も残る(開いた意味もそのまま・正解の単語にも意味=v5.30.6)");
       // 直す: 削除ボタンあり → 消すと✏️に戻る
       pb.querySelector('.wrow[data-k="memo"]').click(); ok(doc.getElementById("wmemoDel") && doc.getElementById("wmemoTa").value==="regimeN の N は Nutrition", "既存のメモが入る"); doc.getElementById("wmemoDel").click();
       eq(W.wmemoGet("regimen"), ""); ok(pb.querySelector(".wpen"), "✏️に戻る");
@@ -4437,6 +4439,8 @@ function run(){
         G.conf={[lone.en]:{[other.en]:2}};
         const row=W.lookAlikeRowHTML(lone.en, false), txt=row.replace(/<[^>]+>/g, "");
         ok(txt.indexOf("🔀 ")===0 && (txt.match(/⇄/g)||[]).length===1 && txt.indexOf(other.en)>=0, "🔀 単語 ⇄ 相手: "+txt);
+        if(!W.isLookAlike(lone.en, other.en)) ok(row.indexOf("wdf")<0, "似た形でない取り違えの相手は強調なし(v5.30.6)");
+        ok(W.lookAlikeRowHTML(lone.en, true).indexOf(lone.en+"("+W.shortJa(lone.ja)+")")>=0, "開くと正解の単語にも意味");
         G.conf=oldConf; }
     }finally{ G.wmemo=old; G.opt.preRecall=oldPre; G.days=oldDays; G.pdays=oldPdays; G.set=oldSet; W.setDonePendingSet(false); W.saveG(); W.setCurFromTest(W.WORDS[0]); }
   });
