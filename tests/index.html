@@ -4431,6 +4431,12 @@ function run(){
       // 似た形が無い語で取り違えの相手だけあるとき ⇄ / 何も無ければ ✏️ だけ
       const lone=W.WORDS.find(w=>w.en.indexOf(" ")<0 && !W.lookAlikes(w.en, 1).length && !W.wmemoGet(w.en) && !(G.myw&&G.myw[w.en]));
       ok(lone, "似た形の無い語"); eq(W.wexLineHTML(lone.en).indexOf("👀"), -1); ok(W.wexLineHTML(lone.en).indexOf("✏️ 覚え方メモ")>=0);
+      // 取り違えの相手だけある語: 先頭は🔀・⇄は間に1つだけ(v5.30.4)
+      { const oldConf=JSON.parse(JSON.stringify(G.conf)); const other=W.WORDS.find(w=>w.en!==lone.en && w.pos===lone.pos && w.en.indexOf(" ")<0);
+        G.conf={[lone.en]:{[other.en]:2}};
+        const row=W.lookAlikeRowHTML(lone.en, false), txt=row.replace(/<[^>]+>/g, "");
+        ok(txt.indexOf("🔀 ")===0 && (txt.match(/⇄/g)||[]).length===1 && txt.indexOf(other.en)>=0, "🔀 単語 ⇄ 相手: "+txt);
+        G.conf=oldConf; }
     }finally{ G.wmemo=old; G.opt.preRecall=oldPre; G.days=oldDays; G.pdays=oldPdays; G.set=oldSet; W.setDonePendingSet(false); W.saveG(); W.setCurFromTest(W.WORDS[0]); }
   });
 

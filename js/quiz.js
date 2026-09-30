@@ -154,7 +154,7 @@ function partnerJa(o, reveal){ return reveal? '('+esc(shortJa(byEn[o].ja))+')' :
 function lookAlikeRowHTML(en, reveal){
   const la=lookAlikes(en, 2);
   let mark="👀", list=la;
-  if(!la.length){ const cf=confusedWith(G, en, 1); if(!cf.length) return ""; mark="⇄"; list=cf; } // 似た形が無ければ取り違えの相手を同じ流儀で
+  if(!la.length){ const cf=confusedWith(G, en, 1); if(!cf.length) return ""; mark="🔀"; list=cf; } // 似た形が無ければ取り違えの相手を同じ流儀で(先頭の印は🔀。⇄だと間の⇄と重なり矢印が2つ並ぶ=v5.30.4実機FB)
   return '<span class="wla">'+mark+' '+diffMark(en, list[0])+' ⇄ '+list.map(o=>diffMark(o, en)+partnerJa(o, reveal)).join("・")+
     (reveal? '' : ' <span class="wtap">▸意味</span>')+'</span>';
 }
