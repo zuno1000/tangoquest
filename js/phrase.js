@@ -319,6 +319,7 @@ function buildPhrChoicesFS(p){
 function phrRenderQuestion(){
   phrAnswered=false; phrPos=0; phrMiss=0; qKind="p"; // 画面の種類(quiz.js・辞書リンクの分岐に使う)
   $("resultBar").classList.remove("show");
+  $("quizView").classList.remove("wmode"); // フレーズは結果バー(次へ・カテゴリ)を使う(単語モードのwmodeはv5.31.0で結果バーを隠す)
   const pc=$("promptCard");
   pc.classList.remove("srch");
   pc.classList.add("phr"); // フレーズ用レイアウト(上詰め+バッジ行の余白確保=v5.2.0の重なり対策)

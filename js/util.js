@@ -27,6 +27,17 @@ function toast(msg){
   clearTimeout(toastTimer);
   toastTimer=setTimeout(()=>t.classList.remove("show"), 1800);
 }
+/* クリップボードへ短い文字列を(v5.31.0・答え合わせの📋コピー)。非対応・拒否なら一時的なtextareaでexecCommand、それも駄目ならトーストで知らせる */
+function copyText(text, okMsg){
+  const done=()=>toast(okMsg || "📋 コピーした");
+  const legacy=()=>{
+    try{ const ta=document.createElement("textarea"); ta.value=text; ta.setAttribute("readonly",""); ta.style.position="fixed"; ta.style.opacity="0"; document.body.appendChild(ta); ta.select();
+      const ok=document.execCommand && document.execCommand("copy"); document.body.removeChild(ta); if(ok){ done(); return; } }catch(e){}
+    toast("コピーできなかった ─ 単語を長押しして選択してください");
+  };
+  if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, legacy);
+  else legacy();
+}
 
 /* ---- tap ----
    iOSはスクロールの減速中などにタップのclickが発火しないことがある(タップが

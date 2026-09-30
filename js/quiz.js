@@ -134,6 +134,60 @@ function wmemoSet(en, t){
   saveG();
   return t;
 }
+/* ---- 覚え方メモをまとめて書く(v5.31.0・実機FB「語呂や語源を自動で入れたい→難しければにがて上位をLLMに投げて貼り戻し」) ----
+   アプリは文章を作らない(方針=LLMなし・無料)。にがてノートの並びで「まだメモの無い語」の上位WMEMO_ASK_N語を依頼文にしてコピー→
+   LLMの答え「単語 — 覚え方」を貼り戻す(wmemoParse・純関数)→メモの無い語だけ保存(wmemoImport。自分で書いたメモは上書きしない)。
+   穴埋め模試(mockPromptText/mockParse)と同じ流儀・入口はにがてノートの折りたたみ(新しいタブ・設定は足さない) */
+var WMEMO_ASK_N=20;
+function wmemoHas(g, en){ const m=g.wmemo && g.wmemo[en]; return !!(m && !m.del && m.t); }
+/* メモの無いにがて語(純関数): にがてノートの並び(sort)のまま、メモの無い語をn語 */
+function wmemoAskWords(g, sort, n){ return weakWords(g, sort).filter(en=>!wmemoHas(g, en)).slice(0, n||WMEMO_ASK_N); }
+/* 依頼文: 語ごとに品詞・意味・語源・区別したい相手(似た形・取り違え)を添える=LLMが「見分けるコツ」まで書ける */
+function wmemoPromptText(words){
+  const lines=words.filter(en=>byEn[en]).map(en=>{
+    const w=byEn[en], la=lookAlikes(en, 2), cf=confusedWith(G, en, 2).filter(o=>la.indexOf(o)<0);
+    const ref=la.concat(cf).map(o=>o+"("+shortJa(byEn[o].ja)+")"), rt=rootText(en);
+    return "・"+en+"("+POS_LABEL[w.pos]+": "+w.ja+")"+(rt? " 語源: "+rt : "")+(ref.length? " 区別したい相手: "+ref.join("・") : "");
+  });
+  return "英検1級レベルの英単語を覚えるための「覚え方メモ」を、次の"+lines.length+"語それぞれに書いてください。\n"+
+    "・内容: 語源(接頭辞・語根・接尾辞の意味)、語呂、イメージ、似た形や意味を取り違えやすい語との区別のコツ、のうちその語にいちばん効くもの。日本語で"+
+    "(例: pique — 興味がピークに達するまで刺激するイメージ / contemptible — -ible(〜できる)=軽蔑される側 / contemptuous — -ous(〜に満ちた)=軽蔑する側)\n"+
+    "・長さ: 1語につき全角50字まで。2行に分けたいときは「 / 」(前後に空白)で区切る(2行まで)\n"+
+    "・出力は1行につき「単語 — 覚え方」だけ。次の語の順で1行ずつ。番号・記号・見出し・空行・説明は入れないでください(アプリにそのまま貼り付けます)\n\n"+
+    lines.join("\n");
+}
+/* 行頭の単語(純関数): 番号・記号・「」・**を捨てたあと、英字の並び(熟語は空白入り・最長一致で内蔵の語)。見つからなければ"" */
+function wmemoHead(s){
+  const m=String(s).replace(/^[\s\d０-９.)．、・\-*•「『"'【\[]+/, "").match(/^([A-Za-z][A-Za-z'\-]*(?: [A-Za-z][A-Za-z'\-]*){0,3})/);
+  if(!m) return "";
+  const toks=m[1].split(" ");
+  for(let k=toks.length;k>=1;k--){ const c=toks.slice(0,k).join(" ").toLowerCase(); if(byEn[c]) return c; }
+  return "";
+}
+/* 貼り戻しの解析(純関数): 行→{en, t}。「単語 — 覚え方」(区切りは — – | → : ： タブ・「 - 」)。
+   区切りが無くても行頭が内蔵の語なら残りをメモに(「wilt」は中期オランダ語…→「中期オランダ語…」/contemptible -ible(〜できる)…→「-ible(〜できる)…」)。
+   単語の直後の「(名: 立腹)」の注記・「は」「とは」は捨て、「 / 」は改行(wmemoNormで2行・120字)。同じ語は最初の行だけ */
+function wmemoParse(text){
+  const items=[], errs=[], seen={};
+  String(text||"").split(/\n+/).map(s=>s.replace(/\*\*/g, "").trim()).filter(Boolean).forEach(l=>{
+    const en=wmemoHead(l);
+    if(!en){ errs.push(l.slice(0, 20)+": 行頭が内蔵の語でない"); return; }
+    const i=l.toLowerCase().indexOf(en);
+    let rest=l.slice(i+en.length).replace(/^[」』"'】\]]+/, "").replace(/^\s*[（(][^）)]*[）)]/, "")
+      .replace(/^\s*(?:[—–|→:：]|-\s|\t)\s*/, "").replace(/^\s*(?:とは|は)\s*/, "").trim();
+    rest=wmemoNorm(rest.replace(/\s\/\s/g, "\n"));
+    if(!rest){ errs.push(en+": 覚え方が空"); return; }
+    if(seen[en]) return; seen[en]=1;
+    items.push({en, t:rest});
+  });
+  return {items, errs};
+}
+/* 保存: メモの無い語だけ(kept=既にメモがあり据え置き)。返り値は件数 */
+function wmemoImport(items){
+  let added=0, kept=0;
+  (items||[]).forEach(it=>{ if(!byEn[it.en]) return; if(wmemoHas(G, it.en)){ kept++; return; } if(wmemoSet(it.en, it.t)) added++; });
+  return {added, kept};
+}
 /* ---- 似た形の見せ方(v5.30.2・実機FB「並べて見せると、かえって間違えた方を覚えてしまいそう」=記憶の干渉への対策) ----
    ①違う文字を強調(diffMark: LCSで揃わない文字を<b class="wdf">)=手がかりを意味ではなく「見分ける文字」に付ける
    ②相手の意味は伏せておき、上の行のタップで開く(小さな想起テスト・「まず自力で思い出す」と同じ思想)。二つの意味を受け身で同時に読ませない。
@@ -167,24 +221,40 @@ function lookAlikeRowHTML(en, reveal){
   return '<span class="wla">'+mark+' '+diffMark(en, list[0])+partnerJa(en, reveal)+' ⇄ '+list.map(o=>diffMark(o, en)+partnerJa(o, reveal)).join("・")+
     (reveal? '' : ' <span class="wtap">▸意味</span>')+'</span>';
 }
-/* 答え合わせの用例行(単語・2行・中央ぞろえ。実機FB「似た形とメモは別の行に」):
-   上の行=👀似た形(なければ📝マイ単語の用例・それも無ければ⇄取り違え。ミス直後の相手は誤答の選択肢にも出るので用例を先に)/
-   下の行=💡覚え方メモ(なければ✏️の入口)。各行は1行に収め、はみ出しは…で切る。reveal=上の行の意味を開いたか(v5.30.2) */
-function wexLineHTML(en, reveal){
+/* ---- 答え合わせの単語の下の枠(#phrBuild.wex・中央ぞろえ) ----
+   v5.31.0(実機FB「見るべき要素が分散している(正解の選択肢・左下の品詞と語源・単語の下の例文・メモ・似た形)→次へボタンを廃止して
+   単語の下(選択肢の上)に集約したい」): 結果バー(左下の品詞・語源・🐺野生語Lv・次へ ▶)は単語モードでは出さず、行の順=優先度で並べる。
+   ①正しい意味(太字・長ければ2行) ②品詞・🧬語源(📝マイ単語) ③💡覚え方メモ(1〜2行・なければ✏️の入口) ④👀似た形(なければ📝用例→🔀取り違え)。
+   次へは正解の選択肢のタップ(v5.10.0)か「自動で次へ」。各行は1行(WEX_ROW px)に収め、はみ出しは…。reveal=④の意味を開いたか(v5.30.2) */
+var WEX_ROW=20, WEX_COLS=20; // 1行の高さ・①が1行に収まる全角の字数の目安(英字は0.55字)
+function wexTextCols(s){ let n=0; for(const ch of String(s||"")) n+=ch.charCodeAt(0)<0x2E80? 0.55 : 1; return n; }
+/* ①の文: EN→日本語なら訳・日本語→ENなら英単語・穴埋め(英文が上)なら「単語 ─ 訳」 */
+function wexJaText(w, e2j, fill){ return fill? w.en+" ─ "+w.ja : e2j? w.ja : w.en; }
+function wexJaRows(w, e2j, fill){ return wexTextCols(wexJaText(w, e2j, fill))>WEX_COLS? 2 : 1; }
+function wexMemoRows(en){ const m=wmemoGet(en); return m? m.split("\n").length : 1; }
+function wexRows(w, e2j, fill){ return wexJaRows(w, e2j, fill)+1+wexMemoRows(w.en)+1; }
+function wexLineHTML(en, reveal, e2j, fill){
+  const w=byEn[en]; if(!w) return "";
+  if(e2j===undefined) e2j=(G.mode==="e2j");
   const memo=wmemoGet(en);
-  let top="";
-  if(lookAlikes(en, 1).length) top=lookAlikeRowHTML(en, reveal);
-  else{
-    top=mywExampleHTML(en);
-    if(!top) top=lookAlikeRowHTML(en, reveal); // 取り違えの相手
-  }
-  // メモは行ごとに1行ずつ(v5.30.8: 2行のメモは枠を1行ぶん広げる=wexHeight)。1行目に💡
-  const bottom=memo? memo.split("\n").map((l,i)=>'<div class="wrow" data-k="memo"><span class="wmemo">'+(i? '' : '💡 ')+esc(l)+'</span></div>').join("")
+  // ① 意味
+  const ja='<div class="wrow wja'+(wexJaRows(w, e2j, fill)>1? ' two':'')+'" data-k="ja">'+esc(wexJaText(w, e2j, fill))+'</div>';
+  // ② 品詞・語源(語源タグは1つずつチップ=途中で折れない)・マイ単語
+  const rt=rootText(en), meta=[];
+  if(rt) rt.split("・").forEach((tag,i)=>meta.push('<span class="rmeta">'+(i? '':'🧬 ')+esc(tag)+'</span>'));
+  if(isMyWord(en)) meta.push('<span class="rmeta myw">📝 マイ単語</span>');
+  const pos='<div class="wrow" data-k="pos"><span class="poschip pos'+w.pos+'">'+POS_LABEL[w.pos]+'</span>'+meta.join(' ')+'</div>';
+  // ③ メモは行ごとに1行ずつ(v5.30.8: 2行のメモは枠を1行ぶん広げる=wexHeight)。1行目に💡
+  const mm=memo? memo.split("\n").map((l,i)=>'<div class="wrow" data-k="memo"><span class="wmemo">'+(i? '' : '💡 ')+esc(l)+'</span></div>').join("")
     : '<div class="wrow" data-k="memo"><span class="wpen">✏️ 覚え方メモ</span></div>';
-  return '<div class="wrow" data-k="la">'+top+'</div>'+bottom;
+  // ④ 似た形(なければ📝マイ単語の用例・それも無ければ🔀取り違え。ミス直後の相手は誤答の選択肢にも出るので用例を先に)。無ければ空の行(枠の高さは出題時に決めるので行は常に置く)
+  let la="";
+  if(lookAlikes(en, 1).length) la=lookAlikeRowHTML(en, reveal);
+  else{ la=mywExampleHTML(en); if(!la) la=lookAlikeRowHTML(en, reveal); }
+  return ja+pos+mm+'<div class="wrow" data-k="la">'+la+'</div>';
 }
-/* 枠の高さ(v5.30.8): 似た形の行1+メモの行数。出題時に決めておく=答え合わせで単語が動かない(2行のメモを答え合わせ中に書いた直後だけ枠が広がる) */
-function wexHeight(pb, en){ pb.classList.toggle("tall", wmemoGet(en).indexOf("\n")>=0); }
+/* 枠の高さ=行数×WEX_ROW。出題時に決めておく=答え合わせで単語が動かない(2行のメモを答え合わせ中に書いた直後だけ枠が広がる) */
+function wexHeight(pb, w, e2j, fill){ if(e2j===undefined) e2j=(G.mode==="e2j"); pb.style.height=(wexRows(w, e2j, fill)*WEX_ROW)+"px"; }
 /* メモを書く/直す。after=保存・削除・とじたあとに呼ぶ(答え合わせの行の描き直し・単語の詳細に戻る) */
 function openMemoModal(en, after){
   const w=byEn[en]; if(!w) return;
@@ -801,10 +871,14 @@ function openFocusDone(){
      セット完了モーダルがタブ切替で消えるのを防ぐ。学習に戻って「次へ」を押した時点でセット完了が出る(v5.29.3自己レビュー) */
   $("focusHome").onclick=()=>{ closeModal(); if(!setDonePending) newQuestion(); switchTab("home"); };
 }
-/* にがてノート(⚙設定・記録から): リストの上位と、特訓の入口 */
-function openWeakModal(){
+/* にがてノート(⚙設定・記録から): リストの上位と、特訓の入口。
+   v5.31.0(実機FB): 行のタップで単語の詳細(openWordModal・「もどる」でノートへ)/折りたたみ「覚え方メモをまとめて書く」=メモの無い上位語をLLMに頼んで貼り戻す。
+   opt.memoOpen=折りたたみを開いたまま描き直す(貼り戻したあと) */
+function openWeakModal(opt){
+  opt=opt||{};
   const sort=WEAK_SORTS[G.opt.weakSort]? G.opt.weakSort : "miss";
   const list=weakWords(G, sort), now=Date.now();
+  const ask=wmemoAskWords(G, sort, WMEMO_ASK_N);
   openModal('<h3>🔥 にがてノート '+helpBtn("hlp-weak")+'</h3>'+
     helpNote("hlp-weak", 'ミスしたことがあり、まだ「覚えた」に届いていない単語。<b>並びは上のボタンで選ぶ</b>: '+
       'ミスが多い(累計のミス回数)/連続ミス中(直近で続けて外している数)/定着が低い(忘却曲線の段)/復習が近い(次の期限)。'+
@@ -816,7 +890,7 @@ function openWeakModal(){
     (list.length
       ? '<div class="panel" style="margin-top:8px">'+list.slice(0, 30).map(en=>{
           const w=byEn[en], st=G.words[en];
-          return '<div class="myrow weakrow"><div class="grow"><b style="font-size:14px">'+esc(en)+'</b>'+
+          return '<div class="myrow weakrow"><div class="grow wopen" data-en="'+esc(en)+'" title="タップで単語の詳細"><b style="font-size:14px">'+esc(en)+'</b>'+(wmemoHas(G, en)? ' 💡':'')+
             ' <span class="small">'+esc(w.ja)+'</span><br><span class="small">'+
             '<span class="wkey">'+weakKeyText(st, sort, now)+'</span>'+
             (sort!=="miss"? ' ・ <span class="qx">ミス '+st[3]+'</span>':'')+
@@ -827,14 +901,31 @@ function openWeakModal(){
             '<button class="btn mydel wdict" data-en="'+esc(en)+'">🔍</button></div>';
         }).join("")+(list.length>30? '<div class="small" style="margin-top:6px">…ほか'+(list.length-30)+'語</div>':'')+'</div>'
       : '<div class="empty">いま立て直す「にがて」はない ─ いい調子!</div>')+
-    '<div class="row" style="margin-top:12px"><button class="btn primary grow" id="weakGo"'+(list.length?'':' disabled')+'>🔥 にがて特訓(上位'+Math.min(FOCUS_N, list.length)+'語)</button></div>');
+    '<div class="row" style="margin-top:12px"><button class="btn primary grow" id="weakGo"'+(list.length?'':' disabled')+'>🔥 にがて特訓(上位'+Math.min(FOCUS_N, list.length)+'語)</button></div>'+
+    // 覚え方メモをまとめて書く(v5.31.0): メモの無い語の上位WMEMO_ASK_N語(このノートの並び)をLLMに頼む→貼り戻し
+    foldSec("weakMemo", '💡 覚え方メモをまとめて書く(LLMに頼む) <span class="small">メモなし '+ask.length+'語</span>',
+      '<div class="small">このノートの並びで、まだ覚え方メモの無い語の上位'+WMEMO_ASK_N+'語('+ask.length+'語)の依頼文をコピーしてLLM(ChatGPT・Gemini等)に貼り、'+
+        '返ってきた「単語 — 覚え方」を貼り戻すとメモになる(答え合わせで💡に出る)。既にメモのある語は頼まない・上書きしない</div>'+
+      (ask.length? '<button class="btn" id="weakMemoCopy" style="width:100%; margin-top:6px">📋 '+ask.length+'語の覚え方をLLMに頼む(依頼文をコピー)</button>'
+        : '<div class="small" style="margin-top:6px">'+(list.length? 'にがての語にはすべてメモがある' : 'にがての語がない')+'</div>')+
+      '<textarea id="weakMemoBack" class="myta" rows="3" style="margin-top:8px" placeholder="LLMの答えを貼り付け(1行『単語 — 覚え方』)"></textarea>'+
+      '<button class="btn primary" id="weakMemoImport" style="width:100%; margin-top:6px">貼り戻してメモに保存</button>', !!opt.memoOpen));
   $("weakSeg").querySelectorAll("button").forEach(b=>{
     b.onclick=()=>{ G.opt.weakSort=b.dataset.s; saveG(); openWeakModal(); };
   });
   $("modal").querySelectorAll(".wdict").forEach(b=>{
     b.onclick=()=>window.open("https://ejje.weblio.jp/content/"+encodeURIComponent(b.dataset.en), "_blank", "noopener");
   });
+  $("modal").querySelectorAll(".wopen").forEach(d=>{ d.onclick=()=>openWordModal(d.dataset.en, ()=>openWeakModal(opt)); }); // 行のタップで単語の詳細(v5.31.0)
   $("weakGo").onclick=()=>startFocus(null);
+  const mc=$("weakMemoCopy"); if(mc) mc.onclick=()=>rlCopy(wmemoPromptText(ask), $("weakMemoBack"));
+  $("weakMemoImport").onclick=()=>{
+    const r=wmemoParse($("weakMemoBack").value);
+    if(!r.items.length){ toast(r.errs[0] || "「単語 — 覚え方」の行が見つからない"); return; }
+    const res=wmemoImport(r.items);
+    toast("💡 覚え方メモ "+res.added+"語を保存"+(res.kept? "・"+res.kept+"語は既にあり据え置き":"")+(r.errs.length? "・"+r.errs.length+"行は使えず":""));
+    openWeakModal({memoOpen:true});
+  };
 }
 
 /* 「自動で次へ」(v4.26.0)の設定値: 0=オフ→1秒→1.5秒→2秒を巡回 */
@@ -905,9 +996,10 @@ function renderQuestion(){
   const pb=$("phrBuild");
   if(pb){ pb.classList.remove("hidden"); pb.classList.add("wex"); pb.classList.remove("memo"); pb.innerHTML=""; pb.onclick=null; }
   $("promptCard").classList.remove("phr");
+  $("quizView").classList.add("wmode"); // 単語モード(v5.31.0): 結果バー(左下・次へ)は出さず、単語の下の枠に集約。フレーズの描画で外す
   $("choices").className="choices";
   const w=cur.word, e2j=G.mode==="e2j";
-  if(pb) wexHeight(pb, w.en); // 2行の覚え方メモがある語は枠を60pxに(v5.30.8)
+  if(pb) wexHeight(pb, w, e2j, !!cur.fill); // 枠の高さ=①意味(1〜2行)+②品詞+③メモ(1〜2行)+④似た形。出題時に決める=答え合わせで単語が動かない
   const st=G.words[w.en];
   $("qBadge").textContent = !st? "新規" : (st[0]>=MASTER_BOX? "覚えた・復習" : "復習");
   $("qBadge").style.color = !st? "var(--accent2)" : (st[0]>=MASTER_BOX? "var(--ok)" : "var(--accent)");
@@ -1032,12 +1124,13 @@ function answer(chosen, btn){
   if(!ok && chosen.en!==w.en){ noteConfusion(G, w.en, chosen.en); if(!FOCUS && !pairQueue.some(q=>q.en===chosen.en)) pairQueue.push({en:chosen.en, wait:PAIR_GAP}); }
   /* 単語カードの下の行(枠は出題時から確保済み=v5.24.0): 💡覚え方メモ(なければ✏️の入口)・👀似た形・📝マイ単語の用例(v5.30.0で統合)。
      タップで覚え方メモを書く/直す(単語カードの辞書タップとは分ける=stopPropagation)。穴埋め模試は英文が上にあるので同じ行に出す */
-  { const pb=$("phrBuild"); let reveal=false; pb.innerHTML=wexLineHTML(w.en, reveal); pb.classList.remove("hidden"); pb.classList.add("memo"); wexHeight(pb, w.en);
-    /* 上の行(似た形)のタップ=伏せた相手の意味を開く(v5.30.2・自分の答えを確かめる)。下の行(メモ)のタップ=覚え方メモを書く/直す */
+  { const pb=$("phrBuild"), fill=!!cur.fill; let reveal=false; pb.innerHTML=wexLineHTML(w.en, reveal, e2j, fill); pb.classList.remove("hidden"); pb.classList.add("memo"); wexHeight(pb, w, e2j, fill);
+    /* 似た形の行のタップ=伏せた相手の意味を開く(v5.30.2・自分の答えを確かめる)。メモの行のタップ=覚え方メモを書く/直す。ほかの行は何もしない(カードの辞書タップにも渡さない) */
     pb.onclick=e=>{ e.stopPropagation(); if(!answered || !cur || cur.word.en!==w.en) return;
-      const row=e.target.closest? e.target.closest(".wrow") : null;
-      if(row && row.dataset.k==="la" && row.textContent.trim()){ reveal=true; pb.innerHTML=wexLineHTML(w.en, reveal); return; }
-      openMemoModal(w.en, ()=>{ if(answered && cur && cur.word.en===w.en){ pb.innerHTML=wexLineHTML(w.en, reveal); wexHeight(pb, w.en); } }); }; }
+      const row=e.target.closest? e.target.closest(".wrow") : null, k=row? row.dataset.k : "";
+      if(k==="la"){ if(row.textContent.trim()){ reveal=true; pb.innerHTML=wexLineHTML(w.en, reveal, e2j, fill); } return; }
+      if(k!=="memo") return;
+      openMemoModal(w.en, ()=>{ if(answered && cur && cur.word.en===w.en){ pb.innerHTML=wexLineHTML(w.en, reveal, e2j, fill); wexHeight(pb, w, e2j, fill); } }); }; }
 
   // 知識XP: 正解が直接キャラの強さになる(連続学習日数+コンボ+キャラスキルでボーナス)
   let xpGain=0, lvUp=0;
@@ -1049,13 +1142,8 @@ function answer(chosen, btn){
     if(l1>l0){ lvUp=l1; }
   }
 
-  // 結果表示: 品詞と語源・野生語だけを見せる(正誤は選択肢の色で伝わる)
-  // 語源タグは1つずつinline-blockのチップにする=タグの途中で改行されない
-  const rc=$("resultCard");
-  const rt=rootText(w.en), meta=[];
-  if(rt) rt.split("・").forEach((tag,i)=>meta.push('<span class="rmeta">'+(i? '':'🧬 ')+esc(tag)+'</span>'));
-  if(isWild(w.en)) meta.push('<span class="rmeta wildm">🐺 野生語 Lv'+memBox(w.en)+'</span>');
-  if(isMyWord(w.en)) meta.push('<span class="rmeta myw">📝 マイ単語</span>'); // 自分で登録した語(v5.11.0)
+  /* 結果表示(v5.31.0): 品詞・語源・マイ単語・メモ・似た形は単語の下の枠(wexLineHTML)に集約した。結果バー(左下)は単語モードでは出さない
+     (🐺野生語Lv=ゲーム面の値・ミス直後の「🧬覚えた仲間」(missHintHTML)も枠から外した=見るべき所を①意味②品詞・語源③メモ④似た形に絞る。正誤は選択肢の色で伝わる) */
   let bigT=false; // 大事なお祝いのトーストを出したか(5問ボーナスの通知で上書きしない)
   if(ok){
     let rar=dropRarity(preSt);
@@ -1072,12 +1160,8 @@ function answer(chosen, btn){
   // 5問ごとのボーナスの通知(v4.31.0)。より大事なお祝いがあるときは譲る
   if(GAME_ENABLED && bonus5 && !bigT) toast("🎁 5問ごとのボーナス 🎫+"+bonus5);
   $("qStats").innerHTML=qStatsHTML(st); // 定着ステップの変化(上がった/戻った)を見せる
-  // ミスの直後は手がかり(選んだ誤答・同じ語根の覚えた仲間)を先頭に出す(v5.10.0)
-  if(!ok) meta.unshift(missHintHTML(G, w, chosen, e2j));
-  rc.innerHTML='<span class="poschip pos'+w.pos+'">'+POS_LABEL[w.pos]+'</span>'+meta.filter(Boolean).join(' ');
-  $("resultBar").classList.add("show");
-  armCorrectNext("#choices", newQuestion); // 正解の選択肢タップでも次へ(v5.10.0)
-  $("promptCard").classList.add("srch"); // 単語タップで辞書へ(意味の裏取り)
+  armCorrectNext("#choices", newQuestion); // 正解の選択肢タップで次へ(v5.10.0。v5.31.0から単語モードの「次へ ▶」はこれだけ)
+  $("promptCard").classList.add("srch"); // 単語タップで辞書へ(意味の裏取り)。上部に📋コピー/🔍辞書のチップ(#qActs)も出る(v5.31.0)
   // 今日の目安にちょうど到達した瞬間だけ祝う(毎問出る表示はノイズ=v4.6.2の知見)
   const pq=paceToday(G);
   if(pq && !pq.done && d.a===pq.perDay){ toast("🎉 今日の目安 "+pq.perDay+"問を達成!"+(GAME_ENABLED? " 任務でドカンと報酬を受け取ろう":"")); vibe(40); }
@@ -1093,7 +1177,11 @@ function answer(chosen, btn){
   }
 }
 
-$("nextBtn").onclick=()=>newQuestion();
+$("nextBtn").onclick=()=>newQuestion(); // フレーズ学習の結果バー(単語モードでは結果バーごと出さない=v5.31.0)
+/* 単語の答え合わせの上部チップ(v5.31.0・実機FB「意味を検索できるように単語をコピーしたい」): 📋コピー=単語をクリップボードへ・🔍辞書=Weblio。
+   カードのタップ(辞書)には渡さない。カード下の「🔍 タップで辞書を開く」の添え書きは単語モードでは出さない(チップに置き換え) */
+$("qCopy").onclick=e=>{ e.stopPropagation(); if(!answered || !cur) return; copyText(cur.word.en, "📋 「"+cur.word.en+"」をコピーした ─ 辞書や検索に貼り付けよう"); };
+$("qDict").onclick=e=>{ e.stopPropagation(); if(!answered || !cur) return; window.open("https://ejje.weblio.jp/content/"+encodeURIComponent(cur.word.en), "_blank", "noopener"); };
 
 /* 正誤確認中は上部の単語カードのタップで辞書(Weblio)を開き、意味を自分で確かめられる。
    出題中は誤タップ防止のため無効(srchクラスで見た目も切り替え) */

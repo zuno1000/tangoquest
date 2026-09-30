@@ -87,12 +87,24 @@ nav button .dot{position:absolute; top:-2px; right:-8px; width:9px; height:9px; 
 
 /* ---- quiz ---- */
 #quizView{display:flex; flex-direction:column; overflow:hidden}
+/* v5.31.0: 高さは中身で決まる(min-heightは従来の24dvh)。答え合わせの枠(#phrBuild.wex)は出題時に高さを確保するので、
+   答え合わせでカードも単語も動かない。上のバッジ行(絶対配置)ぶんの余白=padding-top */
 #promptCard{
-  background:var(--card2); border-radius:24px; padding:14px 16px; text-align:center;
+  background:var(--card2); border-radius:24px; padding:34px 16px 14px; text-align:center;
   position:relative; flex:0 0 auto;
   box-shadow:-5px -5px 10px var(--shl), 5px 5px 10px var(--shd);
-  height:24vh; height:24dvh; display:flex; flex-direction:column; justify-content:center;
+  height:auto; min-height:24vh; min-height:24dvh; display:flex; flex-direction:column; justify-content:center;
 }
+/* 単語モード(v5.31.0・#quizView.wmode): 結果バー(左下の品詞・語源・次へ ▶)は出さず、単語の下の枠に集約。
+   正誤確認中(.srch)は上部に📋コピー/🔍辞書のチップ。カード下の「タップで辞書」の添え書きはチップに置き換え */
+#quizView.wmode #resultBar{display:none}
+#quizView.wmode #promptCard.srch::after{display:none}
+#qActs{display:none; position:absolute; top:8px; left:12px; gap:8px; pointer-events:none}
+#quizView.wmode #promptCard.srch #qActs{display:flex}
+#quizView.wmode #promptCard.srch #qBadge{visibility:hidden} /* 正誤確認中はバッジ(新規/復習)の場所にチップ(中央だと右の「セット n/30・今日 n問」と重なる=390pxで確認)。復習かどうかは下の「これまで…定着」で分かる */
+.qact{pointer-events:auto; border:none; border-radius:10px; padding:3px 10px; min-height:22px; font-family:inherit; font-size:11px; font-weight:800;
+  color:var(--sub); background:var(--bg); cursor:pointer; box-shadow:inset 2px 2px 4px var(--shd), inset -2px -2px 4px var(--shl)}
+.qact:active{transform:scale(.96)}
 #qBadge{position:absolute; top:10px; left:12px; font-size:12px; font-weight:700;
   border-radius:999px; padding:4px 10px; background:var(--bg2); color:var(--accent2)}
 #qCount{position:absolute; top:14px; right:14px; font-size:12px; color:var(--sub)}
@@ -1224,8 +1236,15 @@ body.svplay #slotView{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
 #phrBuild.wex .myex{display:inline}
 /* 答え合わせの2行(v5.30.0→v5.30.1: 別の行・中央ぞろえ): 上=👀似た形(⇄取り違え/📝用例)・下=💡覚え方メモ(✏️の入口)。各行1行・はみ出しは… */
 #phrBuild.wex .wrow{display:block; height:20px; line-height:20px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-#phrBuild.wex.tall{height:60px} /* 2行の覚え方メモ(v5.30.8): 似た形1行+メモ2行 */
-#phrBuild.wex.memo{cursor:pointer}
+/* v5.31.0: 枠の高さは行数×20px(wexHeightがインラインで決める。①意味1〜2行+②品詞・語源+③メモ1〜2行+④似た形)。
+   ①は太字・長い訳は2行に折り返して省略。②の品詞チップは20pxの行に収まる小さめ */
+#phrBuild.wex .wrow.wja{font-size:15px; font-weight:800; color:var(--ink)}
+#phrBuild.wex .wrow.wja.two{height:40px; white-space:normal; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
+#phrBuild.wex .poschip{padding:0 8px; line-height:16px; margin-right:6px; vertical-align:1px}
+#phrBuild.wex .rmeta.myw{margin-left:6px}
+#phrBuild.wex.memo{cursor:default}
+#phrBuild.wex.memo .wrow[data-k="memo"], #phrBuild.wex.memo .wrow[data-k="la"]{cursor:pointer}
+.weakrow .wopen{cursor:pointer} /* にがてノートの行タップで単語の詳細(v5.31.0) */
 .wmemo{color:var(--accent2); font-weight:800}
 .wla{color:var(--ink); font-weight:700}
 .wpen{color:var(--sub); text-decoration:underline dotted var(--sub); text-underline-offset:3px}

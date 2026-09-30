@@ -51,6 +51,7 @@ const EVENTS=[
   // {d:"2026-08-03", t:"..."} 形式でバナー以外のイベント告知を書く
 ];
 const NEWS=[
+  {d:"2026-10-01", t:"📝 v5.31.0 実機FB4件: ①答え合わせを単語の下に集約: 「次へ ▶」と左下の結果バー(品詞・語源・野生語Lv)を単語モードでは廃止し、単語の下の枠に「①正しい意味 ②品詞・🧬語源 ③💡覚え方メモ ④👀似た形/🔀取り違え」の順で出す(枠の高さは出題時に決まるので単語は動かない・次へは正解の選択肢のタップか自動で次へ) ②答え合わせの上部に「📋 コピー」(単語をクリップボードへ=意味を検索しやすく)と「🔍 辞書」のチップ ③にがてノートの行をタップすると単語の詳細(◂ もどるでノートへ・メモのある語は💡) ④にがてノートの「💡 覚え方メモをまとめて書く」: メモの無い語の上位20語の依頼文を📋でコピーしてLLMに貼り、返ってきた「単語 — 覚え方」を貼り戻すとメモになる(既にメモのある語は頼まない・上書きしない)"},
   {d:"2026-09-30", t:"📝 v5.30.8 実機FB: 覚え方メモが改行に対応: ①メモの入力欄で改行すると2行のメモになる(3行目以降は2行目につながる・全体で120字) ②答え合わせでは単語の下の枠が1行ぶん広がり、似た形の行+メモ2行が全部見える(枠の高さは出題時に決まるので単語の位置は動かない) ③単語の詳細でも改行のまま表示"},
   {d:"2026-09-30", t:"🔧 v5.30.7 実機FB: 似た形の違う文字の強調: ①薄い赤の背景の塗りをやめる ②赤い文字と同色の下線はそのまま"},
   {d:"2026-09-30", t:"🔧 v5.30.6 実機FB2件: ①似た形の行を開いたとき、正解の単語(本来答えるべき語)にも括弧で意味を添える(「regimeN(養生法) ⇄ regime(政権)」) ②knowingly/unequivocally のように綴りが似ていない取り違えの相手では、違う文字の強調が3か所に割れて分かりにくかった→強調は編集距離で「似た形」と判定した組だけにし、それ以外は素の綴りで出す"},
@@ -463,6 +464,7 @@ window.RL_LEN=RL_LEN; window.RL_LEN_DEFAULT=RL_LEN_DEFAULT; // v5.23.0(⏱ 聴�
 window.SFX_KINDS=SFX_KINDS; window.SFX_VOLS=SFX_VOLS; // v5.24.0(効果音の種類・音量)
 window.MOCK_N=MOCK_N; window.MOCK_IDIOM=MOCK_IDIOM; window.MOCK_GUIDE_SEC=MOCK_GUIDE_SEC; // v5.25.0(Part 1模試)
 window.laCacheClear=()=>laCache.clear(); window.answeredGet=()=>answered; window.setDonePendingSet=v=>{ setDonePending=!!v; }; // v5.30.0(似た形・覚え方メモ・模試のテスト)
+window.WMEMO_ASK_N=WMEMO_ASK_N; window.WEX_ROW=WEX_ROW; window.WEX_COLS=WEX_COLS; window.POS_LABEL=POS_LABEL; // v5.31.0(メモの一括依頼・答え合わせの枠)
 window.autoSyncPendingGet=()=>autoSyncPending; window.autoSyncPendingSet=v=>{ autoSyncPending=!!v; }; window.AUTO_SYNC_GAP=AUTO_SYNC_GAP; // v5.19.0
 window.setFocusFromTest=f=>{ FOCUS=f; }; window.focusGet=()=>FOCUS; window.pdrillGet=()=>PDRILL;
 window.LTD_SLOTS=LTD_SLOTS;

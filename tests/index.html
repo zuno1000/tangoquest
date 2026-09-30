@@ -3951,7 +3951,8 @@ function run(){
     ok(pb.textContent.indexOf(en)>=0, "答え合わせで用例が入る");
     const h1=doc.getElementById("promptWord").getBoundingClientRect().top;
     ok(Math.abs(h1-h0)<1, "単語の位置が動かない(差 "+Math.abs(h1-h0).toFixed(1)+"px)");
-    ok(pb.getBoundingClientRect().height<=41, "枠は2行ぶん(40px)で切れる: "+pb.getBoundingClientRect().height.toFixed(1));
+    { const n=W.wexRows(w0, G.mode==="e2j", false); eq(pb.style.height, n*W.WEX_ROW+"px", "枠は行数ぶん(v5.31.0: 意味+品詞+メモ+用例)"); ok(pb.getBoundingClientRect().height<=n*W.WEX_ROW+1, "枠で切れる: "+pb.getBoundingClientRect().height.toFixed(1)); }
+    ok(pb.querySelector('.wrow[data-k="la"]') && pb.querySelector('.wrow[data-k="la"]').textContent.indexOf(en)>=0, "用例は④の行");
     if(oldMyw) G.myw[en]=oldMyw; else delete G.myw[en];
     W.newQuestion();
   });
@@ -4397,50 +4398,52 @@ function run(){
     const oldDays=JSON.parse(JSON.stringify(G.days)), oldPdays=JSON.parse(JSON.stringify(G.pdays)), oldSet=JSON.parse(JSON.stringify(G.set)); // 1問の解答で今日の合算がずれると後続のミックスの物差しが動くので戻す
     try{
       G.opt.preRecall=0; G.wmemo={};
+      const e2j=G.mode==="e2j", rowsN=W.wexRows(W.byEn.regimen, e2j, false); // v5.31.0: 枠の行数=①意味(1〜2行)+②品詞+③メモ(1〜2行)+④似た形
       W.switchTab("quiz"); W.setCurFromTest(W.byEn.regimen);
-      const pb=doc.getElementById("phrBuild"); eq(pb.textContent, "", "出題時は空"); ok(!pb.classList.contains("memo"));
+      const pb=doc.getElementById("phrBuild"); eq(pb.textContent, "", "出題時は空"); ok(!pb.classList.contains("memo")); eq(pb.style.height, rowsN*W.WEX_ROW+"px", "出題時から行数ぶんの高さ");
       const h0=doc.getElementById("promptWord").getBoundingClientRect().top;
-      const want=(G.mode==="e2j"? W.byEn.regimen.ja : "regimen");
+      const want=(e2j? W.byEn.regimen.ja : "regimen");
       [...doc.querySelectorAll("#choices .choice")].find(x=>x.textContent===want).click();
-      ok(pb.textContent.indexOf("👀 regimen ⇄ regime")>=0 && pb.textContent.indexOf("▸意味")>=0, "正解しても似た形が出る(意味は伏せる・v5.30.2): "+pb.textContent);
-      ok(pb.textContent.indexOf("政権")<0 && pb.textContent.indexOf("(")<0, "意味は伏せてある");
-      ok(pb.querySelector(".wrow .wdf") && pb.querySelector(".wrow .wdf").textContent==="n", "違う文字(n)を強調: "+pb.querySelector(".wrow").innerHTML.slice(0,120));
-      eq(W.getComputedStyle(pb.querySelector(".wrow .wdf")).color, "rgb(214, 40, 40)", "強調は赤(v5.30.5)");
-      eq(W.getComputedStyle(pb.querySelector(".wrow .wdf")).backgroundColor, "rgba(0, 0, 0, 0)", "背景は塗らない(v5.30.7)");
+      const laRow=()=>pb.querySelector('.wrow[data-k="la"]');
+      ok(laRow().textContent.indexOf("👀 regimen ⇄ regime")>=0 && laRow().textContent.indexOf("▸意味")>=0, "正解しても似た形が出る(意味は伏せる・v5.30.2): "+laRow().textContent);
+      ok(laRow().textContent.indexOf("政権")<0 && laRow().textContent.indexOf("(")<0, "意味は伏せてある");
+      ok(laRow().querySelector(".wdf") && laRow().querySelector(".wdf").textContent==="n", "違う文字(n)を強調: "+laRow().innerHTML.slice(0,120));
+      eq(W.getComputedStyle(laRow().querySelector(".wdf")).color, "rgb(214, 40, 40)", "強調は赤(v5.30.5)");
+      eq(W.getComputedStyle(laRow().querySelector(".wdf")).backgroundColor, "rgba(0, 0, 0, 0)", "背景は塗らない(v5.30.7)");
       ok(pb.querySelector(".wpen") && pb.textContent.indexOf("✏️ 覚え方メモ")>=0, "メモの入口"); ok(pb.classList.contains("memo"));
-      const rows=pb.querySelectorAll(".wrow"); eq(rows.length, 2, "2行(v5.30.1)"); ok(rows[0].querySelector(".wla") && rows[1].querySelector(".wpen"), "上=似た形・下=メモ");
-      eq(W.getComputedStyle(pb).textAlign, "center", "中央ぞろえ"); eq(W.getComputedStyle(rows[0]).whiteSpace, "nowrap", "各行は1行"); ok(rows[0].getBoundingClientRect().height<=21 && pb.getBoundingClientRect().height<=41, "行の高さ");
+      const rows=pb.querySelectorAll(".wrow"); eq(rows.length, 4, "4行(v5.31.0: 意味・品詞・メモ・似た形)");
+      ok(rows[0].classList.contains("wja") && rows[1].querySelector(".poschip") && rows[2].querySelector(".wpen") && rows[3].querySelector(".wla"), "①意味 ②品詞 ③メモ ④似た形の順");
+      eq(W.getComputedStyle(pb).textAlign, "center", "中央ぞろえ"); eq(W.getComputedStyle(rows[3]).whiteSpace, "nowrap", "各行は1行");
+      ok(rows[3].getBoundingClientRect().height<=21 && pb.getBoundingClientRect().height<=rowsN*W.WEX_ROW+1, "行の高さ");
       ok(Math.abs(doc.getElementById("promptWord").getBoundingClientRect().top-h0)<1, "単語の位置が動かない");
-      // 上の行のタップ=伏せた意味を開く(v5.30.3: 未学習の相手でも意味)
+      // 似た形の行のタップ=伏せた意味を開く(v5.30.3: 未学習の相手でも意味)
       const oldRegime=G.words.regime; delete G.words.regime;
-      pb.querySelector('.wrow[data-k="la"]').click();
-      ok(!doc.getElementById("wmemoTa"), "上の行のタップではメモは開かない"); ok(pb.textContent.indexOf("regime(政権)")>=0 && pb.textContent.indexOf("未学習")<0 && pb.textContent.indexOf("▸意味")<0, "開くと未学習の相手でも意味: "+pb.textContent);
-      ok(pb.textContent.indexOf("regimen(養生法) ⇄")>=0, "正解の単語にも意味(v5.30.6)"); ok(pb.textContent.indexOf("政権")<0 || true);
+      laRow().click();
+      ok(!doc.getElementById("wmemoTa"), "似た形の行のタップではメモは開かない"); ok(laRow().textContent.indexOf("regime(政権)")>=0 && laRow().textContent.indexOf("未学習")<0 && laRow().textContent.indexOf("▸意味")<0, "開くと未学習の相手でも意味: "+laRow().textContent);
+      ok(laRow().textContent.indexOf("regimen(養生法) ⇄")>=0, "正解の単語にも意味(v5.30.6)");
       if(oldRegime) G.words.regime=oldRegime; else delete G.words.regime;
+      pb.querySelector('.wrow[data-k="ja"]').click(); ok(!doc.getElementById("wmemoTa"), "意味の行のタップでは何も開かない(v5.31.0)");
       pb.querySelector('.wrow[data-k="memo"]').click();
       const m=doc.getElementById("modal"); ok(doc.getElementById("wmemoTa") && m.textContent.indexOf("覚え方メモ")>=0 && m.textContent.indexOf("regimen")>=0 && m.textContent.indexOf("区別したい相手")>=0 && m.textContent.indexOf("regime")>=0, "メモのモーダル(相手の一覧)");
       ok(!doc.getElementById("wmemoDel"), "まだメモが無ければ削除ボタンなし");
       doc.getElementById("wmemoTa").value="regimeN の N は Nutrition"; doc.getElementById("wmemoSave").click();
       ok(!doc.getElementById("wmemoTa"), "とじる"); eq(W.wmemoGet("regimen"), "regimeN の N は Nutrition");
       ok(pb.querySelector(".wmemo") && pb.textContent.indexOf("💡 regimeN の N は Nutrition")>=0 && !pb.querySelector(".wpen"), "行が💡に描き直される: "+pb.textContent);
-      ok(pb.querySelectorAll(".wrow")[1].querySelector(".wmemo"), "💡は下の行");
-      ok(pb.textContent.indexOf("👀 regimen(養生法) ⇄ regime(")>=0, "似た形も残る(開いた意味もそのまま・正解の単語にも意味=v5.30.6)");
+      ok(pb.querySelectorAll(".wrow")[2].querySelector(".wmemo"), "💡は3行目(メモの行)");
+      ok(laRow().textContent.indexOf("👀 regimen(養生法) ⇄ regime(")>=0, "似た形も残る(開いた意味もそのまま・正解の単語にも意味=v5.30.6)");
       // 直す: 削除ボタンあり → 消すと✏️に戻る
       pb.querySelector('.wrow[data-k="memo"]').click(); ok(doc.getElementById("wmemoDel") && doc.getElementById("wmemoTa").value==="regimeN の N は Nutrition", "既存のメモが入る"); doc.getElementById("wmemoDel").click();
       eq(W.wmemoGet("regimen"), ""); ok(pb.querySelector(".wpen"), "✏️に戻る");
-      // 2行のメモ(v5.30.8): 答え合わせ中に書けば枠が60pxに広がり3行(似た形+メモ2行)・次の出題では出題時から60px=答え合わせで単語が動かない
+      // 2行のメモ(v5.30.8): 答え合わせ中に書けば枠が1行ぶん広がり5行(意味+品詞+メモ2行+似た形)・次の出題では出題時から広い=答え合わせで単語が動かない
       pb.querySelector('.wrow[data-k="memo"]').click(); doc.getElementById("wmemoTa").value="上の行\n下の行"; doc.getElementById("wmemoSave").click();
-      eq(W.wmemoGet("regimen"), "上の行\n下の行"); eq(pb.querySelectorAll(".wrow").length, 3, "3行"); eq(pb.querySelectorAll('.wrow[data-k="memo"]').length, 2);
-      ok(pb.textContent.indexOf("💡 上の行")>=0 && pb.textContent.indexOf("下の行")>=0 && pb.classList.contains("tall"), "枠は.tall");
-      // 高さはテストの1pxのiframe(flexで縮む)では測れないので、スタイルシートの規則で確かめる
-      { let rule=null; for(const ss of doc.styleSheets){ try{ for(const r of ss.cssRules){ if(r.selectorText==="#phrBuild.wex.tall") rule=r; } }catch(e){} }
-        ok(rule && rule.style.height==="60px", "2行のメモの枠は60px(CSS)"); }
-      W.setCurFromTest(W.byEn.regimen); ok(pb.classList.contains("tall") && pb.textContent==="", "出題時から60pxの空の枠");
+      eq(W.wmemoGet("regimen"), "上の行\n下の行"); eq(pb.querySelectorAll(".wrow").length, 5, "5行"); eq(pb.querySelectorAll('.wrow[data-k="memo"]').length, 2);
+      ok(pb.textContent.indexOf("💡 上の行")>=0 && pb.textContent.indexOf("下の行")>=0, "2行のメモ"); eq(pb.style.height, (rowsN+1)*W.WEX_ROW+"px", "枠は1行ぶん広がる");
+      W.setCurFromTest(W.byEn.regimen); ok(pb.style.height===(rowsN+1)*W.WEX_ROW+"px" && pb.textContent==="", "出題時から広い空の枠");
       const hh0=doc.getElementById("promptWord").getBoundingClientRect().top;
       [...doc.querySelectorAll("#choices .choice")].find(x=>x.textContent===want).click();
-      ok(Math.abs(doc.getElementById("promptWord").getBoundingClientRect().top-hh0)<1, "2行のメモでも単語の位置が動かない"); eq(pb.querySelectorAll(".wrow").length, 3);
+      ok(Math.abs(doc.getElementById("promptWord").getBoundingClientRect().top-hh0)<1, "2行のメモでも単語の位置が動かない"); eq(pb.querySelectorAll(".wrow").length, 5);
       W.wmemoSet("regimen", "メモ");
-      W.setCurFromTest(W.WORDS[0]); ok(!pb.classList.contains("memo") && pb.textContent==="" && !pb.classList.contains("tall"), "次の出題で行は空・onclickは外れる・1行のメモなら40px");
+      W.setCurFromTest(W.WORDS[0]); ok(!pb.classList.contains("memo") && pb.textContent==="" && pb.style.height===W.wexRows(W.WORDS[0], e2j, false)*W.WEX_ROW+"px", "次の出題で行は空・onclickは外れる・その語の行数の高さ");
       // 単語の詳細(図鑑・にがてノート)
       W.openWordModal("regimen");
       ok(m.textContent.indexOf("💡 メモ")>=0 && m.textContent.indexOf("👀 似た形")>=0 && m.textContent.indexOf("regime(政権)")>=0 && m.textContent.indexOf("未学習")<0 && m.querySelector(".wdf") && doc.getElementById("wdMemo") && doc.getElementById("wdMemo").textContent.indexOf("直す")>=0, "詳細に💡と👀と✏️");
@@ -4458,6 +4461,125 @@ function run(){
         ok(W.lookAlikeRowHTML(lone.en, true).indexOf(lone.en+"("+W.shortJa(lone.ja)+")")>=0, "開くと正解の単語にも意味");
         G.conf=oldConf; }
     }finally{ G.wmemo=old; G.opt.preRecall=oldPre; G.days=oldDays; G.pdays=oldPdays; G.set=oldSet; W.setDonePendingSet(false); W.saveG(); W.setCurFromTest(W.WORDS[0]); }
+  });
+
+  /* ---- v5.31.0: 実機FB4件(答え合わせの集約・📋コピー・にがてノートの行タップ・覚え方メモの一括依頼) ---- */
+  t("v5.31.0①: 答え合わせの集約 ─ 単語モードは結果バー(次へ・左下)を出さない(wmode)・単語の下の枠に①意味②品詞・🧬語源③💡メモ④👀の順・🐺野生語Lvと覚えた仲間は出ない・枠の高さ=行数×20px(長い訳は2行)・上部に📋コピー/🔍辞書(正誤確認中だけ)・フレーズではwmodeが外れる", ()=>{
+    const G=W.G, doc=W.document; const old=JSON.parse(JSON.stringify(G.wmemo||{})), oldPre=G.opt.preRecall, oldMode=G.mode;
+    const oldDays=JSON.parse(JSON.stringify(G.days)), oldPdays=JSON.parse(JSON.stringify(G.pdays)), oldSet=JSON.parse(JSON.stringify(G.set));
+    const oldOpen=W.open; let url="", copied="";
+    try{
+      G.opt.preRecall=0; G.wmemo={}; G.mode="e2j";
+      // 純関数
+      ok(Math.abs(W.wexTextCols("abc")-1.65)<1e-9 && W.wexTextCols("あい")===2, "全角1・英字0.55");
+      eq(W.wexJaText({en:"x", ja:"や"}, true, false), "や"); eq(W.wexJaText({en:"x", ja:"や"}, false, false), "x"); eq(W.wexJaText({en:"x", ja:"や"}, true, true), "x ─ や", "穴埋めは単語 ─ 訳");
+      eq(W.wexJaRows({en:"x", ja:"あ".repeat(W.WEX_COLS)}, true, false), 1); eq(W.wexJaRows({en:"x", ja:"あ".repeat(W.WEX_COLS+1)}, true, false), 2, "目安を越えると2行");
+      eq(W.wexRows({en:"zz_none", ja:"短い"}, true, false), 4, "①1+②1+③1+④1");
+      // 語根のある語(似た形なし・マイ単語でない)で答え合わせ
+      const wr=W.WORDS.find(w=>w.en.indexOf(" ")<0 && W.rootText(w.en) && !W.lookAlikes(w.en, 1).length && !(G.myw&&G.myw[w.en]) && W.wexJaRows(w, true, false)===1);
+      ok(wr, "語根のある語");
+      W.switchTab("quiz"); W.setCurFromTest(wr);
+      const qv=doc.getElementById("quizView"), pb=doc.getElementById("phrBuild"), pc=doc.getElementById("promptCard");
+      ok(qv.classList.contains("wmode"), "単語モード=wmode"); eq(pb.style.height, 4*W.WEX_ROW+"px", "出題時に4行ぶん");
+      eq(W.getComputedStyle(doc.getElementById("qActs")).display, "none", "出題中はチップなし"); ok(!pc.classList.contains("srch"));
+      [...doc.querySelectorAll("#choices .choice")].find(x=>x.textContent===wr.ja).click();
+      const rows=pb.querySelectorAll(".wrow"); eq(rows.length, 4);
+      eq(rows[0].dataset.k, "ja"); eq(rows[0].textContent, wr.ja, "①正しい意味"); ok(rows[0].classList.contains("wja") && !rows[0].classList.contains("two"));
+      eq(W.getComputedStyle(rows[0]).fontWeight, "800", "①は太字");
+      eq(rows[1].dataset.k, "pos"); ok(rows[1].querySelector(".poschip") && rows[1].querySelector(".poschip").textContent===W.POS_LABEL[wr.pos], "②品詞チップ");
+      ok(rows[1].textContent.indexOf("🧬 "+W.rootText(wr.en).split("・")[0])>=0, "②語源: "+rows[1].textContent);
+      eq(rows[2].dataset.k, "memo"); ok(rows[2].querySelector(".wpen"), "③メモの入口"); eq(rows[3].dataset.k, "la");
+      ok(pb.textContent.indexOf("野生語")<0 && pb.textContent.indexOf("覚えた仲間")<0 && pb.textContent.indexOf("次へ")<0, "野生語Lv・覚えた仲間・次へは無い");
+      ok(!doc.getElementById("resultBar").classList.contains("show"), "結果バーは出さない"); eq(W.getComputedStyle(doc.getElementById("resultBar")).display, "none", "結果バーはCSSで隠れる");
+      ok(doc.querySelector("#choices .choice.correct.gonext"), "次へは正解の選択肢のタップ");
+      // 上部のチップ: 📋コピー(クリップボード)・🔍辞書(Weblio)。カード下の「タップで辞書」の添え書きは無い
+      ok(pc.classList.contains("srch")); eq(W.getComputedStyle(doc.getElementById("qActs")).display, "flex", "正誤確認中はチップ");
+      eq(W.getComputedStyle(pc, "::after").display, "none", "「タップで辞書」の添え書きは出さない");
+      Object.defineProperty(W.navigator, "clipboard", {value:{writeText:t=>{ copied=t; return Promise.resolve(); }}, configurable:true});
+      doc.getElementById("qCopy").click(); eq(copied, wr.en, "📋で単語をコピー");
+      W.open=u=>{ url=u; return null; }; doc.getElementById("qDict").click(); ok(url.indexOf("weblio")>=0 && url.indexOf(encodeURIComponent(wr.en))>=0, "🔍で辞書");
+      // 長い訳は①が2行(.two=40px)・枠は5行ぶん
+      const wl=W.WORDS.find(w=>w.en.indexOf(" ")<0 && W.wexJaRows(w, true, false)===2 && !W.wmemoGet(w.en));
+      ok(wl, "長い訳の語"); W.setCurFromTest(wl); eq(pb.style.height, 5*W.WEX_ROW+"px", "出題時から5行ぶん");
+      const t0=doc.getElementById("promptWord").getBoundingClientRect().top;
+      [...doc.querySelectorAll("#choices .choice")].find(x=>x.textContent===wl.ja).click();
+      ok(pb.querySelector('.wrow[data-k="ja"]').classList.contains("two"), "①が2行"); ok(Math.abs(doc.getElementById("promptWord").getBoundingClientRect().top-t0)<1, "単語は動かない");
+      { let r1=null, r2=null; for(const ss of doc.styleSheets){ try{ for(const r of ss.cssRules){ if(r.selectorText==="#phrBuild.wex .wrow.wja.two") r1=r; if(r.selectorText==="#quizView.wmode #resultBar") r2=r; } }catch(e){} }
+        ok(r1 && r1.style.height==="40px", "2行の意味は40px(CSS)"); ok(r2 && r2.style.display==="none", "wmodeで結果バーを隠す(CSS)"); }
+      // 日本語→ENでは①は英単語
+      G.mode="j2e"; W.setCurFromTest(wr); eq(pb.style.height, 4*W.WEX_ROW+"px");
+      [...doc.querySelectorAll("#choices .choice")].find(x=>x.textContent===wr.en).click();
+      eq(pb.querySelector('.wrow[data-k="ja"]').textContent, wr.en, "日本語→ENの①は英単語");
+      G.mode="e2j";
+      // フレーズの出題ではwmodeが外れ、結果バーが使える
+      const p=W.PHRASES[0]; W.phrStart(p, "mc"); ok(!qv.classList.contains("wmode"), "フレーズではwmodeが外れる"); ok(W.getComputedStyle(doc.getElementById("resultBar")).display!=="none", "結果バーは隠れない");
+      W.setCurFromTest(W.WORDS[0]); ok(qv.classList.contains("wmode"), "単語に戻るとwmode");
+    }finally{ W.open=oldOpen; try{ delete W.navigator.clipboard; }catch(e){} G.wmemo=old; G.opt.preRecall=oldPre; G.mode=oldMode; G.days=oldDays; G.pdays=oldPdays; G.set=oldSet; W.setDonePendingSet(false); W.saveG(); W.setCurFromTest(W.WORDS[0]); }
+  });
+
+  t("v5.31.0②: にがてノートの行タップ→単語の詳細(◂ もどるでノートへ・メモ→詳細に戻っても、もどるは残る)・メモのある語は💡・🔍はそのまま辞書", ()=>{
+    const G=W.G, doc=W.document; const oldWords=G.words, oldMemo=JSON.parse(JSON.stringify(G.wmemo||{})), oldSort=G.opt.weakSort, oldOpen=W.open; let url="";
+    try{
+      const a=W.WORDS.find(w=>w.en.indexOf(" ")<0), b=W.WORDS.find(w=>w.en.indexOf(" ")<0 && w.en!==a.en);
+      G.words={[a.en]:[1, Date.now()+1e6, 1, 3, 0, 0, 0], [b.en]:[1, Date.now()+1e6, 1, 2, 0, 0, 0]}; G.wmemo={}; W.wmemoSet(a.en, "aのメモ"); G.opt.weakSort="miss";
+      W.openWeakModal();
+      const m=doc.getElementById("modal"), row=m.querySelector('.weakrow .wopen[data-en="'+a.en+'"]');
+      ok(row && row.textContent.indexOf("💡")>=0, "メモのある語は💡"); ok(m.querySelector('.weakrow .wopen[data-en="'+b.en+'"]').textContent.indexOf("💡")<0, "メモの無い語は💡なし");
+      row.click();
+      ok(m.textContent.indexOf("単語の詳細")>=0 && m.textContent.indexOf(a.en)>=0 && m.textContent.indexOf("💡 aのメモ")>=0, "行のタップで単語の詳細");
+      eq(doc.getElementById("wdClose").textContent, "◂ もどる", "閉じるではなく、もどる");
+      doc.getElementById("wdMemo").click(); ok(doc.getElementById("wmemoTa"), "詳細→メモ"); doc.getElementById("wmemoClose").click();
+      eq(doc.getElementById("wdClose").textContent, "◂ もどる", "メモから詳細に戻っても、もどるは残る");
+      doc.getElementById("wdClose").click();
+      ok(m.textContent.indexOf("にがてノート")>=0 && m.querySelector('.weakrow .wopen[data-en="'+a.en+'"]'), "もどるでノートへ");
+      W.open=u=>{ url=u; return null; }; m.querySelector('.weakrow .wdict[data-en="'+b.en+'"]').click(); ok(url.indexOf(encodeURIComponent(b.en))>=0, "🔍は辞書のまま");
+      W.closeModal();
+      W.openWordModal(a.en); eq(doc.getElementById("wdClose").textContent, "閉じる", "図鑑などから開いたときは閉じる"); doc.getElementById("wdClose").click(); ok(!doc.getElementById("overlay").classList.contains("show"));
+    }finally{ W.open=oldOpen; G.words=oldWords; G.wmemo=oldMemo; G.opt.weakSort=oldSort; W.saveG(); W.closeModal(); }
+  });
+
+  t("v5.31.0③: 覚え方メモをまとめて書く ─ wmemoAskWords(メモの無い語だけ・ノートの並び・n語)・wmemoPromptText(語・品詞・意味・語源・区別したい相手・書式)・wmemoParse(— / → / 「」は / 空白 / 注記 / 番号・** / 「 / 」で2行 / 重複 / 内蔵に無い語)・wmemoImport(既存は据え置き)・にがてノートの折りたたみ→📋→貼り戻し→💡", ()=>{
+    const G=W.G, doc=W.document; const oldWords=G.words, oldMemo=JSON.parse(JSON.stringify(G.wmemo||{})), oldConf=G.conf, oldSort=G.opt.weakSort; let copied="";
+    try{
+      const vs=W.WORDS.filter(w=>w.en.indexOf(" ")<0 && w.pos==="v"), a=vs[0].en, b=vs[1].en, c=vs[2].en;
+      const ws=W.WORDS.filter(w=>w.en.indexOf(" ")<0).map(w=>w.en), w1=ws[3], w2=ws[4], w3=ws[5], w4=ws[6], w5=ws[7];
+      G.words={[a]:[1, Date.now()+1e6, 1, 5, 0, 0, 0], [b]:[1, Date.now()+1e6, 1, 4, 0, 0, 0], [c]:[1, Date.now()+1e6, 1, 3, 0, 0, 0]}; G.wmemo={}; G.conf={}; G.opt.weakSort="miss";
+      W.wmemoSet(b, "bのメモ");
+      eq(W.wmemoAskWords(G, "miss", 10).join(","), a+","+c, "メモの無い語だけ・ミスが多い順"); eq(W.wmemoAskWords(G, "miss", 1).join(","), a, "n語まで"); eq(W.WMEMO_ASK_N, 20);
+      // 依頼文
+      W.noteConfusion(G, a, c); W.noteConfusion(G, a, c);
+      const p=W.wmemoPromptText([a, c]);
+      ok(p.indexOf("次の2語")>=0 && p.indexOf("\n・"+a+"("+W.POS_LABEL.v+": "+W.byEn[a].ja+")")>=0 && p.indexOf("\n・"+c+"(")>=0, "語・品詞・意味: "+p.slice(-160));
+      ok(p.indexOf("区別したい相手: ")>=0 && p.indexOf(c+"("+W.shortJa(W.byEn[c].ja)+")")>=0, "取り違えの相手を添える");
+      ok(p.indexOf("「単語 — 覚え方」")>=0 && p.indexOf("「 / 」")>=0 && p.indexOf("120")<0, "書式(1行1語・2行は「 / 」)");
+      if(W.rootText(a)) ok(p.indexOf("語源: "+W.rootText(a))>=0, "語源を添える");
+      // 解析
+      const txt=[w1+" — 語呂A", "2. **"+w2+"** → イメージB / 2行目", "「"+w3+"」は中期オランダ語に由来する", w4+"(形: 卑劣な) -ible（〜できる） 軽蔑される側", "以下が覚え方です", w1+" — 重複", "zzzzunknown — x", w5+": コロン区切り", ""].join("\n");
+      const r=W.wmemoParse(txt);
+      eq(r.items.map(x=>x.en).join(","), [w1,w2,w3,w4,w5].join(","), "5語(重複は最初だけ)");
+      eq(r.items[0].t, "語呂A"); eq(r.items[1].t, "イメージB\n2行目", "番号・**を捨て、「 / 」で2行"); eq(r.items[2].t, "中期オランダ語に由来する", "「」と「は」を捨てる");
+      eq(r.items[3].t, "-ible（〜できる） 軽蔑される側", "注記(形: …)を捨て、空白区切りでも通す"); eq(r.items[4].t, "コロン区切り");
+      eq(r.errs.length, 2, "見出しの行と内蔵に無い語: "+r.errs.join(" / ")); ok(r.errs[0].indexOf("以下が覚え方です")>=0 && r.errs[1].indexOf("zzzzunknown")>=0);
+      eq(W.wmemoHead("take aback — x"), W.byEn["take aback"]? "take aback" : W.wmemoHead("take aback — x"), "熟語は最長一致");
+      eq(W.wmemoParse("").items.length, 0);
+      // 保存: 既存は据え置き
+      W.wmemoSet(w3, "自分のメモ");
+      const res=W.wmemoImport(r.items); eq(res.added, 4); eq(res.kept, 1);
+      eq(W.wmemoGet(w2), "イメージB\n2行目"); eq(W.wmemoGet(w3), "自分のメモ", "自分で書いたメモは上書きしない"); eq(W.wmemoGet(w1), "語呂A");
+      // にがてノートのUI
+      W.openWeakModal();
+      const m=doc.getElementById("modal"); ok(m.textContent.indexOf("覚え方メモをまとめて書く")>=0 && m.textContent.indexOf("メモなし 2語")>=0, "折りたたみの見出しにメモなしの語数");
+      ok(doc.getElementById("weakMemo").hidden, "既定は畳んである"); m.querySelector('[data-fold="weakMemo"]').click(); ok(!doc.getElementById("weakMemo").hidden, "開く");
+      ok(doc.getElementById("weakMemoCopy").textContent.indexOf("2語の覚え方")>=0, "依頼する語数");
+      Object.defineProperty(W.navigator, "clipboard", {value:{writeText:t=>{ copied=t; return Promise.resolve(); }}, configurable:true});
+      doc.getElementById("weakMemoCopy").click(); eq(copied, W.wmemoPromptText([a, c]), "📋で依頼文をコピー");
+      doc.getElementById("weakMemoBack").value=a+" — テストメモ\n"+b+" — 上書きしない\nこれは見出し"; doc.getElementById("weakMemoImport").click();
+      eq(W.wmemoGet(a), "テストメモ"); eq(W.wmemoGet(b), "bのメモ", "既存は据え置き");
+      ok(!doc.getElementById("weakMemo").hidden && m.textContent.indexOf("メモなし 1語")>=0 && m.querySelector('.weakrow .wopen[data-en="'+a+'"]').textContent.indexOf("💡")>=0, "描き直し: 開いたまま・語数が減り・行に💡");
+      eq(doc.getElementById("weakMemoCopy").textContent.indexOf("1語の覚え方")>=0, true);
+      W.wmemoSet(c, "cのメモ"); W.openWeakModal({memoOpen:true}); ok(!doc.getElementById("weakMemoCopy") && m.textContent.indexOf("すべてメモがある")>=0, "全語にメモがあれば頼む語なし");
+      W.closeModal();
+    }finally{ try{ delete W.navigator.clipboard; }catch(e){} G.words=oldWords; G.wmemo=oldMemo; G.conf=oldConf; G.opt.weakSort=oldSort; W.saveG(); W.closeModal(); }
   });
 
   t("v5.30.0⑤: 模試の出題範囲 ─ mockPoolWords(純関数: seen=学習した語・25語に足りなければ全語彙)・🧪案内のセグでG.opt.mockPoolを保存・学習した語の回は結果にp:1・穴埋めの依頼文も同じ範囲・推移の一覧と点(○)", ()=>{
@@ -5287,7 +5409,7 @@ async function runAsync(W){
     ok(wrongBtn.classList.contains("wrong") && wrongBtn.classList.contains("said"), "誤答の選択肢に印");
     eq(wrongBtn.dataset.said, wrongEn, "誤答の選択肢に「その意味を持つ単語」");
     ok(cs.find(b=>b.textContent==="優先テスト").classList.contains("gonext"), "正解はタップで次へ");
-    ok(doc.getElementById("resultCard").textContent.indexOf("マイ単語")>=0, "結果バーに📝マイ単語");
+    ok(doc.getElementById("phrBuild").textContent.indexOf("📝 マイ単語")>=0, "単語の下の枠(②品詞の行)に📝マイ単語(v5.31.0: 結果バーは出さない)");
     ok(doc.getElementById("resultCard").textContent.indexOf("選んだのは")<0, "結果バーの「選んだのは」は廃止");
     ok(G.words.zzprioritas && G.words.zzprioritas[3]===1, "SRSは内蔵と同じ台帳");
     W.newQuestion(); if(doc.getElementById("focusEnd")) doc.getElementById("focusEnd").click();

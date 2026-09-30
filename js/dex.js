@@ -11,7 +11,8 @@ function fmtDueIn(ms){
   if(ms<864e5) return Math.round(ms/3600e3)+"時間後";
   return Math.round(ms/864e5)+"日後";
 }
-function openWordModal(en){
+/* back=「もどる」で戻る先(v5.31.0・にがてノートの行から開いたとき。無ければ「閉じる」) */
+function openWordModal(en, back){
   const w=byEn[en]; if(!w) return;
   const st=G.words[en], now=Date.now();
   const conf=(G.conf&&G.conf[en])||{};
@@ -40,10 +41,10 @@ function openWordModal(en){
     '<button class="btn" id="wdMemo" style="width:100%; margin-top:12px">✏️ '+(memo? '覚え方メモを直す' : '覚え方メモを書く')+'</button>'+
     '<div class="row" style="margin-top:8px; gap:8px">'+
       '<button class="btn grow" id="wdDict">📖 辞書で確かめる</button>'+
-      '<button class="btn primary grow" id="wdClose">閉じる</button></div>');
+      '<button class="btn primary grow" id="wdClose">'+(back? '◂ もどる' : '閉じる')+'</button></div>');
   $("wdDict").onclick=()=>window.open("https://ejje.weblio.jp/content/"+encodeURIComponent(en), "_blank", "noopener");
-  $("wdClose").onclick=closeModal;
-  $("wdMemo").onclick=()=>openMemoModal(en, ()=>openWordModal(en)); // 書き終えたら詳細に戻る
+  $("wdClose").onclick=back || closeModal;
+  $("wdMemo").onclick=()=>openMemoModal(en, ()=>openWordModal(en, back)); // 書き終えたら詳細に戻る(戻る先も引き継ぐ)
 }
 
 /* en -> 所持している最高レア度(0=未取得) */
