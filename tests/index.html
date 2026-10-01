@@ -4613,7 +4613,7 @@ function run(){
       G.opt.preRecall=0;
       W.switchTab("quiz");
       const top=doc.getElementById("qTop"), badge=doc.getElementById("qBadge"), meta=doc.getElementById("qMeta"), cnt=doc.getElementById("qCount");
-      ok(top && badge.parentNode===top && meta.parentNode===top && cnt.parentNode===top && badge.nextElementSibling===meta && meta.nextElementSibling===cnt, "3つは同じ行の中(左から バッジ・品詞・右の数字)");
+      ok(top && badge.parentNode===top && meta.parentNode===top && cnt.parentNode===top && badge.nextElementSibling===meta && meta.nextElementSibling===doc.getElementById("qStats") && doc.getElementById("qStats").nextElementSibling===cnt, "同じ行の中(左から バッジ・品詞・正解/ミス/定着(v5.33.1)・右の数字)");
       eq(W.getComputedStyle(top).display, "flex", "flexで並べる"); eq(W.getComputedStyle(top).position, "absolute");
       eq(W.getComputedStyle(cnt).flexShrink, "0", "右は縮めない"); eq(W.getComputedStyle(cnt).whiteSpace, "nowrap");
       eq(W.getComputedStyle(badge).flexShrink, "0", "バッジも縮めない");
@@ -4670,15 +4670,21 @@ function run(){
     }finally{ G.wmemo=old; G.opt.preRecall=oldPre; G.days=oldDays; G.pdays=oldPdays; G.set=oldSet; W.setDonePendingSet(false); W.saveG(); W.setCurFromTest(W.WORDS[0]); }
   });
 
-  t("v5.33.0②: 正解・ミス・定着の行(#qStats)を単語の下から上の行の下へ ─ DOMは#qTopの次・#promptWordの前・絶対配置(top 34px・左寄せ・1行で…)・カードのpadding-top 54px(フレーズは58px)・文言から「これまで」を省く・答え合わせで定着の変化が出る", ()=>{
+  t("v5.33.0②→v5.33.1: 正解・ミス・定着(#qStats)を単語の下から上の行(#qTop)の中へ ─ DOMはバッジ/品詞の次・#qCountの前(左のまとまり)・#qTopはflex-wrapで右の#qCountだけ折り返して右寄せ・新規(空)は場所を取らない・カードのpadding-top 54px(フレーズは58px)・文言から「これまで」を省く・答え合わせで定着の変化が出る", ()=>{
     const G=W.G, doc=W.document; const oldPre=G.opt.preRecall;
     const oldDays=JSON.parse(JSON.stringify(G.days)), oldPdays=JSON.parse(JSON.stringify(G.pdays)), oldSet=JSON.parse(JSON.stringify(G.set));
     try{
       G.opt.preRecall=0;
-      const qs=doc.getElementById("qStats"), top=doc.getElementById("qTop"), pw=doc.getElementById("promptWord"), card=doc.getElementById("promptCard");
-      ok(qs.parentNode===card && qs.previousElementSibling===top && qs.nextElementSibling===pw, "上の行の次・単語の前");
-      eq(W.getComputedStyle(qs).position, "absolute", "絶対配置"); eq(W.getComputedStyle(qs).top, "34px"); eq(W.getComputedStyle(qs).textAlign, "left"); eq(W.getComputedStyle(qs).whiteSpace, "nowrap"); eq(W.getComputedStyle(qs).textOverflow, "ellipsis");
+      const qs=doc.getElementById("qStats"), top=doc.getElementById("qTop"), meta=doc.getElementById("qMeta"), cnt=doc.getElementById("qCount");
+      ok(qs.parentNode===top && qs.previousElementSibling===meta && qs.nextElementSibling===cnt, "上の行の中・品詞の次・右の数字の前");
+      ok(!doc.querySelector("#promptCard > #qStats"), "単語の下には無い");
+      eq(W.getComputedStyle(top).flexWrap, "wrap", "入り切らなければ折り返す(右の数字だけ2行目へ)"); eq(W.getComputedStyle(cnt).flexShrink, "0");
+      eq(W.getComputedStyle(qs).position, "static", "絶対配置ではない(v5.33.1)"); eq(W.getComputedStyle(qs).whiteSpace, "nowrap"); eq(W.getComputedStyle(qs).textOverflow, "ellipsis");
       eq(W.getComputedStyle(qs).fontSize, "12px");
+      { let r=null, re=null; for(const ss of doc.styleSheets){ try{ for(const x of ss.cssRules){ if(x.selectorText==="#qStats") r=x; if(x.selectorText==="#qStats:empty") re=x; } }catch(e){} }
+        ok(r && r.style.minWidth==="0px" && r.style.flexShrink==="1" && r.style.overflow==="hidden", "長ければ縮んで…(CSS): "+(r? r.style.cssText : "なし")); ok(re && re.style.display==="none", "空なら場所を取らない(CSS)"); }
+      W.switchTab("quiz"); W.setCurFromTest(W.WORDS.find(w=>w.en.indexOf(" ")<0 && !G.words[w.en]));
+      eq(qs.innerHTML, "", "新規は空"); eq(W.getComputedStyle(qs).display, "none", "新規なら隠れる");
       { let r=null, rp=null; for(const ss of doc.styleSheets){ try{ for(const x of ss.cssRules){ if(x.selectorText==="#promptCard") r=x; if(x.selectorText==="#promptCard.phr") rp=x; } }catch(e){} }
         ok(r && r.style.paddingTop==="54px", "カードの上の余白=2行ぶん: "+(r? r.style.paddingTop : "なし")); ok(rp && rp.style.paddingTop==="58px", "フレーズのカードも"); }
       // 文言
