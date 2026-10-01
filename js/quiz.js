@@ -188,6 +188,25 @@ function wmemoImport(items){
   (items||[]).forEach(it=>{ if(!byEn[it.en]) return; if(wmemoHas(G, it.en)){ kept++; return; } if(wmemoSet(it.en, it.t)) added++; });
   return {added, kept};
 }
+/* 依頼→貼り戻しのUI(v5.32.0: にがてノートの折りたたみとセット完了画面で共通)。id=要素idの接頭辞(idCopy/idBack/idImport)。
+   lead=説明文・none=頼む語が無いときの一言。bindのafter(res)=保存のあと(画面の描き直し) */
+function wmemoAskSecHTML(id, ask, lead, none){
+  return '<div class="small">'+lead+'</div>'+
+    (ask.length? '<button class="btn" id="'+id+'Copy" style="width:100%; margin-top:6px">📋 '+ask.length+'語の覚え方をLLMに頼む(依頼文をコピー)</button>'
+      : '<div class="small" style="margin-top:6px">'+none+'</div>')+
+    '<textarea id="'+id+'Back" class="myta" rows="3" style="margin-top:8px" placeholder="LLMの答えを貼り付け(1行『単語 — 覚え方』)"></textarea>'+
+    '<button class="btn primary" id="'+id+'Import" style="width:100%; margin-top:6px">貼り戻してメモに保存</button>';
+}
+function wmemoAskBind(id, ask, after){
+  const mc=$(id+"Copy"); if(mc) mc.onclick=()=>rlCopy(wmemoPromptText(ask), $(id+"Back"));
+  $(id+"Import").onclick=()=>{
+    const r=wmemoParse($(id+"Back").value);
+    if(!r.items.length){ toast(r.errs[0] || "「単語 — 覚え方」の行が見つからない"); return; }
+    const res=wmemoImport(r.items);
+    toast("💡 覚え方メモ "+res.added+"語を保存"+(res.kept? "・"+res.kept+"語は既にあり据え置き":"")+(r.errs.length? "・"+r.errs.length+"行は使えず":""));
+    if(after) after(res);
+  };
+}
 /* ---- 似た形の見せ方(v5.30.2・実機FB「並べて見せると、かえって間違えた方を覚えてしまいそう」=記憶の干渉への対策) ----
    ①違う文字を強調(diffMark: LCSで揃わない文字を<b class="wdf">)=手がかりを意味ではなく「見分ける文字」に付ける
    ②相手の意味は伏せておき、上の行のタップで開く(小さな想起テスト・「まず自力で思い出す」と同じ思想)。二つの意味を受け身で同時に読ませない。
@@ -211,48 +230,38 @@ function diffMark(a, b){
   flush();
   return out;
 }
-/* 相手の意味(開いたときだけ)。reveal=false のときは空 */
+/* 相手の意味(reveal=trueのときだけ・単語の詳細とメモの「区別したい相手」で使う)。reveal=false のときは空 */
 function partnerJa(o, reveal){ return reveal? '('+esc(shortJa(byEn[o].ja))+')' : ''; }
-/* 上の行: 「👀 regimeN ⇄ regime・regimenT ▸意味」→タップで「👀 regimeN(養生法) ⇄ regime(政権)・regimenT(連隊)」(v5.30.6: 正解の単語にも意味) */
-function lookAlikeRowHTML(en, reveal){
-  const la=lookAlikes(en, 2);
-  let mark="👀", list=la;
-  if(!la.length){ const cf=confusedWith(G, en, 1); if(!cf.length) return ""; mark="🔀"; list=cf; } // 似た形が無ければ取り違えの相手を同じ流儀で(先頭の印は🔀。⇄だと間の⇄と重なり矢印が2つ並ぶ=v5.30.4実機FB)
-  return '<span class="wla">'+mark+' '+diffMark(en, list[0])+partnerJa(en, reveal)+' ⇄ '+list.map(o=>diffMark(o, en)+partnerJa(o, reveal)).join("・")+
-    (reveal? '' : ' <span class="wtap">▸意味</span>')+'</span>';
-}
 /* ---- 答え合わせの単語の下の枠(#phrBuild.wex・中央ぞろえ) ----
-   v5.31.0(実機FB「見るべき要素が分散している(正解の選択肢・左下の品詞と語源・単語の下の例文・メモ・似た形)→次へボタンを廃止して
-   単語の下(選択肢の上)に集約したい」): 結果バー(左下の品詞・語源・🐺野生語Lv・次へ ▶)は単語モードでは出さず、行の順=優先度で並べる。
-   ①正しい意味(太字・長ければ2行) ②品詞・🧬語源(📝マイ単語) ③💡覚え方メモ(1〜2行・なければ✏️の入口) ④👀似た形(なければ📝用例→🔀取り違え)。
-   次へは正解の選択肢のタップ(v5.10.0)か「自動で次へ」。各行は1行(WEX_ROW px)に収め、はみ出しは…。reveal=④の意味を開いたか(v5.30.2) */
+   v5.31.0(実機FB「見るべき要素が分散している→次へボタンを廃止して単語の下(選択肢の上)に集約したい」): 結果バー(左下の品詞・語源・🐺野生語Lv・次へ ▶)は
+   単語モードでは出さず、行の順=優先度で並べる。
+   v5.32.0(実機FB3件): ②品詞・📝マイ単語は上の行(バッジの場所・#qMeta)へ移し、語源の表記は廃止(役割は💡覚え方メモが引き継ぐ)。
+   👀似た形・🔀取り違えの行(v5.30.2〜v5.30.7の「伏せてタップで開く」)も答え合わせからは廃止(単語の詳細とメモの「区別したい相手」には残す。4択の誤答に混ぜるのはそのまま)。
+   残る行=①正しい意味(太字・長ければ2行) ②💡覚え方メモ(1〜2行・なければ✏️の入口) ③📝マイ単語の用例(あるときだけ)。
+   次へは正解の選択肢のタップ(v5.10.0)か「自動で次へ」。各行は1行(WEX_ROW px)に収め、はみ出しは… */
 var WEX_ROW=20, WEX_COLS=20; // 1行の高さ・①が1行に収まる全角の字数の目安(英字は0.55字)
 function wexTextCols(s){ let n=0; for(const ch of String(s||"")) n+=ch.charCodeAt(0)<0x2E80? 0.55 : 1; return n; }
 /* ①の文: EN→日本語なら訳・日本語→ENなら英単語・穴埋め(英文が上)なら「単語 ─ 訳」 */
 function wexJaText(w, e2j, fill){ return fill? w.en+" ─ "+w.ja : e2j? w.ja : w.en; }
 function wexJaRows(w, e2j, fill){ return wexTextCols(wexJaText(w, e2j, fill))>WEX_COLS? 2 : 1; }
 function wexMemoRows(en){ const m=wmemoGet(en); return m? m.split("\n").length : 1; }
-function wexRows(w, e2j, fill){ return wexJaRows(w, e2j, fill)+1+wexMemoRows(w.en)+1; }
-function wexLineHTML(en, reveal, e2j, fill){
+function wexExRows(en){ return mywExampleHTML(en)? 1 : 0; } // 📝用例の行(マイ単語に出会った英文があるときだけ)
+function wexRows(w, e2j, fill){ return wexJaRows(w, e2j, fill)+wexMemoRows(w.en)+wexExRows(w.en); }
+function wexLineHTML(en, e2j, fill){
   const w=byEn[en]; if(!w) return "";
   if(e2j===undefined) e2j=(G.mode==="e2j");
   const memo=wmemoGet(en);
   // ① 意味
   const ja='<div class="wrow wja'+(wexJaRows(w, e2j, fill)>1? ' two':'')+'" data-k="ja">'+esc(wexJaText(w, e2j, fill))+'</div>';
-  // ② 品詞・語源(語源タグは1つずつチップ=途中で折れない)・マイ単語
-  const rt=rootText(en), meta=[];
-  if(rt) rt.split("・").forEach((tag,i)=>meta.push('<span class="rmeta">'+(i? '':'🧬 ')+esc(tag)+'</span>'));
-  if(isMyWord(en)) meta.push('<span class="rmeta myw">📝 マイ単語</span>');
-  const pos='<div class="wrow" data-k="pos"><span class="poschip pos'+w.pos+'">'+POS_LABEL[w.pos]+'</span>'+meta.join(' ')+'</div>';
-  // ③ メモは行ごとに1行ずつ(v5.30.8: 2行のメモは枠を1行ぶん広げる=wexHeight)。1行目に💡
+  // ② メモは行ごとに1行ずつ(v5.30.8: 2行のメモは枠を1行ぶん広げる=wexHeight)。1行目に💡
   const mm=memo? memo.split("\n").map((l,i)=>'<div class="wrow" data-k="memo"><span class="wmemo">'+(i? '' : '💡 ')+esc(l)+'</span></div>').join("")
     : '<div class="wrow" data-k="memo"><span class="wpen">✏️ 覚え方メモ</span></div>';
-  // ④ 似た形(なければ📝マイ単語の用例・それも無ければ🔀取り違え。ミス直後の相手は誤答の選択肢にも出るので用例を先に)。無ければ空の行(枠の高さは出題時に決めるので行は常に置く)
-  let la="";
-  if(lookAlikes(en, 1).length) la=lookAlikeRowHTML(en, reveal);
-  else{ la=mywExampleHTML(en); if(!la) la=lookAlikeRowHTML(en, reveal); }
-  return ja+pos+mm+'<div class="wrow" data-k="la">'+la+'</div>';
+  // ③ 📝マイ単語の用例(あるときだけ=枠の高さもwexExRowsで同じ判定)
+  const ex=mywExampleHTML(en);
+  return ja+mm+(ex? '<div class="wrow" data-k="ex">'+ex+'</div>' : '');
 }
+/* 上の行の左(v5.32.0・バッジの場所): 正誤確認中は品詞チップ・📝マイ単語。右の「🔥連続・セット n/30・今日 n問」とはflexで並ぶ(重ならない・長ければ左が…) */
+function qMetaHTML(w){ return '<span class="poschip pos'+w.pos+'">'+POS_LABEL[w.pos]+'</span>'+(isMyWord(w.en)? '<span class="rmeta myw">📝 マイ単語</span>' : ''); }
 /* 枠の高さ=行数×WEX_ROW。出題時に決めておく=答え合わせで単語が動かない(2行のメモを答え合わせ中に書いた直後だけ枠が広がる) */
 function wexHeight(pb, w, e2j, fill){ if(e2j===undefined) e2j=(G.mode==="e2j"); pb.style.height=(wexRows(w, e2j, fill)*WEX_ROW)+"px"; }
 /* メモを書く/直す。after=保存・削除・とじたあとに呼ぶ(答え合わせの行の描き直し・単語の詳細に戻る) */
@@ -493,7 +502,11 @@ function setProgress(g){
   return {done:Math.floor(t/SET_N), cur:t%SET_N, targetQ, a:t, hit};
 }
 let setDonePending=false; // 30問目の答え合わせのあと、「次へ」で完了モーダルを出す
-function openSetDone(){
+/* このセットでミスし、まだ覚え方メモの無い語(純関数・v5.32.0): セット完了画面からLLMに頼む対象 */
+function setMemoAskWords(g){ const s=g.set; return ((s && s.miss)||[]).filter(en=>byEn[en] && !wmemoHas(g, en)); }
+/* opt.memoOpen=「覚え方メモをLLMに頼む」の折りたたみを開いたまま描き直す(貼り戻したあと・v5.32.0) */
+function openSetDone(opt){
+  opt=opt||{};
   const s=G.set||{n:SET_N, cor:0, newN:0, up:0, mas:0, tk:0, phr:0, miss:[]};
   const p=setProgress(G);
   const full=s.cor>=s.n;
@@ -502,7 +515,7 @@ function openSetDone(){
         ? '🏅 今日の目安('+p.targetQ+'問)達成! ここからは前倒し'
         : '今日の目安まで あと'+(p.targetQ-p.a)+'問') // 「(約◯セット)」はv5.29.0で撤去(目安に合わせたセット表記の廃止)
     : '今日 '+p.done+'セット目を積み上げた';
-  const missN=(s.miss||[]).length;
+  const missN=(s.miss||[]).length, askM=setMemoAskWords(G);
   /* v5.10.0: セットの締めに「次の一手」 ─ ミスがあれば🔥にがて特訓(このセットのミスから)。フレーズが混ざったセットはその数も出す。
      🎯今日の実戦ドリル(日替わり)はv5.26.0で廃止(実機FB「ポップアップから削除・ホームにシンプルに」→ホームの📝パネル「🎯 フレーズ5問」) */
   openModal('<h3>🧩 セット完了! <span class="small">今日 '+p.done+'セット目</span></h3>'+
@@ -515,6 +528,12 @@ function openSetDone(){
       (GAME_ENABLED? '<div style="font-weight:800; color:var(--accent2); margin-top:8px">🎫 このセットで +'+s.tk+'</div>':'')+
       '<div class="small" style="margin-top:6px">'+line+'</div></div>'+ // ●○のゲージ(setDotsHTML)はv5.29.0で廃止
     (missN? '<button class="btn setnext2" id="setWeak"><span>🔥 このセットのミス <b>'+missN+'</b>語をすぐ立て直す</span><span class="hlsub">にがて特訓 ─ 正解の選択肢タップでサクサク進める</span></button>':'')+
+    /* v5.32.0(実機FB「セットで間違えた語のうちメモの無い語を自動で抽出し、LLMに投げるプロンプトをコピーできるボタン→セットごとに覚え方を楽に登録」):
+       にがてノートの一括依頼(v5.31.0)と同じUI(wmemoAskSecHTML)を、対象=このセットのミスでメモの無い語(setMemoAskWords)にして置く。全語にメモがあれば出さない */
+    (askM.length? foldSec("setMemo", '💡 ミスした語の覚え方メモをLLMに頼む <span class="small">メモなし '+askM.length+'語</span>',
+      wmemoAskSecHTML("setMemo", askM,
+        'このセットでミスし、まだ覚え方メモの無い'+askM.length+'語の依頼文をコピーしてLLM(ChatGPT・Gemini等)に貼り、返ってきた「単語 — 覚え方」を貼り戻すとメモになる(次の答え合わせから💡に出る)。既にメモのある語は頼まない・上書きしない', ''),
+      !!opt.memoOpen) : '')+
     (mockDue(G)? '<button class="btn setnext2" id="setMock"><span>🧪 Part 1 模試を受ける(25問・約10分)</span><span class="hlsub">'+mockDueSub()+'</span></button>':'')+ // 週1回の模試の入口(v5.30.0)
     '<div class="row" style="gap:10px; margin-top:10px">'+ // 「📥 いま同期する」(v5.16.0)はv5.29.0で撤去=学習タブを離れたときに自動で同期
     '<button class="btn grow" id="setHome">ひと休み(ホームへ)</button>'+
@@ -522,6 +541,7 @@ function openSetDone(){
   $("setNext").onclick=()=>{ closeModal(); newQuestion(); };
   $("setHome").onclick=()=>{ closeModal(); switchTab("home"); };
   if(missN) $("setWeak").onclick=()=>{ closeModal(); startFocus(s.miss.slice()); };
+  if(askM.length) wmemoAskBind("setMemo", askM, ()=>openSetDone({memoOpen:true})); // 保存後は開いたまま描き直し(残りの語数が減る・全語に付けば折りたたみごと消える)
   const sm=$("setMock"); if(sm) sm.onclick=startMock;
 }
 /* 🧪の入口の添え書き(セット完了・ホーム): 前回からの日数と結果、まだなら誘い文 */
@@ -902,14 +922,12 @@ function openWeakModal(opt){
         }).join("")+(list.length>30? '<div class="small" style="margin-top:6px">…ほか'+(list.length-30)+'語</div>':'')+'</div>'
       : '<div class="empty">いま立て直す「にがて」はない ─ いい調子!</div>')+
     '<div class="row" style="margin-top:12px"><button class="btn primary grow" id="weakGo"'+(list.length?'':' disabled')+'>🔥 にがて特訓(上位'+Math.min(FOCUS_N, list.length)+'語)</button></div>'+
-    // 覚え方メモをまとめて書く(v5.31.0): メモの無い語の上位WMEMO_ASK_N語(このノートの並び)をLLMに頼む→貼り戻し
+    // 覚え方メモをまとめて書く(v5.31.0): メモの無い語の上位WMEMO_ASK_N語(このノートの並び)をLLMに頼む→貼り戻し(UIはセット完了と共通=wmemoAskSecHTML)
     foldSec("weakMemo", '💡 覚え方メモをまとめて書く(LLMに頼む) <span class="small">メモなし '+ask.length+'語</span>',
-      '<div class="small">このノートの並びで、まだ覚え方メモの無い語の上位'+WMEMO_ASK_N+'語('+ask.length+'語)の依頼文をコピーしてLLM(ChatGPT・Gemini等)に貼り、'+
-        '返ってきた「単語 — 覚え方」を貼り戻すとメモになる(答え合わせで💡に出る)。既にメモのある語は頼まない・上書きしない</div>'+
-      (ask.length? '<button class="btn" id="weakMemoCopy" style="width:100%; margin-top:6px">📋 '+ask.length+'語の覚え方をLLMに頼む(依頼文をコピー)</button>'
-        : '<div class="small" style="margin-top:6px">'+(list.length? 'にがての語にはすべてメモがある' : 'にがての語がない')+'</div>')+
-      '<textarea id="weakMemoBack" class="myta" rows="3" style="margin-top:8px" placeholder="LLMの答えを貼り付け(1行『単語 — 覚え方』)"></textarea>'+
-      '<button class="btn primary" id="weakMemoImport" style="width:100%; margin-top:6px">貼り戻してメモに保存</button>', !!opt.memoOpen));
+      wmemoAskSecHTML("weakMemo", ask,
+        'このノートの並びで、まだ覚え方メモの無い語の上位'+WMEMO_ASK_N+'語('+ask.length+'語)の依頼文をコピーしてLLM(ChatGPT・Gemini等)に貼り、'+
+        '返ってきた「単語 — 覚え方」を貼り戻すとメモになる(答え合わせで💡に出る)。既にメモのある語は頼まない・上書きしない',
+        list.length? 'にがての語にはすべてメモがある' : 'にがての語がない'), !!opt.memoOpen));
   $("weakSeg").querySelectorAll("button").forEach(b=>{
     b.onclick=()=>{ G.opt.weakSort=b.dataset.s; saveG(); openWeakModal(); };
   });
@@ -918,14 +936,7 @@ function openWeakModal(opt){
   });
   $("modal").querySelectorAll(".wopen").forEach(d=>{ d.onclick=()=>openWordModal(d.dataset.en, ()=>openWeakModal(opt)); }); // 行のタップで単語の詳細(v5.31.0)
   $("weakGo").onclick=()=>startFocus(null);
-  const mc=$("weakMemoCopy"); if(mc) mc.onclick=()=>rlCopy(wmemoPromptText(ask), $("weakMemoBack"));
-  $("weakMemoImport").onclick=()=>{
-    const r=wmemoParse($("weakMemoBack").value);
-    if(!r.items.length){ toast(r.errs[0] || "「単語 — 覚え方」の行が見つからない"); return; }
-    const res=wmemoImport(r.items);
-    toast("💡 覚え方メモ "+res.added+"語を保存"+(res.kept? "・"+res.kept+"語は既にあり据え置き":"")+(r.errs.length? "・"+r.errs.length+"行は使えず":""));
-    openWeakModal({memoOpen:true});
-  };
+  wmemoAskBind("weakMemo", ask, ()=>openWeakModal({memoOpen:true})); // 保存後は折りたたみを開いたまま描き直し
 }
 
 /* 「自動で次へ」(v4.26.0)の設定値: 0=オフ→1秒→1.5秒→2秒を巡回 */
@@ -999,7 +1010,8 @@ function renderQuestion(){
   $("quizView").classList.add("wmode"); // 単語モード(v5.31.0): 結果バー(左下・次へ)は出さず、単語の下の枠に集約。フレーズの描画で外す
   $("choices").className="choices";
   const w=cur.word, e2j=G.mode==="e2j";
-  if(pb) wexHeight(pb, w, e2j, !!cur.fill); // 枠の高さ=①意味(1〜2行)+②品詞+③メモ(1〜2行)+④似た形。出題時に決める=答え合わせで単語が動かない
+  if(pb) wexHeight(pb, w, e2j, !!cur.fill); // 枠の高さ=①意味(1〜2行)+②メモ(1〜2行)+③用例(あれば)。出題時に決める=答え合わせで単語が動かない
+  $("qMeta").innerHTML=""; // 上の行の品詞・📝は正誤確認中だけ(v5.32.0)
   const st=G.words[w.en];
   $("qBadge").textContent = !st? "新規" : (st[0]>=MASTER_BOX? "覚えた・復習" : "復習");
   $("qBadge").style.color = !st? "var(--accent2)" : (st[0]>=MASTER_BOX? "var(--ok)" : "var(--accent)");
@@ -1122,15 +1134,15 @@ function answer(chosen, btn){
   if(FOCUS) FOCUS.res.push(ok); // にがて特訓の進行(v5.10.0)
   // 取り違えの記録と追い出題(v5.12.0): 選んだ誤答の単語を相手として数え、数問以内に出す
   if(!ok && chosen.en!==w.en){ noteConfusion(G, w.en, chosen.en); if(!FOCUS && !pairQueue.some(q=>q.en===chosen.en)) pairQueue.push({en:chosen.en, wait:PAIR_GAP}); }
-  /* 単語カードの下の行(枠は出題時から確保済み=v5.24.0): 💡覚え方メモ(なければ✏️の入口)・👀似た形・📝マイ単語の用例(v5.30.0で統合)。
+  /* 単語カードの下の行(枠は出題時から確保済み=v5.24.0): ①正しい意味・②💡覚え方メモ(なければ✏️の入口)・③📝マイ単語の用例(v5.32.0: 似た形・品詞・語源の行は外した)。
      タップで覚え方メモを書く/直す(単語カードの辞書タップとは分ける=stopPropagation)。穴埋め模試は英文が上にあるので同じ行に出す */
-  { const pb=$("phrBuild"), fill=!!cur.fill; let reveal=false; pb.innerHTML=wexLineHTML(w.en, reveal, e2j, fill); pb.classList.remove("hidden"); pb.classList.add("memo"); wexHeight(pb, w, e2j, fill);
-    /* 似た形の行のタップ=伏せた相手の意味を開く(v5.30.2・自分の答えを確かめる)。メモの行のタップ=覚え方メモを書く/直す。ほかの行は何もしない(カードの辞書タップにも渡さない) */
+  { const pb=$("phrBuild"), fill=!!cur.fill; pb.innerHTML=wexLineHTML(w.en, e2j, fill); pb.classList.remove("hidden"); pb.classList.add("memo"); wexHeight(pb, w, e2j, fill);
+    /* メモの行のタップ=覚え方メモを書く/直す。ほかの行は何もしない(カードの辞書タップにも渡さない) */
     pb.onclick=e=>{ e.stopPropagation(); if(!answered || !cur || cur.word.en!==w.en) return;
       const row=e.target.closest? e.target.closest(".wrow") : null, k=row? row.dataset.k : "";
-      if(k==="la"){ if(row.textContent.trim()){ reveal=true; pb.innerHTML=wexLineHTML(w.en, reveal, e2j, fill); } return; }
       if(k!=="memo") return;
-      openMemoModal(w.en, ()=>{ if(answered && cur && cur.word.en===w.en){ pb.innerHTML=wexLineHTML(w.en, reveal, e2j, fill); wexHeight(pb, w, e2j, fill); } }); }; }
+      openMemoModal(w.en, ()=>{ if(answered && cur && cur.word.en===w.en){ pb.innerHTML=wexLineHTML(w.en, e2j, fill); wexHeight(pb, w, e2j, fill); } }); }; }
+  $("qMeta").innerHTML=qMetaHTML(w); // 上の行の左に品詞・📝マイ単語(v5.32.0・バッジの場所。CSSで正誤確認中=.srchだけ見える)
 
   // 知識XP: 正解が直接キャラの強さになる(連続学習日数+コンボ+キャラスキルでボーナス)
   let xpGain=0, lvUp=0;
@@ -1161,7 +1173,7 @@ function answer(chosen, btn){
   if(GAME_ENABLED && bonus5 && !bigT) toast("🎁 5問ごとのボーナス 🎫+"+bonus5);
   $("qStats").innerHTML=qStatsHTML(st); // 定着ステップの変化(上がった/戻った)を見せる
   armCorrectNext("#choices", newQuestion); // 正解の選択肢タップで次へ(v5.10.0。v5.31.0から単語モードの「次へ ▶」はこれだけ)
-  $("promptCard").classList.add("srch"); // 単語タップで辞書へ(意味の裏取り)。上部に📋コピー/🔍辞書のチップ(#qActs)も出る(v5.31.0)
+  $("promptCard").classList.add("srch"); // 単語タップで辞書へ(意味の裏取り)。上の行の左に品詞・📝(#qMeta)も出る(v5.32.0。v5.31.0の📋コピー/🔍辞書のチップは廃止)
   // 今日の目安にちょうど到達した瞬間だけ祝う(毎問出る表示はノイズ=v4.6.2の知見)
   const pq=paceToday(G);
   if(pq && !pq.done && d.a===pq.perDay){ toast("🎉 今日の目安 "+pq.perDay+"問を達成!"+(GAME_ENABLED? " 任務でドカンと報酬を受け取ろう":"")); vibe(40); }
@@ -1178,10 +1190,7 @@ function answer(chosen, btn){
 }
 
 $("nextBtn").onclick=()=>newQuestion(); // フレーズ学習の結果バー(単語モードでは結果バーごと出さない=v5.31.0)
-/* 単語の答え合わせの上部チップ(v5.31.0・実機FB「意味を検索できるように単語をコピーしたい」): 📋コピー=単語をクリップボードへ・🔍辞書=Weblio。
-   カードのタップ(辞書)には渡さない。カード下の「🔍 タップで辞書を開く」の添え書きは単語モードでは出さない(チップに置き換え) */
-$("qCopy").onclick=e=>{ e.stopPropagation(); if(!answered || !cur) return; copyText(cur.word.en, "📋 「"+cur.word.en+"」をコピーした ─ 辞書や検索に貼り付けよう"); };
-$("qDict").onclick=e=>{ e.stopPropagation(); if(!answered || !cur) return; window.open("https://ejje.weblio.jp/content/"+encodeURIComponent(cur.word.en), "_blank", "noopener"); };
+/* v5.31.0の上部チップ(📋コピー/🔍辞書・#qActs)はv5.32.0の実機FBで廃止。辞書は従来どおり正誤確認中のカードのタップで開く */
 
 /* 正誤確認中は上部の単語カードのタップで辞書(Weblio)を開き、意味を自分で確かめられる。
    出題中は誤タップ防止のため無効(srchクラスで見た目も切り替え) */

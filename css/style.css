@@ -96,18 +96,20 @@ nav button .dot{position:absolute; top:-2px; right:-8px; width:9px; height:9px; 
   height:auto; min-height:24vh; min-height:24dvh; display:flex; flex-direction:column; justify-content:center;
 }
 /* 単語モード(v5.31.0・#quizView.wmode): 結果バー(左下の品詞・語源・次へ ▶)は出さず、単語の下の枠に集約。
-   正誤確認中(.srch)は上部に📋コピー/🔍辞書のチップ。カード下の「タップで辞書」の添え書きはチップに置き換え */
+   v5.32.0(実機FB): 上部の📋コピー/🔍辞書のチップ(#qActs)は廃止。正誤確認中(.srch)はバッジ(新規/復習)の場所に品詞チップ・📝マイ単語(#qMeta)。
+   カード下の「タップで辞書」の添え書きは出さない(辞書はカードのタップで開く・v4〜の挙動のまま)。復習かどうかは下の「これまで…定着」で分かる */
 #quizView.wmode #resultBar{display:none}
 #quizView.wmode #promptCard.srch::after{display:none}
-#qActs{display:none; position:absolute; top:8px; left:12px; gap:8px; pointer-events:none}
-#quizView.wmode #promptCard.srch #qActs{display:flex}
-#quizView.wmode #promptCard.srch #qBadge{visibility:hidden} /* 正誤確認中はバッジ(新規/復習)の場所にチップ(中央だと右の「セット n/30・今日 n問」と重なる=390pxで確認)。復習かどうかは下の「これまで…定着」で分かる */
-.qact{pointer-events:auto; border:none; border-radius:10px; padding:3px 10px; min-height:22px; font-family:inherit; font-size:11px; font-weight:800;
-  color:var(--sub); background:var(--bg); cursor:pointer; box-shadow:inset 2px 2px 4px var(--shd), inset -2px -2px 4px var(--shl)}
-.qact:active{transform:scale(.96)}
-#qBadge{position:absolute; top:10px; left:12px; font-size:12px; font-weight:700;
-  border-radius:999px; padding:4px 10px; background:var(--bg2); color:var(--accent2)}
-#qCount{position:absolute; top:14px; right:14px; font-size:12px; color:var(--sub)}
+/* 上の行(#qTop・v5.32.0): 左(バッジ/品詞)と右(🔥連続・セット n/30・今日 n問)をflexで並べる。右は縮めず(flex-shrink:0・1行)、左は min-width:0 で縮んで…になる=
+   右の表記に被らない(v5.31.0の絶対配置2つ+中央のチップは390pxで重なった) */
+#qTop{position:absolute; top:8px; left:12px; right:14px; display:flex; align-items:center; gap:8px; min-height:24px}
+#qBadge{flex:0 0 auto; font-size:12px; font-weight:700; border-radius:999px; padding:4px 10px; background:var(--bg2); color:var(--accent2)}
+#qMeta{display:none; flex:0 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-align:left; font-size:12px; align-items:center}
+#qMeta .poschip{flex:0 0 auto; margin-right:6px} /* 品詞チップは欠けない */
+#qMeta .rmeta.myw{flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px} /* 右が長いとき(⚡12連続 ・ セット 29/30 ・ 今日 119問)は📝側だけ…(390pxで確認) */
+#qCount{margin-left:auto; flex:0 0 auto; font-size:12px; color:var(--sub); white-space:nowrap}
+#quizView.wmode #promptCard.srch #qBadge{display:none}
+#quizView.wmode #promptCard.srch #qMeta{display:flex}
 #promptWord{font-size:40px; font-weight:900; line-height:1.25; word-break:break-word}
 #promptWord.ja{font-size:24px; font-weight:700}
 #qStats{font-size:13px; color:var(--sub); margin-top:6px; min-height:19px}
@@ -1234,25 +1236,21 @@ body.svplay #slotView{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
 #phrBuild.wex{min-height:0; height:40px; margin-top:6px; overflow:hidden; display:block;
   font-size:13px; line-height:20px; font-weight:600; color:var(--sub); text-align:center}
 #phrBuild.wex .myex{display:inline}
-/* 答え合わせの2行(v5.30.0→v5.30.1: 別の行・中央ぞろえ): 上=👀似た形(⇄取り違え/📝用例)・下=💡覚え方メモ(✏️の入口)。各行1行・はみ出しは… */
+/* 答え合わせの行(v5.30.0→v5.30.1: 別の行・中央ぞろえ)。各行1行・はみ出しは… */
 #phrBuild.wex .wrow{display:block; height:20px; line-height:20px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-/* v5.31.0: 枠の高さは行数×20px(wexHeightがインラインで決める。①意味1〜2行+②品詞・語源+③メモ1〜2行+④似た形)。
-   ①は太字・長い訳は2行に折り返して省略。②の品詞チップは20pxの行に収まる小さめ */
+/* v5.31.0: 枠の高さは行数×20px(wexHeightがインラインで決める)。v5.32.0: 行=①意味1〜2行+②💡メモ1〜2行+③📝用例(あれば)。品詞・語源・似た形の行は外した。
+   ①は太字・長い訳は2行に折り返して省略 */
 #phrBuild.wex .wrow.wja{font-size:15px; font-weight:800; color:var(--ink)}
 #phrBuild.wex .wrow.wja.two{height:40px; white-space:normal; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
-#phrBuild.wex .poschip{padding:0 8px; line-height:16px; margin-right:6px; vertical-align:1px}
-#phrBuild.wex .rmeta.myw{margin-left:6px}
 #phrBuild.wex.memo{cursor:default}
-#phrBuild.wex.memo .wrow[data-k="memo"], #phrBuild.wex.memo .wrow[data-k="la"]{cursor:pointer}
+#phrBuild.wex.memo .wrow[data-k="memo"]{cursor:pointer}
 .weakrow .wopen{cursor:pointer} /* にがてノートの行タップで単語の詳細(v5.31.0) */
 .wmemo{color:var(--accent2); font-weight:800}
-.wla{color:var(--ink); font-weight:700}
 .wpen{color:var(--sub); text-decoration:underline dotted var(--sub); text-underline-offset:3px}
 .wsep{color:var(--sub)}
-/* 似た形の見せ方(v5.30.2): 違う文字の強調(.wdf)・伏せた意味を開くタップの印(.wtap) */
-/* v5.30.5(実機FB「強調の色が見えにくい」): 黄土色→はっきりした赤。v5.30.7(実機FB): 背景の塗りはやめ、赤い文字と同色の下線だけ */
+/* 似た形の違う文字の強調(.wdf・v5.30.2): 単語の詳細と覚え方メモの「区別したい相手」で使う(答え合わせの行はv5.32.0で廃止)
+   v5.30.5(実機FB「強調の色が見えにくい」): 黄土色→はっきりした赤。v5.30.7(実機FB): 背景の塗りはやめ、赤い文字と同色の下線だけ */
 .wdf{color:#D62828; font-weight:900; text-decoration:underline; text-decoration-color:#D62828; text-underline-offset:2px}
-.wtap{color:var(--accent2); font-weight:700}
 .mockfc b{color:var(--accent2)}
 .homemock{width:100%; margin-top:10px; padding:11px 14px}
 .homemock .hlsub{display:block; margin-left:0; margin-top:2px}

@@ -50,10 +50,9 @@
     <button data-q="add" class="qadd">➕</button>
   </div>
   <div id="promptCard">
-    <span id="qBadge">新規</span>
-    <span id="qCount"></span>
-    <!-- 単語の答え合わせの上部チップ(v5.31.0): 📋コピー(意味を検索しやすく)・🔍辞書。CSSで単語モードの正誤確認中だけ出す -->
-    <span id="qActs"><button class="qact" id="qCopy">📋 コピー</button><button class="qact" id="qDict">🔍 辞書</button></span>
+    <!-- 上の行(v5.32.0): 左=バッジ(新規/復習)・単語の正誤確認中はその場所に品詞チップと📝マイ単語(#qMeta)/右=🔥連続・セット n/30・今日 n問(#qCount)。
+         flexで並べ、右は縮めず左が…になる=重ならない。v5.31.0の📋コピー/🔍辞書のチップ(#qActs)は廃止(辞書はカードのタップ) -->
+    <div id="qTop"><span id="qBadge">新規</span><span id="qMeta"></span><span id="qCount"></span></div>
     <div id="promptWord"></div>
     <div id="qStats"></div>
     <!-- フレーズの並べ替えの組み立て行+答え合わせの全文表示(単語モードでは隠す) -->
