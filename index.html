@@ -53,8 +53,9 @@
     <!-- 上の行(v5.32.0): 左=バッジ(新規/復習)・単語の正誤確認中はその場所に品詞チップと📝マイ単語(#qMeta)/右=🔥連続・セット n/30・今日 n問(#qCount)。
          flexで並べ、右は縮めず左が…になる=重ならない。v5.31.0の📋コピー/🔍辞書のチップ(#qActs)は廃止(辞書はカードのタップ) -->
     <div id="qTop"><span id="qBadge">新規</span><span id="qMeta"></span><span id="qCount"></span></div>
-    <div id="promptWord"></div>
+    <!-- 正解・ミス・定着の行(v5.33.0): 単語の下から上の行の下(左寄せ・絶対配置)へ。単語の下の枠(メモ・用例)の行数を増やす場所をつくる -->
     <div id="qStats"></div>
+    <div id="promptWord"></div>
     <!-- フレーズの並べ替えの組み立て行+答え合わせの全文表示(単語モードでは隠す) -->
     <div id="phrBuild" class="hidden"></div>
   </div>

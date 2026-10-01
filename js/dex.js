@@ -29,7 +29,7 @@ function openWordModal(en, back){
     '<div class="wdetail">'+
       '<div class="wden">'+esc(w.en)+' <span class="poschip pos'+w.pos+'">'+POS_LABEL[w.pos]+'</span></div>'+
       '<div class="wdja">'+esc(w.ja)+'</div>'+
-      (st? '<div class="small" style="margin-top:8px">'+qStatsHTML(st)+'</div><div class="small">'+due+'</div>'
+      (st? '<div class="small" style="margin-top:8px">これまで '+qStatsHTML(st)+'</div><div class="small">'+due+'</div>'
          : '<div class="small" style="margin-top:8px">未出題'+(w.my? '(マイ単語)' : mywWanted(en)? '(優先して出る)' : '')+'</div>')+
       (rootText(en)? '<div class="small" style="margin-top:7px">🧬 '+rootText(en)+'</div>':'')+
       // 違う文字を強調(v5.30.2)。意味は出す(v5.30.3: 詳細は自分で開いて見る画面なので伏せない)

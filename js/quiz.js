@@ -142,19 +142,29 @@ var WMEMO_ASK_N=20;
 function wmemoHas(g, en){ const m=g.wmemo && g.wmemo[en]; return !!(m && !m.del && m.t); }
 /* メモの無いにがて語(純関数): にがてノートの並び(sort)のまま、メモの無い語をn語 */
 function wmemoAskWords(g, sort, n){ return weakWords(g, sort).filter(en=>!wmemoHas(g, en)).slice(0, n||WMEMO_ASK_N); }
-/* 依頼文: 語ごとに品詞・意味・語源・区別したい相手(似た形・取り違え)を添える=LLMが「見分けるコツ」まで書ける */
+/* 依頼文: 語ごとに品詞・意味・語源を添える。
+   v5.33.0(実機FB「『〜と区別』というLLMの回答の精度が悪い=ごちゃまぜにならない語が挙がる→そのようなメモが含まれないように」):
+   v5.31.0で添えていた「区別したい相手」(似た形・取り違え)と「区別のコツ」の指示を外し、区別・比較を書かないよう明記。
+   それでも返ってきた「〜と区別」の文は貼り戻しで落とす(wmemoStripDistinct) */
 function wmemoPromptText(words){
   const lines=words.filter(en=>byEn[en]).map(en=>{
-    const w=byEn[en], la=lookAlikes(en, 2), cf=confusedWith(G, en, 2).filter(o=>la.indexOf(o)<0);
-    const ref=la.concat(cf).map(o=>o+"("+shortJa(byEn[o].ja)+")"), rt=rootText(en);
-    return "・"+en+"("+POS_LABEL[w.pos]+": "+w.ja+")"+(rt? " 語源: "+rt : "")+(ref.length? " 区別したい相手: "+ref.join("・") : "");
+    const w=byEn[en], rt=rootText(en);
+    return "・"+en+"("+POS_LABEL[w.pos]+": "+w.ja+")"+(rt? " 語源: "+rt : "");
   });
   return "英検1級レベルの英単語を覚えるための「覚え方メモ」を、次の"+lines.length+"語それぞれに書いてください。\n"+
-    "・内容: 語源(接頭辞・語根・接尾辞の意味)、語呂、イメージ、似た形や意味を取り違えやすい語との区別のコツ、のうちその語にいちばん効くもの。日本語で"+
-    "(例: pique — 興味がピークに達するまで刺激するイメージ / contemptible — -ible(〜できる)=軽蔑される側 / contemptuous — -ous(〜に満ちた)=軽蔑する側)\n"+
+    "・内容: 語源(接頭辞・語根・接尾辞の意味)、語呂、イメージのうち、その語そのものがいちばん覚えやすくなるもの。日本語で"+
+    "(例: pique — 興味がピークに達するまで刺激するイメージ / suborn — sub(下で)こっそり賄賂を渡して「サボんな」とそそのかす / contemptible — con+tempt(軽んじる)+-ible(〜される)=軽蔑されるべき)\n"+
+    "・ほかの語との区別・比較(「〜と区別」「〜と混同しない」「〜との違い」など)は書かないでください。その語だけで完結する覚え方にしてください\n"+
     "・長さ: 1語につき全角50字まで。2行に分けたいときは「 / 」(前後に空白)で区切る(2行まで)\n"+
     "・出力は1行につき「単語 — 覚え方」だけ。次の語の順で1行ずつ。番号・記号・見出し・空行・説明は入れないでください(アプリにそのまま貼り付けます)\n\n"+
     lines.join("\n");
+}
+/* 「〜と区別」の文を落とす(純関数・v5.33.0): 行ごとに「。」で文に分け、ほかの語との区別・混同・違いを述べる文を捨てる。空になった行は捨てる。
+   「chuckle(くすくす笑う)と区別。「へっ！」とやじを飛ばすのがheckle。」→「「へっ！」とやじを飛ばすのがheckle。」/「ped(足)で行商。 / meddle(干渉する)と区別。」→1行目だけ。
+   自分で書くメモ(wmemoSet)には掛けない=自分の言葉の「区別」は残る */
+var WMEMO_DISTINCT=/区別|混同|取り違え|見分け|の違い|と違[いっう]/;
+function wmemoStripDistinct(t){
+  return String(t||"").split("\n").map(l=>(l.match(/[^。．]*[。．]?/g)||[]).filter(s=>s && !WMEMO_DISTINCT.test(s)).join("").trim()).filter(Boolean).join("\n");
 }
 /* 行頭の単語(純関数): 番号・記号・「」・**を捨てたあと、英字の並び(熟語は空白入り・最長一致で内蔵の語)。見つからなければ"" */
 function wmemoHead(s){
@@ -166,7 +176,8 @@ function wmemoHead(s){
 }
 /* 貼り戻しの解析(純関数): 行→{en, t}。「単語 — 覚え方」(区切りは — – | → : ： タブ・「 - 」)。
    区切りが無くても行頭が内蔵の語なら残りをメモに(「wilt」は中期オランダ語…→「中期オランダ語…」/contemptible -ible(〜できる)…→「-ible(〜できる)…」)。
-   単語の直後の「(名: 立腹)」の注記・「は」「とは」は捨て、「 / 」は改行(wmemoNormで2行・120字)。同じ語は最初の行だけ */
+   単語の直後の「(名: 立腹)」の注記・「は」「とは」は捨て、「 / 」は改行(wmemoNormで2行・120字)。同じ語は最初の行だけ。
+   v5.33.0: 「〜と区別」の文はwmemoStripDistinctで落とす(その文だけなら「使えず」) */
 function wmemoParse(text){
   const items=[], errs=[], seen={};
   String(text||"").split(/\n+/).map(s=>s.replace(/\*\*/g, "").trim()).filter(Boolean).forEach(l=>{
@@ -175,8 +186,10 @@ function wmemoParse(text){
     const i=l.toLowerCase().indexOf(en);
     let rest=l.slice(i+en.length).replace(/^[」』"'】\]]+/, "").replace(/^\s*[（(][^）)]*[）)]/, "")
       .replace(/^\s*(?:[—–|→:：]|-\s|\t)\s*/, "").replace(/^\s*(?:とは|は)\s*/, "").trim();
-    rest=wmemoNorm(rest.replace(/\s\/\s/g, "\n"));
-    if(!rest){ errs.push(en+": 覚え方が空"); return; }
+    rest=rest.replace(/\s\/\s/g, "\n");
+    if(!rest.trim()){ errs.push(en+": 覚え方が空"); return; }
+    rest=wmemoNorm(wmemoStripDistinct(rest)); // 「〜と区別」の文は落とす(v5.33.0)
+    if(!rest){ errs.push(en+": ほかの語との区別の文だけ"); return; }
     if(seen[en]) return; seen[en]=1;
     items.push({en, t:rest});
   });
@@ -237,28 +250,42 @@ function partnerJa(o, reveal){ return reveal? '('+esc(shortJa(byEn[o].ja))+')' :
    単語モードでは出さず、行の順=優先度で並べる。
    v5.32.0(実機FB3件): ②品詞・📝マイ単語は上の行(バッジの場所・#qMeta)へ移し、語源の表記は廃止(役割は💡覚え方メモが引き継ぐ)。
    👀似た形・🔀取り違えの行(v5.30.2〜v5.30.7の「伏せてタップで開く」)も答え合わせからは廃止(単語の詳細とメモの「区別したい相手」には残す。4択の誤答に混ぜるのはそのまま)。
-   残る行=①正しい意味(太字・長ければ2行) ②💡覚え方メモ(1〜2行・なければ✏️の入口) ③📝マイ単語の用例(あるときだけ)。
-   次へは正解の選択肢のタップ(v5.10.0)か「自動で次へ」。各行は1行(WEX_ROW px)に収め、はみ出しは… */
+   残る行=①正しい意味(太字・長ければ2行) ②💡覚え方メモ(なければ✏️の入口) ③📝マイ単語の用例(あるときだけ)。
+   次へは正解の選択肢のタップ(v5.10.0)か「自動で次へ」。
+   v5.33.0(実機FB「メモを自動で適切な長さに改行/メモや用例の表示行数を増やす」): ②③は1行に詰めて…にせず、字数から行数を見積もって(wexWrapRows)
+   その行数ぶんの高さで自然に折り返す(.multi=-webkit-line-clamp・はみ出しは最後の行の末尾で…)。メモはWEX_MEMO_ROWS=3行・用例はWEX_EX_ROWS=2行まで。
+   メモの明示の改行(「 / 」・入力欄の改行)は<br>でそのまま。枠の高さは出題時に同じ見積もりで決める(答え合わせで単語は動かない)。
+   「これまで 正解・ミス・定着」の行(#qStats)は単語の下から上の行の下(バッジの下)へ移し、増えた行の場所をつくった */
 var WEX_ROW=20, WEX_COLS=20; // 1行の高さ・①が1行に収まる全角の字数の目安(英字は0.55字)
+var WEX_MEMO_COLS=24, WEX_MEMO_ROWS=3, WEX_EX_ROWS=2; // ②③(13px)が1行に収まる全角の字数の目安・メモの最大行数・用例の最大行数
 function wexTextCols(s){ let n=0; for(const ch of String(s||"")) n+=ch.charCodeAt(0)<0x2E80? 0.55 : 1; return n; }
+/* 折り返しの行数の見積もり(純関数): 改行ごとに ceil(字数/cols) の和。1〜max行 */
+function wexWrapRows(s, cols, max){
+  const n=String(s||"").split("\n").reduce((a, l)=>a+Math.max(1, Math.ceil(wexTextCols(l)/cols)), 0);
+  return Math.min(max, Math.max(1, n));
+}
 /* ①の文: EN→日本語なら訳・日本語→ENなら英単語・穴埋め(英文が上)なら「単語 ─ 訳」 */
 function wexJaText(w, e2j, fill){ return fill? w.en+" ─ "+w.ja : e2j? w.ja : w.en; }
 function wexJaRows(w, e2j, fill){ return wexTextCols(wexJaText(w, e2j, fill))>WEX_COLS? 2 : 1; }
-function wexMemoRows(en){ const m=wmemoGet(en); return m? m.split("\n").length : 1; }
-function wexExRows(en){ return mywExampleHTML(en)? 1 : 0; } // 📝用例の行(マイ単語に出会った英文があるときだけ)
+function wexMemoRows(en){ const m=wmemoGet(en); return m? wexWrapRows("💡 "+m, WEX_MEMO_COLS, WEX_MEMO_ROWS) : 1; }
+function wexExRows(en){ const m=G.myw && G.myw[en]; return mywExampleHTML(en)? wexWrapRows("📝 "+m.ex, WEX_MEMO_COLS, WEX_EX_ROWS) : 0; } // 📝用例の行(マイ単語に出会った英文があるときだけ)
 function wexRows(w, e2j, fill){ return wexJaRows(w, e2j, fill)+wexMemoRows(w.en)+wexExRows(w.en); }
+/* 1つの行(純関数): n行ぶんの高さ。n>1なら .multi(折り返し・n行目の末尾で…) */
+function wexRowHTML(k, cls, inner, n){
+  return '<div class="wrow'+(cls? ' '+cls : '')+(n>1? ' multi' : '')+'" data-k="'+k+'"'+(n>1? ' style="height:'+(n*WEX_ROW)+'px; -webkit-line-clamp:'+n+'"' : '')+'>'+inner+'</div>';
+}
 function wexLineHTML(en, e2j, fill){
   const w=byEn[en]; if(!w) return "";
   if(e2j===undefined) e2j=(G.mode==="e2j");
-  const memo=wmemoGet(en);
+  const memo=wmemoGet(en), jaN=wexJaRows(w, e2j, fill);
   // ① 意味
-  const ja='<div class="wrow wja'+(wexJaRows(w, e2j, fill)>1? ' two':'')+'" data-k="ja">'+esc(wexJaText(w, e2j, fill))+'</div>';
-  // ② メモは行ごとに1行ずつ(v5.30.8: 2行のメモは枠を1行ぶん広げる=wexHeight)。1行目に💡
-  const mm=memo? memo.split("\n").map((l,i)=>'<div class="wrow" data-k="memo"><span class="wmemo">'+(i? '' : '💡 ')+esc(l)+'</span></div>').join("")
-    : '<div class="wrow" data-k="memo"><span class="wpen">✏️ 覚え方メモ</span></div>';
+  const ja=wexRowHTML("ja", "wja"+(jaN>1? " two" : ""), esc(wexJaText(w, e2j, fill)), jaN);
+  // ② メモ(v5.33.0: 1つの行に折り返し・明示の改行は<br>)。先頭に💡
+  const mm=memo? wexRowHTML("memo", "", '<span class="wmemo">💡 '+esc(memo).replace(/\n/g, "<br>")+'</span>', wexMemoRows(en))
+    : wexRowHTML("memo", "", '<span class="wpen">✏️ 覚え方メモ</span>', 1);
   // ③ 📝マイ単語の用例(あるときだけ=枠の高さもwexExRowsで同じ判定)
   const ex=mywExampleHTML(en);
-  return ja+mm+(ex? '<div class="wrow" data-k="ex">'+ex+'</div>' : '');
+  return ja+mm+(ex? wexRowHTML("ex", "", ex, wexExRows(en)) : '');
 }
 /* 上の行の左(v5.32.0・バッジの場所): 正誤確認中は品詞チップ・📝マイ単語。右の「🔥連続・セット n/30・今日 n問」とはflexで並ぶ(重ならない・長ければ左が…) */
 function qMetaHTML(w){ return '<span class="poschip pos'+w.pos+'">'+POS_LABEL[w.pos]+'</span>'+(isMyWord(w.en)? '<span class="rmeta myw">📝 マイ単語</span>' : ''); }
@@ -415,10 +442,12 @@ function masteryHTML(st){
   if(st[0]>=MASTER_BOX) return ' ・ <span class="qmas">✓覚えた</span>';
   return ' ・ <span class="qstep">定着 '+st[0]+'/'+MASTER_BOX+'</span>';
 }
-/* 出題ヘッダの統計行。解答直後にも呼び直して定着ステップの変化を見せる */
+/* 出題ヘッダの統計行。解答直後にも呼び直して定着ステップの変化を見せる。
+   v5.33.0(実機FB「メモ・用例の表示行数を増やすために位置や表記を変更」): 単語の下から上の行(バッジ)の下(#qStats・絶対配置・左寄せ・12px)へ移し、
+   「これまで」の語は省く(バッジの「復習」の下にあるので文脈で分かる) */
 function qStatsHTML(st){
   if(!st) return "";
-  return 'これまで <span class="qo">正解 '+st[2]+'</span> ・ <span class="qx">ミス '+st[3]+'</span>'+
+  return '<span class="qo">正解 '+st[2]+'</span> ・ <span class="qx">ミス '+st[3]+'</span>'+
     masteryHTML(st)+
     ((st[5]||0)>=3? ' <span class="qfire">🔥連続ミス'+st[5]+(GAME_ENABLED? '(正解で強カード!)':'')+'</span>':"");
 }

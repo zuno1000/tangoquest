@@ -90,7 +90,7 @@ nav button .dot{position:absolute; top:-2px; right:-8px; width:9px; height:9px; 
 /* v5.31.0: 高さは中身で決まる(min-heightは従来の24dvh)。答え合わせの枠(#phrBuild.wex)は出題時に高さを確保するので、
    答え合わせでカードも単語も動かない。上のバッジ行(絶対配置)ぶんの余白=padding-top */
 #promptCard{
-  background:var(--card2); border-radius:24px; padding:34px 16px 14px; text-align:center;
+  background:var(--card2); border-radius:24px; padding:54px 16px 14px; text-align:center; /* v5.33.0: 上の行+正解・ミス・定着の行(どちらも絶対配置)ぶん */
   position:relative; flex:0 0 auto;
   box-shadow:-5px -5px 10px var(--shl), 5px 5px 10px var(--shd);
   height:auto; min-height:24vh; min-height:24dvh; display:flex; flex-direction:column; justify-content:center;
@@ -112,7 +112,9 @@ nav button .dot{position:absolute; top:-2px; right:-8px; width:9px; height:9px; 
 #quizView.wmode #promptCard.srch #qMeta{display:flex}
 #promptWord{font-size:40px; font-weight:900; line-height:1.25; word-break:break-word}
 #promptWord.ja{font-size:24px; font-weight:700}
-#qStats{font-size:13px; color:var(--sub); margin-top:6px; min-height:19px}
+/* 正解・ミス・定着の行(v5.33.0・実機FB「メモ・用例の表示行数を増やすために位置や表記を変更」): 単語の下から上の行(#qTop)の下へ・左寄せ・1行(長ければ…) */
+#qStats{position:absolute; top:34px; left:14px; right:14px; text-align:left; font-size:12px; color:var(--sub); min-height:18px; line-height:18px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 #qStats .qo{color:var(--ok); font-weight:700}
 #qStats .qx{color:var(--ng); font-weight:700}
 .choices{flex:1; min-height:0; display:flex; flex-direction:column; gap:11px; margin-top:12px; padding:2px 2px}
@@ -1173,7 +1175,7 @@ body.svplay #slotView{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
    24dvhの中央寄せだと複数行の日本語+文脈行がバッジと重なっていた(実機FB)。
    小さい画面で収まらないときだけカードが伸びる(min-heightは従来と同じ) */
 #promptCard.phr{justify-content:flex-start; height:auto; min-height:24vh; min-height:24dvh;
-  padding-top:42px}
+  padding-top:58px} /* v5.33.0: 正解・ミス・定着の行(絶対配置)が上に増えたぶん(42→58) */
 #promptCard.phr #promptWord.ja{font-size:20px; line-height:1.45}
 #promptCard.phr #promptWord.ja.fill{font-size:16px; line-height:1.55; text-align:left; font-weight:700} /* 穴埋め模試(v5.28.0): 20〜35語の英文 */
 /* 実戦ドリルのメニューボタン(ホームのhomelinksと同じ縦積みスタイル) */
@@ -1242,6 +1244,9 @@ body.svplay #slotView{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
    ①は太字・長い訳は2行に折り返して省略 */
 #phrBuild.wex .wrow.wja{font-size:15px; font-weight:800; color:var(--ink)}
 #phrBuild.wex .wrow.wja.two{height:40px; white-space:normal; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
+/* 複数行の行(.multi・v5.33.0・実機FB「メモを自動で適切な長さに改行」): 高さと-webkit-line-clampはインライン(wexRowHTMLが見積もった行数)。
+   自然に折り返し(英単語は空白で・日本語は字で)、最後の行の末尾で… */
+#phrBuild.wex .wrow.multi{white-space:normal; display:-webkit-box; -webkit-box-orient:vertical; overflow:hidden; text-overflow:clip; word-break:break-word}
 #phrBuild.wex.memo{cursor:default}
 #phrBuild.wex.memo .wrow[data-k="memo"]{cursor:pointer}
 .weakrow .wopen{cursor:pointer} /* にがてノートの行タップで単語の詳細(v5.31.0) */
