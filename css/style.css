@@ -735,6 +735,11 @@ body.nogame .dexcell.miss{cursor:pointer} /* v5.29.0: 未学習もタップで�
 .pbar i{display:block; height:100%; border-radius:8px;
   background:linear-gradient(90deg,#7B8AFF,var(--accent2)); transition:width .4s}
 .pbar.full i{background:linear-gradient(90deg,#FFB547,#F5A020)}
+/* v5.34.0: 3本の線の目盛り(最低限・十分)はバーの中の細い白線、文字はバーの下に右端を線に揃えて置く */
+.pbar{position:relative}
+.pbar i.ptick{position:absolute; top:0; width:2px; height:100%; margin-left:-1px; border-radius:0; background:rgba(255,255,255,.9); transition:none}
+.plabels{position:relative; height:13px; margin-top:3px; font-size:10px; font-weight:700; color:var(--sub)}
+.plabels span{position:absolute; top:0; transform:translateX(-100%); white-space:nowrap; padding-right:2px}
 .pacemsg{font-size:12px; font-weight:700; color:var(--sub); margin-top:7px}
 .pacemsg.pdone{color:#C07C00}
 .pacefoot{font-size:11px; color:var(--sub); margin-top:5px}

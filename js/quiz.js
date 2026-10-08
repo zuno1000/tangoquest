@@ -16,6 +16,17 @@ let autoNextT=null; // 「自動で次へ」(v4.26.0設定)のタイマー
    このセットの中身(正解・新規・定着が進んだ数・🎫)はG.set(setRecord)に持つ。
    varはテスト(iframe)からの参照用 */
 var SET_N=30;
+/* 1セットの所要時間(v5.34.0・実機FB「勉強の始めやすさ」): 解答と解答の間隔の合計をセットごとに実測し(setRecord)、
+   直近SET_T_N回の中央値から「1セット 約◯分」「のこり約◯分」をホームのCTAに添える(費用が小さく見えると着手しやすい)。
+   SET_GAP_MAX秒を超える間隔(アプリを閉じた・考え込んだ)は数えない。測定が無ければ出さない */
+var SET_GAP_MAX=60, SET_T_N=10;
+/* remain問ぶんの見込み分数(純関数)。setT=直近のセットの秒数(30問ぶん)。データが無ければnull・最小1分 */
+function setMinutes(setT, remain){
+  const a=(setT||[]).filter(x=>x>0).slice().sort((x,y)=>x-y);
+  if(!a.length) return null;
+  const med=a.length%2? a[(a.length-1)/2] : (a[a.length/2-1]+a[a.length/2])/2;
+  return Math.max(1, Math.round(med*remain/SET_N/60));
+}
 /* 新規導入の待ったガード(v5.8.0): 期限が来た復習がこの数以上たまっているときは新規を混ぜない。
    復習が遅れる→忘れる→やり直しが増える→さらに遅れる、の悪循環(正答率の低下)を断つ。
    復習が片づけば新規はすぐ再開する(復習が尽きれば無制限=従来どおり) */
@@ -502,10 +513,15 @@ function quizTarget(){ const t=G.opt && G.opt.qtab; return (t==="p"||t==="w"||t=
    up=定着の階段が上がった/mas=覚えた/tk=このセットで得た🎫/phr=フレーズだった(v5.10.0)。
    戻り値=このセットが完了した瞬間か */
 function setRecord(g, total, info){
-  const a0=Math.floor((total-1)/SET_N)*SET_N, k=todayKey();
+  const a0=Math.floor((total-1)/SET_N)*SET_N, k=todayKey(), now=info.now||Date.now();
   let s=g.set;
   if(!s || s.d!==k || s.a0!==a0) s=g.set={d:k, a0, n:0, cor:0, newN:0, up:0, mas:0, tk:0, phr:0, miss:[]};
   s.n++;
+  /* 所要時間(v5.34.0): 前の解答からの間隔(答え合わせを読む時間を含む)をsecに足す。SET_GAP_MAX秒を超える間隔は中断とみなして数えない。
+     セット完了でg.setT(直近SET_T_N回の秒数)に残し、ホームのCTAの「約◯分」(setMinutes)に使う */
+  if(s.at>0){ const gap=(now-s.at)/1000; if(gap>0 && gap<=SET_GAP_MAX){ s.sec=(s.sec||0)+gap; s.secN=(s.secN||0)+1; } }
+  s.at=now;
+  if(total%SET_N===0 && s.secN>=SET_N/2){ g.setT=(g.setT||[]).concat([Math.round(s.sec*SET_N/s.secN)]).slice(-SET_T_N); }
   if(info.ok) s.cor++;
   if(info.wasNew) s.newN++;
   if(info.my) s.myN=(s.myN||0)+1; // マイ単語の新規導入(1セットの上限に使う・v5.12.0)
@@ -531,20 +547,38 @@ function setProgress(g){
   return {done:Math.floor(t/SET_N), cur:t%SET_N, targetQ, a:t, hit};
 }
 let setDonePending=false; // 30問目の答え合わせのあと、「次へ」で完了モーダルを出す
-/* このセットでミスし、まだ覚え方メモの無い語(純関数・v5.32.0): セット完了画面からLLMに頼む対象 */
-function setMemoAskWords(g){ const s=g.set; return ((s && s.miss)||[]).filter(en=>byEn[en] && !wmemoHas(g, en)); }
+/* ミスが重なった語のたまり(純関数・v5.34.0・実機FB「毎回のセット終わりにLLMに頼むのが面倒=各回1〜2語しか無い」):
+   v5.32.0の「このセットのミス」をやめ、ミスWMEMO_POOL_MISS回以上・まだ覚えていない・メモなし・直近WMEMO_POOL_DAYS日に解いた語
+   (単語の記録から導く=保存データなし・同期は単語の記録に乗る)を、最後に解いた順に最大WMEMO_ASK_N語。
+   1回きりのミスはうっかりが多く、メモが要るのは繰り返し落とす語だけ */
+var WMEMO_POOL_MISS=2, WMEMO_POOL_DAYS=7, WMEMO_ASK_MIN=8;
+function wmemoPoolWords(g, now){
+  now=now||Date.now();
+  const out=[];
+  for(const en in g.words||{}){
+    const st=g.words[en];
+    if(!st || !byEn[en] || (st[3]||0)<WMEMO_POOL_MISS || st[0]>=MASTER_BOX || wmemoHas(g, en)) continue;
+    if(!(st[6]>0) || now-st[6]>WMEMO_POOL_DAYS*864e5) continue;
+    out.push(en);
+  }
+  out.sort((a,b)=>(g.words[b][6]||0)-(g.words[a][6]||0));
+  return out.slice(0, WMEMO_ASK_N);
+}
+/* セット完了画面からLLMに頼む対象(純関数): たまりがWMEMO_ASK_MIN語に達したときだけ(all=しきい値を無視=貼り戻したあとの描き直し用)。
+   数日に1回だけ出る=セット完了画面はふだん軽いまま、フックの位置はセット終わりのまま */
+function setMemoAskWords(g, now, all){ const p=wmemoPoolWords(g, now); return (all || p.length>=WMEMO_ASK_MIN)? p : []; }
 /* opt.memoOpen=「覚え方メモをLLMに頼む」の折りたたみを開いたまま描き直す(貼り戻したあと・v5.32.0) */
 function openSetDone(opt){
   opt=opt||{};
   const s=G.set||{n:SET_N, cor:0, newN:0, up:0, mas:0, tk:0, phr:0, miss:[]};
   const p=setProgress(G);
   const full=s.cor>=s.n;
-  const line=p.targetQ
-    ? (p.hit
-        ? '🏅 今日の目安('+p.targetQ+'問)達成! ここからは前倒し'
-        : '今日の目安まで あと'+(p.targetQ-p.a)+'問') // 「(約◯セット)」はv5.29.0で撤去(目安に合わせたセット表記の廃止)
+  /* v5.34.0: 次の線(最低限・十分・完璧)までの案内=ホームと同じ文(paceMsg)。目安が無ければセット数だけ */
+  const q=paceToday(G);
+  const line=(q && !q.done)
+    ? paceMsg(dayRec().a, paceLines(q.perDay, wordsPerSet()))
     : '今日 '+p.done+'セット目を積み上げた';
-  const missN=(s.miss||[]).length, askM=setMemoAskWords(G);
+  const missN=(s.miss||[]).length, askM=setMemoAskWords(G, Date.now(), !!opt.memoOpen);
   /* v5.10.0: セットの締めに「次の一手」 ─ ミスがあれば🔥にがて特訓(このセットのミスから)。フレーズが混ざったセットはその数も出す。
      🎯今日の実戦ドリル(日替わり)はv5.26.0で廃止(実機FB「ポップアップから削除・ホームにシンプルに」→ホームの📝パネル「🎯 フレーズ5問」) */
   openModal('<h3>🧩 セット完了! <span class="small">今日 '+p.done+'セット目</span></h3>'+
@@ -559,9 +593,10 @@ function openSetDone(opt){
     (missN? '<button class="btn setnext2" id="setWeak"><span>🔥 このセットのミス <b>'+missN+'</b>語をすぐ立て直す</span><span class="hlsub">にがて特訓 ─ 正解の選択肢タップでサクサク進める</span></button>':'')+
     /* v5.32.0(実機FB「セットで間違えた語のうちメモの無い語を自動で抽出し、LLMに投げるプロンプトをコピーできるボタン→セットごとに覚え方を楽に登録」):
        にがてノートの一括依頼(v5.31.0)と同じUI(wmemoAskSecHTML)を、対象=このセットのミスでメモの無い語(setMemoAskWords)にして置く。全語にメモがあれば出さない */
-    (askM.length? foldSec("setMemo", '💡 ミスした語の覚え方メモをLLMに頼む <span class="small">メモなし '+askM.length+'語</span>',
+    /* v5.34.0: 対象=ミスが重なった語のたまり(wmemoPoolWords)。WMEMO_ASK_MIN語に達したセットの完了でだけ出る(数日に1回) */
+    (askM.length? foldSec("setMemo", '💡 ミスが重なった'+askM.length+'語の覚え方メモをLLMに頼む',
       wmemoAskSecHTML("setMemo", askM,
-        'このセットでミスし、まだ覚え方メモの無い'+askM.length+'語の依頼文をコピーしてLLM(ChatGPT・Gemini等)に貼り、返ってきた「単語 — 覚え方」を貼り戻すとメモになる(次の答え合わせから💡に出る)。既にメモのある語は頼まない・上書きしない', ''),
+        'この1週間に'+WMEMO_POOL_MISS+'回以上ミスし、まだ覚え方メモの無い'+askM.length+'語。依頼文をコピーしてLLM(ChatGPT・Gemini等)に貼り、返ってきた「単語 — 覚え方」を貼り戻すとメモになる(次の答え合わせから💡に出る)。既にメモのある語は頼まない・上書きしない', ''),
       !!opt.memoOpen) : '')+
     (mockDue(G)? '<button class="btn setnext2" id="setMock"><span>🧪 Part 1 模試を受ける(25問・約10分)</span><span class="hlsub">'+mockDueSub()+'</span></button>':'')+ // 週1回の模試の入口(v5.30.0)
     '<div class="row" style="gap:10px; margin-top:10px">'+ // 「📥 いま同期する」(v5.16.0)はv5.29.0で撤去=学習タブを離れたときに自動で同期

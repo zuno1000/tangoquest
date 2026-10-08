@@ -1422,7 +1422,7 @@ function run(){
     G.pace.qd={d:"2000-01-01", per:q1.perDay}; // 昨日の値が残っている状態
     const q3=W.paceToday(G);
     eq(G.pace.qd.d, W.todayKey(), "翌日の最初の表示で引き直す");
-    ok(q3.perDay>q1.perDay, "昨日までの結果(悪化した正答率)を織り込む");
+    ok(q3.raw>q1.raw, "昨日までの結果(悪化した正答率)を織り込む(逆算値raw。固定する目安はv5.34.0から上限120)");
     G.pace.qd=null;
     G.pace.goal=W.addDays(W.todayKey(),120); // 目標を設定し直すとqd=nullで即引き直し
     ok(W.paceToday(G).perDay>0 && G.pace.qd.d===W.todayKey(), "目標変更時は即時に再計算");
@@ -3595,10 +3595,12 @@ function run(){
     const G=W.G, old=JSON.parse(JSON.stringify(G.pace)), oldW=G.words;
     G.words={}; G.pace={goal:W.addDays(W.todayKey(),120), setAt:1, log:[], qd:{d:"2000-01-01", per:1000}};
     const q=W.paceToday(G);
-    ok(q.perDay>=900 && q.perDay<=1100, "前日1000問なら今日は900〜1100の範囲に収まる(生の見込みは"+W.paceQuota(G).perDay+")");
+    eq(q.perDay, W.PACE_CAP, "前日1000問なら減衰で900だが、v5.34.0の上限120で止まる(生の見込みは"+W.paceQuota(G).perDay+")");
     eq(G.pace.qd.d, W.todayKey(), "固定される");
+    G.pace={goal:W.addDays(W.todayKey(),120), setAt:1, log:[], qd:{d:"2000-01-01", per:100}};
+    eq(W.paceToday(G).perDay, Math.min(W.PACE_CAP, W.paceDamp(100, W.paceQuota(G).perDay)), "前日100問なら±10%の減衰がそのまま効く(上限の内側)");
     G.pace={goal:W.addDays(W.todayKey(),120), setAt:1, log:[], qd:null};
-    eq(W.paceToday(G).perDay, W.paceQuota(G).perDay, "目標変更(qd=null)は上限なしで即時");
+    eq(W.paceToday(G).perDay, Math.min(W.PACE_CAP, W.paceQuota(G).perDay), "目標変更(qd=null)は減衰なしで即時(上限は掛かる)");
     G.pace=old; G.words=oldW;
   });
   t("v5.20.0②: 起動時の同期を待ってから今日の目安を固定 ─ 待ち中は仮の値(固定しない)・同期の完了/不要/失敗(paceHoldRelease)か最初の解答(paceLog)で固定", ()=>{
@@ -4269,7 +4271,7 @@ function run(){
     try{
       G.opt.qtab="mix"; G.pace={goal:W.addDays(W.todayKey(), 300), setAt:Date.now(), log:[], qd:{d:W.todayKey(), per:221}};
       dr.a=228; pd.a=48; // 合算276(スクショ: 目安221→277問・最後のセットは7問→「6/7」と出ていた)
-      const p=W.setProgress(G); eq(p.cur, 6); eq(p.done, 9); eq(p.targetQ, 277); ok(!("target" in p) && !("last" in p));
+      const p=W.setProgress(G); eq(p.cur, 6); eq(p.done, 9); eq(p.targetQ, 150, "目安221はv5.34.0の上限120→ミックスで150問(以前は277)"); ok(!("target" in p) && !("last" in p));
       W.renderHome();
       const cta=doc.getElementById("homeStudy").textContent;
       ok(cta.indexOf("セットのつづき(6/30)")>=0, "CTA=6/30: "+cta);
@@ -4572,37 +4574,117 @@ function run(){
   });
 
   /* ---- v5.32.0: 実機FB3件(①セット完了のメモ依頼 ②上の行に品詞・📋/🔍チップと語源の廃止 ③答え合わせの似た形/取り違えの廃止=上のv5.30.0④/v5.31.0①の更新で検証) ---- */
-  t("v5.32.0①: セット完了画面の「💡 ミスした語の覚え方メモをLLMに頼む」 ─ setMemoAskWords(このセットのミスでメモの無い語だけ・純関数)・折りたたみ(メモなし n語)・📋で依頼文=wmemoPromptText(その語)・貼り戻し→保存(既存は据え置き)→開いたまま描き直し・全語に付けば消える・使えない行なら保存しない・ミス無しなら出ない", ()=>{
-    const G=W.G, doc=W.document; const oldSet=G.set? JSON.parse(JSON.stringify(G.set)) : null, oldMemo=JSON.parse(JSON.stringify(G.wmemo||{})); let copied="";
+  t("v5.34.0②(旧v5.32.0①): セット完了画面の「💡 覚え方メモをLLMに頼む」の対象は「ミスが重なった語のたまり」(wmemoPoolWords: ミス2回以上・未習得・メモなし・直近7日に解いた・最後に解いた順・純関数) ─ WMEMO_ASK_MIN=8語に達したセットの完了でだけ出る・📋で依頼文=wmemoPromptText(たまり)・貼り戻し→保存→開いたまま描き直し(しきい値未満でも消えない)・全語に付けば消える", ()=>{
+    const G=W.G, doc=W.document; const oldSet=G.set? JSON.parse(JSON.stringify(G.set)) : null, oldMemo=JSON.parse(JSON.stringify(G.wmemo||{})), oldWords=G.words; let copied="";
     try{
-      const ws=W.WORDS.filter(w=>w.en.indexOf(" ")<0).map(w=>w.en), a=ws[0], b=ws[1], c=ws[2];
-      G.wmemo={}; W.wmemoSet(b, "bのメモ");
-      G.set={d:W.todayKey(), a0:0, n:30, cor:27, newN:3, up:5, mas:1, tk:0, phr:0, miss:[a, b, c]};
-      eq(W.setMemoAskWords(G).join(","), a+","+c, "ミスでメモの無い語だけ(bは除く)");
-      eq(W.setMemoAskWords({set:null}).length, 0, "セット無し"); eq(W.setMemoAskWords({set:{miss:["zzz_none"]}}).length, 0, "内蔵に無い語は除く");
+      eq(W.WMEMO_ASK_MIN, 8); eq(W.WMEMO_POOL_MISS, 2); eq(W.WMEMO_POOL_DAYS, 7);
+      const ws=W.WORDS.filter(w=>w.en.indexOf(" ")<0).slice(0, 12).map(w=>w.en), now=Date.now();
+      G.words={}; G.wmemo={};
+      ws.forEach((en, i)=>{ G.words[en]=[1, now+6e5, 2, 2, 0, 1, now-i*3600e3, 0]; }); // [box, due, correct, wrong, mastered, wrongStreak, lastAt, lapseBack]
+      G.words[ws[0]][3]=1;            // ミス1回=うっかり→対象外
+      G.words[ws[1]][0]=W.MASTER_BOX; // 覚えた→対象外
+      W.wmemoSet(ws[2], "メモあり");   // メモあり→対象外
+      G.words[ws[3]][6]=now-8*864e5;  // 8日前に解いた→対象外
+      const pool=W.wmemoPoolWords(G, now);
+      eq(pool.length, 8, "12語のうち4語が除かれて8語"); eq(pool[0], ws[4], "最後に解いた順");
+      ok([ws[0], ws[1], ws[2], ws[3]].every(en=>pool.indexOf(en)<0), "除外の4語は入らない");
+      eq(W.setMemoAskWords(G, now).length, 8, "8語=しきい値に達した");
+      G.words[ws[4]][3]=1; eq(W.setMemoAskWords(G, now).length, 0, "7語なら出さない"); eq(W.setMemoAskWords(G, now, true).length, 7, "all=しきい値を無視(貼り戻したあとの描き直し用)"); G.words[ws[4]][3]=2;
+      G.set={d:W.todayKey(), a0:0, n:30, cor:27, newN:3, up:5, mas:1, tk:0, phr:0, miss:[ws[0]]};
       W.openSetDone();
       const m=doc.getElementById("modal");
       ok(doc.getElementById("setWeak") && doc.getElementById("setNext") && doc.getElementById("setHome"), "従来のボタンはそのまま");
-      ok(m.querySelector('[data-fold="setMemo"]') && m.textContent.indexOf("ミスした語の覚え方メモをLLMに頼む")>=0 && m.textContent.indexOf("メモなし 2語")>=0, "折りたたみ(メモなし2語)");
+      ok(m.querySelector('[data-fold="setMemo"]') && m.textContent.indexOf("ミスが重なった8語の覚え方メモをLLMに頼む")>=0, "折りたたみ(8語)");
+      ok(m.textContent.indexOf("メモなし")<0 && m.textContent.indexOf("このセットでミス")<0, "v5.32.0の文言は無い");
       ok(doc.getElementById("setMemo").hidden, "既定は畳んである"); m.querySelector('[data-fold="setMemo"]').click(); ok(!doc.getElementById("setMemo").hidden, "開く");
-      ok(doc.getElementById("setMemoCopy").textContent.indexOf("2語の覚え方")>=0, "依頼する語数");
+      ok(doc.getElementById("setMemoCopy").textContent.indexOf("8語の覚え方")>=0, "依頼する語数");
       Object.defineProperty(W.navigator, "clipboard", {value:{writeText:t=>{ copied=t; return Promise.resolve(); }}, configurable:true});
-      doc.getElementById("setMemoCopy").click(); eq(copied, W.wmemoPromptText([a, c]), "📋で依頼文(このセットのミスでメモの無い語)");
-      ok(copied.indexOf("次の2語")>=0 && copied.indexOf("・"+a+"(")>=0 && copied.indexOf("・"+c+"(")>=0 && copied.indexOf("・"+b+"(")<0, "bは依頼に含めない");
-      doc.getElementById("setMemoBack").value=a+" — aの覚え方\n"+b+" — 上書きしない"; doc.getElementById("setMemoImport").click();
-      eq(W.wmemoGet(a), "aの覚え方"); eq(W.wmemoGet(b), "bのメモ", "既存は据え置き");
-      ok(doc.getElementById("setMemo") && !doc.getElementById("setMemo").hidden && m.textContent.indexOf("メモなし 1語")>=0 && doc.getElementById("setMemoCopy").textContent.indexOf("1語の覚え方")>=0, "開いたまま描き直し・残り1語");
-      ok(doc.getElementById("setWeak") && doc.getElementById("setWeak").textContent.indexOf("3")>=0, "「立て直す」は3語のまま");
-      doc.getElementById("setMemoBack").value=c+" — cの覚え方"; doc.getElementById("setMemoImport").click();
-      eq(W.wmemoGet(c), "cの覚え方"); ok(!m.querySelector('[data-fold="setMemo"]') && !doc.getElementById("setMemoCopy") && doc.getElementById("setNext"), "全語に付けば折りたたみごと消える");
+      doc.getElementById("setMemoCopy").click(); eq(copied, W.wmemoPromptText(pool), "📋で依頼文(たまりの8語)");
+      ok(copied.indexOf("次の8語")>=0 && copied.indexOf("・"+ws[0]+"(")<0, "ミス1回の語は依頼に含めない");
+      doc.getElementById("setMemoBack").value=pool.slice(0, 3).map(en=>en+" — "+en+"の覚え方").join("\n"); doc.getElementById("setMemoImport").click();
+      eq(W.wmemoGet(pool[0]), pool[0]+"の覚え方"); eq(W.wmemoGet(ws[2]), "メモあり", "既存は据え置き");
+      ok(doc.getElementById("setMemo") && !doc.getElementById("setMemo").hidden && m.textContent.indexOf("ミスが重なった5語")>=0, "開いたまま描き直し・残り5語(しきい値未満でも消えない)");
+      ok(doc.getElementById("setWeak") && doc.getElementById("setWeak").textContent.indexOf("1")>=0, "「立て直す」はこのセットのミス(1語)のまま");
+      doc.getElementById("setMemoBack").value=pool.slice(3).map(en=>en+" — "+en+"の覚え方").join("\n"); doc.getElementById("setMemoImport").click();
+      eq(W.wmemoGet(pool[7]), pool[7]+"の覚え方"); ok(!m.querySelector('[data-fold="setMemo"]') && !doc.getElementById("setMemoCopy") && doc.getElementById("setNext"), "全語に付けば折りたたみごと消える");
       W.closeModal();
       // 使えない行なら保存せず画面はそのまま(memoOpenで開いたまま)
-      W.wmemoSet(a, ""); W.openSetDone({memoOpen:true}); ok(doc.getElementById("setMemo") && !doc.getElementById("setMemo").hidden, "memoOpenで開いたまま");
-      doc.getElementById("setMemoBack").value="これは見出し"; doc.getElementById("setMemoImport").click(); eq(W.wmemoGet(a), "", "使えない行なら保存しない"); ok(doc.getElementById("setMemoBack") && doc.getElementById("setMemoBack").value==="これは見出し", "画面はそのまま");
+      W.wmemoSet(pool[0], ""); W.openSetDone({memoOpen:true}); ok(doc.getElementById("setMemo") && !doc.getElementById("setMemo").hidden, "memoOpenで開いたまま(1語でも)");
+      doc.getElementById("setMemoBack").value="これは見出し"; doc.getElementById("setMemoImport").click(); eq(W.wmemoGet(pool[0]), "", "使えない行なら保存しない"); ok(doc.getElementById("setMemoBack") && doc.getElementById("setMemoBack").value==="これは見出し", "画面はそのまま");
       W.closeModal();
-      // ミスが無ければ出ない
-      G.set.miss=[]; W.openSetDone(); ok(!m.querySelector('[data-fold="setMemo"]') && !doc.getElementById("setWeak") && doc.getElementById("setNext"), "ミス無しなら出ない"); W.closeModal();
-    }finally{ try{ delete W.navigator.clipboard; }catch(e){} G.set=oldSet; G.wmemo=oldMemo; W.saveG(); W.closeModal(); }
+      // たまりがしきい値未満・セットのミスも無ければ、どちらも出ない
+      G.set.miss=[]; W.openSetDone(); ok(!m.querySelector('[data-fold="setMemo"]') && !doc.getElementById("setWeak") && doc.getElementById("setNext"), "ミス無し・たまり1語なら出ない"); W.closeModal();
+      eq(W.wmemoPoolWords({words:{}}).length, 0, "記録なし"); eq(W.wmemoPoolWords({words:{zzz_none:[0,0,0,5,0,0,now,0]}}).length, 0, "内蔵に無い語は除く");
+    }finally{ try{ delete W.navigator.clipboard; }catch(e){} G.set=oldSet; G.wmemo=oldMemo; G.words=oldWords; W.saveG(); W.closeModal(); }
+  });
+  t("v5.34.0①: 今日の目安に上限PACE_CAP=120 ─ paceLines(最低限=1セットの単語・十分=目安・完璧=十分+1セット)・paceMsgは次の線だけ言う・ホームのバーに目盛りと文字・脚注に見通しの日付(paceForecast=残り解答数÷直近14日の実際のペース。今日は含めず『今日の分で◯日早まる』で見せる)・管理画面だけ逆算値(raw)を添える", ()=>{
+    const G=W.G, doc=W.document; const oldPace=JSON.parse(JSON.stringify(G.pace)), oldWords=G.words, oldDays=G.days, dk=W.todayKey(), oldQtab=G.opt.qtab;
+    const key=i=>{ const d=new Date(Date.now()-i*864e5); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
+    try{
+      eq(W.PACE_CAP, 120); eq(W.PACE_WIN, 14);
+      const L=W.paceLines(120, 24); eq(L.min, 24); eq(L.good, 120); eq(L.best, 144);
+      const L2=W.paceLines(10, 30); eq(L2.min, 10, "目安が1セット未満なら最低限=十分"); eq(L2.best, 40);
+      ok(W.paceMsg(0, L).indexOf("まず1セット")>=0, "0問"); ok(W.paceMsg(10, L).indexOf("最低限(1セット)まで あと14問")>=0, "最低限まで");
+      ok(W.paceMsg(24, L).indexOf("最低限クリア")>=0 && W.paceMsg(24, L).indexOf("十分まで あと96問")>=0, "ちょうど最低限");
+      ok(W.paceMsg(100, L).indexOf("十分まで あと20問")>=0 && W.paceMsg(100, L).indexOf("最低限")<0, "十分まで(最低限は言わない)");
+      ok(W.paceMsg(120, L).indexOf("十分を達成")>=0 && W.paceMsg(120, L).indexOf("完璧まで あと24問")>=0, "十分");
+      ok(W.paceMsg(144, L).indexOf("完璧!")>=0 && W.paceMsg(150, L).indexOf("+6問")>=0, "完璧と前倒し");
+      ok(W.paceMsg(5, L2).indexOf("十分まで あと5問")>=0 && W.paceMsg(5, L2).indexOf("最低限")<0, "最低限=十分なら十分だけ");
+      // 上限: 逆算値が大きくても固定する目安は120・生の値はraw
+      G.words={}; G.pace={goal:W.addDays(dk, 60), setAt:1, log:[], qd:null};
+      const q=W.paceToday(G); ok(q.raw>120, "逆算値は120超: "+q.raw); eq(q.perDay, 120, "目安は上限で止まる"); eq(G.pace.qd.per, 120); eq(G.days[dk].t, 120, "日別記録の目安(達成判定)も120");
+      G.pace.qd={d:dk, per:260}; eq(W.paceToday(G).perDay, 120, "旧版が固定した上限超えの値も今日から120");
+      // 見通し: 直近14日(今日を含まない)の平均で残り解答数を割る
+      G.days={};
+      eq(W.paceForecast(G, q.est, Date.now(), 60), null, "記録が無ければ見通しなし");
+      for(let i=1;i<=14;i++) G.days[key(i)]={a:100, c:90, m:10};
+      const f0=W.paceForecast(G, q.est, Date.now(), 60);
+      ok(f0 && f0.avg===100 && f0.days>0 && /^\d{4}-\d{2}-\d{2}$/.test(f0.date), "見通し: "+(f0&&f0.days)+"日"); eq(f0.gain, 0, "今日0問なら早まらない");
+      G.days[dk]={a:200, c:180, m:0}; const f1=W.paceForecast(G, q.est, Date.now(), 60);
+      eq(f1.days, f0.days, "見通しの日数は今日の分では動かない(明日の平均に入る)"); ok(f1.gain>0, "今日200問(平均100の日と入れ替わる)で早まる日数>0: "+f1.gain);
+      G.days[dk].a=100; eq(W.paceForecast(G, q.est, Date.now(), 60).gain, 0, "今日が、抜ける日と同じ100問なら0");
+      for(let i=1;i<=14;i++) G.days[key(i)].a=(i===14? 100 : 0);
+      const f2=W.paceForecast(G, q.est, Date.now(), 60); ok(f2.days>f0.days, "ペースが落ちれば見通しは遠のく");
+      eq(W.paceFmtDate("2027-03-05"), "2027/3/5");
+      // ホームの描画(ミックス: 1セット=単語24問)
+      G.opt.qtab="mix"; G.pace.qd={d:dk, per:120}; G.days[dk]={a:30, c:28, m:0}; for(let i=1;i<=14;i++) G.days[key(i)]={a:100, c:90, m:10};
+      W.renderHome();
+      let hp=doc.getElementById("homePace");
+      ok(hp.textContent.indexOf("今日の目安")>=0 && hp.textContent.indexOf("30 / 120問")>=0, "数字=今日/十分: "+hp.textContent);
+      eq(hp.querySelectorAll(".pbar .ptick").length, 2, "目盛り=最低限・十分(完璧=右端は描かない)");
+      eq([...hp.querySelectorAll(".plabels span")].map(s=>s.textContent).join(","), "最低限,十分,完璧", "文字は3つ");
+      eq(hp.querySelector(".pbar i").style.width, Math.round(100*30/144)+"%", "バーの幅は完璧まで");
+      ok(hp.querySelector(".pacemsg").textContent.indexOf("十分まで あと90問")>=0, "次の線の案内");
+      ok(hp.textContent.indexOf("このペースなら")>=0 && hp.textContent.indexOf("ごろに全")>=0 && hp.textContent.indexOf("残り")>=0, "見通しの日付+目標日");
+      ok(hp.textContent.indexOf("早まる")<0, "30問(抜ける日の100問より少ない)では早まらない");
+      G.days[dk].a=200; W.renderHome(); hp=doc.getElementById("homePace"); ok(hp.textContent.indexOf("早まる")>=0 && hp.querySelector(".pbar.full"), "今日の分で早まる・十分を超えたら金");
+      ok(hp.textContent.indexOf("目安ぶんは積み上げた")<0, "達成の脚注はpaceMsgに吸収"); eq(W.setFootText({hit:true, cur:0, done:0}), "", "setFootTextは常に空");
+      G.days[dk].a=0; W.renderHome(); ok(doc.getElementById("homePace").querySelector(".pacemsg").textContent.indexOf("まず1セット")>=0, "0問");
+      // 学習ペース管理の画面: 上限で止めているときだけ逆算値を添える
+      G.pace.qd=null; W.openPaceModal(); const mt=doc.getElementById("modal").textContent;
+      ok(mt.indexOf("上限120問で止めている")>=0 && mt.indexOf("目標日どおりなら1日")>=0, "逆算値は管理画面だけ"); ok(mt.indexOf("ごろに全語")>=0, "管理画面にも見通し"); W.closeModal();
+    }finally{ G.pace=oldPace; G.words=oldWords; G.days=oldDays; G.opt.qtab=oldQtab; W.saveG(); W.closeModal(); W.renderHome(); }
+  });
+  t("v5.34.0③: 1セットの所要時間を実測(setRecord: 解答の間隔の合計・60秒超の間隔は中断として数えない・完了でG.setTに直近10回)→setMinutes(中央値・純関数)→ホームのCTAに「約◯分」「のこり約◯分」(実測が無ければ従来どおり)", ()=>{
+    const G=W.G, doc=W.document; const oldSet=G.set? JSON.parse(JSON.stringify(G.set)) : null, oldT=G.setT.slice(), dr=W.dayRec(), pd=W.pdayRec(), a0=dr.a, pa0=pd.a;
+    try{
+      eq(W.SET_GAP_MAX, 60); eq(W.SET_T_N, 10);
+      eq(W.setMinutes([], 30), null, "実測なしはnull"); eq(W.setMinutes([420], 30), 7); eq(W.setMinutes([300, 600, 420], 30), 7, "中央値"); eq(W.setMinutes([420], 10), 2, "のこり10問=1/3"); eq(W.setMinutes([20], 30), 1, "最小1分");
+      G.set=null; G.setT=[]; const t0=1e12;
+      for(let i=1;i<=30;i++) W.setRecord(G, i, {ok:true, now:t0+i*10000}); // 10秒間隔
+      eq(G.setT.length, 1); eq(G.setT[0], 300, "29回の間隔×30/29=300秒");
+      G.set=null; for(let i=31;i<=60;i++) W.setRecord(G, i, {ok:true, now:t0+(i>=45? 600000 : 0)+i*10000}); // 途中に10分の中断
+      eq(G.setT.length, 2); eq(G.setT[1], 300, "60秒超の間隔は数えない(中断)");
+      for(let k=0;k<12;k++){ G.set=null; for(let i=1;i<=30;i++) W.setRecord(G, 60+k*30+i, {ok:true, now:t0+(k*30+i)*20000}); }
+      eq(G.setT.length, 10, "直近10回だけ"); eq(G.setT[9], 600, "20秒間隔=600秒");
+      // 「約◯分」は主文ではなく下の小さな行(主文に足すと390pxで2行に折れる)
+      G.set=null; dr.a=0; pd.a=0; G.setT=[420]; W.renderHome(); let cta=doc.getElementById("homeStudy");
+      ok(cta.textContent.indexOf("1セット(30問)はじめる")>=0 && cta.querySelector(".ctasub").textContent.indexOf("約7分 ・ 今日 0問")===0, "CTA: "+cta.querySelector(".ctasub").textContent);
+      dr.a=20; W.renderHome(); cta=doc.getElementById("homeStudy");
+      ok(cta.textContent.indexOf("セットのつづき(20/30)")>=0 && cta.querySelector(".ctasub").textContent.indexOf("のこり約2分 ・ 今日 20問")===0, "のこり10問=約2分: "+cta.querySelector(".ctasub").textContent);
+      G.setT=[]; W.renderHome(); cta=doc.getElementById("homeStudy"); ok(cta.querySelector(".ctasub").textContent.indexOf("今日 20問")===0, "実測なしは従来どおり");
+      dr.a=0; W.renderHome(); ok(doc.getElementById("homeStudy").textContent.indexOf("1セット(30問)はじめる")>=0, "実測なしは従来どおり(新しいセット)");
+    }finally{ G.set=oldSet; G.setT=oldT; dr.a=a0; pd.a=pa0; W.saveG(); W.renderHome(); }
   });
 
   t("v5.32.0②: 上の行(#qTop) ─ バッジ/品詞(左)とセット n/30・今日 n問(右)をflexで並べる(右は縮めない・左はmin-width:0で…)・正誤確認中はバッジの代わりに品詞チップ(マイ単語なら📝も)・qMetaHTML・出題で空に戻る", ()=>{
@@ -5993,7 +6075,7 @@ async function runAsync(W){
     ok(doc.getElementById("homeStudy").textContent.indexOf("6/30")>=0 && doc.getElementById("homeStudy").textContent.indexOf("6/7")<0, "実機FB: 「6/7」ではなく 6/30");
     G.pace.qd.per=113; dr.a=113; pd.a=27; p=W.setProgress(G);
     ok(p.hit && p.done===4, "単語113問で達成=目安の数字と同じ判定(セット数は4のまま)");
-    ok(W.setFootText(p).indexOf("目安ぶんは積み上げた")>=0, "達成の脚注");
+    eq(W.setFootText(p), "", "達成の脚注はv5.34.0でpaceMsg(次の線の案内)に吸収");
     // 単語のみ: 目安100問
     G.opt.qtab="w"; G.pace.qd.per=100; dr.a=0; pd.a=0; p=W.setProgress(G);
     eq(p.targetQ, 100);

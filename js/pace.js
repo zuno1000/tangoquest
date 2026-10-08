@@ -175,6 +175,54 @@ function paceDamp(prev, next){
   const lo=Math.ceil(prev*(1-PACE_DAMP)), hi=Math.max(prev+1, Math.floor(prev*(1+PACE_DAMP)));
   return Math.max(10, Math.min(hi, Math.max(lo, next)));
 }
+/* 今日の目安の上限(v5.34.0・実機FB「目安が200問を超え続けて、時間がかかるのでやる気をそぐ」):
+   逆算値(残り解答数÷残り日数)は届かなかった分が翌日以降に上乗せされ、目標日を動かさない限り下がらない=督促になっていた。
+   目安(十分の線)は上限PACE_CAP問で止め、上限を超える分は数字ではなく「このペースなら◯/◯ごろに全語」という見通しの日付
+   (paceForecast)に変換する。目標日は督促ではなく見通しと比べる情報になる */
+var PACE_CAP=120;
+/* 今日の3本の線(純関数・v5.34.0): min=最低限(1セットぶんの単語)・good=十分(今日の目安=上限つき)・best=完璧(十分+1セット)。
+   perSet=1セットに含まれる単語数(ミックス24・単語のみ30)。目安が1セット未満(残りわずか)なら最低限=十分 */
+function paceLines(per, perSet){
+  perSet=perSet||SET_N;
+  const good=Math.max(1, per|0);
+  return {min:Math.min(perSet, good), good, best:good+perSet};
+}
+/* 直近n日(昨日まで・今日は含まない)の1日平均解答数(単語)。記録のない日は0として平均する(純関数)。
+   今日を含めないのは、朝の0問で平均が落ちて見通しの日付が毎朝後ろに跳ぶのを避けるため。今日の分はpaceForecastのgainで見せる */
+var PACE_WIN=14;
+function paceRecent(g, n, now){
+  const base=new Date(now||Date.now()); let sum=0;
+  for(let i=1;i<=n;i++){
+    const dt=new Date(base.getFullYear(), base.getMonth(), base.getDate()-i);
+    const k=dt.getFullYear()+"-"+String(dt.getMonth()+1).padStart(2,"0")+"-"+String(dt.getDate()).padStart(2,"0");
+    sum+=((g.days||{})[k]||{}).a||0;
+  }
+  return sum/n;
+}
+/* 全語を覚え切る見通しの日付(v5.34.0・純関数): 残り解答数(復習の繰り返しを含む)÷直近14日の実際のペース。
+   days=見込みの日数・date=その日付(YYYY-MM-DD)・avg=直近の1日平均・gain=今日の解答(today)が明日からの平均に入ることで
+   見通しが何日早まるか(=「頑張った分が目標に近づく」の実感。今日が0問なら0)。平均が0なら見通しなし(null)。
+   残り解答数は維持復習の見込みが日数に依存するので、目標日の残り日数(なければ180日)から始めて2回引き直す */
+function paceForecast(g, est, now, daysHint){
+  now=now||Date.now();
+  const avg=paceRecent(g, PACE_WIN, now);
+  if(!(avg>0)) return null;
+  const today=((g.days||{})[todayKey()]||{}).a||0;
+  const daysAt=a=>{ let d=Math.max(1, daysHint||180); for(let i=0;i<2;i++){ const rem=paceRemaining(g, est, d); d=Math.max(1, rem.attempts/a); } return d; };
+  const days=daysAt(avg);
+  const avg2=avg+(today-paceRecentOldest(g, PACE_WIN, now))/PACE_WIN; // 明日の窓=いちばん古い日が抜けて今日が入る
+  const gain=today>0 && avg2>avg? Math.max(0, Math.round(days-daysAt(avg2))) : 0;
+  const dt=new Date(now+Math.round(days)*864e5);
+  return {days:Math.round(days), date:dt.getFullYear()+"-"+String(dt.getMonth()+1).padStart(2,"0")+"-"+String(dt.getDate()).padStart(2,"0"), avg, gain, today};
+}
+/* 直近n日の窓からいちばん先に抜ける日(n日前)の解答数 */
+function paceRecentOldest(g, n, now){
+  const base=new Date(now||Date.now());
+  const dt=new Date(base.getFullYear(), base.getMonth(), base.getDate()-n);
+  const k=dt.getFullYear()+"-"+String(dt.getMonth()+1).padStart(2,"0")+"-"+String(dt.getDate()).padStart(2,"0");
+  return ((g.days||{})[k]||{}).a||0;
+}
+function paceFmtDate(k){ return k? (+k.slice(0,4))+"/"+(+k.slice(5,7))+"/"+(+k.slice(8)) : ""; }
 /* 今日の目安は「その日はじめて計算した値」で固定する(v4.9.0)。
    表示のたびに再計算すると、ミスで残り問題数が増えて目安が途中で膨らみ
    やる気を削ぐため。翌日の最初の表示で昨日までの結果を織り込んで引き直す。
@@ -189,13 +237,14 @@ function paceToday(g, now, opts){
   const d=todayKey();
   /* at=固定した時刻(v5.19.0): 同期では同じ日の目安は「先に固定した端末の値」に揃える(sync.js mergeQd)=
      どの端末で見ても今日の目安は同じ数字になる */
+  q.raw=q.perDay; // 逆算値そのもの(上限なし・学習ペース管理の画面だけが使う)
   if(!g.pace.qd || g.pace.qd.d!==d){
-    const per=paceDamp(g.pace.qd? g.pace.qd.per : 0, q.perDay); // 直前に固定した値(ふつう前日)から±10%以内
+    const per=Math.min(PACE_CAP, paceDamp(g.pace.qd? g.pace.qd.per : 0, q.perDay)); // 直前に固定した値(ふつう前日)から±10%以内・上限PACE_CAP(v5.34.0)
     const hold=!(opts&&opts.fix) && typeof syncHoldsPace==="function" && syncHoldsPace();
     if(hold){ q.perDay=per; q.provisional=true; if(g.days){ const r=g.days[d]=g.days[d]||{a:0,c:0,m:0}; if(r.t!==per) r.t=per; } return q; }
     g.pace.qd={d, per, at:now};
   }
-  q.perDay=g.pace.qd.per;
+  q.perDay=Math.min(PACE_CAP, g.pace.qd.per); // 旧版が固定した上限超えの値も今日から上限に
   // その日の目安を日別記録にも残す(「学習のあゆみ」の達成判定に使う)
   if(g.days){
     const rec=g.days[d]=g.days[d]||{a:0,c:0,m:0};
@@ -220,19 +269,26 @@ function paceByNow(target, now){
 }
 
 /* ---- UI: 今日のメーター ---- */
-function paceMsg(done, target){
-  if(done>=target){
-    const over=done-target;
-    return over>0? "🎉 目安達成! +"+over+"問の前倒し ─ 明日がラクになる"
-                 : "🎉 今日の目安を達成! おつかれさま";
+/* 次の線までの案内(v5.34.0): L=paceLines(最低限・十分・完璧)。done=今日の単語の解答数。
+   いま目指す線を1つだけ言う(3つの数字を並べない)。完璧の先は前倒しの問数 */
+function paceMsg(done, L){
+  if(done>=L.best){
+    const over=done-L.best;
+    return "🎉 完璧!"+(over>0? " さらに+"+over+"問の前倒し" : " おつかれさま");
   }
-  const remain=target-done, pct=100*done/target;
-  if(done===0) return "さあ、今日の1問目から! 目安は"+target+"問";
-  if(pct<25)  return "スタートよし! あと"+remain+"問";
-  if(pct<50)  return "いい調子! あと"+remain+"問";
-  if(pct<75)  return "半分を超えた! あと"+remain+"問";
-  return "ラストスパート🔥 あと"+remain+"問";
+  if(done>=L.good) return "🎉 十分を達成! 完璧まで あと"+(L.best-done)+"問";
+  if(done===0) return "さあ、今日の1問目から! まず1セット";
+  if(L.min<L.good && done<L.min) return "最低限(1セット)まで あと"+(L.min-done)+"問";
+  if(L.min<L.good && done===L.min) return "最低限クリア ─ 十分まで あと"+(L.good-done)+"問";
+  return "十分まで あと"+(L.good-done)+"問";
 }
+/* 線の目盛り(バーの上の小さな印と、下の「最低限・十分・完璧」の文字)。幅=完璧の線が100% */
+function paceMarks(L){
+  const pos=v=>Math.round(100*v/L.best);
+  return [L.min<L.good? {v:L.min, t:"最低限"} : null, {v:L.good, t:"十分"}, {v:L.best, t:"完璧"}].filter(Boolean).map(m=>({v:m.v, t:m.t, p:pos(m.v)}));
+}
+function paceTicksHTML(L){ return paceMarks(L).filter(m=>m.p<100).map(m=>'<i class="ptick" style="left:'+m.p+'%"></i>').join(""); } // バーの中(完璧=右端は描かない)
+function paceLabelsHTML(L){ return '<div class="plabels">'+paceMarks(L).map(m=>'<span style="left:'+m.p+'%">'+m.t+'</span>').join("")+'</div>'; } // バーの下
 
 /* ペースパネルの中身を描く(ホーム #homePace)。
    学習画面には置かない: 縦に要素を足すと選択肢が押し出されて構成が崩れる(v4.7.1)。
@@ -240,8 +296,7 @@ function paceMsg(done, target){
 /* v5.12.1(実機FB「今日の目安と今日のセットを統廃合」): ホームの「今日のセット」パネルは廃止し目安のパネルに統合。
    数字=目安(単語の問数)・脚注=このセットの進み。バーはv5.12.1〜v5.14.0はセットの●○、v5.15.0で連続1本に戻した */
 function setFootText(sp){
-  if(sp.hit) return '🏅 今日の目安ぶんは積み上げた ─ 前倒しでもう1セット?';
-  return ''; // v5.26.0〜v5.28.2(実機FB「ホームをシンプルに」): 「次は◯セット目」「30問=1セット」「このセット n/◯問」の行は廃止(達成の行だけ。セットの進みはCTAの「セットのつづき(n/30)」が担う)
+  return ''; // v5.26.0〜v5.28.2(実機FB「ホームをシンプルに」): 「次は◯セット目」「30問=1セット」「このセット n/◯問」の行は廃止。v5.34.0: 達成の行もpaceMsg(次の線の案内)に吸収
 }
 /* v5.15.0(実機FB「セット分割のバーを連続した1本に戻す」): バーは旧来の帯グラフ(.pbar)=今日の問数/目安。
    セット(30問)の情報は脚注の1行(setFootText)だけが担う(v5.28.2からは達成の行だけ)。●○(setDotsHTML)はv5.29.0で廃止 */
@@ -260,20 +315,24 @@ function fillPaceEl(el){
     el.innerHTML='<div class="pacetop"><span>🏆 全'+fmt(q.total)+'語 制覇!</span><b>🎊</b></div>'+
       '<div class="pacemsg">おめでとう! 復習を続けて記憶を守ろう</div>';
   }else{
-    const done=dayRec().a, target=q.perDay;
-    const pct=Math.min(100, Math.round(100*done/target));
+    /* v5.34.0: 3本の線(最低限=1セット・十分=目安・完璧=十分+1セット)。バーの幅は完璧まで・目盛りは最低限と十分。
+       数字は「今日 / 十分」。脚注=見通しの日付(paceForecast: 直近14日の実際のペースで割った全語の日付)と、今日の分で何日早まるか */
+    const done=dayRec().a, L=paceLines(q.perDay, wordsPerSet());
+    const pct=Math.min(100, Math.round(100*done/L.best));
+    const fc=paceForecast(G, q.est, Date.now(), q.days);
     // 時間帯の小目標(v4.13.0「⏰◯時時点の目安」)はv5.26.0で表示をやめた(実機FB「ホームをシンプルに」。paceByNowは残す)
-    const nowLine='';
     el.innerHTML=
       '<div class="pacetop"><span>🎯 今日の目安</span>'+
-        '<b class="'+(done>=target?"pgold":"")+'">'+done+' <span class="ptgt">/ '+target+'問</span></b></div>'+
-      '<div class="pbar'+(done>=target?" full":"")+'"><i style="width:'+pct+'%"></i></div>'+ // 連続1本のバー(v5.15.0で●○から戻した)
-      '<div class="pacemsg'+(done>=target?" pdone":"")+'">'+paceMsg(done, target)+'</div>'+
-      nowLine+
-      (setFootText(sp)? '<div class="pacefoot">'+setFootText(sp)+'</div>' : '')+
+        '<b class="'+(done>=L.good?"pgold":"")+'">'+done+' <span class="ptgt">/ '+L.good+'問</span></b></div>'+
+      '<div class="pbar'+(done>=L.good?" full":"")+'"><i style="width:'+pct+'%"></i>'+paceTicksHTML(L)+'</div>'+ // 連続1本のバー(v5.15.0で●○から戻した)・目盛り(v5.34.0)
+      paceLabelsHTML(L)+
+      '<div class="pacemsg'+(done>=L.good?" pdone":"")+'">'+paceMsg(done, L)+'</div>'+
+      '<div class="pacefoot">'+(fc
+        ? 'このペースなら <b>'+paceFmtDate(fc.date)+'</b> ごろに全'+fmt(q.total)+'語'+(fc.gain>0? ' ・ 今日の分で <b>'+fc.gain+'日</b> 早まる' : '')
+        : '覚えた '+fmt(q.mastered)+'/'+fmt(q.total)+'語')+'</div>'+
       '<div class="pacefoot">'+(q.expired
         ? '⚠️ 目標日を過ぎている ─ タップして立て直そう'
-        : '目標 '+q.goal.replace(/-/g,"/")+' まで残り'+q.daysLeft+'日 ・ 覚えた '+fmt(q.mastered)+'/'+fmt(q.total)+'語')+'</div>';
+        : '目標 '+q.goal.replace(/-/g,"/")+' まで残り'+q.daysLeft+'日'+(fc? ' ・ 覚えた '+fmt(q.mastered)+'/'+fmt(q.total)+'語' : ''))+'</div>';
   }
   el.onclick=openPaceModal;
 }
@@ -291,6 +350,7 @@ function openPaceModal(){
   const goal=(G.pace&&G.pace.goal)||null;
   const cur=goal||addDays(today,180);
   const q=goal? paceToday(G) : null;
+  const fc=q && !q.done? paceForecast(G, q.est, Date.now(), q.days) : null; // 見通しの日付(v5.34.0)
   // 覚えた単語の進捗(ヒーローの中に置く共通部品)
   const masteredRow=
     '<div class="row" style="margin-top:8px"><div class="grow small">覚えた単語</div>'+
@@ -302,11 +362,14 @@ function openPaceModal(){
       '<div class="small" style="margin-top:4px">おめでとう! 復習を続けて記憶を守ろう</div>'+masteredRow+'</div>'
     : q
     ? '<div class="panel" style="margin-top:10px">'+
-      '<div class="row" style="align-items:center"><div class="grow" style="font-weight:800">🎯 1日の目安</div>'+
+      '<div class="row" style="align-items:center"><div class="grow" style="font-weight:800">🎯 1日の目安(十分の線)</div>'+
         '<b style="font-size:30px; line-height:1; color:var(--accent2)">'+fmt(q.perDay)+'<span style="font-size:14px; color:var(--sub)"> 問</span></b></div>'+
       '<div class="small" style="margin-top:5px">'+(q.expired
         ? '⚠️ 目標日('+q.goal.replace(/-/g,"/")+')を過ぎている ─ 下の「目標日を変更」で立て直そう'
-        : '目標 '+q.goal.replace(/-/g,"/")+' まで残り'+q.daysLeft+'日')+'</div>'+masteredRow+'</div>'
+        : '目標 '+q.goal.replace(/-/g,"/")+' まで残り'+q.daysLeft+'日')+
+        /* v5.34.0: 上限で止めているときは、目標日どおりに必要な問数と見通しの日付を正直に添える(ホームには出さない) */
+        (q.raw>q.perDay? '<br>目標日どおりなら1日'+fmt(q.raw)+'問 ─ 上限'+PACE_CAP+'問で止めている' : '')+
+        (fc? '<br>直近'+PACE_WIN+'日のペース(1日'+Math.round(fc.avg)+'問)なら <b>'+paceFmtDate(fc.date)+'</b> ごろに全語' : '')+'</div>'+masteredRow+'</div>'
     : '<div class="panel" style="margin-top:10px"><div style="font-weight:800">🎯 目標日を決めよう</div>'+
       '<div class="small" style="margin-top:4px">「いつまでに全部覚えるか」を決めると、1日の目安を毎日逆算して案内する</div>'+
       masteredRow+'</div>';
@@ -331,7 +394,9 @@ function openPaceModal(){
   openModal('<h3>🎯 学習ペース管理 '+helpBtn("hlp-pace")+'</h3>'+
     helpNote("hlp-pace", '目標日を決めると、全'+fmt(total)+'語を覚え切るのに必要な「1日の問題数」を毎日逆算して案内する。'+
       '目安は直近100問の分析(既知語率・復習の正答率)から見積もり、学習を進めるほど自動で更新される。'+
-      '日ごとの変化は前日の±10%以内に抑える(分析のゆらぎで数字が跳ねないように)')+
+      '日ごとの変化は前日の±10%以内に抑える(分析のゆらぎで数字が跳ねないように)。'+
+      '目安は1日'+PACE_CAP+'問が上限(それ以上は数字ではなく「このペースなら◯/◯ごろ」の見通しに表れる)。'+
+      'ホームの線は 最低限=1セット ・ 十分=目安 ・ 完璧=十分+1セット')+
     hero+
     foldSec("pfoldGoal", "📅 目標日を"+(goal? "変更":"決める"), goalInner, !goal)+
     foldSec("pfoldSim", "🎚 もしものペース試算", simInner, false)+
@@ -352,7 +417,7 @@ function openPaceModal(){
     const per=Math.max(10, Math.ceil(rem.attempts/days));
     box.innerHTML='<div class="small">残り約'+fmt(rem.attempts)+'問(復習の繰り返しを含む)÷ '+days+'日</div>'+
       '<div style="font-size:18px; font-weight:800; margin-top:4px">1日 <span style="color:var(--accent2)">'+fmt(per)+'問</span> が目安</div>'+
-      (per>300? '<div class="small" style="color:var(--ng); margin-top:4px">⚠️ かなり挑戦的なペース。目標日を延ばす選択も</div>':'');
+      (per>PACE_CAP? '<div class="small" style="color:var(--ng); margin-top:4px">⚠️ 上限'+PACE_CAP+'問を超える ─ ホームの目安は'+PACE_CAP+'問で止め、超える分は見通しの日付に表れる</div>':'');
   };
   // 試算スライダー: 日付・つまみのどちらを動かしても引き直す
   const simUpd=()=>{
