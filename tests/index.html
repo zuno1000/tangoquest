@@ -4687,6 +4687,39 @@ function run(){
     }finally{ G.set=oldSet; G.setT=oldT; dr.a=a0; pd.a=pa0; W.saveG(); W.renderHome(); }
   });
 
+  t("v5.35.0①: 辞書引きの純関数 ─ mywDictParse(gtxのJSON→第一候補+品詞ごとの訳と逆引き)・mywJaCands(英→日: 第一候補が先頭・品詞つき・重複なし)・mywEnCands(日→英: 辞書の語+第一候補・意味=入力した日本語+逆引き2つ・品詞は辞書か語尾)・mywDictPos・壊れた入力はnull/空", ()=>{
+    const EN=[[["軽減する","zzlookword",null,null,3]],[["verb",["弱まる","減らす","軽減する"],[["弱まる",["weaken","zzlookword"],null,0.03],["減らす",["reduce"],null,0.01]],"zzlookword",2],["noun",["軽減"],[["軽減",["zzlookword"],null,0.01]],"zzlookword",1]],"en"];
+    const d=W.mywDictParse(EN); eq(d.main, "軽減する"); eq(d.groups.length, 2); eq(d.groups[0].pos, "v"); eq(d.groups[0].raw, "verb"); eq(d.groups[1].pos, "n");
+    eq(d.groups[0].terms.map(t=>t.t).join(","), "弱まる,減らす,軽減する"); eq(d.groups[0].terms[0].back.join(","), "weaken,zzlookword", "逆引き"); eq(d.groups[0].terms[2].back.length, 0, "逆引きが無い訳は空");
+    const jc=W.mywJaCands(d); eq(jc.map(x=>x.ja).join(","), "軽減する,弱まる,減らす,軽減", "第一候補が先頭・重複なし"); eq(jc[0].pos, "v", "第一候補の品詞=それを含む群"); eq(jc[3].pos, "n");
+    eq(W.mywDictPos("Adjective"), "adj"); eq(W.mywDictPos("adverb"), "adv"); eq(W.mywDictPos("preposition"), "", "4品詞以外は空");
+    const JA=[[["Zzrelax","和らぐ",null,null,3]],[["verb",["zzsoften","calm zzdown","be zzmitigated"],[["zzsoften",["和らげる","和らぐ","溶かす","溶く"],null,0.03],["calm zzdown",["静まる","和らぐ"],null,0.002],["be zzmitigated",["和らぐ"],null,0.002]],"和らぐ",2]],"ja"];
+    const e=W.mywDictParse(JA), ec=W.mywEnCands(e, "和らぐ");
+    eq(ec.map(x=>x.en).join(","), "zzsoften,calm zzdown,be zzmitigated,zzrelax", "辞書の語→最後に第一候補(小文字に)");
+    eq(ec[0].ja, "和らぐ、和らげる、溶かす", "入力した日本語を先頭に+逆引き2つ"); eq(ec[1].ja, "和らぐ、静まる"); eq(ec[2].ja, "和らぐ"); eq(ec[3].ja, "和らぐ", "第一候補は入力した日本語だけ");
+    eq(ec[0].pos, "v", "品詞は辞書"); eq(ec[3].pos, W.mywGuessPos("zzrelax"), "第一候補は語尾から推定");
+    eq(W.mywEnCands({main:"Take into account", groups:[]}, "考慮に入れる").map(x=>x.en+"/"+x.ja).join(","), "take into account/考慮に入れる", "辞書の群が無ければ第一候補だけ(句も通る)");
+    eq(W.mywDictParse("x"), null); eq(W.mywDictParse([]), null, "空はnull"); eq(W.mywDictParse([[["",""]],[]]), null); eq(W.mywJaCands(null).length, 0); eq(W.mywEnCands(null, "x").length, 0);
+    eq(W.mywJaCands({main:"abate", groups:[]}).length, 0, "日本語でない訳は候補にしない");
+  });
+  t("v5.35.0②: 引く対象sayLookTarget(純関数) ─ 1行の英単語(意味なし)=英→日・短い日本語=日→英・文/「言いたかった」/15字以上/2行/フレーズ/意味つき/内蔵の語/登録済みはnull。mywPrevNoteは内蔵の語の意味も添える", ()=>{
+    const G=W.G, oldMyw=JSON.parse(JSON.stringify(G.myw));
+    try{
+      const c=s=>s.split("\n").map(W.sayClassify).filter(Boolean);
+      eq(JSON.stringify(W.sayLookTarget(c("zzlookword"))), '{"dir":"en","q":"zzlookword"}', "英単語");
+      eq(JSON.stringify(W.sayLookTarget(c("Zzlook Over"))), '{"dir":"en","q":"zzlook over"}', "句動詞も(正規化)");
+      eq(JSON.stringify(W.sayLookTarget(c("和らぐ"))), '{"dir":"ja","q":"和らぐ"}', "日本語の語");
+      eq(JSON.stringify(W.sayLookTarget(c("考慮に入れる"))), '{"dir":"ja","q":"考慮に入れる"}', "短い表現");
+      eq(W.sayLookTarget(c("会議を来週に延期したいと言いたかった")), null, "言いたかった=英訳待ちのメモ");
+      eq(W.sayLookTarget(c("明日は早く起きる。")), null, "文の記号"); eq(W.sayLookTarget(c("あいうえおかきくけこさしすせそ")), null, "15字");
+      eq(W.sayLookTarget(c("zzlookword\n和らぐ")), null, "2行は引かない"); eq(W.sayLookTarget(c("I'll get back to you on that.")), null, "フレーズ");
+      eq(W.sayLookTarget(c("zzlookword — 軽減する")), null, "意味つきは引かない"); eq(W.sayLookTarget(c("abate")), null, "内蔵の語");
+      W.mywAdd("zzlookdone", "できた", "v"); eq(W.sayLookTarget(c("zzlookdone")), null, "登録済み");
+      eq(W.sayLookTarget([]), null); eq(W.sayLookTarget(null), null);
+      const bi=W.WORDS.find(w=>w.en==="abate"); const n=W.mywPrevNote({en:"abate"}); ok(n.note.indexOf(bi.ja)>=0 && n.note.indexOf("内蔵にある")>=0, "内蔵の語の意味を添える: "+n.note);
+    }finally{ G.myw=oldMyw; W.mywUnmount("zzlookdone"); W.saveG(); }
+  });
+
   t("v5.32.0②: 上の行(#qTop) ─ バッジ/品詞(左)とセット n/30・今日 n問(右)をflexで並べる(右は縮めない・左はmin-width:0で…)・正誤確認中はバッジの代わりに品詞チップ(マイ単語なら📝も)・qMetaHTML・出題で空に戻る", ()=>{
     const G=W.G, doc=W.document; const oldPre=G.opt.preRecall;
     const oldDays=JSON.parse(JSON.stringify(G.days)), oldPdays=JSON.parse(JSON.stringify(G.pdays)), oldSet=JSON.parse(JSON.stringify(G.set));
@@ -6303,6 +6336,45 @@ async function runAsync(W){
     }finally{
       W.setRlFetchImpl(null); clearCache(); G.rl=oldRl; W.saveG(); W.rlStateReset();
     }
+  });
+
+  await ta("v5.35.0③: 📝メモの辞書引き(画面) ─ 英単語1語で意味の候補チップ(第一候補が選択済み→プレビューの意味・タップで追加/解除)→「＋ 追加」で意味つきで登録(意味待ちにならない)/日本語で英語の候補の行→➕のワンタップで登録(入力欄は空に・行は✓・候補は残る)/入力が変われば消える・2行なら引かない・辞書に無い語", async()=>{
+    const G=W.G, doc=W.document; const wait=ms=>new Promise(r=>setTimeout(r, ms));
+    const oldSay=JSON.parse(JSON.stringify(G.say)), oldMyw=JSON.parse(JSON.stringify(G.myw));
+    const EN={main:"軽減する", groups:[{pos:"v", raw:"verb", terms:[{t:"弱まる", back:["weaken"]},{t:"減らす", back:[]}]}]};
+    const JA={main:"Zzrelax", groups:[{pos:"v", raw:"verb", terms:[{t:"zzsoften", back:["和らげる","和らぐ","溶かす"]},{t:"abate", back:["和らぐ"]}]}]};
+    const calls=[];
+    try{
+      W.setMywDictImpl(async (q, dir)=>{ calls.push(dir+":"+q); return dir==="en"? (q==="zzlookword"? EN : null) : JA; });
+      W.openSayModal();
+      const ta2=doc.getElementById("sayText"), look=doc.getElementById("sayLook");
+      ta2.value="zzlookword"; ta2.oninput();
+      ok(look.textContent.indexOf("調べている")>=0, "まず「調べている…」"); eq(calls.length, 0, "打ち終わりを待つ(すぐには引かない)");
+      await wait(700);
+      eq(calls.join(","), "en:zzlookword", "1回だけ引く");
+      let chips=look.querySelectorAll(".sayja"); eq(chips.length, 3, "訳のチップ"); ok(chips[0].classList.contains("ksel") && !chips[1].classList.contains("ksel"), "第一候補が選択済み");
+      ok(doc.querySelector("#sayPrev").textContent.indexOf("軽減する")>=0, "プレビューの意味に入る");
+      chips[1].click(); chips=look.querySelectorAll(".sayja"); ok(chips[0].classList.contains("ksel") && chips[1].classList.contains("ksel"), "タップで追加(複数可)");
+      ok(doc.querySelector("#sayPrev").textContent.indexOf("軽減する、弱まる")>=0, "「、」でつなぐ: "+doc.querySelector("#sayPrev").textContent);
+      chips[0].click(); ok(doc.querySelector("#sayPrev").textContent.indexOf("弱まる")>=0 && doc.querySelector("#sayPrev").textContent.indexOf("軽減する")<0, "タップで解除");
+      doc.getElementById("sayAddBtn").click();
+      ok(G.myw.zzlookword && G.myw.zzlookword.ja==="弱まる" && G.myw.zzlookword.pos==="v", "意味つき・辞書の品詞で登録(意味待ちにならない): "+JSON.stringify(G.myw.zzlookword));
+      // 日→英
+      const ta3=doc.getElementById("sayText"), look3=doc.getElementById("sayLook"); ta3.value="和らぐ"; ta3.oninput(); await wait(700);
+      eq(calls[calls.length-1], "ja:和らぐ");
+      let rows=look3.querySelectorAll(".myrow"); eq(rows.length, 3, "候補の行(辞書2+第一候補)"); ok(rows[0].textContent.indexOf("zzsoften")>=0 && rows[0].textContent.indexOf("和らぐ、和らげる、溶かす")>=0, "語と意味: "+rows[0].textContent);
+      ok(rows[1].textContent.indexOf("内蔵にある")>=0, "内蔵の語は優先出題の案内");
+      look3.querySelectorAll(".sayreg")[0].click();
+      ok(G.myw.zzsoften && G.myw.zzsoften.ja==="和らぐ、和らげる、溶かす" && G.myw.zzsoften.pos==="v", "➕で即登録: "+JSON.stringify(G.myw.zzsoften));
+      eq(doc.getElementById("sayText").value, "", "入力欄は空に"); ok(doc.getElementById("sayAddBtn").disabled, "追加は押せない");
+      rows=doc.getElementById("sayLook").querySelectorAll(".myrow"); eq(rows.length, 3, "候補は残る"); ok(rows[0].querySelector(".sayreg").disabled && rows[0].textContent.indexOf("✓")>=0 && rows[0].textContent.indexOf("登録済み")>=0, "登録した行は✓");
+      doc.getElementById("sayLook").querySelectorAll(".sayreg")[1].click(); ok(G.myw.abate && G.myw.abate.ref, "内蔵の語は優先出題の印");
+      // 入力が変われば消える・2行は引かない・辞書に無い語
+      const n0=calls.length; const ta4=doc.getElementById("sayText"); ta4.value="zzlookword\n和らぐ"; ta4.oninput(); await wait(700);
+      eq(doc.getElementById("sayLook").innerHTML, "", "2行=候補は消える"); eq(calls.length, n0, "引かない");
+      ta4.value="zzunknown"; ta4.oninput(); await wait(700); ok(doc.getElementById("sayLook").textContent.indexOf("見つからなかった")>=0, "辞書に無い語: "+doc.getElementById("sayLook").textContent);
+      W.closeModal();
+    }finally{ W.setMywDictImpl(null); G.say=oldSay; G.myw=oldMyw; ["zzlookword","zzsoften"].forEach(en=>{ W.mywUnmount(en); delete G.words[en]; }); W.saveG(); W.closeModal(); }
   });
 
 }

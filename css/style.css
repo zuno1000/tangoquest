@@ -1337,6 +1337,13 @@ body.svplay #slotView{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
 .sayrow .btn{padding:9px 6px; min-height:40px; font-size:13px}
 .sayused{flex:0 0 auto; padding:8px 10px; min-height:38px; font-size:12px}
 .sayused.ok{color:var(--ok)}
+/* 辞書引き(v5.35.0): 📝メモの1行入力に対する意味(チップ)/英語の候補(行) */
+.saylook{margin-top:6px; padding:10px 12px}
+.saylook .sayja{text-align:left}
+.sayjp{font-size:10px; font-weight:800; opacity:.7; margin-right:4px}
+.saylookmsg{margin-top:6px; padding:0 4px}
+.myrow .sayreg{flex:0 0 auto; padding:8px 12px; min-height:38px}
+.myrow .sayreg.ok{color:var(--ok)}
 /* 効果音の種類・音量(v5.24.0・⚙設定→演出) */
 .sfxrow{display:flex; align-items:center; flex-wrap:wrap; gap:6px; margin-top:8px}
 .sfxrow .wchip{padding:5px 11px; font-size:12px}

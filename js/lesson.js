@@ -38,6 +38,49 @@ function sayClassify(line){
   const pos=(t==="w" && typeof mywGuessPos==="function")? mywGuessPos(mywNorm(en)||en) : "";
   return pos? {t, en, ja, pos} : {t, en, ja};
 }
+/* ---- 辞書引き(v5.35.0・実機FB「分からない単語や、日本語で思いついた語の英語をGoogleで調べてから、あらためて登録するのが億劫」) ----
+   入力欄に1行だけ書いたとき、その場で引く(myword.js mywDictLookup):
+     英語の単語・表現 → 和訳の候補をチップで(第一候補を選択済み=「＋ 追加」で意味つきで登録。タップで選び直し・複数可)
+     日本語の短い語句 → 英語の候補を行で(品詞・意味つき。➕のワンタップでマイ単語に。入力欄は空に・候補は残る=続けて別の語も)
+   文(=英訳待ちのメモ・LLMへ)・2行以上(貼り付け)・内蔵/登録済みの語(意味はプレビューのmywPrevNoteが出す)には引かない */
+const SAY_LOOK_JA_MAX=14;  // 日本語はこの字数まで(単語・短い表現。それより長い文は従来どおり英訳待ちのメモ)
+const SAY_LOOK_DELAY=450;  // 打ち終わりを待つms
+/* 引く対象(純関数): {dir:"en"|"ja", q} か null */
+function sayLookTarget(items){
+  if(!items || items.length!==1 || !items[0]) return null;
+  const it=items[0];
+  if(it.t==="w" && !it.ja){
+    const en=mywNorm(it.en); if(!en) return null;
+    const m=G.myw && G.myw[en];
+    if(byEn[en] || (m && !m.del)) return null;
+    return {dir:"en", q:en};
+  }
+  if(it.t==="j"){
+    const q=String(it.ja||"").trim();
+    if(!q || q.length>SAY_LOOK_JA_MAX || /[。、！？!?]/.test(q) || /言いたかった|言えなかった/.test(q)) return null;
+    return {dir:"ja", q};
+  }
+  return null;
+}
+/* 結果のHTML: 英→日=訳のチップ(sel=選んだ番号)/日→英=候補の行(posOv=タップで直した品詞・➕で登録) */
+function sayLookHTML(tgt, d, sel, posOv){
+  if(tgt.dir==="en"){
+    const c=mywJaCands(d);
+    return '<div class="panel saylook"><div class="small">🔍 <b>'+esc(tgt.q)+'</b> の意味 ─ タップで選ぶ(複数可)→「＋ 追加」</div>'+
+      '<div class="mywords" style="margin-top:6px">'+c.map((x,i)=>'<button class="wchip sayja'+(sel.indexOf(i)>=0? " ksel":"")+'" data-i="'+i+'">'+
+        (x.pos? '<span class="sayjp">'+POS_SHORT[x.pos]+'</span>':'')+esc(x.ja)+'</button>').join("")+'</div></div>';
+  }
+  const c=mywEnCands(d, tgt.q);
+  return '<div class="panel saylook"><div class="small">🔍 <b>'+esc(tgt.q)+'</b> の英語 ─ ➕でそのままマイ単語に</div>'+
+    c.map((x,i)=>{
+      const w=mywPrevNote({en:x.en, ja:x.ja, pos:posOv[i]||x.pos}), m=G.myw && G.myw[x.en], done=!!(m && !m.del);
+      return '<div class="myrow"><button class="wchip poschip pos'+w.pos+' saycpos" data-i="'+i+'" title="品詞(タップで変更)"'+(w.builtin||done? ' disabled':'')+'>'+POS_SHORT[w.pos]+'</button>'+
+        '<div class="grow small"><b style="color:var(--ink)">'+esc(x.en)+'</b><br><span class="small">'+(w.builtin? w.note : done? '<span class="qmas">登録済み</span> ─ '+esc(m.ja||x.ja) : esc(x.ja))+'</span></div>'+
+        '<button class="btn sayreg'+(done? ' ok':'')+'" data-i="'+i+'"'+(done? ' disabled':'')+'>'+(done? '✓':'➕')+'</button></div>';
+    }).join("")+'</div>';
+}
+let sayLookSeq=0, sayLookTimer=null; // 引き直しの世代(入力が変わったら古い結果は捨てる)
+
 /* 追加(v5.26.0): 仕分けどおりに振り分ける。items=[{t,en,ja}]。戻り={w:マイ単語, p:即マイフレーズ, pend:英訳待ち, errs[]} */
 function sayIntake(items){
   const r={w:0, p:0, pend:0, errs:[]}; const now=Date.now();
@@ -159,9 +202,12 @@ function openSayModal(focusAdd){
     helpNote("hlp-say", '1行1つ書くと自動で仕分ける。<b>単語</b>(英語3語以内)→マイ単語(意味は自動取得・4択に出る。品詞のチップはタップで変更。内蔵にある語・登録済みの語はその場で分かる)。'+
       '<b>フレーズ</b>(日本語=言えなかったこと/英語の表現)→英訳待ち → 📋依頼文をLLMに貼り、返った「英文 — 日本語 — 覚えたい表現」を貼り戻すとマイフレーズ(並べ替えに優先して出る)。'+
       '短い語もチップで「フレーズ」にすれば例文化される。「英文 — 日本語」と書けばその場で登録。<br>'+
-      '<b>プライバシー</b>: メモはこの端末と、同期を使う場合はあなた自身のGoogleドライブの非公開領域にだけ保存される')+
-    '<textarea id="sayText" class="myta" rows="5" placeholder="1行1つ(英単語・英語の表現・日本語)\n例: incumbent\n例: I&#39;ll get back to you on that.\n例: 会議を来週に延期したいと言いたかった"></textarea>'+ // v5.28.2: 4行が見える高さ・例は短く
+      '<b>1行だけ</b>書くと、その場で辞書を引く(v5.35.0): 英単語なら意味の候補がチップで出て第一候補が選ばれた状態になる(タップで選び直し・複数可→「＋ 追加」で意味つきで登録)。'+
+      '日本語の短い語句(14字以内)なら英語の候補が品詞・意味つきで並び、➕のワンタップでマイ単語に。<br>'+
+      '<b>プライバシー</b>: メモはこの端末と、同期を使う場合はあなた自身のGoogleドライブの非公開領域にだけ保存される。辞書引きで外部(Google翻訳の辞書)に送るのは入力した語だけ')+
+    '<textarea id="sayText" class="myta" rows="5" placeholder="1行1つ(英単語・英語の表現・日本語)\n例: incumbent → 意味の候補が出る\n例: 和らぐ → 英語の候補が出る\n例: I&#39;ll get back to you on that.\n例: 会議を来週に延期したいと言いたかった"></textarea>'+ // v5.28.2: 4行が見える高さ・例は短く。v5.35.0: 1語なら辞書を引く例
     '<div id="sayPrev" style="margin-top:6px"></div>'+
+    '<div id="sayLook"></div>'+ // 辞書引きの結果(v5.35.0)
     '<div class="row" style="gap:8px; margin-top:6px"><button class="btn primary grow" id="sayAddBtn" disabled>＋ 追加</button></div>'+
     (pend.length
       ? '<div class="small" style="margin-top:12px">英訳待ち '+pend.length+'件</div>'+
@@ -180,8 +226,9 @@ function openSayModal(focusAdd){
     '<div class="row" style="gap:8px; margin-top:10px">'+
       '<button class="btn rlentry grow" id="sayMywBtn"><span class="grow">📚 マイ単語</span><span class="hlsub">'+words+'語 ›</span></button>'+
       '<button class="btn rlentry grow" id="sayMyBtn"><span class="grow">📚 マイフレーズ</span><span class="hlsub">'+mine.length+'件 ›</span></button></div>');
-  const ta=$("sayText");
-  let items=[];
+  const ta=$("sayText"), look=$("sayLook");
+  let items=[], lookTgt=null, lookData=null, lookSel=[], lookPos={}; // 辞書引き(v5.35.0): 対象・結果・選んだ訳(英→日)・直した品詞(日→英)
+  sayLookSeq++; clearTimeout(sayLookTimer); // 前に開いていたモーダルの引き直しは捨てる
   const renderPrev=()=>{
     const box=$("sayPrev");
     if(!items.length){ box.innerHTML=""; $("sayAddBtn").disabled=true; return; }
@@ -190,13 +237,53 @@ function openSayModal(focusAdd){
       const w=it.t==="w"? mywPrevNote(it) : null;
       return '<div class="myrow"><button class="wchip saytype'+(it.t==="w"? " ksel":"")+'" data-i="'+i+'"'+(it.t==="j"? ' disabled':'')+'>'+T[it.t]+'</button>'+
       (w? '<button class="wchip poschip pos'+w.pos+' saypos" data-i="'+i+'" title="品詞(タップで変更)"'+(w.builtin? ' disabled':'')+'>'+POS_SHORT[w.pos]+'</button>':'')+
-      '<div class="grow small"><b style="color:var(--ink)">'+esc(it.t==="j"? it.ja : it.en)+'</b>'+(it.t!=="j" && it.ja? ' <span class="small">'+esc(it.ja)+'</span>':'')+
+      '<div class="grow small"><b style="color:var(--ink)">'+esc(it.t==="j"? it.ja : it.en)+'</b>'+(it.t==="p" && it.ja? ' <span class="small">'+esc(it.ja)+'</span>':'')+ // 単語の意味は下の注記(mywPrevNote)に出る=二重に出さない(v5.35.0)
       '<br><span class="small">'+(w? w.note : it.t==="j"? '英訳待ちのメモに' : (it.ja? 'マイフレーズに' : '英訳待ちのメモに(例文化と日本語訳をLLMに)'))+'</span></div></div>'; }).join("")+'</div>';
-    box.querySelectorAll(".saytype").forEach(b=>b.onclick=()=>{ const it=items[+b.dataset.i]; it.t=it.t==="w"? "p":"w"; if(it.t==="w" && !it.pos) it.pos=mywGuessPos(mywNorm(it.en)||it.en); renderPrev(); });
+    box.querySelectorAll(".saytype").forEach(b=>b.onclick=()=>{ const it=items[+b.dataset.i]; it.t=it.t==="w"? "p":"w"; if(it.t==="w" && !it.pos) it.pos=mywGuessPos(mywNorm(it.en)||it.en); renderPrev(); sayLookup(); });
     box.querySelectorAll(".saypos").forEach(b=>b.onclick=()=>{ const it=items[+b.dataset.i]; it.pos=MYW_POS_CYCLE[(MYW_POS_CYCLE.indexOf(it.pos||"n")+1)%MYW_POS_CYCLE.length]; renderPrev(); });
     $("sayAddBtn").disabled=false;
   };
-  ta.oninput=()=>{ items=ta.value.split(/\n+/).map(sayClassify).filter(Boolean); renderPrev(); };
+  /* ---- 辞書引き(v5.35.0) ---- */
+  const renderLook=()=>{ look.innerHTML=(lookTgt && lookData)? sayLookHTML(lookTgt, lookData, lookSel, lookPos) : ""; bindLook(); };
+  const applySel=()=>{ // 英→日: 選んだ訳をプレビューの単語の意味(と品詞)に=「＋ 追加」で意味つきで登録される
+    const it=items[0]; if(!it || !lookData || !lookTgt || lookTgt.dir!=="en") return;
+    const c=mywJaCands(lookData), sel=lookSel.map(i=>c[i]).filter(Boolean);
+    it.ja=sel.map(x=>x.ja).join("、"); const p=sel.find(x=>x.pos); if(p) it.pos=p.pos;
+    renderPrev(); renderLook();
+  };
+  const bindLook=()=>{
+    look.querySelectorAll(".sayja").forEach(b=>b.onclick=()=>{ const i=+b.dataset.i, k=lookSel.indexOf(i); if(k>=0) lookSel.splice(k, 1); else lookSel.push(i); applySel(); });
+    look.querySelectorAll(".saycpos").forEach(b=>b.onclick=()=>{ const i=+b.dataset.i, c=mywEnCands(lookData, lookTgt.q)[i]; if(!c) return; const cur=lookPos[i]||c.pos; lookPos[i]=MYW_POS_CYCLE[(MYW_POS_CYCLE.indexOf(cur)+1)%MYW_POS_CYCLE.length]; renderLook(); });
+    look.querySelectorAll(".sayreg").forEach(b=>b.onclick=()=>{ // 日→英: ➕のワンタップでマイ単語に
+      const i=+b.dataset.i, x=mywEnCands(lookData, lookTgt.q)[i]; if(!x) return;
+      const r=mywAdd(x.en, x.ja, lookPos[i]||x.pos, "", "メモ");
+      if(r.err){ toast(r.err); renderLook(); return; }
+      toast(r.ref? "📝 "+x.en+" は内蔵の語 ─ 優先して出る" : "📝 "+x.en+" をマイ単語に登録("+x.ja.split("、")[0]+")");
+      if(ta.value.trim()===lookTgt.q){ ta.value=""; items=[]; renderPrev(); } // その語だけの入力は空に(候補は残す=続けて別の語も登録できる)
+      renderLook();
+      const mb=$("sayMywBtn"); if(mb) mb.querySelector(".hlsub").textContent=mywList().length+"語 ›";
+      renderHomeIfShown();
+    });
+  };
+  const sayLookup=()=>{
+    const tgt=sayLookTarget(items);
+    if(!tgt){ if(lookTgt){ lookTgt=null; lookData=null; look.innerHTML=""; } return; }
+    if(lookTgt && lookTgt.dir===tgt.dir && lookTgt.q===tgt.q){ if(lookData) applySel(); return; } // 同じ語=引き直さない(選んだ訳は保つ)
+    const seq=++sayLookSeq; clearTimeout(sayLookTimer);
+    lookTgt=tgt; lookData=null; lookSel=[]; lookPos={};
+    const later=tgt.dir==="en"? ' ─ 追加すれば意味はあとで自動取得' : '';
+    if(!navigator.onLine && !mywDictImpl){ look.innerHTML='<div class="small saylookmsg">🔍 オフライン'+later+'</div>'; return; }
+    look.innerHTML='<div class="small saylookmsg">🔍 '+esc(tgt.q)+' を調べている…</div>';
+    sayLookTimer=setTimeout(()=>{
+      mywDictLookup(tgt.q, tgt.dir).then(d=>{
+        if(seq!==sayLookSeq) return; // そのあと入力が変わった
+        if(!d){ look.innerHTML='<div class="small saylookmsg">🔍 '+esc(tgt.q)+' は見つからなかった'+later+'</div>'; return; }
+        lookData=d;
+        if(tgt.dir==="en"){ lookSel=[0]; applySel(); } else renderLook();
+      });
+    }, SAY_LOOK_DELAY);
+  };
+  ta.oninput=()=>{ items=ta.value.split(/\n+/).map(sayClassify).filter(Boolean); renderPrev(); sayLookup(); };
   $("sayAddBtn").onclick=()=>{
     const r=sayIntake(items);
     const parts=[]; if(r.w) parts.push("📝 単語"+r.w); if(r.p) parts.push("💬 フレーズ"+r.p); if(r.pend) parts.push("✍ 英訳待ち"+r.pend); if(r.errs.length) parts.push(r.errs[0]);

@@ -192,10 +192,10 @@ function mywUnseen(g){
    1) Google翻訳の辞書拡張用エンドポイント(CORS可・キー不要): ["軽減する"]
    2) MyMemory(CORS可・匿名は1日5,000文字): {responseData:{translatedText}}
    どちらも「日本語が返らない/英語のまま」は失敗扱い */
-const MYW_ENDPOINTS=[
-  {name:"google", url:en=>"https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=en&tl=ja&q="+encodeURIComponent(en),
+const MYW_ENDPOINTS=[ // v5.35.0: sl/tlを取る(日→英の代替にも使う。省略時は英→日)
+  {name:"google", url:(q, sl, tl)=>"https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl="+(sl||"en")+"&tl="+(tl||"ja")+"&q="+encodeURIComponent(q),
     pick:j=>Array.isArray(j)? (typeof j[0]==="string"? j[0] : (Array.isArray(j[0])? j[0][0] : "")) : ""},
-  {name:"mymemory", url:en=>"https://api.mymemory.translated.net/get?q="+encodeURIComponent(en)+"&langpair=en|ja",
+  {name:"mymemory", url:(q, sl, tl)=>"https://api.mymemory.translated.net/get?q="+encodeURIComponent(q)+"&langpair="+(sl||"en")+"|"+(tl||"ja"),
     pick:j=>(j && j.responseData && j.responseData.translatedText)||""},
 ];
 function mywJaOk(ja, en){
@@ -205,19 +205,101 @@ function mywJaOk(ja, en){
   if(ja.toLowerCase()===String(en).toLowerCase()) return "";
   return ja;
 }
-async function mywFetchJa(en){
+/* JSONを取りに行く(8秒で打ち切り)。失敗は例外 */
+async function mywFetchJSON(url, ms){
+  const ctrl=("AbortController" in window)? new AbortController() : null;
+  const tm=ctrl? setTimeout(()=>ctrl.abort(), ms||8000) : null;
+  try{
+    const r=await fetch(url, ctrl? {signal:ctrl.signal} : {});
+    if(!r.ok) throw new Error("http "+r.status);
+    return await r.json();
+  }finally{ if(tm) clearTimeout(tm); }
+}
+/* 1訳だけを取る: MYW_ENDPOINTSを順に試し、okFn(訳)が空でない最初の訳を返す */
+async function mywFetchOne(q, sl, tl, okFn){
   for(const ep of MYW_ENDPOINTS){
     try{
-      const ctrl=("AbortController" in window)? new AbortController() : null;
-      const tm=ctrl? setTimeout(()=>ctrl.abort(), 8000) : null;
-      const r=await fetch(ep.url(en), ctrl? {signal:ctrl.signal} : {});
-      if(tm) clearTimeout(tm);
-      if(!r.ok) continue;
-      const ja=mywJaOk(ep.pick(await r.json()), en);
-      if(ja) return ja;
+      const s=okFn(ep.pick(await mywFetchJSON(ep.url(q, sl, tl))));
+      if(s) return s;
     }catch(e){ /* 次のエンドポイントへ */ }
   }
   return "";
+}
+async function mywFetchJa(en){ return mywFetchOne(en, "en", "ja", s=>mywJaOk(s, en)); }
+
+/* ---- 辞書引き(v5.35.0・実機FB「分からない単語や、日本語で思いついた語の英語をGoogleで検索し、そのあと登録し直すのが億劫」) ----
+   📝メモ(lesson.js)の入力欄に1行だけ書いたとき、英語なら和訳の候補・日本語なら英語の候補をその場で引き、タップで登録できる。
+   1) Google翻訳の辞書(gtx・dt=bd・CORS可・キー不要)=品詞ごとの複数の訳と、その逆引き(soften→和らげる・和らぐ…)。送るのは語だけ
+   2) 取れなければ1訳だけ(clients5→MyMemory=意味待ちの自動取得と同じ道)
+   取れた語は端末のセッション内で再利用(同じ語を打ち直しても引き直さない)。テストはsetMywDictImplで差し替える(reading.jsのrlFetchImplと同じ流儀) */
+const MYW_DICT_URL=(q, sl, tl)=>"https://translate.googleapis.com/translate_a/single?client=gtx&dt=t&dt=bd&sl="+sl+"&tl="+tl+"&q="+encodeURIComponent(q);
+const MYW_DICT_POS={verb:"v", noun:"n", adjective:"adj", adverb:"adv"};
+const MYW_CAND_JA=12, MYW_CAND_EN=8; // 候補の上限(英→日の訳・日→英の語)
+function mywDictPos(name){ return MYW_DICT_POS[String(name||"").toLowerCase()]||""; }
+/* gtxのJSON→{main:第一候補, groups:[{pos, raw:品詞名, terms:[{t:訳, back:[逆引き]}]}]}(純関数)。読めなければnull */
+function mywDictParse(j){
+  if(!Array.isArray(j)) return null;
+  let main="";
+  try{ main=(j[0] && j[0][0] && typeof j[0][0][0]==="string")? j[0][0][0].trim() : ""; }catch(e){ main=""; }
+  const groups=[];
+  (Array.isArray(j[1])? j[1] : []).forEach(g=>{
+    if(!Array.isArray(g)) return;
+    const raw=String(g[0]||""), det=Array.isArray(g[2])? g[2] : [], terms=[];
+    (Array.isArray(g[1])? g[1] : []).forEach(t=>{
+      if(typeof t!=="string" || !t.trim()) return;
+      const d=det.find(x=>Array.isArray(x) && x[0]===t);
+      terms.push({t:t.trim(), back:(d && Array.isArray(d[1]))? d[1].filter(s=>typeof s==="string").map(s=>s.trim()).filter(Boolean) : []});
+    });
+    if(terms.length) groups.push({pos:mywDictPos(raw), raw, terms});
+  });
+  if(!main && !groups.length) return null;
+  return {main, groups};
+}
+/* 英→日の候補(純関数): [{ja, pos}]。先頭=第一候補(品詞はそれを含む群から)、以降は品詞ごとの訳。重複なし・最大12 */
+function mywJaCands(d){
+  const out=[], seen={};
+  if(!d) return out;
+  const push=(ja, pos)=>{ ja=mywJaOk(ja, ""); if(!ja || seen[ja] || out.length>=MYW_CAND_JA) return; seen[ja]=1; out.push({ja, pos:pos||""}); };
+  const groups=d.groups||[];
+  if(d.main){ const g=groups.find(g=>g.terms.some(t=>t.t===d.main.trim()))||groups[0]; push(d.main, g? g.pos : ""); }
+  groups.forEach(g=>g.terms.forEach(t=>push(t.t, g.pos)));
+  return out;
+}
+/* 日→英の候補(純関数): [{en, pos, ja}]。品詞ごとの語(辞書の順)→最後に第一候補。
+   ja=入力した日本語を先頭に、その語の逆引きから2つまで(「和らぐ、和らげる、溶かす」)。品詞が分からなければ語尾から推定。重複なし・最大8 */
+function mywEnCands(d, jaIn){
+  const out=[], seen={}; jaIn=String(jaIn||"").trim();
+  if(!d) return out;
+  const push=(en, pos, back)=>{
+    en=mywNorm(en); if(!en || seen[en] || out.length>=MYW_CAND_EN) return; seen[en]=1;
+    const b=(back||[]).filter(s=>s && s!==jaIn && /[぀-ヿ一-鿿]/.test(s)).slice(0, 2);
+    out.push({en, pos:pos||mywGuessPos(en), ja:(jaIn? [jaIn] : []).concat(b).join("、")});
+  };
+  (d.groups||[]).forEach(g=>g.terms.forEach(t=>push(t.t, g.pos, t.back)));
+  if(d.main) push(d.main, "", []);
+  return out;
+}
+var mywDictImpl=null; // テスト用の差し替え: async (q, dir)=>{main, groups}|null
+function setMywDictImpl(f){ mywDictImpl=f; }
+const mywDictCache={};
+/* 辞書を引く: dir="en"(英→日)|"ja"(日→英)。Promise<{main, groups}|null>。候補が1つも無ければnull(失敗は再挑戦できるよう覚えない) */
+async function mywDictLookup(q, dir){
+  q=String(q||"").trim(); if(!q) return null;
+  const key=dir+":"+q.toLowerCase();
+  if(mywDictCache[key]) return mywDictCache[key];
+  const sl=dir==="ja"? "ja":"en", tl=dir==="ja"? "en":"ja";
+  let d=null;
+  if(mywDictImpl){ try{ d=await mywDictImpl(q, dir); }catch(e){ d=null; } }
+  else{
+    d=await mywFetchJSON(MYW_DICT_URL(q, sl, tl)).then(mywDictParse).catch(()=>null);
+    if(!d){ // 代替: 1訳だけ
+      const one=await mywFetchOne(q, sl, tl, s=>{ s=String(s||"").trim(); return (s && s.toLowerCase()!==q.toLowerCase() && (tl==="ja"? /[぀-ヿ一-鿿]/.test(s) : /[A-Za-z]/.test(s)))? s : ""; });
+      if(one) d={main:one, groups:[]};
+    }
+  }
+  if(!d || !(dir==="ja"? mywEnCands(d, q).length : mywJaCands(d).length)) return null;
+  mywDictCache[key]=d;
+  return d;
 }
 let mywFilling=false;
 /* 意味待ちの語を順に埋める(1回に最大20語・直列)。done(n)=埋まった数 */
@@ -256,7 +338,7 @@ function mywPrevNote(it){
   const builtin=!!(bi && !bi.my);
   const pos=builtin? bi.pos : (MYW_POS_CYCLE.indexOf(it.pos)>=0? it.pos : mywGuessPos(en));
   let note;
-  if(builtin) note='<span class="qmas">内蔵にある → 優先出題に</span>'+(G.words[en]? ' ・ 定着 '+G.words[en][0]+'/'+MASTER_BOX : '')+(m && !m.del && m.ref? ' ・ <span class="qx">登録済み</span>':'');
+  if(builtin) note=esc(bi.ja)+' ─ <span class="qmas">内蔵にある → 優先出題に</span>'+(G.words[en]? ' ・ 定着 '+G.words[en][0]+'/'+MASTER_BOX : '')+(m && !m.del && m.ref? ' ・ <span class="qx">登録済み</span>':'');
   else if(m && !m.del) note='<span class="qx">登録済み'+(m.ja? '('+esc(m.ja)+')':'(意味待ち)')+' ─ 追加されない</span>';
   else note=(it.ja? esc(it.ja) : '<span style="color:var(--accent2)">意味は自動で取得</span>')+(it.ex? '<br><span class="myexs">📝 '+esc(it.ex)+'</span>':'');
   return {pos, builtin, note};
