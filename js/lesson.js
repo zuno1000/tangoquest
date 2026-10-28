@@ -63,12 +63,14 @@ function sayLookTarget(items){
   return null;
 }
 /* 結果のHTML: 英→日=訳のチップ(sel=選んだ番号)/日→英=候補の行(posOv=タップで直した品詞・➕で登録) */
-function sayLookHTML(tgt, d, sel, posOv){
+/* 自分で意味を書く欄(v5.36.0・実機FB「検索画面で自ら意味を入力して追加できるように」): 選んだ候補のあとに「、」でつないで登録の意味に入る。候補が無くても書ける */
+function sayOwnHTML(own){ return '<input id="sayOwn" class="pdate" value="'+esc(own||"")+'" placeholder="✎ 自分の言葉で意味を書く(候補と一緒に登録できる)">'; }
+function sayLookHTML(tgt, d, sel, posOv, own){
   if(tgt.dir==="en"){
     const c=mywJaCands(d);
     return '<div class="panel saylook"><div class="small">🔍 <b>'+esc(tgt.q)+'</b> の意味 ─ タップで選ぶ(複数可)→「＋ 追加」</div>'+
       '<div class="mywords" style="margin-top:6px">'+c.map((x,i)=>'<button class="wchip sayja'+(sel.indexOf(i)>=0? " ksel":"")+'" data-i="'+i+'">'+
-        (x.pos? '<span class="sayjp">'+POS_SHORT[x.pos]+'</span>':'')+esc(x.ja)+'</button>').join("")+'</div></div>';
+        (x.pos? '<span class="sayjp">'+POS_SHORT[x.pos]+'</span>':'')+esc(x.ja)+'</button>').join("")+'</div>'+sayOwnHTML(own)+'</div>';
   }
   const c=mywEnCands(d, tgt.q);
   return '<div class="panel saylook"><div class="small">🔍 <b>'+esc(tgt.q)+'</b> の英語 ─ ➕でそのままマイ単語に</div>'+
@@ -227,7 +229,7 @@ function openSayModal(focusAdd){
       '<button class="btn rlentry grow" id="sayMywBtn"><span class="grow">📚 マイ単語</span><span class="hlsub">'+words+'語 ›</span></button>'+
       '<button class="btn rlentry grow" id="sayMyBtn"><span class="grow">📚 マイフレーズ</span><span class="hlsub">'+mine.length+'件 ›</span></button></div>');
   const ta=$("sayText"), look=$("sayLook");
-  let items=[], lookTgt=null, lookData=null, lookSel=[], lookPos={}; // 辞書引き(v5.35.0): 対象・結果・選んだ訳(英→日)・直した品詞(日→英)
+  let items=[], lookTgt=null, lookData=null, lookSel=[], lookPos={}, lookOwn=""; // 辞書引き(v5.35.0): 対象・結果・選んだ訳(英→日)・直した品詞(日→英)・自分で書いた意味(v5.36.0)
   sayLookSeq++; clearTimeout(sayLookTimer); // 前に開いていたモーダルの引き直しは捨てる
   const renderPrev=()=>{
     const box=$("sayPrev");
@@ -244,14 +246,16 @@ function openSayModal(focusAdd){
     $("sayAddBtn").disabled=false;
   };
   /* ---- 辞書引き(v5.35.0) ---- */
-  const renderLook=()=>{ look.innerHTML=(lookTgt && lookData)? sayLookHTML(lookTgt, lookData, lookSel, lookPos) : ""; bindLook(); };
-  const applySel=()=>{ // 英→日: 選んだ訳をプレビューの単語の意味(と品詞)に=「＋ 追加」で意味つきで登録される
-    const it=items[0]; if(!it || !lookData || !lookTgt || lookTgt.dir!=="en") return;
-    const c=mywJaCands(lookData), sel=lookSel.map(i=>c[i]).filter(Boolean);
-    it.ja=sel.map(x=>x.ja).join("、"); const p=sel.find(x=>x.pos); if(p) it.pos=p.pos;
-    renderPrev(); renderLook();
+  const renderLook=()=>{ look.innerHTML=(lookTgt && lookData)? sayLookHTML(lookTgt, lookData, lookSel, lookPos, lookOwn) : ""; bindLook(); };
+  const setLookMsg=(html, withOwn)=>{ look.innerHTML='<div class="small saylookmsg">'+html+'</div>'+(withOwn? sayOwnHTML(lookOwn) : ''); bindLook(); }; // 案内文(+自分で書く欄)
+  const applySel=(keep)=>{ // 英→日: 選んだ訳(+自分で書いた意味)をプレビューの単語の意味(と品詞)に=「＋ 追加」で意味つきで登録される。keep=候補の枠は描き直さない(入力中のフォーカスを保つ)
+    const it=items[0]; if(!it || !lookTgt || lookTgt.dir!=="en") return;
+    const c=lookData? mywJaCands(lookData) : [], sel=lookSel.map(i=>c[i]).filter(Boolean), own=lookOwn.replace(/\s+/g," ").trim();
+    it.ja=sel.map(x=>x.ja).concat(own? [own] : []).join("、"); const p=sel.find(x=>x.pos); if(p) it.pos=p.pos;
+    renderPrev(); if(!keep) renderLook();
   };
   const bindLook=()=>{
+    const own=$("sayOwn"); if(own) own.oninput=()=>{ lookOwn=own.value; applySel(true); }; // 自分で意味を書く(v5.36.0)
     look.querySelectorAll(".sayja").forEach(b=>b.onclick=()=>{ const i=+b.dataset.i, k=lookSel.indexOf(i); if(k>=0) lookSel.splice(k, 1); else lookSel.push(i); applySel(); });
     look.querySelectorAll(".saycpos").forEach(b=>b.onclick=()=>{ const i=+b.dataset.i, c=mywEnCands(lookData, lookTgt.q)[i]; if(!c) return; const cur=lookPos[i]||c.pos; lookPos[i]=MYW_POS_CYCLE[(MYW_POS_CYCLE.indexOf(cur)+1)%MYW_POS_CYCLE.length]; renderLook(); });
     look.querySelectorAll(".sayreg").forEach(b=>b.onclick=()=>{ // 日→英: ➕のワンタップでマイ単語に
@@ -270,14 +274,14 @@ function openSayModal(focusAdd){
     if(!tgt){ if(lookTgt){ lookTgt=null; lookData=null; look.innerHTML=""; } return; }
     if(lookTgt && lookTgt.dir===tgt.dir && lookTgt.q===tgt.q){ if(lookData) applySel(); return; } // 同じ語=引き直さない(選んだ訳は保つ)
     const seq=++sayLookSeq; clearTimeout(sayLookTimer);
-    lookTgt=tgt; lookData=null; lookSel=[]; lookPos={};
-    const later=tgt.dir==="en"? ' ─ 追加すれば意味はあとで自動取得' : '';
-    if(!navigator.onLine && !mywDictImpl){ look.innerHTML='<div class="small saylookmsg">🔍 オフライン'+later+'</div>'; return; }
-    look.innerHTML='<div class="small saylookmsg">🔍 '+esc(tgt.q)+' を調べている…</div>';
+    lookTgt=tgt; lookData=null; lookSel=[]; lookPos={}; lookOwn="";
+    const en=tgt.dir==="en", later=en? ' ─ 自分で意味を書くか、追加すればあとで自動取得' : '';
+    if(!navigator.onLine && !mywDictImpl){ setLookMsg('🔍 オフライン'+later, en); return; }
+    setLookMsg('🔍 '+esc(tgt.q)+' を調べている…', false);
     sayLookTimer=setTimeout(()=>{
       mywDictLookup(tgt.q, tgt.dir).then(d=>{
         if(seq!==sayLookSeq) return; // そのあと入力が変わった
-        if(!d){ look.innerHTML='<div class="small saylookmsg">🔍 '+esc(tgt.q)+' は見つからなかった'+later+'</div>'; return; }
+        if(!d){ setLookMsg('🔍 '+esc(tgt.q)+' は見つからなかった'+later, en); return; }
         lookData=d;
         if(tgt.dir==="en"){ lookSel=[0]; applySel(); } else renderLook();
       });

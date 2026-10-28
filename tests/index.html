@@ -4536,7 +4536,7 @@ function run(){
       const ws=W.WORDS.filter(w=>w.en.indexOf(" ")<0).map(w=>w.en), w1=ws[3], w2=ws[4], w3=ws[5], w4=ws[6], w5=ws[7];
       G.words={[a]:[1, Date.now()+1e6, 1, 5, 0, 0, 0], [b]:[1, Date.now()+1e6, 1, 4, 0, 0, 0], [c]:[1, Date.now()+1e6, 1, 3, 0, 0, 0]}; G.wmemo={}; G.conf={}; G.opt.weakSort="miss";
       W.wmemoSet(b, "bのメモ");
-      eq(W.wmemoAskWords(G, "miss", 10).join(","), a+","+c, "メモの無い語だけ・ミスが多い順"); eq(W.wmemoAskWords(G, "miss", 1).join(","), a, "n語まで"); eq(W.WMEMO_ASK_N, 20);
+      eq(W.wmemoAskWords(G, "miss", 10).join(","), a+","+c, "メモの無い語だけ・ミスが多い順"); eq(W.wmemoAskWords(G, "miss", 1).join(","), a, "n語まで"); eq(W.WMEMO_ASK_N, 40);
       // 依頼文
       W.noteConfusion(G, a, c); W.noteConfusion(G, a, c);
       const p=W.wmemoPromptText([a, c]);
@@ -4577,7 +4577,7 @@ function run(){
   t("v5.34.0②(旧v5.32.0①): セット完了画面の「💡 覚え方メモをLLMに頼む」の対象は「ミスが重なった語のたまり」(wmemoPoolWords: ミス2回以上・未習得・メモなし・直近7日に解いた・最後に解いた順・純関数) ─ WMEMO_ASK_MIN=8語に達したセットの完了でだけ出る・📋で依頼文=wmemoPromptText(たまり)・貼り戻し→保存→開いたまま描き直し(しきい値未満でも消えない)・全語に付けば消える", ()=>{
     const G=W.G, doc=W.document; const oldSet=G.set? JSON.parse(JSON.stringify(G.set)) : null, oldMemo=JSON.parse(JSON.stringify(G.wmemo||{})), oldWords=G.words; let copied="";
     try{
-      eq(W.WMEMO_ASK_MIN, 8); eq(W.WMEMO_POOL_MISS, 2); eq(W.WMEMO_POOL_DAYS, 7);
+      eq(W.WMEMO_ASK_MIN, 8); eq(W.WMEMO_POOL_MISS, 2); eq(W.WMEMO_POOL_DAYS, 7); eq(W.WMEMO_ASK_N, 40, "一度に頼む上限は40語(v5.36.0)");
       const ws=W.WORDS.filter(w=>w.en.indexOf(" ")<0).slice(0, 12).map(w=>w.en), now=Date.now();
       G.words={}; G.wmemo={};
       ws.forEach((en, i)=>{ G.words[en]=[1, now+6e5, 2, 2, 0, 1, now-i*3600e3, 0]; }); // [box, due, correct, wrong, mastered, wrongStreak, lastAt, lapseBack]
@@ -4594,18 +4594,20 @@ function run(){
       W.openSetDone();
       const m=doc.getElementById("modal");
       ok(doc.getElementById("setWeak") && doc.getElementById("setNext") && doc.getElementById("setHome"), "従来のボタンはそのまま");
-      ok(m.querySelector('[data-fold="setMemo"]') && m.textContent.indexOf("ミスが重なった8語の覚え方メモをLLMに頼む")>=0, "折りたたみ(8語)");
+      ok(m.querySelector('[data-fold="setMemo"]') && m.textContent.indexOf("ミスした9語の覚え方メモをLLMに頼む")>=0, "折りたたみ(たまり8語+いまのセットのミス1語=9語・v5.36.0)");
       ok(m.textContent.indexOf("メモなし")<0 && m.textContent.indexOf("このセットでミス")<0, "v5.32.0の文言は無い");
       ok(doc.getElementById("setMemo").hidden, "既定は畳んである"); m.querySelector('[data-fold="setMemo"]').click(); ok(!doc.getElementById("setMemo").hidden, "開く");
-      ok(doc.getElementById("setMemoCopy").textContent.indexOf("8語の覚え方")>=0, "依頼する語数");
+      ok(doc.getElementById("setMemoCopy").textContent.indexOf("9語の覚え方")>=0, "依頼する語数");
       Object.defineProperty(W.navigator, "clipboard", {value:{writeText:t=>{ copied=t; return Promise.resolve(); }}, configurable:true});
-      doc.getElementById("setMemoCopy").click(); eq(copied, W.wmemoPromptText(pool), "📋で依頼文(たまりの8語)");
-      ok(copied.indexOf("次の8語")>=0 && copied.indexOf("・"+ws[0]+"(")<0, "ミス1回の語は依頼に含めない");
+      doc.getElementById("setMemoCopy").click(); eq(copied, W.wmemoPromptText([ws[0]].concat(pool)), "📋で依頼文(いまのセットのミスを先頭に+たまりの8語)");
+      ok(copied.indexOf("次の9語")>=0 && copied.indexOf("・"+ws[0]+"(")>=0, "いまのセットでミスした語は回数にかかわらず含める(v5.36.0)");
+      eq(W.wmemoPoolWords(G, now).length, 8, "たまりだけなら8語(ミス1回の語は入らない)");
+      eq(W.setMemoAskWords(G, now, false, [ws[0], ws[1], ws[2], ws[0]]).join(","), [ws[0]].concat(pool).join(","), "いまのセットのミス=先頭(重複は1つ)・覚えた語とメモのある語は除く");
       doc.getElementById("setMemoBack").value=pool.slice(0, 3).map(en=>en+" — "+en+"の覚え方").join("\n"); doc.getElementById("setMemoImport").click();
       eq(W.wmemoGet(pool[0]), pool[0]+"の覚え方"); eq(W.wmemoGet(ws[2]), "メモあり", "既存は据え置き");
-      ok(doc.getElementById("setMemo") && !doc.getElementById("setMemo").hidden && m.textContent.indexOf("ミスが重なった5語")>=0, "開いたまま描き直し・残り5語(しきい値未満でも消えない)");
+      ok(doc.getElementById("setMemo") && !doc.getElementById("setMemo").hidden && m.textContent.indexOf("ミスした6語")>=0, "開いたまま描き直し・残り6語(しきい値未満でも消えない)");
       ok(doc.getElementById("setWeak") && doc.getElementById("setWeak").textContent.indexOf("1")>=0, "「立て直す」はこのセットのミス(1語)のまま");
-      doc.getElementById("setMemoBack").value=pool.slice(3).map(en=>en+" — "+en+"の覚え方").join("\n"); doc.getElementById("setMemoImport").click();
+      doc.getElementById("setMemoBack").value=pool.slice(3).concat([ws[0]]).map(en=>en+" — "+en+"の覚え方").join("\n"); doc.getElementById("setMemoImport").click();
       eq(W.wmemoGet(pool[7]), pool[7]+"の覚え方"); ok(!m.querySelector('[data-fold="setMemo"]') && !doc.getElementById("setMemoCopy") && doc.getElementById("setNext"), "全語に付けば折りたたみごと消える");
       W.closeModal();
       // 使えない行なら保存せず画面はそのまま(memoOpenで開いたまま)
@@ -4718,6 +4720,51 @@ function run(){
       eq(W.sayLookTarget([]), null); eq(W.sayLookTarget(null), null);
       const bi=W.WORDS.find(w=>w.en==="abate"); const n=W.mywPrevNote({en:"abate"}); ok(n.note.indexOf(bi.ja)>=0 && n.note.indexOf("内蔵にある")>=0, "内蔵の語の意味を添える: "+n.note);
     }finally{ G.myw=oldMyw; W.mywUnmount("zzlookdone"); W.saveG(); }
+  });
+
+  t("v5.36.0②: 毎日の習慣モード(G.pace.habit) ─ habitSecPer(実測の中央値÷30・無ければ15秒)・habitLines(最低限=1セット・15分ぶん・30分ぶん=5問単位・最低10問・lab)・paceQuota/paceTodayはhabit(目標日なしでも目安・perDay=15分ぶん・固定なし・日別記録のt)・paceMsgの文言・ホーム「🌱 今日の習慣」(最低限,15分,30分)・学習ペース管理の切替(#paceModeSeg・目標日と試算は出ない)・同期は進め方もsetAtの側", ()=>{
+    const G=W.G, doc=W.document;
+    const oldPace=JSON.parse(JSON.stringify(G.pace)), oldSetT=G.setT.slice(), oldDays=JSON.parse(JSON.stringify(G.days)), oldQtab=G.opt.qtab;
+    try{
+      eq(W.habitSecPer([]), 15, "実測なし=15秒"); eq(W.habitSecPer([300, 600, 900]), 20, "中央値600秒÷30=20秒");
+      let L=W.habitLines([], 24); eq(L.min, 24); eq(L.good, 60, "15分÷15秒=60問"); eq(L.best, 120, "30分=120問"); ok(L.habit && L.lab.good==="15分" && L.lab.best==="30分" && L.lab.min==="最低限", "lab");
+      L=W.habitLines([300], 30); eq(L.good, 90, "10秒/問→15分=90問"); eq(L.best, 180); eq(L.min, 30);
+      L=W.habitLines([3000], 24); eq(L.good, 10, "遅くても最低10問"); eq(L.best, 20, "30分ぶんは5問単位・良い線より上"); eq(L.min, 10);
+      const L2=W.habitLines([], 24);
+      ok(W.paceMsg(0, L2).indexOf("まず1セット")>=0, "0問"); ok(W.paceMsg(10, L2).indexOf("最低限(1セット)まで あと14問")>=0, W.paceMsg(10, L2));
+      ok(W.paceMsg(24, L2).indexOf("最低限クリア ─ 15分ぶんまで あと36問")>=0, W.paceMsg(24, L2)); ok(W.paceMsg(50, L2).indexOf("15分ぶんまで あと10問")>=0, W.paceMsg(50, L2));
+      ok(W.paceMsg(60, L2).indexOf("15分ぶん達成")>=0 && W.paceMsg(60, L2).indexOf("30分ぶんまで あと60問")>=0, W.paceMsg(60, L2));
+      ok(W.paceMsg(120, L2).indexOf("30分ぶん達成")>=0 && W.paceMsg(120, L2).indexOf("ここまでで十分")>=0, W.paceMsg(120, L2));
+      ok(W.paceMsg(130, L2).indexOf("+10問")>=0 && W.paceMsg(130, L2).indexOf("前倒し")<0, "前倒しとは言わない: "+W.paceMsg(130, L2));
+      eq(W.paceMarks(L2).map(m=>m.t).join(","), "最低限,15分,30分"); eq(W.paceMarks(W.paceLines(120, 24)).map(m=>m.t).join(","), "最低限,十分,完璧", "目標日モードは従来どおり");
+      // 目安: 目標日なし+習慣
+      G.pace.goal=null; G.pace.habit=1; G.pace.qd=null; G.setT=[]; G.opt.qtab="mix";
+      const q=W.paceToday(G); ok(q && q.habit && !q.goal && !q.expired, "目標日なしでも目安がある"); eq(q.perDay, 60, "perDay=15分ぶん"); eq(G.days[W.todayKey()].t, 60, "日別記録に残す(達成判定)"); ok(!G.pace.qd, "固定(qd)は使わない");
+      eq(W.paceLinesFor(q).best, 120, "paceLinesForは時間の線"); eq(W.paceLinesFor({perDay:50, habit:false}).best, 74, "目標日モードは目安+1セット");
+      ok(!W.paceToday({pace:{goal:null, habit:0, log:[]}, words:{}, days:{}}), "どちらも無ければnull");
+      // ホーム
+      const dk=W.todayKey(); G.days[dk].a=0; W.switchTab("home"); let hp=doc.getElementById("homePace");
+      ok(hp.textContent.indexOf("今日の習慣")>=0 && hp.textContent.indexOf("目標日")<0, "題は🌱今日の習慣・目標日の文言なし: "+hp.textContent);
+      eq([...hp.querySelectorAll(".plabels span")].map(s=>s.textContent).join(","), "最低限,15分,30分", "線の文字");
+      ok(hp.textContent.indexOf("/ 60問")>=0 && hp.textContent.indexOf("毎日15〜30分の習慣")>=0 && hp.textContent.indexOf("期限なし")>=0, hp.textContent);
+      G.days[dk].a=70; W.renderHome(); hp=doc.getElementById("homePace"); ok(hp.querySelector(".pbar.full") && hp.querySelector(".pgold") && hp.textContent.indexOf("15分ぶん達成")>=0, "15分ぶんで金");
+      G.pace.habit=0; W.renderHome(); hp=doc.getElementById("homePace"); ok(hp.textContent.indexOf("目標日を設定")>=0 && hp.textContent.indexOf("毎日の習慣")>=0, "どちらも無ければ両方の案内"); G.pace.habit=1;
+      // 学習ペース管理
+      W.openPaceModal(); let mt=doc.getElementById("modal").textContent;
+      ok(doc.getElementById("paceModeSeg") && doc.querySelector('#paceModeSeg [data-m="habit"]').classList.contains("active"), "切替は習慣が選択中");
+      ok(mt.indexOf("毎日の習慣 ─ 期限なし")>=0 && mt.indexOf("15分ぶん ≈ 60問")>=0 && mt.indexOf("30分ぶん ≈ 120問")>=0 && mt.indexOf("標準値")>=0, mt);
+      ok(!doc.getElementById("pfoldGoal") && !doc.getElementById("pfoldSim") && !doc.getElementById("goalDate"), "目標日・試算は出ない");
+      doc.querySelector('#paceModeSeg [data-m="goal"]').click();
+      ok(!G.pace.habit && G.pace.setAt>0, "目標日モードに戻る"); ok(doc.getElementById("pfoldGoal") && !doc.getElementById("pfoldGoal").hidden, "目標日が未設定なら「決める」が開く");
+      ok(doc.querySelector('#paceModeSeg [data-m="goal"]').classList.contains("active"), "切替の表示");
+      doc.querySelector('#paceModeSeg [data-m="habit"]').click(); eq(G.pace.habit, 1, "習慣へ"); W.closeModal();
+      // 同期: 進め方はsetAtの新しい側
+      const base=()=>({words:{}, days:{}, inv:{}, chars:{}, dungeons:{}, counters:{}, inf:{}, ach:{}});
+      let m=W.mergeData(Object.assign(base(), {pace:{goal:null, habit:1, setAt:5, log:[]}, updatedAt:1}), Object.assign(base(), {pace:{goal:"2027-01-01", habit:0, setAt:3, log:[]}, updatedAt:2}));
+      eq(m.pace.habit, 1, "setAtが新しい側(習慣)"); eq(m.pace.goal, null);
+      m=W.mergeData(Object.assign(base(), {pace:{goal:null, habit:1, setAt:3, log:[]}, updatedAt:9}), Object.assign(base(), {pace:{goal:"2027-01-01", setAt:5, log:[]}, updatedAt:2}));
+      eq(m.pace.habit, 0, "新しい側が目標日なら習慣は消える"); eq(m.pace.goal, "2027-01-01");
+    }finally{ G.pace=oldPace; G.setT=oldSetT; G.days=oldDays; G.opt.qtab=oldQtab; W.saveG(); W.closeModal(); W.renderHome(); }
   });
 
   t("v5.32.0②: 上の行(#qTop) ─ バッジ/品詞(左)とセット n/30・今日 n問(右)をflexで並べる(右は縮めない・左はmin-width:0で…)・正誤確認中はバッジの代わりに品詞チップ(マイ単語なら📝も)・qMetaHTML・出題で空に戻る", ()=>{
@@ -6375,6 +6422,32 @@ async function runAsync(W){
       ta4.value="zzunknown"; ta4.oninput(); await wait(700); ok(doc.getElementById("sayLook").textContent.indexOf("見つからなかった")>=0, "辞書に無い語: "+doc.getElementById("sayLook").textContent);
       W.closeModal();
     }finally{ W.setMywDictImpl(null); G.say=oldSay; G.myw=oldMyw; ["zzlookword","zzsoften"].forEach(en=>{ W.mywUnmount(en); delete G.words[en]; }); W.saveG(); W.closeModal(); }
+  });
+
+  await ta("v5.36.0①: 📝メモの辞書引きに「✎ 自分の言葉で意味を書く」 ─ 候補と一緒に登録の意味に入る(「、」でつなぐ・入力中は候補の枠を描き直さない・候補を外せば自分の意味だけ・描き直しても残る)・辞書に無い語でも書いて「＋ 追加」で意味つきで登録", async()=>{
+    const G=W.G, doc=W.document; const wait=ms=>new Promise(r=>setTimeout(r, ms));
+    const oldSay=JSON.parse(JSON.stringify(G.say)), oldMyw=JSON.parse(JSON.stringify(G.myw));
+    const EN={main:"軽減する", groups:[{pos:"v", raw:"verb", terms:[{t:"弱まる", back:[]}]}]};
+    try{
+      W.setMywDictImpl(async (q, dir)=>q==="zzownword"? EN : null);
+      W.openSayModal();
+      let ta2=doc.getElementById("sayText"); ta2.value="zzownword"; ta2.oninput(); await wait(700);
+      const own=doc.getElementById("sayOwn"); ok(own, "候補の下に自分で書く欄");
+      own.value="自分の訳"; own.oninput();
+      ok(doc.querySelector("#sayPrev").textContent.indexOf("軽減する、自分の訳")>=0, "候補+自分の意味: "+doc.querySelector("#sayPrev").textContent);
+      ok(doc.getElementById("sayOwn")===own, "入力中は欄を描き直さない(フォーカスを保つ)");
+      doc.querySelector("#sayLook .sayja").click(); // 第一候補を外す
+      ok(doc.querySelector("#sayPrev").textContent.indexOf("自分の訳")>=0 && doc.querySelector("#sayPrev").textContent.indexOf("軽減する")<0, "候補を外せば自分の意味だけ");
+      eq(doc.getElementById("sayOwn").value, "自分の訳", "描き直しても自分の意味は残る");
+      doc.getElementById("sayAddBtn").click(); ok(G.myw.zzownword && G.myw.zzownword.ja==="自分の訳", "自分の意味で登録: "+JSON.stringify(G.myw.zzownword));
+      // 辞書に無い語
+      ta2=doc.getElementById("sayText"); ta2.value="zzownnone"; ta2.oninput(); await wait(700);
+      ok(doc.getElementById("sayLook").textContent.indexOf("見つからなかった")>=0 && doc.getElementById("sayOwn"), "見つからなくても書ける: "+doc.getElementById("sayLook").textContent);
+      doc.getElementById("sayOwn").value="手書きの意味"; doc.getElementById("sayOwn").oninput();
+      ok(doc.querySelector("#sayPrev").textContent.indexOf("手書きの意味")>=0, "プレビューの意味に");
+      doc.getElementById("sayAddBtn").click(); ok(G.myw.zzownnone && G.myw.zzownnone.ja==="手書きの意味", "意味つきで登録(意味待ちにならない)");
+      W.closeModal();
+    }finally{ W.setMywDictImpl(null); G.say=oldSay; G.myw=oldMyw; ["zzownword","zzownnone"].forEach(en=>{ W.mywUnmount(en); delete G.words[en]; }); W.saveG(); W.closeModal(); }
   });
 
 }

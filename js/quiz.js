@@ -149,7 +149,7 @@ function wmemoSet(en, t){
    アプリは文章を作らない(方針=LLMなし・無料)。にがてノートの並びで「まだメモの無い語」の上位WMEMO_ASK_N語を依頼文にしてコピー→
    LLMの答え「単語 — 覚え方」を貼り戻す(wmemoParse・純関数)→メモの無い語だけ保存(wmemoImport。自分で書いたメモは上書きしない)。
    穴埋め模試(mockPromptText/mockParse)と同じ流儀・入口はにがてノートの折りたたみ(新しいタブ・設定は足さない) */
-var WMEMO_ASK_N=20;
+var WMEMO_ASK_N=40; // v5.36.0: 20→40(実機FB「一度に依頼する語数を増やしてほしい」)
 function wmemoHas(g, en){ const m=g.wmemo && g.wmemo[en]; return !!(m && !m.del && m.t); }
 /* メモの無いにがて語(純関数): にがてノートの並び(sort)のまま、メモの無い語をn語 */
 function wmemoAskWords(g, sort, n){ return weakWords(g, sort).filter(en=>!wmemoHas(g, en)).slice(0, n||WMEMO_ASK_N); }
@@ -552,21 +552,25 @@ let setDonePending=false; // 30問目の答え合わせのあと、「次へ」�
    (単語の記録から導く=保存データなし・同期は単語の記録に乗る)を、最後に解いた順に最大WMEMO_ASK_N語。
    1回きりのミスはうっかりが多く、メモが要るのは繰り返し落とす語だけ */
 var WMEMO_POOL_MISS=2, WMEMO_POOL_DAYS=7, WMEMO_ASK_MIN=8;
-function wmemoPoolWords(g, now){
+/* v5.36.0(実機FB「いま間違えた単語のフックも追加されるようにしたい・一度に依頼する語数を増やしてほしい」):
+   setMiss=いまのセットでミスした語(G.set.miss)を、回数にかかわらず先頭に入れる(メモなし・未習得だけ)。続けてたまりの語。上限はWMEMO_ASK_N=40 */
+function wmemoPoolWords(g, now, setMiss){
   now=now||Date.now();
-  const out=[];
+  const out=[], seen={};
+  (setMiss||[]).forEach(en=>{ const st=(g.words||{})[en]; if(!byEn[en] || seen[en] || wmemoHas(g, en) || (st && st[0]>=MASTER_BOX)) return; seen[en]=1; out.push(en); });
+  const pool=[];
   for(const en in g.words||{}){
     const st=g.words[en];
-    if(!st || !byEn[en] || (st[3]||0)<WMEMO_POOL_MISS || st[0]>=MASTER_BOX || wmemoHas(g, en)) continue;
+    if(seen[en] || !st || !byEn[en] || (st[3]||0)<WMEMO_POOL_MISS || st[0]>=MASTER_BOX || wmemoHas(g, en)) continue;
     if(!(st[6]>0) || now-st[6]>WMEMO_POOL_DAYS*864e5) continue;
-    out.push(en);
+    pool.push(en);
   }
-  out.sort((a,b)=>(g.words[b][6]||0)-(g.words[a][6]||0));
-  return out.slice(0, WMEMO_ASK_N);
+  pool.sort((a,b)=>(g.words[b][6]||0)-(g.words[a][6]||0));
+  return out.concat(pool).slice(0, WMEMO_ASK_N);
 }
-/* セット完了画面からLLMに頼む対象(純関数): たまりがWMEMO_ASK_MIN語に達したときだけ(all=しきい値を無視=貼り戻したあとの描き直し用)。
+/* セット完了画面からLLMに頼む対象(純関数): いまのセットのミス+たまりがWMEMO_ASK_MIN語に達したときだけ(all=しきい値を無視=貼り戻したあとの描き直し用)。
    数日に1回だけ出る=セット完了画面はふだん軽いまま、フックの位置はセット終わりのまま */
-function setMemoAskWords(g, now, all){ const p=wmemoPoolWords(g, now); return (all || p.length>=WMEMO_ASK_MIN)? p : []; }
+function setMemoAskWords(g, now, all, setMiss){ const p=wmemoPoolWords(g, now, setMiss); return (all || p.length>=WMEMO_ASK_MIN)? p : []; }
 /* opt.memoOpen=「覚え方メモをLLMに頼む」の折りたたみを開いたまま描き直す(貼り戻したあと・v5.32.0) */
 function openSetDone(opt){
   opt=opt||{};
@@ -576,9 +580,9 @@ function openSetDone(opt){
   /* v5.34.0: 次の線(最低限・十分・完璧)までの案内=ホームと同じ文(paceMsg)。目安が無ければセット数だけ */
   const q=paceToday(G);
   const line=(q && !q.done)
-    ? paceMsg(dayRec().a, paceLines(q.perDay, wordsPerSet()))
+    ? paceMsg(dayRec().a, paceLinesFor(q)) // 習慣モードは時間の線(v5.36.0)
     : '今日 '+p.done+'セット目を積み上げた';
-  const missN=(s.miss||[]).length, askM=setMemoAskWords(G, Date.now(), !!opt.memoOpen);
+  const missN=(s.miss||[]).length, askM=setMemoAskWords(G, Date.now(), !!opt.memoOpen, s.miss||[]); // いまのセットのミスを先頭に(v5.36.0)
   /* v5.10.0: セットの締めに「次の一手」 ─ ミスがあれば🔥にがて特訓(このセットのミスから)。フレーズが混ざったセットはその数も出す。
      🎯今日の実戦ドリル(日替わり)はv5.26.0で廃止(実機FB「ポップアップから削除・ホームにシンプルに」→ホームの📝パネル「🎯 フレーズ5問」) */
   openModal('<h3>🧩 セット完了! <span class="small">今日 '+p.done+'セット目</span></h3>'+
@@ -594,9 +598,9 @@ function openSetDone(opt){
     /* v5.32.0(実機FB「セットで間違えた語のうちメモの無い語を自動で抽出し、LLMに投げるプロンプトをコピーできるボタン→セットごとに覚え方を楽に登録」):
        にがてノートの一括依頼(v5.31.0)と同じUI(wmemoAskSecHTML)を、対象=このセットのミスでメモの無い語(setMemoAskWords)にして置く。全語にメモがあれば出さない */
     /* v5.34.0: 対象=ミスが重なった語のたまり(wmemoPoolWords)。WMEMO_ASK_MIN語に達したセットの完了でだけ出る(数日に1回) */
-    (askM.length? foldSec("setMemo", '💡 ミスが重なった'+askM.length+'語の覚え方メモをLLMに頼む',
+    (askM.length? foldSec("setMemo", '💡 ミスした'+askM.length+'語の覚え方メモをLLMに頼む',
       wmemoAskSecHTML("setMemo", askM,
-        'この1週間に'+WMEMO_POOL_MISS+'回以上ミスし、まだ覚え方メモの無い'+askM.length+'語。依頼文をコピーしてLLM(ChatGPT・Gemini等)に貼り、返ってきた「単語 — 覚え方」を貼り戻すとメモになる(次の答え合わせから💡に出る)。既にメモのある語は頼まない・上書きしない', ''),
+        'いまのセットのミスと、この1週間に'+WMEMO_POOL_MISS+'回以上ミスした語のうち、まだ覚え方メモの無い'+askM.length+'語(最大'+WMEMO_ASK_N+'語)。依頼文をコピーしてLLM(ChatGPT・Gemini等)に貼り、返ってきた「単語 — 覚え方」を貼り戻すとメモになる(次の答え合わせから💡に出る)。既にメモのある語は頼まない・上書きしない', ''),
       !!opt.memoOpen) : '')+
     (mockDue(G)? '<button class="btn setnext2" id="setMock"><span>🧪 Part 1 模試を受ける(25問・約10分)</span><span class="hlsub">'+mockDueSub()+'</span></button>':'')+ // 週1回の模試の入口(v5.30.0)
     '<div class="row" style="gap:10px; margin-top:10px">'+ // 「📥 いま同期する」(v5.16.0)はv5.29.0で撤去=学習タブを離れたときに自動で同期

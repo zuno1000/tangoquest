@@ -148,12 +148,42 @@ function paceProjection(g, est, days, perDay){
   return {mastered:m, total:WORDS.length, pct:Math.round(100*m/WORDS.length)};
 }
 
-/* 今日の目安(1日あたりの問題数)。目標未設定ならnull */
+/* ---- 毎日の習慣モード(v5.36.0・実機FB「8,000語以上を期限を決めて覚え切るのは難しい。期限ではなく毎日の習慣として取り組み、
+   いつか全部覚えられるようにする切替がほしい。目安は短くて15分・長くても30分(余裕がある日はもっとやってもいい)。
+   目的=目標に追われてハードルを上げるより、気軽に毎日続けられること」) ----
+   G.pace.habit=1 で有効(⚙学習ペース管理の切替・同期は目標日と同じsetAtの新しい側が勝つ)。目標日・逆算・残り日数・上限は使わず、
+   今日の線を「時間」で引く: 最低限=1セット・15分ぶん(=十分の線・達成=金)・30分ぶん(=完璧の線)。問数への換算は1セットの所要時間の
+   実測(G.setT=直近10回の中央値・v5.34.0のCTAと同じ)から1問あたりの秒数を出し、無ければHABIT_SEC秒/問。
+   見通しの日付(paceForecast=直近14日の実際のペース)は期限ではなく「いつか」の目安として残す */
+var HABIT_MIN=15, HABIT_BEST=30, HABIT_SEC=15; // 分・分・1問あたりの標準秒数(実測が無いとき)
+function habitOn(g){ return !!(g && g.pace && g.pace.habit); }
+/* 1問あたりの秒数(純関数): setT=直近のセットの秒数(30問換算)の中央値÷30。実測が無ければHABIT_SEC */
+function habitSecPer(setT){
+  const a=(setT||[]).filter(x=>x>0).slice().sort((x,y)=>x-y);
+  if(!a.length) return HABIT_SEC;
+  const med=a.length%2? a[(a.length-1)/2] : (a[a.length/2-1]+a[a.length/2])/2;
+  return Math.max(3, med/SET_N);
+}
+/* 習慣モードの3本の線(純関数): min=1セット・good=15分ぶん・best=30分ぶん(5問単位・最低10問)。lab=バーの文字・habit=文言の分岐 */
+function habitLines(setT, perSet){
+  perSet=perSet||SET_N;
+  const sec=habitSecPer(setT), q=min=>Math.max(10, Math.round(min*60/sec/5)*5);
+  const good=q(HABIT_MIN), best=Math.max(good+5, q(HABIT_BEST));
+  return {min:Math.min(perSet, good), good, best, sec, habit:true, lab:{min:"最低限", good:HABIT_MIN+"分", best:HABIT_BEST+"分"}};
+}
+/* 今日の目安(1日あたりの問題数)。目標未設定(かつ習慣モードでない)ならnull */
 function paceQuota(g, now){
-  const goal=g.pace && g.pace.goal;
-  if(!goal) return null;
+  const goal=g.pace && g.pace.goal, habit=habitOn(g);
+  if(!goal && !habit) return null;
   now=now||Date.now();
   const est=paceEstimates(g.pace.log||[]);
+  if(habit){ // 期限なし: 残り解答数の見積もりは365日の地平で(新規の混ぜ方paceNewPerDayと見通しの初期値に使う)
+    const days=365, rem=paceRemaining(g, est, days);
+    return {goal:null, habit:true, daysLeft:null, days, est,
+            perDay: habitLines(g.setT, typeof wordsPerSet==="function"? wordsPerSet() : SET_N).good,
+            mastered:rem.mastered, unseen:rem.unseen, attempts:rem.attempts,
+            total:WORDS.length, done: rem.mastered>=WORDS.length, expired:false};
+  }
   const daysLeft=Math.ceil((new Date(goal+"T23:59:59").getTime()-now)/864e5);
   const days=Math.max(1, daysLeft);
   const rem=paceRemaining(g, est, days);
@@ -185,7 +215,12 @@ var PACE_CAP=120;
 function paceLines(per, perSet){
   perSet=perSet||SET_N;
   const good=Math.max(1, per|0);
-  return {min:Math.min(perSet, good), good, best:good+perSet};
+  return {min:Math.min(perSet, good), good, best:good+perSet, lab:{min:"最低限", good:"十分", best:"完璧"}};
+}
+/* 今日の線(目安qから): 習慣モードは時間の線(habitLines)・目標日モードは目安の線(paceLines)。v5.36.0 */
+function paceLinesFor(q){
+  const perSet=typeof wordsPerSet==="function"? wordsPerSet() : SET_N;
+  return q && q.habit? habitLines(G.setT, perSet) : paceLines(q? q.perDay : 0, perSet);
 }
 /* 直近n日(昨日まで・今日は含まない)の1日平均解答数(単語)。記録のない日は0として平均する(純関数)。
    今日を含めないのは、朝の0問で平均が落ちて見通しの日付が毎朝後ろに跳ぶのを避けるため。今日の分はpaceForecastのgainで見せる */
@@ -235,6 +270,11 @@ function paceToday(g, now, opts){
   const q=paceQuota(g, now);
   if(!q || q.done) return q;
   const d=todayKey();
+  if(q.habit){ // 習慣モード(v5.36.0): 固定も上限も要らない(実測の所要時間から引く線はゆっくりしか動かない)。達成判定のため日別記録に残す
+    q.raw=q.perDay;
+    if(g.days){ const rec=g.days[d]=g.days[d]||{a:0,c:0,m:0}; if(rec.t!==q.perDay) rec.t=q.perDay; }
+    return q;
+  }
   /* at=固定した時刻(v5.19.0): 同期では同じ日の目安は「先に固定した端末の値」に揃える(sync.js mergeQd)=
      どの端末で見ても今日の目安は同じ数字になる */
   q.raw=q.perDay; // 逆算値そのもの(上限なし・学習ペース管理の画面だけが使う)
@@ -272,20 +312,24 @@ function paceByNow(target, now){
 /* 次の線までの案内(v5.34.0): L=paceLines(最低限・十分・完璧)。done=今日の単語の解答数。
    いま目指す線を1つだけ言う(3つの数字を並べない)。完璧の先は前倒しの問数 */
 function paceMsg(done, L){
+  const lab=L.lab||{min:"最低限", good:"十分", best:"完璧"};
+  const good=L.habit? lab.good+"ぶん" : lab.good, best=L.habit? lab.best+"ぶん" : lab.best; // 習慣モード(v5.36.0)は「15分ぶん」「30分ぶん」
   if(done>=L.best){
     const over=done-L.best;
-    return "🎉 完璧!"+(over>0? " さらに+"+over+"問の前倒し" : " おつかれさま");
+    return L.habit
+      ? "🎉 "+best+"達成!"+(over>0? " さらに+"+over+"問(余裕のある日の分)" : " 今日はここまでで十分")
+      : "🎉 完璧!"+(over>0? " さらに+"+over+"問の前倒し" : " おつかれさま");
   }
-  if(done>=L.good) return "🎉 十分を達成! 完璧まで あと"+(L.best-done)+"問";
+  if(done>=L.good) return L.habit? "🎉 "+good+"達成! 余裕があれば"+best+"まで あと"+(L.best-done)+"問" : "🎉 十分を達成! 完璧まで あと"+(L.best-done)+"問";
   if(done===0) return "さあ、今日の1問目から! まず1セット";
   if(L.min<L.good && done<L.min) return "最低限(1セット)まで あと"+(L.min-done)+"問";
-  if(L.min<L.good && done===L.min) return "最低限クリア ─ 十分まで あと"+(L.good-done)+"問";
-  return "十分まで あと"+(L.good-done)+"問";
+  if(L.min<L.good && done===L.min) return "最低限クリア ─ "+good+"まで あと"+(L.good-done)+"問";
+  return good+"まで あと"+(L.good-done)+"問";
 }
-/* 線の目盛り(バーの上の小さな印と、下の「最低限・十分・完璧」の文字)。幅=完璧の線が100% */
+/* 線の目盛り(バーの上の小さな印と、下の「最低限・十分・完璧」(習慣モードは「最低限・15分・30分」)の文字)。幅=完璧の線が100% */
 function paceMarks(L){
-  const pos=v=>Math.round(100*v/L.best);
-  return [L.min<L.good? {v:L.min, t:"最低限"} : null, {v:L.good, t:"十分"}, {v:L.best, t:"完璧"}].filter(Boolean).map(m=>({v:m.v, t:m.t, p:pos(m.v)}));
+  const pos=v=>Math.round(100*v/L.best), lab=L.lab||{min:"最低限", good:"十分", best:"完璧"};
+  return [L.min<L.good? {v:L.min, t:lab.min} : null, {v:L.good, t:lab.good}, {v:L.best, t:lab.best}].filter(Boolean).map(m=>({v:m.v, t:m.t, p:pos(m.v)}));
 }
 function paceTicksHTML(L){ return paceMarks(L).filter(m=>m.p<100).map(m=>'<i class="ptick" style="left:'+m.p+'%"></i>').join(""); } // バーの中(完璧=右端は描かない)
 function paceLabelsHTML(L){ return '<div class="plabels">'+paceMarks(L).map(m=>'<span style="left:'+m.p+'%">'+m.t+'</span>').join("")+'</div>'; } // バーの下
@@ -309,28 +353,31 @@ function fillPaceEl(el){
     el.innerHTML='<div class="pacetop"><span>🧩 今日 <b style="font-size:22px">'+sp.a+'</b> <span class="ptgt">問'+(sp.done? ' ・ '+sp.done+'セット':'')+'</span></span>'+
       '<b style="color:var(--accent2); font-size:13px">🎯 目標日を設定 ›</b></div>'+
       '<div class="pbar"><i style="width:'+Math.round(100*sp.cur/SET_N)+'%"></i></div>'+
-      '<div class="pacemsg">「いつまでに全部覚えるか」を決めると、1日の目安をここに逆算する</div>'+
+      '<div class="pacemsg">「いつまでに全部覚えるか」を決めるか、期限なしの「🌱 毎日の習慣」(1日15〜30分)を選ぶと、今日の目安をここに出す</div>'+ // v5.36.0: 習慣モードの案内
       (setFootText(sp)? '<div class="pacefoot">'+setFootText(sp)+'</div>' : '');
   }else if(q.done){
     el.innerHTML='<div class="pacetop"><span>🏆 全'+fmt(q.total)+'語 制覇!</span><b>🎊</b></div>'+
       '<div class="pacemsg">おめでとう! 復習を続けて記憶を守ろう</div>';
   }else{
     /* v5.34.0: 3本の線(最低限=1セット・十分=目安・完璧=十分+1セット)。バーの幅は完璧まで・目盛りは最低限と十分。
-       数字は「今日 / 十分」。脚注=見通しの日付(paceForecast: 直近14日の実際のペースで割った全語の日付)と、今日の分で何日早まるか */
-    const done=dayRec().a, L=paceLines(q.perDay, wordsPerSet());
+       数字は「今日 / 十分」。脚注=見通しの日付(paceForecast: 直近14日の実際のペースで割った全語の日付)と、今日の分で何日早まるか
+       v5.36.0(習慣モード): 線は時間(最低限=1セット・15分・30分)・題は「今日の習慣」・2行目は期限の代わりに「毎日15〜30分(期限なし)」 */
+    const done=dayRec().a, L=paceLinesFor(q);
     const pct=Math.min(100, Math.round(100*done/L.best));
     const fc=paceForecast(G, q.est, Date.now(), q.days);
     // 時間帯の小目標(v4.13.0「⏰◯時時点の目安」)はv5.26.0で表示をやめた(実機FB「ホームをシンプルに」。paceByNowは残す)
     el.innerHTML=
-      '<div class="pacetop"><span>🎯 今日の目安</span>'+
+      '<div class="pacetop"><span>'+(q.habit? '🌱 今日の習慣' : '🎯 今日の目安')+'</span>'+
         '<b class="'+(done>=L.good?"pgold":"")+'">'+done+' <span class="ptgt">/ '+L.good+'問</span></b></div>'+
       '<div class="pbar'+(done>=L.good?" full":"")+'"><i style="width:'+pct+'%"></i>'+paceTicksHTML(L)+'</div>'+ // 連続1本のバー(v5.15.0で●○から戻した)・目盛り(v5.34.0)
       paceLabelsHTML(L)+
       '<div class="pacemsg'+(done>=L.good?" pdone":"")+'">'+paceMsg(done, L)+'</div>'+
       '<div class="pacefoot">'+(fc
-        ? 'このペースなら <b>'+paceFmtDate(fc.date)+'</b> ごろに全'+fmt(q.total)+'語'+(fc.gain>0? ' ・ 今日の分で <b>'+fc.gain+'日</b> 早まる' : '')
+        ? (q.habit? 'いまのペースなら' : 'このペースなら')+' <b>'+paceFmtDate(fc.date)+'</b> ごろに全'+fmt(q.total)+'語'+(fc.gain>0? ' ・ 今日の分で <b>'+fc.gain+'日</b> 早まる' : '')
         : '覚えた '+fmt(q.mastered)+'/'+fmt(q.total)+'語')+'</div>'+
-      '<div class="pacefoot">'+(q.expired
+      '<div class="pacefoot">'+(q.habit
+        ? '🌱 毎日'+HABIT_MIN+'〜'+HABIT_BEST+'分の習慣(期限なし・1問 約'+Math.round(L.sec)+'秒)'+(fc? ' ・ 覚えた '+fmt(q.mastered)+'/'+fmt(q.total)+'語' : '')
+        : q.expired
         ? '⚠️ 目標日を過ぎている ─ タップして立て直そう'
         : '目標 '+q.goal.replace(/-/g,"/")+' まで残り'+q.daysLeft+'日'+(fc? ' ・ 覚えた '+fmt(q.mastered)+'/'+fmt(q.total)+'語' : ''))+'</div>';
   }
@@ -347,10 +394,15 @@ function openPaceModal(){
   let mastered=0; for(const en in G.words){ if(G.words[en][0]>=MASTER_BOX) mastered++; }
   const total=WORDS.length, pct=Math.round(100*mastered/total);
   const today=todayKey();
-  const goal=(G.pace&&G.pace.goal)||null;
+  const goal=(G.pace&&G.pace.goal)||null, habit=habitOn(G);
   const cur=goal||addDays(today,180);
-  const q=goal? paceToday(G) : null;
+  const q=(goal||habit)? paceToday(G) : null;
   const fc=q && !q.done? paceForecast(G, q.est, Date.now(), q.days) : null; // 見通しの日付(v5.34.0)
+  const HL=habit? habitLines(G.setT, typeof wordsPerSet==="function"? wordsPerSet() : SET_N) : null; // 習慣モードの線(v5.36.0)
+  /* 進め方の切替(v5.36.0): 🎯目標日に向けて(逆算) / 🌱毎日の習慣(期限なし・15〜30分)。同期は目標日と同じsetAtの新しい側 */
+  const modeSeg='<div class="seg" id="paceModeSeg" style="margin-top:8px">'+
+    '<button data-m="goal"'+(habit? '':' class="active"')+'>🎯 目標日に向けて</button>'+
+    '<button data-m="habit"'+(habit? ' class="active"':'')+'>🌱 毎日の習慣</button></div>';
   // 覚えた単語の進捗(ヒーローの中に置く共通部品)
   const masteredRow=
     '<div class="row" style="margin-top:8px"><div class="grow small">覚えた単語</div>'+
@@ -360,6 +412,13 @@ function openPaceModal(){
   const hero = q && q.done
     ? '<div class="panel" style="margin-top:10px"><div style="font-weight:800">🏆 全'+fmt(total)+'語 制覇! 🎊</div>'+
       '<div class="small" style="margin-top:4px">おめでとう! 復習を続けて記憶を守ろう</div>'+masteredRow+'</div>'
+    : habit
+    ? '<div class="panel" style="margin-top:10px">'+ // 習慣モード(v5.36.0): 主役は「1日15〜30分」。問数は実測の所要時間からの換算
+      '<div class="row" style="align-items:center"><div class="grow" style="font-weight:800">🌱 毎日の習慣 ─ 期限なし</div>'+
+        '<b style="font-size:30px; line-height:1; color:var(--accent2)">'+HABIT_MIN+'<span style="font-size:14px; color:var(--sub)">〜'+HABIT_BEST+'分</span></b></div>'+
+      '<div class="small" style="margin-top:5px">'+HABIT_MIN+'分ぶん ≈ <b>'+HL.good+'問</b>(達成の線) ・ '+HABIT_BEST+'分ぶん ≈ <b>'+HL.best+'問</b>(余裕のある日)'+
+        '<br>1問あたり約'+Math.round(HL.sec)+'秒'+((G.setT||[]).length? '(直近'+(G.setT||[]).length+'セットの実測)' : '(標準値 ─ セットを重ねると実測に変わる)')+
+        (fc? '<br>いまのペース(1日'+Math.round(fc.avg)+'問)なら <b>'+paceFmtDate(fc.date)+'</b> ごろに全語 ─ 期限ではなく見通し' : '')+'</div>'+masteredRow+'</div>'
     : q
     ? '<div class="panel" style="margin-top:10px">'+
       '<div class="row" style="align-items:center"><div class="grow" style="font-weight:800">🎯 1日の目安(十分の線)</div>'+
@@ -396,10 +455,14 @@ function openPaceModal(){
       '目安は直近100問の分析(既知語率・復習の正答率)から見積もり、学習を進めるほど自動で更新される。'+
       '日ごとの変化は前日の±10%以内に抑える(分析のゆらぎで数字が跳ねないように)。'+
       '目安は1日'+PACE_CAP+'問が上限(それ以上は数字ではなく「このペースなら◯/◯ごろ」の見通しに表れる)。'+
-      'ホームの線は 最低限=1セット ・ 十分=目安 ・ 完璧=十分+1セット')+
+      'ホームの線は 最低限=1セット ・ 十分=目安 ・ 完璧=十分+1セット<br><br>'+
+      '<b>🌱 毎日の習慣</b>(v5.36.0): 期限を決めず、1日'+HABIT_MIN+'〜'+HABIT_BEST+'分を続けて「いつか全部」を目指す進め方。'+
+      'ホームの線は 最低限=1セット ・ '+HABIT_MIN+'分ぶん(ここまでで達成=金) ・ '+HABIT_BEST+'分ぶん(余裕のある日)。'+
+      '問数への換算は1セットの所要時間の実測(直近10回の中央値)から。目標日・逆算・上限は使わず、見通しの日付だけを「いつか」の目安として添える')+
+    modeSeg+
     hero+
-    foldSec("pfoldGoal", "📅 目標日を"+(goal? "変更":"決める"), goalInner, !goal)+
-    foldSec("pfoldSim", "🎚 もしものペース試算", simInner, false)+
+    (habit? '' : foldSec("pfoldGoal", "📅 目標日を"+(goal? "変更":"決める"), goalInner, !goal))+ // 習慣モードは目標日・試算を出さない(v5.36.0)
+    (habit? '' : foldSec("pfoldSim", "🎚 もしものペース試算", simInner, false))+
     '<div class="small" style="margin-top:10px">📊 直近'+logN+'問の分析: '+
       ((est.sampledN||est.sampledR)
         ? 'すでに知っていそうな単語 約'+Math.round(est.knownRate*100)+'%'+
@@ -409,6 +472,16 @@ function openPaceModal(){
           ' ・ 1語を覚え切るまで 約'+(Math.round(srsCostUnseen(est)*10)/10)+'問'
         : 'まだ分析中(新規・復習をそれぞれ8問以上解くと精度が上がる。いまは標準値で計算)')+'</div>');
   // v5.21.0: 「📊 学習のあゆみ」ボタンは撤去(記録タブのタイルに集約=重複の解消)
+  $("paceModeSeg").querySelectorAll("button").forEach(b=>{ // 進め方の切替(v5.36.0)
+    b.onclick=()=>{
+      const h=b.dataset.m==="habit"? 1:0;
+      if(h===(habit? 1:0)) return;
+      G.pace.habit=h; G.pace.setAt=Date.now(); G.pace.qd=null; saveG();
+      toast(h? "🌱 毎日の習慣モード ─ 1日"+HABIT_MIN+"〜"+HABIT_BEST+"分を続けよう" : "🎯 目標日に向けて逆算する");
+      openPaceModal(); paceRefreshViews();
+    };
+  });
+  if(habit) return; // 以下は目標日モードの部品(習慣モードでは描いていない)
   const upd=()=>{
     const v=$("goalDate").value, box=$("paceCalc");
     if(!v || v<=today){ box.innerHTML='<div class="small">明日以降の日付を選ぶと計算結果が出る</div>'; return; }

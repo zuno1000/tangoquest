@@ -312,12 +312,12 @@ function mergeData(a, b){
      setAt同士が同じ(旧版=0)なら目標あり側を優先。推定ログは長い方(結合すると重複計上になる) */
   {
     const pa=a.pace, pb=b.pace;
-    if(!pa || !pb){ const p=pa||pb; m.pace=p? {goal:p.goal||null, setAt:p.setAt||0, qd:p.qd||null, log:p.log||[]} : m.pace; } // 片側だけでも同じ形に揃える(syncChangesの比較のため)
+    if(!pa || !pb){ const p=pa||pb; m.pace=p? {goal:p.goal||null, habit:p.habit? 1:0, setAt:p.setAt||0, qd:p.qd||null, log:p.log||[]} : m.pace; } // 片側だけでも同じ形に揃える(syncChangesの比較のため)
     else{
-      const w=(pb.setAt||0)>(pa.setAt||0)? pb : (pa.setAt||0)>(pb.setAt||0)? pa : (pa.goal? pa : pb);
+      const w=(pb.setAt||0)>(pa.setAt||0)? pb : (pa.setAt||0)>(pb.setAt||0)? pa : ((pa.goal||pa.habit)? pa : pb);
       /* v5.19.0(実機FB「端末で1日の目安が違う」): 推定ログは時刻つきの記録を合流(mergePaceLog)・
-         今日の目安(qd)は同じ日なら先に固定した端末の値(mergeQd)=全端末で同じ数字 */
-      m.pace={goal:w.goal||null, setAt:w.setAt||0, qd:mergeQd(pa.qd, pb.qd), log:mergePaceLog(pa.log, pb.log)};
+         今日の目安(qd)は同じ日なら先に固定した端末の値(mergeQd)=全端末で同じ数字。v5.36.0: 進め方(habit)は目標日と同じsetAtの側 */
+      m.pace={goal:w.goal||null, habit:w.habit? 1:0, setAt:w.setAt||0, qd:mergeQd(pa.qd, pb.qd), log:mergePaceLog(pa.log, pb.log)};
     }
   }
   m.resetAt=a.resetAt||0;
